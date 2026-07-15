@@ -268,4 +268,3 @@ SLAMで地図を作るためのlaunchです。
   - Nav2操作用RViz設定
 - `maps/*.yaml`、`maps/*.pgm`
   - 保存済み地図
->>>>>>> feat/initial
