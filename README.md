@@ -6,6 +6,14 @@ ROS 2 Navigation2で自律移動させるためのワークスペースです。
 ROS 2、Nav2、SLAM Toolbox、RViz、EMCL2は、DockerコンテナまたはネイティブのROS 2
 環境で実行できます。Dockerを使う場合、ホストへのROS 2のインストールは不要です。
 
+グローバルプランナには、価値反復 (Value Iteration) ベースの
+[`vi_planner`](https://github.com/NOPLAB/value_iteration3)（デフォルト、
+`planner:=vi`）と、Nav2標準のNavFn（`planner:=navfn`）を選択できます。
+`vi_planner`はNav2の`planner_server`の代わりに`compute_path_to_pose`アクションを
+提供するRust製ノードで、ゴールごとに価値関数を`frontier2d_sparse`ソルバで計算し、
+最適方策のロールアウトで経路を生成します。同一ゴールへのリプランは価値関数
+キャッシュにより高速です。
+
 > **重要:** このリポジトリにはRaspberry Pi Catのデバイスドライバやセンサードライバは
 > 含まれていません。機体側でROS 2のドライバを起動し、必要なトピックとTFを配信して
 > ください。
@@ -52,6 +60,8 @@ Raspberry Pi CatはRaspberry Pi Mouseと同じデバイスドライバを利用�
 - RViz2
 - EMCL2
 - `autonomous_nav`パッケージ
+- `vi_planner`（value_iteration3の価値反復グローバルプランナ、Rust/rclrs製。
+  ビルドに必要なros2_rustワークスペースはイメージ内`/opt/ros2_rust_ws`に構築済み）
 
 ## ネイティブ環境でのセットアップ
 
@@ -65,13 +75,22 @@ Dockerを使わず、Ubuntu 22.04へインストールしたROS 2 Humble上で�
 - `rviz2`
 - Raspberry Pi CatのROS 2対応ドライバとセンサードライバ
 
-ワークスペースのルートでEMCL2を取得します。
+`planner:=vi`（デフォルト）で`vi_planner`をビルドする場合は追加で:
+
+- Rust toolchain（rustup）
+- `pip install colcon-cargo colcon-ros-cargo`と`cargo install cargo-ament-build`
+- ビルド済みros2_rustワークスペース（rclrs @ 2c6b926）と`nav2_msgs`のRust
+  バインディング。手順は`docker/Dockerfile`の`/opt/ros2_rust_ws`構築部分、
+  または`src/value_iteration3/vi_ros2/docker/Dockerfile`を参照
+
+ワークスペースのルートでEMCL2とvalue_iteration3を取得します。
 
 ```bash
 vcs import . < autonomous_bot.repos
 ```
 
-依存パッケージをインストールします。
+依存パッケージをインストールします（rclrs系のキーは解決できないため`-r`で
+続行します）。
 
 ```bash
 rosdep update
@@ -82,8 +101,15 @@ rosdep install --from-paths src --ignore-src -r -y
 
 ```bash
 source /opt/ros/humble/setup.bash
-colcon build --packages-select autonomous_nav emcl2 --symlink-install
+source /path/to/ros2_rust_ws/install/local_setup.bash  # planner:=vi を使う場合
+colcon build --packages-select autonomous_nav emcl2 vi_planner --symlink-install
 source install/setup.bash
+```
+
+`vi_planner`を使わない場合（`planner:=navfn`のみ）はros2_rust環境が不要です。
+
+```bash
+colcon build --packages-select autonomous_nav emcl2 --symlink-install
 ```
 
 新しいターミナルを開くたびに、ROS 2とワークスペースの環境設定を読み込んでください。
@@ -109,7 +135,7 @@ ros2 run nav2_map_server map_saver_cli -f src/autonomous_nav/maps/map
 
 ### 自律移動
 
-EMCL2を使う場合:
+EMCL2を使う場合（グローバルプランナはデフォルトで`vi_planner`）:
 
 ```bash
 ros2 launch autonomous_nav navigation.launch.py \
@@ -125,7 +151,21 @@ ros2 launch autonomous_nav navigation.launch.py \
   use_sim_time:=false localization:=amcl
 ```
 
+NavFnプランナへ切り替える場合は`planner:=navfn`を追加します:
+
+```bash
+ros2 launch autonomous_nav navigation.launch.py \
+  map:=$PWD/src/autonomous_nav/maps/map.yaml \
+  use_sim_time:=false localization:=emcl2 planner:=navfn
+```
+
 RVizの「2D Pose Estimate」で初期姿勢を設定し、「Nav2 Goal」で移動先を指定します。
+
+`planner:=vi`では、新しいゴールを受けた最初の経路計算で価値反復が地図全体を
+解くため、地図サイズに応じて数秒〜数十秒かかることがあります（`vi_planner`の
+ログに計算時間が出力されます）。同じゴールへのリプランはキャッシュされた
+価値関数を使うため高速です。計算された価値関数（θ=0スライス）は
+`/value_function`トピック（OccupancyGrid）でRVizに表示できます。
 
 ## Docker環境の起動
 
@@ -266,6 +306,9 @@ docker compose -f docker/compose.yaml exec ros2 `
   use_sim_time:=false localization:=amcl
 ```
 
+NavFnプランナへ切り替える場合は、上記コマンドに`planner:=navfn`を追加します
+（デフォルトは`planner:=vi`の`vi_planner`）。
+
 RVizの「2D Pose Estimate」で地図上の初期姿勢を設定し、「Nav2 Goal」で移動先を指定
 します。
 
@@ -300,15 +343,20 @@ daifuku_autonomous
     │   │   └── navigation.launch.py
     │   ├── maps
     │   └── rviz
-    └── emcl2_ros2
-        ├── config
-        ├── launch
-        ├── include
-        └── src
+    ├── emcl2_ros2
+    │   ├── config
+    │   ├── launch
+    │   ├── include
+    │   └── src
+    └── value_iteration3
+        ├── vi_rs          (価値反復ソルバ本体, Rust crate)
+        └── vi_ros2
+            └── vi_planner (Nav2用グローバルプランナノード +
+                            vi版navigation_launch.py)
 ```
 
-Dockerイメージ内ではEMCL2を`/opt/ros_ws/src/emcl2_ros2`へ取得します。ネイティブ環境では
-`vcs import`により、このリポジトリの`src/emcl2_ros2`へ取得します。
+Dockerイメージ内ではEMCL2とvalue_iteration3を`/opt/ros_ws/src/`へ取得します。
+ネイティブ環境では`vcs import`により、このリポジトリの`src/`へ取得します。
 
 ### パッケージ
 
@@ -320,6 +368,17 @@ Dockerイメージ内ではEMCL2を`/opt/ros_ws/src/emcl2_ros2`へ取得しま�
   - `src/emcl2_ros2`に配置される外部自己位置推定パッケージ
   - パッケージ名は`emcl2`
   - `emcl2_node`を起動し、AMCLの代わりに`map -> odom`の自己位置推定TFを担当する
+- `vi_planner`
+  - `src/value_iteration3/vi_ros2/vi_planner`に配置される価値反復グローバルプランナ
+    （rclrs製Rustノード）
+  - `planner_server`の代わりに`compute_path_to_pose`アクションを提供する
+  - `/map`（静的地図）から3次元 (x, y, θ) の価値反復を解き、最適方策の
+    ロールアウトで`nav_msgs/Path`を生成する。動的障害物の回避はDWBローカル
+    プランナ（ローカルコストマップ）が担当する
+  - 自己位置はTFではなく`pose_topic`（emcl2: `mcl_pose` / AMCL: `amcl_pose`）
+    から取得する（rclrsにtf2バインディングがないため）
+  - パラメータは`config/nav2_params.yaml`の`vi_planner`セクション
+    （ソルバ名、スレッド数、キャッシュ許容差、経路補間間隔など）
 
 ### Nav2で使っているもの
 
@@ -340,9 +399,12 @@ Dockerイメージ内ではEMCL2を`/opt/ros_ws/src/emcl2_ros2`へ取得しま�
   - 進捗チェックは`nav2_controller::SimpleProgressChecker`
   - ゴール判定は`nav2_controller::SimpleGoalChecker`
 - 経路計画
-  - `nav2_planner`
-  - グローバルプランナは`nav2_navfn_planner/NavfnPlanner`
-  - `use_astar: false`なのでDijkstra系のNavFnとして使う
+  - `planner:=vi`（デフォルト）の場合: `vi_planner`（value_iteration3）が
+    `planner_server`の代わりに`compute_path_to_pose`を提供する
+    （`vi_planner/launch/navigation_launch.py`が`planner_server`抜きで
+    Nav2を起動する）
+  - `planner:=navfn`の場合: `nav2_planner`の
+    `nav2_navfn_planner/NavfnPlanner`（`use_astar: false`のDijkstra系）
 - コストマップ
   - `nav2_costmap_2d`
   - ローカルコストマップ: `VoxelLayer` + `InflationLayer`
@@ -410,17 +472,23 @@ SLAMで地図を作るための起動ファイルです。
 
 - `rviz2`（`use_rviz:=true`の場合）
 
-`localization:=amcl`の場合:
+`localization:=amcl`かつ`planner:=navfn`の場合:
 
 - `nav2_bringup/launch/bringup_launch.py`をincludeする
 - Nav2標準の`amcl`、`map_server`、planner、controller、BT navigatorなどをまとめて起動する
+
+`localization:=amcl`かつ`planner:=vi`の場合:
+
+- `nav2_bringup/launch/localization_launch.py`（`amcl` + `map_server`）
+- `vi_planner/launch/navigation_launch.py`（下記; `pose_topic:=amcl_pose`）
 
 `localization:=emcl2`または`localization:=emcl`の場合:
 
 - `nav2_map_server`の`map_server`
 - `emcl2`パッケージの`emcl2_node`
 - `nav2_lifecycle_manager`の`lifecycle_manager_map_server`
-- `nav2_bringup/launch/navigation_launch.py`
+- `planner:=navfn`なら`nav2_bringup/launch/navigation_launch.py`、
+  `planner:=vi`なら`vi_planner/launch/navigation_launch.py`（`pose_topic:=mcl_pose`）
 - `use_composition:=true`の場合は`rclcpp_components`の`component_container_isolated`
 
 主な起動引数:
@@ -437,6 +505,9 @@ SLAMで地図を作るための起動ファイルです。
 - `use_sim_time`
 - `localization`
   - `emcl2`、`emcl`、`amcl`
+- `planner`
+  - `vi`（デフォルト）、`navfn`
+  - `planner:=vi`は`vi_planner`パッケージのビルドが必要（起動時に検証される）
 - `use_rviz`
 - `autostart`
 - `use_composition`
@@ -444,11 +515,27 @@ SLAMで地図を作るための起動ファイルです。
 - `namespace`
 - `use_namespace`
 
+#### `vi_planner/launch/navigation_launch.py`（value_iteration3側）
+
+`nav2_bringup/launch/navigation_launch.py`（Humble）から派生した、ロボット非依存の
+起動ファイルです。`vi_planner`パッケージ（`src/value_iteration3/vi_ros2/vi_planner`）
+が提供し、`planner:=vi`のときに`navigation.launch.py`からincludeされます。相違点:
+
+- `nav2_planner`の`planner_server`を起動せず、lifecycle管理リストからも除外する
+- 代わりに`vi_planner`ノードを起動する（非composable・非lifecycleの単独プロセス）
+- `pose_topic`起動引数（デフォルト`mcl_pose`）を`vi_planner`へ渡す
+
+Nav2を使う任意のロボットで、`nav2_bringup/launch/navigation_launch.py`の代わりに
+このファイルをincludeすれば価値反復プランナへ切り替えられます。
+
 ### 設定ファイル
 
 - `config/nav2_params.yaml`
   - Nav2全体のパラメータ
   - AMCL、ビヘイビアツリーナビゲーター、制御、コストマップ、地図配信、経路計画、経路平滑化、各種行動、経由地点追従、速度平滑化を設定する
+  - `vi_planner`セクションで価値反復プランナ（ソルバ名`solver`、スレッド数
+    `vi_threads`、キャッシュ許容差`goal_tolerance_*`、経路補間間隔`path_spacing`
+    など）を設定する
 - `config/emcl2_params.yaml`
   - `emcl2_node`用のパラメータ
   - フレーム名、初期姿勢、粒子数、オドメトリモデル、センサリセットなどを設定する

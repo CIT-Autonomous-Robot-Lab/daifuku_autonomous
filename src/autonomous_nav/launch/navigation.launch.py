@@ -13,10 +13,15 @@ from launch.actions import (
 )
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PythonExpression
+from launch.substitutions import (
+    LaunchConfiguration,
+    PathJoinSubstitution,
+    PythonExpression,
+)
 from launch_ros.actions import Node
 from launch_ros.actions import PushRosNamespace
 from launch_ros.descriptions import ParameterFile
+from launch_ros.substitutions import FindPackageShare
 from nav2_common.launch import RewrittenYaml
 
 
@@ -30,6 +35,14 @@ def generate_launch_description():
     default_map = os.path.join(pkg_share, "maps", "map.yaml")
     bringup_launch = os.path.join(nav2_share, "launch", "bringup_launch.py")
     navigation_launch = os.path.join(nav2_share, "launch", "navigation_launch.py")
+    localization_launch = os.path.join(nav2_share, "launch", "localization_launch.py")
+    # planner:=vi 用: planner_server の代わりに vi_planner を起動する
+    # navigation_launch.py の vi 版 (vi_planner パッケージが提供)。
+    # vi_planner 未インストールでも planner:=navfn で起動できるよう、パス解決は
+    # include 実行時 (条件成立時) まで遅延させる。
+    vi_navigation_launch = PathJoinSubstitution(
+        [FindPackageShare("vi_planner"), "launch", "navigation_launch.py"]
+    )
 
     namespace = LaunchConfiguration("namespace")
     use_namespace = LaunchConfiguration("use_namespace")
@@ -47,9 +60,18 @@ def generate_launch_description():
     emcl2_package = LaunchConfiguration("emcl2_package")
     emcl2_executable = LaunchConfiguration("emcl2_executable")
     emcl2_node_name = LaunchConfiguration("emcl2_node_name")
+    planner = LaunchConfiguration("planner")
 
     use_amcl = PythonExpression(["'", localization, "' == 'amcl'"])
     use_emcl2 = PythonExpression(["'", localization, "' in ['emcl', 'emcl2']"])
+    use_navfn = PythonExpression(["'", planner, "' == 'navfn'"])
+    use_vi = PythonExpression(["'", planner, "' == 'vi'"])
+    use_amcl_navfn = PythonExpression(
+        ["'", localization, "' == 'amcl' and '", planner, "' == 'navfn'"]
+    )
+    use_amcl_vi = PythonExpression(
+        ["'", localization, "' == 'amcl' and '", planner, "' == 'vi'"]
+    )
 
     remappings = [("/tf", "tf"), ("/tf_static", "tf_static")]
     emcl2_remappings = remappings + [
@@ -113,6 +135,25 @@ def generate_launch_description():
                 ) from exc
         return []
 
+    def validate_planner(context, *args, **kwargs):
+        selected = planner.perform(context)
+        if selected not in ("vi", "navfn"):
+            raise RuntimeError(
+                f"Unsupported planner: {selected}\n"
+                "Use planner:=vi (value iteration, vi_planner) or planner:=navfn."
+            )
+        if selected == "vi":
+            try:
+                get_package_prefix("vi_planner")
+            except PackageNotFoundError as exc:
+                raise RuntimeError(
+                    "vi_planner package is not available.\n"
+                    "Import value_iteration3 (vcs import src < autonomous_bot.repos) and "
+                    "build it (colcon build --packages-select vi_planner) before launching "
+                    "with planner:=vi, or fall back to planner:=navfn."
+                ) from exc
+        return []
+
     return LaunchDescription([
         SetEnvironmentVariable("RCUTILS_LOGGING_BUFFERED_STREAM", "1"),
 
@@ -140,13 +181,19 @@ def generate_launch_description():
         DeclareLaunchArgument("emcl2_package", default_value="emcl2"),
         DeclareLaunchArgument("emcl2_executable", default_value="emcl2_node"),
         DeclareLaunchArgument("emcl2_node_name", default_value="emcl2"),
+        DeclareLaunchArgument(
+            "planner",
+            default_value="vi",
+            description="Global planner backend: vi (value iteration) or navfn.",
+        ),
 
         OpaqueFunction(function=validate_map_file),
         OpaqueFunction(function=validate_localization),
+        OpaqueFunction(function=validate_planner),
 
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(bringup_launch),
-            condition=IfCondition(use_amcl),
+            condition=IfCondition(use_amcl_navfn),
             launch_arguments={
                 "namespace": namespace,
                 "use_namespace": use_namespace,
@@ -159,6 +206,55 @@ def generate_launch_description():
                 "use_respawn": use_respawn,
                 "log_level": log_level,
             }.items(),
+        ),
+
+        # amcl + vi: 標準 bringup は planner_server 込みなので、localization と
+        # vi 版 navigation を個別に include する。
+        GroupAction(
+            condition=IfCondition(use_amcl_vi),
+            actions=[
+                PushRosNamespace(
+                    condition=IfCondition(use_namespace),
+                    namespace=namespace,
+                ),
+                Node(
+                    condition=IfCondition(use_composition),
+                    name="nav2_container",
+                    package="rclcpp_components",
+                    executable="component_container_isolated",
+                    parameters=[configured_nav2_params, {"autostart": autostart}],
+                    arguments=["--ros-args", "--log-level", log_level],
+                    remappings=remappings,
+                    output="screen",
+                ),
+                IncludeLaunchDescription(
+                    PythonLaunchDescriptionSource(localization_launch),
+                    launch_arguments={
+                        "namespace": namespace,
+                        "map": map_yaml,
+                        "use_sim_time": use_sim_time,
+                        "params_file": params_file,
+                        "autostart": autostart,
+                        "use_composition": use_composition,
+                        "use_respawn": use_respawn,
+                        "container_name": "nav2_container",
+                    }.items(),
+                ),
+                IncludeLaunchDescription(
+                    PythonLaunchDescriptionSource(vi_navigation_launch),
+                    launch_arguments={
+                        "namespace": namespace,
+                        "use_sim_time": use_sim_time,
+                        "params_file": params_file,
+                        "autostart": autostart,
+                        "use_composition": use_composition,
+                        "use_respawn": use_respawn,
+                        "container_name": "nav2_container",
+                        "log_level": log_level,
+                        "pose_topic": "amcl_pose",
+                    }.items(),
+                ),
+            ],
         ),
 
         GroupAction(
@@ -217,6 +313,7 @@ def generate_launch_description():
                 ),
                 IncludeLaunchDescription(
                     PythonLaunchDescriptionSource(navigation_launch),
+                    condition=IfCondition(use_navfn),
                     launch_arguments={
                         "namespace": namespace,
                         "use_sim_time": use_sim_time,
@@ -226,6 +323,21 @@ def generate_launch_description():
                         "use_respawn": use_respawn,
                         "container_name": "nav2_container",
                         "log_level": log_level,
+                    }.items(),
+                ),
+                IncludeLaunchDescription(
+                    PythonLaunchDescriptionSource(vi_navigation_launch),
+                    condition=IfCondition(use_vi),
+                    launch_arguments={
+                        "namespace": namespace,
+                        "use_sim_time": use_sim_time,
+                        "params_file": params_file,
+                        "autostart": autostart,
+                        "use_composition": use_composition,
+                        "use_respawn": use_respawn,
+                        "container_name": "nav2_container",
+                        "log_level": log_level,
+                        "pose_topic": "mcl_pose",
                     }.items(),
                 ),
             ],

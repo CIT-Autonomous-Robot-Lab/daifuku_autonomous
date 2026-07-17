@@ -6,6 +6,13 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         git \
+        curl \
+        build-essential \
+        pkg-config \
+        cmake \
+        libclang-dev \
+        libssl-dev \
+        python3-pip \
         python3-colcon-common-extensions \
         python3-rosdep \
         python3-vcstool \
@@ -14,6 +21,42 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ros-humble-slam-toolbox \
     && rm -rf /var/lib/apt/lists/*
 
+# ── vi_planner (value_iteration3, rclrs 製 Rust ノード) のビルド環境 ──────────
+# value_iteration3/vi_ros2/docker/Dockerfile と同じ構成:
+#   Rust toolchain + colcon-cargo/colcon-ros-cargo + cargo-ament-build、
+#   rclrs (ros2_rust @ 2c6b926) と nav2_msgs の Rust バインディングを
+#   /opt/ros2_rust_ws にビルドしておく。
+RUN pip3 install --no-cache-dir colcon-cargo colcon-ros-cargo
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH=/root/.cargo/bin:$PATH
+
+RUN cargo install --locked cargo-ament-build
+
+WORKDIR /opt/ros2_rust_ws/src
+# rclrs は vi_planner/vi_node が書かれている API のコミットに固定する。
+# ベースイメージが共通インターフェースパッケージの Rust バインディング
+# (share/<pkg>/rust) を同梱しているため、重複ビルドになる ros2 ディレクトリは
+# 削除する (詳細は value_iteration3/vi_ros2/docker/Dockerfile のコメント参照)。
+RUN git clone https://github.com/ros2-rust/ros2_rust.git && \
+    git -C ros2_rust checkout 2c6b92671a65a426aec9c3468c069a551329ca1b && \
+    vcs import < ros2_rust/ros2_rust_humble.repos && \
+    rm -rf ros2
+
+WORKDIR /opt/ros2_rust_ws
+RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
+    colcon build --merge-install --packages-up-to rclrs
+
+# nav2_msgs (ComputePathToPose など) の Rust バインディングをソースビルドで生成
+# (apt バイナリは share/nav2_msgs/rust を含まない)。
+RUN git clone --depth 1 --branch humble \
+      https://github.com/ros-navigation/navigation2.git /tmp/navigation2 && \
+    cp -a /tmp/navigation2/nav2_msgs /opt/ros2_rust_ws/src/nav2_msgs && \
+    rm -rf /tmp/navigation2
+RUN . /opt/ros/${ROS_DISTRO}/setup.sh && . /opt/ros2_rust_ws/install/local_setup.sh && \
+    colcon build --merge-install --packages-select nav2_msgs
+
+# ── メインワークスペース ──────────────────────────────────────────────────────
 WORKDIR ${ROS_WS}
 
 COPY autonomous_bot.repos /tmp/autonomous_bot.repos
@@ -22,12 +65,19 @@ RUN mkdir -p src \
 
 COPY src/autonomous_nav src/autonomous_nav
 
+# rosdep は rclrs 系のキーを解決できないため -r で続行する。
+# colcon は使用パッケージのみ選択ビルドする (value_iteration3 の vi_node /
+# vi_interfaces は Vi.action 用ノードでナビゲーションには不要)。
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh \
     && rosdep update --rosdistro=${ROS_DISTRO} \
     && apt-get update \
     && rosdep install --from-paths src --ignore-src -r -y --rosdistro=${ROS_DISTRO} \
-    && rm -rf /var/lib/apt/lists/* \
-    && colcon build --symlink-install
+    && rm -rf /var/lib/apt/lists/*
+RUN . /opt/ros/${ROS_DISTRO}/setup.sh \
+    && . /opt/ros2_rust_ws/install/local_setup.sh \
+    && colcon build --symlink-install \
+         --packages-select autonomous_nav emcl2 vi_planner \
+         --cargo-args --release
 
 COPY docker/entrypoint.sh /ros_entrypoint.sh
 RUN chmod +x /ros_entrypoint.sh

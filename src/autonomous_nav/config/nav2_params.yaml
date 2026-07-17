@@ -253,6 +253,7 @@ map_saver:
     occupied_thresh_default: 0.65
     map_subscribe_transient_local: true
 
+# planner:=navfn のときのみ使用 (planner:=vi では planner_server は起動しない)。
 planner_server:
   ros__parameters:
     expected_planner_frequency: 20.0
@@ -263,6 +264,35 @@ planner_server:
       tolerance: 0.5
       use_astar: false
       allow_unknown: true
+
+# planner:=vi (デフォルト) のグローバルプランナ。value_iteration3 の vi_planner
+# (Rust) が planner_server の代わりに compute_path_to_pose を提供する。
+# pose_topic は launch 側 (localization に応じて mcl_pose / amcl_pose) が上書きする。
+vi_planner:
+  ros__parameters:
+    use_sim_time: false
+    solver: "frontier2d_sparse"   # U64Solver::from_name の任意のソルバ名
+    theta_cell_num: 60
+    safety_radius: 0.2            # [m] 障害物近傍ペナルティ半径 (VI 内部の膨張)
+    safety_radius_penalty: 30
+    goal_margin_radius: 0.3       # [m] final_state (ゴール圏) 判定半径
+    goal_margin_theta: 15.0       # [deg]
+    map_wait_sec: 60
+    vi_threads: 0                 # 0 = 論理コア数 (VI_THREADS)
+    solve_chunk: 64               # プリエンプト観測間隔 (VI イテレーション)
+    max_solve_iter: 1000000
+    max_rollout_steps: 10000
+    start_tolerance: 0.5          # [m] start が方策なしセルのときの近傍スナップ半径
+    path_spacing: 0.05            # [m] Path の姿勢間隔 (DWB 向け補間; 0 で無効)
+    goal_tolerance_xy: 0.25       # [m] 価値関数キャッシュを再利用するゴール一致判定
+    goal_tolerance_deg: 10.0      # [deg]
+    cost_drawing_threshold: 60    # value_function 可視化のスケール上限 (ステップ数)
+    publish_value_function: true
+    unknown_as_obstacle: true
+    allow_action_mismatch: false
+    action_names: ["forward", "back", "right", "rightfw", "left", "leftfw"]
+    action_forward_m: [0.3, -0.2, 0.0, 0.2, 0.0, 0.2]
+    action_rotation_deg: [0.0, 0.0, -20.0, -20.0, 20.0, 20.0]
 
 smoother_server:
   ros__parameters:
