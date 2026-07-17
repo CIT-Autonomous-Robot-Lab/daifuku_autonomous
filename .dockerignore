@@ -3,5 +3,6 @@ build
 install
 log
 src/emcl2_ros2
+src/value_iteration3
 **/__pycache__
 **/*.pyc
