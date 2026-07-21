@@ -14,6 +14,12 @@ ROS 2、Nav2、SLAM Toolbox、RViz、EMCL2は、Dockerコンテナまたはネ�
 最適方策のロールアウトで経路を生成します。同一ゴールへのリプランは価値関数
 キャッシュにより高速です。
 
+狭域プランナ（経路追従）はデフォルトでグローバルプランナに連動します:
+`planner:=vi`では同リポジトリの`vi_local_planner`（`controller_server`の代わりに
+`follow_path`アクションを提供し、レーザスキャンでローカルに価値関数を補正しながら
+`cmd_vel`を出力するRust製ノード）が使われます。`local_planner:=nav2`で
+Nav2標準のDWB（controller_server）に切り替えられます。
+
 > **重要:** このリポジトリにはRaspberry Pi Catのデバイスドライバやセンサードライバは
 > 含まれていません。機体側でROS 2のドライバを起動し、必要なトピックとTFを配信して
 > ください。
@@ -106,7 +112,9 @@ colcon build --packages-select autonomous_nav emcl2 vi_planner vi_local_planner 
 source install/setup.bash
 ```
 
-（`vi_local_planner`は`local_planner:=vi`を使う場合のみ必要です。）
+（`planner:=vi`（デフォルト）では狭域プランナもデフォルトで`vi_local_planner`に
+なるため、両方ビルドしておきます。DWBを使う場合（`local_planner:=nav2`）は
+`vi_local_planner`を省けます。）
 
 `vi_planner`を使わない場合（`planner:=navfn`のみ）はros2_rust環境が不要です。
 
@@ -161,15 +169,16 @@ ros2 launch autonomous_nav navigation.launch.py \
   use_sim_time:=false localization:=emcl2 planner:=navfn
 ```
 
-狭域プランナ（経路追従）も価値反復に切り替える場合は`local_planner:=vi`を
-追加します（`planner:=vi`が前提。controller_serverの代わりに
-`vi_local_planner`が`follow_path`を提供し、レーザスキャンでローカルに
-価値関数を補正しながら`cmd_vel`を出します）:
+狭域プランナ（経路追従）はデフォルトでグローバルプランナに連動します:
+`planner:=vi`（デフォルト）ではcontroller_serverの代わりに`vi_local_planner`が
+`follow_path`を提供し、レーザスキャンでローカルに価値関数を補正しながら
+`cmd_vel`を出します。狭域だけDWB（controller_server）に戻す場合は
+`local_planner:=nav2`を追加します:
 
 ```bash
 ros2 launch autonomous_nav navigation.launch.py \
   map:=$PWD/src/autonomous_nav/maps/map.yaml \
-  use_sim_time:=false localization:=emcl2 local_planner:=vi
+  use_sim_time:=false localization:=emcl2 local_planner:=nav2
 ```
 
 RVizの「2D Pose Estimate」で初期姿勢を設定し、「Nav2 Goal」で移動先を指定します。
@@ -393,7 +402,7 @@ Dockerイメージ内ではEMCL2とvalue_iteration3を`/opt/ros_ws/src/`へ取�
     から取得する（rclrsにtf2バインディングがないため）
   - パラメータは`config/nav2_params.yaml`の`vi_planner`セクション
     （ソルバ名、スレッド数、キャッシュ許容差、経路補間間隔など）
-- `vi_local_planner`（`local_planner:=vi`の場合のみ）
+- `vi_local_planner`（`local_planner`が`vi`のとき。`planner:=vi`ではデフォルト）
   - `src/value_iteration3/vi_ros2/vi_local_planner`に配置される価値反復狭域
     プランナ（rclrs製Rustノード）
   - `nav2_controller`の`controller_server`の代わりに`follow_path`アクションを
@@ -420,12 +429,15 @@ Dockerイメージ内ではEMCL2とvalue_iteration3を`/opt/ros_ws/src/`へ取�
   - `nav2_bt_navigator`
   - `NavigateToPose`、`NavigateThroughPoses`、経路計算、経路追従、リカバリ、キャンセル系BTノードを使用する
 - 制御
-  - `local_planner:=nav2`（デフォルト）の場合: `nav2_controller`
+  - `local_planner`はデフォルト（`auto`）でグローバルプランナに連動する
+    （`planner:=vi`なら`vi`、`planner:=navfn`なら`nav2`）
+  - `local_planner`が`vi`の場合（`planner:=vi`時のデフォルト）:
+    `vi_local_planner`（value_iteration3）が`controller_server`の代わりに
+    `follow_path`を提供する
+  - `local_planner`が`nav2`の場合: `nav2_controller`
     - ローカルプランナは`dwb_core::DWBLocalPlanner`
     - 進捗チェックは`nav2_controller::SimpleProgressChecker`
     - ゴール判定は`nav2_controller::SimpleGoalChecker`
-  - `local_planner:=vi`の場合: `vi_local_planner`（value_iteration3）が
-    `controller_server`の代わりに`follow_path`を提供する（`planner:=vi`が前提）
 - 経路計画
   - `planner:=vi`（デフォルト）の場合: `vi_planner`（value_iteration3）が
     `planner_server`の代わりに`compute_path_to_pose`を提供する
@@ -537,8 +549,9 @@ SLAMで地図を作るための起動ファイルです。
   - `vi`（デフォルト）、`navfn`
   - `planner:=vi`は`vi_planner`パッケージのビルドが必要（起動時に検証される）
 - `local_planner`
-  - `nav2`（デフォルト、controller_server/DWB）、`vi`（`vi_local_planner`）
-  - `local_planner:=vi`は`planner:=vi`が前提で、`vi_local_planner`パッケージの
+  - `auto`（デフォルト: グローバルプランナに連動し、`planner:=vi`なら`vi`、
+    それ以外は`nav2`）、`nav2`（controller_server/DWB）、`vi`（`vi_local_planner`）
+  - `vi`になる場合は`planner:=vi`が前提で、`vi_local_planner`パッケージの
     ビルドが必要（いずれも起動時に検証される）
 - `use_rviz`
 - `autostart`

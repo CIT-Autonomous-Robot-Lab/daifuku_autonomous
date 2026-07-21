@@ -63,6 +63,13 @@ def generate_launch_description():
     planner = LaunchConfiguration("planner")
     local_planner = LaunchConfiguration("local_planner")
 
+    # local_planner:=auto (デフォルト) はグローバルプランナに連動する:
+    # planner:=vi なら vi_local_planner、それ以外は nav2 (controller_server)。
+    effective_local_planner = PythonExpression([
+        "'", local_planner, "' if '", local_planner, "' != 'auto' else "
+        "('vi' if '", planner, "' == 'vi' else 'nav2')"
+    ])
+
     use_amcl = PythonExpression(["'", localization, "' == 'amcl'"])
     use_emcl2 = PythonExpression(["'", localization, "' in ['emcl', 'emcl2']"])
     use_navfn = PythonExpression(["'", planner, "' == 'navfn'"])
@@ -157,30 +164,31 @@ def generate_launch_description():
 
     def validate_local_planner(context, *args, **kwargs):
         selected = local_planner.perform(context)
-        if selected not in ("nav2", "vi"):
+        if selected not in ("auto", "nav2", "vi"):
             raise RuntimeError(
                 f"Unsupported local_planner: {selected}\n"
-                "Use local_planner:=nav2 (controller_server) or local_planner:=vi "
+                "Use local_planner:=auto (follow the global planner), "
+                "local_planner:=nav2 (controller_server) or local_planner:=vi "
                 "(vi_local_planner)."
             )
-        if selected == "vi":
+        if selected == "vi" and planner.perform(context) != "vi":
             # local_planner:=vi は vi 版 navigation_launch.py 経由でのみ効く
             # (planner:=navfn の標準 navigation_launch.py は local_planner を
             # 知らない)。
-            if planner.perform(context) != "vi":
-                raise RuntimeError(
-                    "local_planner:=vi requires planner:=vi (it is wired through "
-                    "vi_planner's navigation_launch.py)."
-                )
+            raise RuntimeError(
+                "local_planner:=vi requires planner:=vi (it is wired through "
+                "vi_planner's navigation_launch.py)."
+            )
+        if effective_local_planner.perform(context) == "vi":
             try:
                 get_package_prefix("vi_local_planner")
             except PackageNotFoundError as exc:
                 raise RuntimeError(
-                    "vi_local_planner package is not available.\n"
+                    "vi_local_planner package is not available (local planner "
+                    "defaults to vi when planner:=vi).\n"
                     "Import value_iteration3 (vcs import src < autonomous_bot.repos) and "
-                    "build it (colcon build --packages-select vi_local_planner) before "
-                    "launching with local_planner:=vi, or fall back to "
-                    "local_planner:=nav2."
+                    "build it (colcon build --packages-select vi_local_planner), or "
+                    "fall back to local_planner:=nav2."
                 ) from exc
         return []
 
@@ -218,9 +226,11 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             "local_planner",
-            default_value="nav2",
-            description="Local planner backend: nav2 (controller_server/DWB) or vi "
-                        "(vi_local_planner; requires planner:=vi).",
+            default_value="auto",
+            description="Local planner backend: auto (follow the global planner: "
+                        "planner:=vi -> vi, otherwise nav2), nav2 "
+                        "(controller_server/DWB) or vi (vi_local_planner; requires "
+                        "planner:=vi).",
         ),
 
         OpaqueFunction(function=validate_map_file),
@@ -289,7 +299,7 @@ def generate_launch_description():
                         "container_name": "nav2_container",
                         "log_level": log_level,
                         "pose_topic": "amcl_pose",
-                        "local_planner": local_planner,
+                        "local_planner": effective_local_planner,
                     }.items(),
                 ),
             ],
@@ -376,7 +386,7 @@ def generate_launch_description():
                         "container_name": "nav2_container",
                         "log_level": log_level,
                         "pose_topic": "mcl_pose",
-                        "local_planner": local_planner,
+                        "local_planner": effective_local_planner,
                     }.items(),
                 ),
             ],
