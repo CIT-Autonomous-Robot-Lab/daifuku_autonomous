@@ -68,6 +68,7 @@ COPY src/autonomous_nav src/autonomous_nav
 # rosdep は rclrs 系のキーを解決できないため -r で続行する。
 # colcon は使用パッケージのみ選択ビルドする (value_iteration3 の vi_node /
 # vi_interfaces は Vi.action 用ノードでナビゲーションには不要)。
+# vi_local_planner は local_planner:=vi 用の controller_server 置き換えノード。
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh \
     && rosdep update --rosdistro=${ROS_DISTRO} \
     && apt-get update \
@@ -76,7 +77,7 @@ RUN . /opt/ros/${ROS_DISTRO}/setup.sh \
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh \
     && . /opt/ros2_rust_ws/install/local_setup.sh \
     && colcon build --symlink-install \
-         --packages-select autonomous_nav emcl2 vi_planner \
+         --packages-select autonomous_nav emcl2 vi_planner vi_local_planner \
          --cargo-args --release
 
 COPY docker/entrypoint.sh /ros_entrypoint.sh

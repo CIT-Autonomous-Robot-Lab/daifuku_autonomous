@@ -294,6 +294,36 @@ vi_planner:
     action_forward_m: [0.3, -0.2, 0.0, 0.2, 0.0, 0.2]
     action_rotation_deg: [0.0, 0.0, -20.0, -20.0, 20.0, 20.0]
 
+# local_planner:=vi の狭域プランナ。value_iteration3 の vi_local_planner (Rust)
+# が controller_server の代わりに follow_path を提供する。ゴール判定は VI の
+# final_state (goal_margin_*) 自体が担う。pose_topic / scan_topic は launch 側が
+# 上書きする。地図・アクション系のパラメータは vi_planner と一致させること
+# (別プロセスで同じ価値関数を解き直すため)。
+vi_local_planner:
+  ros__parameters:
+    use_sim_time: false
+    solver: "frontier2d_sparse"
+    theta_cell_num: 60
+    safety_radius: 0.2
+    safety_radius_penalty: 30
+    goal_margin_radius: 0.3       # [m] final_state (ゴール圏) 判定半径 = ゴール許容差
+    goal_margin_theta: 15.0       # [deg]
+    map_wait_sec: 60
+    vi_threads: 0
+    solve_chunk: 64
+    max_solve_iter: 1000000
+    goal_tolerance_xy: 0.25       # [m] 価値関数キャッシュを再利用するゴール一致判定
+    goal_tolerance_deg: 10.0      # [deg]
+    control_frequency: 10.0       # [Hz] 制御周期 (本家 ViNode::decision の 100ms)
+    refine_budget_ms: 40          # [ms/tick] ローカルウィンドウ価値反復の時間予算
+    action_tolerance: 0.2         # [m] 方策なしセルでの近傍行動探索半径
+    no_action_timeout_sec: 3.0    # pose/方策なしがこの秒数続いたら追従を中断
+    unknown_as_obstacle: true
+    allow_action_mismatch: false
+    action_names: ["forward", "back", "right", "rightfw", "left", "leftfw"]
+    action_forward_m: [0.3, -0.2, 0.0, 0.2, 0.0, 0.2]
+    action_rotation_deg: [0.0, 0.0, -20.0, -20.0, 20.0, 20.0]
+
 smoother_server:
   ros__parameters:
     use_sim_time: false

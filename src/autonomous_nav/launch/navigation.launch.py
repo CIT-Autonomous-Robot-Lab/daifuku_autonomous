@@ -61,6 +61,7 @@ def generate_launch_description():
     emcl2_executable = LaunchConfiguration("emcl2_executable")
     emcl2_node_name = LaunchConfiguration("emcl2_node_name")
     planner = LaunchConfiguration("planner")
+    local_planner = LaunchConfiguration("local_planner")
 
     use_amcl = PythonExpression(["'", localization, "' == 'amcl'"])
     use_emcl2 = PythonExpression(["'", localization, "' in ['emcl', 'emcl2']"])
@@ -154,6 +155,35 @@ def generate_launch_description():
                 ) from exc
         return []
 
+    def validate_local_planner(context, *args, **kwargs):
+        selected = local_planner.perform(context)
+        if selected not in ("nav2", "vi"):
+            raise RuntimeError(
+                f"Unsupported local_planner: {selected}\n"
+                "Use local_planner:=nav2 (controller_server) or local_planner:=vi "
+                "(vi_local_planner)."
+            )
+        if selected == "vi":
+            # local_planner:=vi は vi 版 navigation_launch.py 経由でのみ効く
+            # (planner:=navfn の標準 navigation_launch.py は local_planner を
+            # 知らない)。
+            if planner.perform(context) != "vi":
+                raise RuntimeError(
+                    "local_planner:=vi requires planner:=vi (it is wired through "
+                    "vi_planner's navigation_launch.py)."
+                )
+            try:
+                get_package_prefix("vi_local_planner")
+            except PackageNotFoundError as exc:
+                raise RuntimeError(
+                    "vi_local_planner package is not available.\n"
+                    "Import value_iteration3 (vcs import src < autonomous_bot.repos) and "
+                    "build it (colcon build --packages-select vi_local_planner) before "
+                    "launching with local_planner:=vi, or fall back to "
+                    "local_planner:=nav2."
+                ) from exc
+        return []
+
     return LaunchDescription([
         SetEnvironmentVariable("RCUTILS_LOGGING_BUFFERED_STREAM", "1"),
 
@@ -186,10 +216,17 @@ def generate_launch_description():
             default_value="vi",
             description="Global planner backend: vi (value iteration) or navfn.",
         ),
+        DeclareLaunchArgument(
+            "local_planner",
+            default_value="nav2",
+            description="Local planner backend: nav2 (controller_server/DWB) or vi "
+                        "(vi_local_planner; requires planner:=vi).",
+        ),
 
         OpaqueFunction(function=validate_map_file),
         OpaqueFunction(function=validate_localization),
         OpaqueFunction(function=validate_planner),
+        OpaqueFunction(function=validate_local_planner),
 
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(bringup_launch),
@@ -252,6 +289,7 @@ def generate_launch_description():
                         "container_name": "nav2_container",
                         "log_level": log_level,
                         "pose_topic": "amcl_pose",
+                        "local_planner": local_planner,
                     }.items(),
                 ),
             ],
@@ -338,6 +376,7 @@ def generate_launch_description():
                         "container_name": "nav2_container",
                         "log_level": log_level,
                         "pose_topic": "mcl_pose",
+                        "local_planner": local_planner,
                     }.items(),
                 ),
             ],
