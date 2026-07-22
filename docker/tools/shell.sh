@@ -2,8 +2,8 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
-COMPOSE_FILE="${REPO_ROOT}/docker/compose.yaml"
+DOCKER_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+COMPOSE_FILE="${DOCKER_DIR}/compose.yaml"
 SERVICE="ros2"
 
 if docker info >/dev/null 2>&1; then
