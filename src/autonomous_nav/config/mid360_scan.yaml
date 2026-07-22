@@ -1,0 +1,15 @@
+pointcloud_to_laserscan:
+  ros__parameters:
+    # Transform first so the height slice is expressed from the floor.
+    target_frame: base_footprint
+    transform_tolerance: 0.05
+    min_height: 0.05
+    max_height: 0.50
+    angle_min: -3.141592654
+    angle_max: 3.141592654
+    angle_increment: 0.008726646
+    queue_size: 4
+    scan_time: 0.10
+    range_min: 0.23
+    range_max: 10.0
+    use_inf: true

@@ -1,0 +1,14 @@
+scan_to_scan_filter_chain:
+  ros__parameters:
+    filter1:
+      name: connector_blind_sector
+      type: laser_filters/LaserScanSectorFilter
+      params:
+        # Default blind sector: rear 60 deg (+150 through +/-180 to -150).
+        # angle_max < angle_min intentionally denotes a wrapped sector.
+        angle_min: 2.617993878
+        angle_max: -2.617993878
+        range_min: 0.0
+        range_max: 100.0
+        clear_inside: true
+        invert: false

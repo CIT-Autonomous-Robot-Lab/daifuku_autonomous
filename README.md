@@ -20,9 +20,9 @@ ROS 2、Nav2、SLAM Toolbox、RViz、EMCL2は、Dockerコンテナまたはネ�
 `cmd_vel`を出力するRust製ノード）が使われます。`local_planner:=nav2`で
 Nav2標準のDWB（controller_server）に切り替えられます。
 
-> **重要:** このリポジトリにはRaspberry Pi Catのデバイスドライバやセンサードライバは
-> 含まれていません。機体側でROS 2のドライバを起動し、必要なトピックとTFを配信して
-> ください。
+> **重要:** Raspberry Pi Catのモータードライバと車輪オドメトリは含まれていません。
+> Mid-360ドライバとLiDAR前処理は含まれます。2D LiDARを使う場合は、機体側の
+> ドライバから生スキャンを`/scan_raw`へ配信してください。
 
 ## システム構成
 
@@ -34,7 +34,8 @@ Raspberry Pi Cat                         Docker / ネイティブPC
 ────────────────────                    ──────────────────────
 モータードライバ  ←── /cmd_vel ─────── Nav2 / 遠隔操作
 オドメトリ        ─── /odom ─────────→ Nav2 / SLAM / EMCL2
-LiDAR             ─── /scan ─────────→ Nav2 / SLAM / EMCL2
+2D LiDAR          ─── /scan_raw ─┐
+Mid-360 ─ /livox/lidar ─ 3D→2D ─┴→ 角度フィルタ → /scan
 TF                ─── odom → base_footprint → センサーフレーム
                                           │
                                           └─ RViz
@@ -44,7 +45,8 @@ TF                ─── odom → base_footprint → センサーフレーム
 
 - `/cmd_vel`（`geometry_msgs/msg/Twist`）を受信する
 - `/odom`（`nav_msgs/msg/Odometry`）を配信する
-- `/scan`（`sensor_msgs/msg/LaserScan`）を配信する
+- 2D LiDAR使用時は`/scan_raw`（`sensor_msgs/msg/LaserScan`）を配信する
+- Mid-360 + IMU使用時は車輪オドメトリを`/wheel/odom`へ配信する
 - `odom`から`base_footprint`までのTFを配信する
 - LiDARなどのセンサーフレームから`base_footprint`までのTFを配信する
 
@@ -68,6 +70,8 @@ Raspberry Pi CatはRaspberry Pi Mouseと同じデバイスドライバを利用�
 - `autonomous_nav`パッケージ
 - `vi_global_planner`（value_iteration3の価値反復グローバルプランナ、Rust/rclrs製。
   ビルドに必要なros2_rustワークスペースはイメージ内`/opt/ros2_rust_ws`に構築済み）
+- Livox SDK2 / `livox_ros_driver2`
+- `pointcloud_to_laserscan`、`laser_filters`、`robot_localization`
 
 ## ネイティブ環境でのセットアップ
 
@@ -79,6 +83,9 @@ Dockerを使わず、Ubuntu 22.04へインストールしたROS 2 Humble上で�
 - `nav2_bringup`
 - `slam_toolbox`
 - `rviz2`
+- `laser_filters`
+- `pointcloud_to_laserscan`
+- `robot_localization`
 - Raspberry Pi CatのROS 2対応ドライバとセンサードライバ
 
 `planner:=vi`（デフォルト）で`vi_global_planner`をビルドする場合は追加で:
@@ -89,10 +96,25 @@ Dockerを使わず、Ubuntu 22.04へインストールしたROS 2 Humble上で�
   バインディング。手順は`docker/Dockerfile`の`/opt/ros2_rust_ws`構築部分、
   または`src/value_iteration3/vi_ros2/docker/Dockerfile`を参照
 
-ワークスペースのルートでEMCL2とvalue_iteration3を取得します。
+ワークスペースのルートでEMCL2、value_iteration3、`livox_ros_driver2`を取得します。
 
 ```bash
 vcs import . < autonomous_bot.repos
+```
+
+Mid-360を使う場合はLivox SDK2を先にインストールし、公式ドライバをROS 2用に準備します。
+Dockerイメージではこの処理は自動です。
+
+```bash
+git clone --depth 1 --branch v1.3.1 \
+  https://github.com/Livox-SDK/Livox-SDK2.git /tmp/Livox-SDK2
+cmake -S /tmp/Livox-SDK2 -B /tmp/Livox-SDK2/build -DCMAKE_BUILD_TYPE=Release
+cmake --build /tmp/Livox-SDK2/build --parallel
+sudo cmake --install /tmp/Livox-SDK2/build
+sudo ldconfig
+
+cp src/livox_ros_driver2/package_ROS2.xml src/livox_ros_driver2/package.xml
+cp -a src/livox_ros_driver2/launch_ROS2 src/livox_ros_driver2/launch
 ```
 
 依存パッケージをインストールします（rclrs系のキーは解決できないため`-r`で
@@ -108,7 +130,9 @@ rosdep install --from-paths src --ignore-src -r -y
 ```bash
 source /opt/ros/humble/setup.bash
 source /path/to/ros2_rust_ws/install/local_setup.bash  # planner:=vi を使う場合
-colcon build --packages-select autonomous_nav emcl2 vi_global_planner vi_local_planner --symlink-install
+colcon build --packages-select autonomous_nav emcl2 vi_global_planner vi_local_planner \
+  livox_ros_driver2 --symlink-install \
+  --cmake-args -DROS_EDITION=ROS2 -DDISTRO_ROS=humble
 source install/setup.bash
 ```
 
@@ -129,12 +153,87 @@ source /opt/ros/humble/setup.bash
 source install/setup.bash
 ```
 
+## LiDARの切り替えと前処理
+
+`mapping.launch.py`と`navigation.launch.py`は`lidar:=2d|mid360`で入力を切り替えます。
+どちらも生スキャンを`/scan_raw`へ集約し、`config/scan_filter.yaml`を通した結果だけを
+`/scan`へ配信します。既定ではコネクタがある後方60度（+150度から-150度まで、
+±180度をまたぐ範囲）を無効化します。
+
+恒久的に制限角度を変える場合は`config/scan_filter.yaml`の`angle_min`と`angle_max`を
+ラジアンで編集します。別ファイルを使う場合、または一時的に無効化する場合は次のように
+指定します。
+
+```bash
+ros2 launch autonomous_nav mapping.launch.py \
+  lidar:=2d \
+  scan_filter_params_file:=/path/to/custom_scan_filter.yaml
+
+ros2 launch autonomous_nav mapping.launch.py \
+  lidar:=2d scan_filter_enabled:=false
+```
+
+### 2D LiDARを使う
+
+2D LiDARドライバの出力を`/scan`ではなく`/scan_raw`へremapしてから、地図作成または
+ナビゲーションを起動します。ドライバ固有のlaunch引数がない場合のROS remap例です。
+
+```bash
+ros2 run <2d_lidar_package> <2d_lidar_node> \
+  --ros-args -r scan:=/scan_raw
+```
+
+`lidar:=2d`では従来どおり、車輪オドメトリノードが`/odom`と
+`odom -> base_footprint` TFを配信します。
+
+### Mid-360を使う
+
+最初に`config/MID360_config.json`の次のアドレスを実ネットワークに合わせます。
+
+- `host_net_info`内の4個の`*_data_ip`: ドライバを動かすPCの固定IP
+- `lidar_configs[0].ip`: Mid-360本体のIP
+
+`base_footprint -> livox_frame` TFはロボットのURDFから配信するのが推奨です。URDFに
+まだ追加していない場合は、実測した搭載位置・姿勢をlaunch引数で一時配信できます。
+値はメートル、姿勢はラジアンです。
+
+```bash
+publish_lidar_tf:=true lidar_x:=0.0 lidar_y:=0.0 lidar_z:=0.30 \
+lidar_roll:=0.0 lidar_pitch:=0.0 lidar_yaw:=0.0
+```
+
+Mid-360ではIMU融合が既定で有効です。Raspberry Pi Catの車輪オドメトリを
+`/wheel/odom`へremapし、車輪ノード自身の`odom -> base_footprint` TF配信を無効にして
+ください。EKFがMid-360のZ軸角速度と車輪速度を融合し、最終的な`/odom`と
+`odom -> base_footprint`を配信します。同じTFを車輪ノードとEKFの両方から配信しては
+いけません。
+
+車輪ドライバにTF無効化機能がない場合は、そのノードの`/tf`出力を未使用トピックへ
+remapします。具体的なパラメータ名は使用する車輪ドライバに合わせてください。
+
+```bash
+# 概念例。実際のpackage/node名とTF無効化引数へ置き換える
+ros2 run <wheel_package> <wheel_odom_node> --ros-args \
+  -r /odom:=/wheel/odom -r /tf:=/wheel/tf_unused
+```
+
+IMU/EKFだけを切り分ける場合は`use_mid360_imu:=false`を指定します。この場合は2D
+LiDAR時と同様に、車輪ノードから通常の`/odom`とTFを配信してください。
+
 ### 地図作成
 
 Raspberry Pi Cat側でセンサー、オドメトリ、TFを起動してから、SLAMを起動します。
 
 ```bash
-ros2 launch autonomous_nav mapping.launch.py use_sim_time:=false
+ros2 launch autonomous_nav mapping.launch.py lidar:=2d use_sim_time:=false
+```
+
+Mid-360の場合（下記の搭載値は例なので実測値へ変更）:
+
+```bash
+ros2 launch autonomous_nav mapping.launch.py \
+  lidar:=mid360 use_sim_time:=false \
+  publish_lidar_tf:=true lidar_z:=0.30
 ```
 
 機体側の操作ノードやゲームパッドで走行した後、地図を保存します。
@@ -150,7 +249,16 @@ EMCL2を使う場合（グローバルプランナはデフォルトで`vi_globa
 ```bash
 ros2 launch autonomous_nav navigation.launch.py \
   map:=$PWD/src/autonomous_nav/maps/map.yaml \
-  use_sim_time:=false localization:=emcl2
+  use_sim_time:=false localization:=emcl2 lidar:=2d
+```
+
+Mid-360を使う場合（IMU融合は既定で有効）:
+
+```bash
+ros2 launch autonomous_nav navigation.launch.py \
+  map:=$PWD/src/autonomous_nav/maps/map.yaml \
+  use_sim_time:=false localization:=emcl2 lidar:=mid360 \
+  publish_lidar_tf:=true lidar_z:=0.30
 ```
 
 Nav2標準のAMCLを使う場合:
@@ -160,6 +268,27 @@ ros2 launch autonomous_nav navigation.launch.py \
   map:=$PWD/src/autonomous_nav/maps/map.yaml \
   use_sim_time:=false localization:=amcl
 ```
+
+### 起動確認
+
+別ターミナルで、共通出力とセンサー別の入力を確認できます。
+
+```bash
+# 両方式共通。/scan_rawが入力、角度制限後の/scanがNav2/SLAM入力
+ros2 topic hz /scan_raw
+ros2 topic hz /scan
+
+# Mid-360 + IMUの場合
+ros2 topic hz /livox/lidar
+ros2 topic hz /livox/imu
+ros2 topic hz /imu/mid360
+ros2 topic hz /wheel/odom
+ros2 topic hz /odom
+ros2 run tf2_ros tf2_echo odom base_footprint
+```
+
+Mid-360起動時に`bind failed`となる場合は、`MID360_config.json`のホストIPが実際に
+ROS 2を動かすPCへ設定されていること、そのIPが対象NICに割り当てられていることを確認します。
 
 NavFnプランナへ切り替える場合は`planner:=navfn`を追加します:
 
@@ -286,8 +415,10 @@ docker compose -f docker/compose.yaml up -d
 
 ### 1. 機体側ドライバを起動
 
-Raspberry Pi Cat側でモータードライバ、オドメトリ、LiDAR、TFを起動します。Docker側で
-`/scan`、`/odom`、必要なTFを確認してから次へ進みます。
+Raspberry Pi Cat側でモータードライバ、オドメトリ、LiDAR、TFを起動します。2D LiDARは
+`/scan_raw`へremapします。Mid-360 + IMUでは車輪オドメトリを`/wheel/odom`へremapし、
+車輪側のodom TFを停止します。Docker側でフィルタ後の`/scan`、最終的な`/odom`、必要な
+TFを確認してから次へ進みます。
 
 ### 2. SLAMを起動
 

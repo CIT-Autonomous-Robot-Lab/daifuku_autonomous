@@ -1,4 +1,8 @@
 repositories:
+  src/livox_ros_driver2:
+    type: git
+    url: https://github.com/Livox-SDK/livox_ros_driver2.git
+    version: 1.2.6
   src/emcl2_ros2:
     type: git
     url: https://github.com/CIT-Autonomous-Robot-Lab/emcl2_ros2.git

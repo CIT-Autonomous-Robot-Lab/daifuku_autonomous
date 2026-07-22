@@ -36,6 +36,7 @@ def generate_launch_description():
     bringup_launch = os.path.join(nav2_share, "launch", "bringup_launch.py")
     navigation_launch = os.path.join(nav2_share, "launch", "navigation_launch.py")
     localization_launch = os.path.join(nav2_share, "launch", "localization_launch.py")
+    lidar_bringup_launch = os.path.join(pkg_share, "launch", "lidar_bringup.launch.py")
     # planner:=vi 用: planner_server の代わりに vi_global_planner を起動する
     # navigation_launch.py の vi 版 (vi_global_planner パッケージが提供)。
     # vi_global_planner 未インストールでも planner:=navfn で起動できるよう、パス解決は
@@ -62,6 +63,11 @@ def generate_launch_description():
     emcl2_node_name = LaunchConfiguration("emcl2_node_name")
     planner = LaunchConfiguration("planner")
     local_planner = LaunchConfiguration("local_planner")
+    lidar = LaunchConfiguration("lidar")
+    scan_filter_enabled = LaunchConfiguration("scan_filter_enabled")
+    scan_filter_params_file = LaunchConfiguration("scan_filter_params_file")
+    mid360_config = LaunchConfiguration("mid360_config")
+    use_mid360_imu = LaunchConfiguration("use_mid360_imu")
 
     # local_planner:=auto (デフォルト) はグローバルプランナに連動する:
     # planner:=vi なら vi_local_planner、それ以外は nav2 (controller_server)。
@@ -232,11 +238,50 @@ def generate_launch_description():
                         "(controller_server/DWB) or vi (vi_local_planner; requires "
                         "planner:=vi).",
         ),
+        DeclareLaunchArgument("lidar", default_value="2d"),
+        DeclareLaunchArgument("scan_filter_enabled", default_value="true"),
+        DeclareLaunchArgument(
+            "scan_filter_params_file",
+            default_value=os.path.join(pkg_share, "config", "scan_filter.yaml"),
+        ),
+        DeclareLaunchArgument(
+            "mid360_config",
+            default_value=os.path.join(pkg_share, "config", "MID360_config.json"),
+        ),
+        DeclareLaunchArgument("use_mid360_imu", default_value="true"),
+        DeclareLaunchArgument("publish_lidar_tf", default_value="false"),
+        DeclareLaunchArgument("lidar_x", default_value="0.0"),
+        DeclareLaunchArgument("lidar_y", default_value="0.0"),
+        DeclareLaunchArgument("lidar_z", default_value="0.0"),
+        DeclareLaunchArgument("lidar_roll", default_value="0.0"),
+        DeclareLaunchArgument("lidar_pitch", default_value="0.0"),
+        DeclareLaunchArgument("lidar_yaw", default_value="0.0"),
+        DeclareLaunchArgument("wheel_odom_topic", default_value="/wheel/odom"),
 
         OpaqueFunction(function=validate_map_file),
         OpaqueFunction(function=validate_localization),
         OpaqueFunction(function=validate_planner),
         OpaqueFunction(function=validate_local_planner),
+
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(lidar_bringup_launch),
+            launch_arguments={
+                "lidar": lidar,
+                "use_sim_time": use_sim_time,
+                "scan_filter_enabled": scan_filter_enabled,
+                "scan_filter_params_file": scan_filter_params_file,
+                "mid360_config": mid360_config,
+                "use_mid360_imu": use_mid360_imu,
+                "publish_lidar_tf": LaunchConfiguration("publish_lidar_tf"),
+                "lidar_x": LaunchConfiguration("lidar_x"),
+                "lidar_y": LaunchConfiguration("lidar_y"),
+                "lidar_z": LaunchConfiguration("lidar_z"),
+                "lidar_roll": LaunchConfiguration("lidar_roll"),
+                "lidar_pitch": LaunchConfiguration("lidar_pitch"),
+                "lidar_yaw": LaunchConfiguration("lidar_yaw"),
+                "wheel_odom_topic": LaunchConfiguration("wheel_odom_topic"),
+            }.items(),
+        ),
 
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(bringup_launch),
