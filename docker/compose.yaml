@@ -3,6 +3,8 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+      args:
+        BUILD_JOBS: ${BUILD_JOBS:-2}
     image: daifuku-autonomous:humble
     container_name: daifuku-autonomous
     stdin_open: true
@@ -10,11 +12,11 @@ services:
     command: ["sleep", "infinity"]
     network_mode: host
     environment:
-      DISPLAY: ${DISPLAY:-host.docker.internal:0.0}
-      LIBGL_ALWAYS_SOFTWARE: ${LIBGL_ALWAYS_SOFTWARE:-1}
-      QT_X11_NO_MITSHM: "1"
-      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-1}
+      ROS_LOCALHOST_ONLY: "0"
+      RMW_IMPLEMENTATION: rmw_fastrtps_cpp
     volumes:
-      - ../src/autonomous_nav:/opt/ros_ws/src/autonomous_nav
+      - ../src/autonomous_nav:/opt/ros_ws/install/share/autonomous_nav
+      # ament_cargo does not install package.xml's <install>launch</install>.
+      # Keep the VI Nav2 launch available to the already-built Pi image.
+      - ../src/value_iteration3/vi_ros2/vi_global_planner/launch:/opt/ros_ws/install/share/vi_global_planner/launch:ro

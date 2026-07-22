@@ -105,6 +105,15 @@ vcs import . < autonomous_bot.repos
 Mid-360を使う場合はLivox SDK2を先にインストールし、公式ドライバをROS 2用に準備します。
 Dockerイメージではこの処理は自動です。
 
+Raspberry Piを含むネイティブ環境では、リポジトリルートからセットアップスクリプトを
+実行できます。Raspberry Pi 4ではメモリ使用量を抑えるため既定の並列数は2です。
+
+```bash
+bash scripts/setup_livox_native.sh
+# メモリが不足する場合
+bash scripts/setup_livox_native.sh --jobs 1
+```
+
 ```bash
 git clone --depth 1 --branch v1.3.1 \
   https://github.com/Livox-SDK/Livox-SDK2.git /tmp/Livox-SDK2
@@ -333,10 +342,23 @@ RVizの「2D Pose Estimate」で初期姿勢を設定し、「Nav2 Goal」で移
 
 リポジトリのルートで実行します。
 
+現在のDockerfileはRaspberry Pi向けの軽量・ヘッドレス構成です。
+`ros:humble-ros-base-jammy`を使用するため`arm64`と`amd64`の両方でビルドでき、
+RVizは含みません。Rust製`vi_global_planner`と`vi_local_planner`はbuilder段階で
+コンパイルし、最終イメージには実行成果物だけを収録します。Raspberry Piでは
+`use_rviz:=false`を指定してください。
+
 ```powershell
 docker compose -f docker/compose.yaml build
 docker compose -f docker/compose.yaml up -d
 docker compose -f docker/compose.yaml ps
+```
+
+Raspberry Pi 4でメモリ不足になる場合は、並列数を1にしてビルドします。
+
+```bash
+BUILD_JOBS=1 docker compose -f docker/compose.yaml build
+docker compose -f docker/compose.yaml up -d
 ```
 
 `src/autonomous_nav`はコンテナの`/opt/ros_ws/src/autonomous_nav`へバインドマウント
