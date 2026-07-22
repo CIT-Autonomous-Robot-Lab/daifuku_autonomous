@@ -29,6 +29,12 @@ Raspberry Pi上のネイティブROSノードとDocker内のFast DDSを確実に
 
 WindowsファイアウォールではDocker Desktop、WSL、ROS 2で使用するネットワークの通信を許可します。
 
+Docker Desktopのhost networkingはL4実装で、コンテナからWindowsホストの物理NICへ
+直接bindできません。このためpingやユニキャストUDPが通っても、Raspberry Pi側との
+DDSマルチキャスト探索が成立しない場合があります。ライブDDS接続が必要な開発では、
+ネイティブUbuntuのDocker Engine、またはmirrored networkingのWSL2内で直接動かす
+Docker Engineを推奨します。Docker Desktop環境はrosbag再生によるデバッグにも利用できます。
+
 WSL2からGUI付き開発コンテナを使う場合は、Windows 11 22H2以降のmirrored networkingを推奨します。`%UserProfile%\.wslconfig`の例:
 
 ```ini
@@ -47,26 +53,26 @@ Linux:
 
 ```bash
 export RASPICAT_ETHERNET_IF=enp3s0
-bash docker_dev/up.sh
+bash docker_dev/tools/up.sh
 ```
 
 Linux側はNetworkManagerプロファイル`raspicat-docker-dev`を作り、通常`10.42.0.1/24`でDHCP/NATを提供します。終了後に戻す場合:
 
 ```bash
-bash docker_dev/network-linux.sh down "$RASPICAT_ETHERNET_IF"
+bash docker_dev/tools/network-linux.sh down "$RASPICAT_ETHERNET_IF"
 ```
 
 Windows PowerShell:
 
 ```powershell
 # Get-NetAdapterで名前を確認してから実行
-.\docker_dev\up.ps1 -EthernetAlias "Ethernet" -InternetAlias "Wi-Fi"
+.\docker_dev\tools\up.ps1 -EthernetAlias "Ethernet" -InternetAlias "Wi-Fi"
 ```
 
 Windows Internet Connection Sharing（ICS）では通常、ホストが`192.168.137.1/24`、機体が`192.168.137.x`になります。ICSを解除する場合は管理者PowerShellで実行します。
 
 ```powershell
-.\docker_dev\network-windows.ps1 -Mode Disable -EthernetAlias "Ethernet"
+.\docker_dev\tools\network-windows.ps1 -Mode Disable -EthernetAlias "Ethernet"
 ```
 
 注意: Windows用スクリプトは競合を避けるため、既存のICS共有を解除してから対象NICへ設定します。

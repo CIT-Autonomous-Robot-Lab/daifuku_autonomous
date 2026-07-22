@@ -12,9 +12,12 @@ services:
     command: ["sleep", "infinity"]
     network_mode: host
     environment:
-      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-1}
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-90}
       ROS_LOCALHOST_ONLY: "0"
       RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+      # Native ROS and Docker are on the same Pi but do not share a process
+      # namespace. Force UDP so Fast DDS does not select unusable SHM paths.
+      FASTDDS_BUILTIN_TRANSPORTS: UDPv4
     volumes:
       - ../src/autonomous_nav:/opt/ros_ws/install/share/autonomous_nav
       # ament_cargo does not install package.xml's <install>launch</install>.

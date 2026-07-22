@@ -13,19 +13,19 @@ Linux:
 ```bash
 sudo apt install network-manager
 export RASPICAT_ETHERNET_IF=enp3s0
-bash docker_dev/up.sh
+bash docker_dev/tools/up.sh
 ```
 
 Windows PowerShell:
 
 ```powershell
-.\docker_dev\up.ps1 -EthernetAlias "Ethernet" -InternetAlias "Wi-Fi"
+.\docker_dev\tools\up.ps1 -EthernetAlias "Ethernet" -InternetAlias "Wi-Fi"
 ```
 
 WSL2シェルからは次を実行できます。管理者権限の確認画面が開き、Windows側のICSが設定されます。
 
 ```bash
-bash docker_dev/up.sh
+bash docker_dev/tools/up.sh
 ```
 
 ネットワークの詳細と戻し方は[ROS 2ネットワーク](network.md#専用ethernetで機体を接続する)を参照してください。
@@ -33,8 +33,8 @@ bash docker_dev/up.sh
 ## コンテナを使う
 
 ```bash
-bash docker_dev/shell.sh
-# PowerShell: .\docker_dev\shell.ps1
+bash docker_dev/tools/shell.sh
+# PowerShell: .\docker_dev\tools\shell.ps1
 build-autonomous
 source install/setup.bash
 ros2 pkg list | grep raspicat

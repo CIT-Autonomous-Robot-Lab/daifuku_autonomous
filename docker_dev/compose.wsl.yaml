@@ -1,0 +1,7 @@
+services:
+  raspicat-dev:
+    environment:
+      PULSE_SERVER: ${PULSE_SERVER:-unix:/mnt/wslg/PulseServer}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /mnt/wslg:/mnt/wslg:rw
