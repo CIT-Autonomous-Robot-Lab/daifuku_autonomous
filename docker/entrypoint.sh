@@ -3,7 +3,7 @@ set -e
 
 source "/opt/ros/${ROS_DISTRO:-humble}/setup.bash"
 
-# rclrs / nav2_msgs (Rust バインディング) — vi_planner の実行時依存。
+# rclrs / nav2_msgs (Rust バインディング) — vi_global_planner の実行時依存。
 if [[ -f /opt/ros2_rust_ws/install/local_setup.bash ]]; then
   source /opt/ros2_rust_ws/install/local_setup.bash
 fi

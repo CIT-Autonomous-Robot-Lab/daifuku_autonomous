@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ros-humble-slam-toolbox \
     && rm -rf /var/lib/apt/lists/*
 
-# ── vi_planner (value_iteration3, rclrs 製 Rust ノード) のビルド環境 ──────────
+# ── vi_global_planner (value_iteration3, rclrs 製 Rust ノード) のビルド環境 ──────────
 # value_iteration3/vi_ros2/docker/Dockerfile と同じ構成:
 #   Rust toolchain + colcon-cargo/colcon-ros-cargo + cargo-ament-build、
 #   rclrs (ros2_rust @ 2c6b926) と nav2_msgs の Rust バインディングを
@@ -34,7 +34,7 @@ ENV PATH=/root/.cargo/bin:$PATH
 RUN cargo install --locked cargo-ament-build
 
 WORKDIR /opt/ros2_rust_ws/src
-# rclrs は vi_planner/vi_node が書かれている API のコミットに固定する。
+# rclrs は vi_global_planner/vi_node が書かれている API のコミットに固定する。
 # ベースイメージが共通インターフェースパッケージの Rust バインディング
 # (share/<pkg>/rust) を同梱しているため、重複ビルドになる ros2 ディレクトリは
 # 削除する (詳細は value_iteration3/vi_ros2/docker/Dockerfile のコメント参照)。
@@ -77,7 +77,7 @@ RUN . /opt/ros/${ROS_DISTRO}/setup.sh \
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh \
     && . /opt/ros2_rust_ws/install/local_setup.sh \
     && colcon build --symlink-install \
-         --packages-select autonomous_nav emcl2 vi_planner vi_local_planner \
+         --packages-select autonomous_nav emcl2 vi_global_planner vi_local_planner \
          --cargo-args --release
 
 COPY docker/entrypoint.sh /ros_entrypoint.sh

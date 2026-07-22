@@ -36,12 +36,12 @@ def generate_launch_description():
     bringup_launch = os.path.join(nav2_share, "launch", "bringup_launch.py")
     navigation_launch = os.path.join(nav2_share, "launch", "navigation_launch.py")
     localization_launch = os.path.join(nav2_share, "launch", "localization_launch.py")
-    # planner:=vi 用: planner_server の代わりに vi_planner を起動する
-    # navigation_launch.py の vi 版 (vi_planner パッケージが提供)。
-    # vi_planner 未インストールでも planner:=navfn で起動できるよう、パス解決は
+    # planner:=vi 用: planner_server の代わりに vi_global_planner を起動する
+    # navigation_launch.py の vi 版 (vi_global_planner パッケージが提供)。
+    # vi_global_planner 未インストールでも planner:=navfn で起動できるよう、パス解決は
     # include 実行時 (条件成立時) まで遅延させる。
     vi_navigation_launch = PathJoinSubstitution(
-        [FindPackageShare("vi_planner"), "launch", "navigation_launch.py"]
+        [FindPackageShare("vi_global_planner"), "launch", "navigation_launch.py"]
     )
 
     namespace = LaunchConfiguration("namespace")
@@ -148,16 +148,16 @@ def generate_launch_description():
         if selected not in ("vi", "navfn"):
             raise RuntimeError(
                 f"Unsupported planner: {selected}\n"
-                "Use planner:=vi (value iteration, vi_planner) or planner:=navfn."
+                "Use planner:=vi (value iteration, vi_global_planner) or planner:=navfn."
             )
         if selected == "vi":
             try:
-                get_package_prefix("vi_planner")
+                get_package_prefix("vi_global_planner")
             except PackageNotFoundError as exc:
                 raise RuntimeError(
-                    "vi_planner package is not available.\n"
+                    "vi_global_planner package is not available.\n"
                     "Import value_iteration3 (vcs import src < autonomous_bot.repos) and "
-                    "build it (colcon build --packages-select vi_planner) before launching "
+                    "build it (colcon build --packages-select vi_global_planner) before launching "
                     "with planner:=vi, or fall back to planner:=navfn."
                 ) from exc
         return []
@@ -177,7 +177,7 @@ def generate_launch_description():
             # 知らない)。
             raise RuntimeError(
                 "local_planner:=vi requires planner:=vi (it is wired through "
-                "vi_planner's navigation_launch.py)."
+                "vi_global_planner's navigation_launch.py)."
             )
         if effective_local_planner.perform(context) == "vi":
             try:

@@ -265,10 +265,10 @@ planner_server:
       use_astar: false
       allow_unknown: true
 
-# planner:=vi (デフォルト) のグローバルプランナ。value_iteration3 の vi_planner
+# planner:=vi (デフォルト) のグローバルプランナ。value_iteration3 の vi_global_planner
 # (Rust) が planner_server の代わりに compute_path_to_pose を提供する。
 # pose_topic は launch 側 (localization に応じて mcl_pose / amcl_pose) が上書きする。
-vi_planner:
+vi_global_planner:
   ros__parameters:
     use_sim_time: false
     solver: "frontier2d_sparse"   # U64Solver::from_name の任意のソルバ名
@@ -298,7 +298,7 @@ vi_planner:
 # local_planner:=vi の狭域プランナ。value_iteration3 の vi_local_planner (Rust)
 # が controller_server の代わりに follow_path を提供する。ゴール判定は VI の
 # final_state (goal_margin_*) 自体が担う。pose_topic / scan_topic は launch 側が
-# 上書きする。地図・アクション系のパラメータは vi_planner と一致させること
+# 上書きする。地図・アクション系のパラメータは vi_global_planner と一致させること
 # (別プロセスで同じ価値関数を解き直すため)。
 vi_local_planner:
   ros__parameters:
