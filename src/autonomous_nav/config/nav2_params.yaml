@@ -288,6 +288,7 @@ vi_planner:
     goal_tolerance_deg: 10.0      # [deg]
     cost_drawing_threshold: 60    # value_function 可視化のスケール上限 (ステップ数)
     publish_value_function: true
+    value_publish_interval_ms: 500  # [ms] solve 途中経過の配信間隔 (0 で完了時のみ)
     unknown_as_obstacle: true
     allow_action_mismatch: false
     action_names: ["forward", "back", "right", "rightfw", "left", "leftfw"]
@@ -318,6 +319,9 @@ vi_local_planner:
     refine_budget_ms: 40          # [ms/tick] ローカルウィンドウ価値反復の時間予算
     action_tolerance: 0.2         # [m] 方策なしセルでの近傍行動探索半径
     no_action_timeout_sec: 3.0    # pose/方策なしがこの秒数続いたら追従を中断
+    cost_drawing_threshold: 60    # local_value_function / local_window_value のスケール上限
+    publish_value_function: true  # solve 経過を local_value_function、追従中の±1m 窓を local_window_value へ
+    value_publish_interval_ms: 500  # [ms] 可視化配信間隔 (0 で solve 完了時のみ)
     unknown_as_obstacle: true
     allow_action_mismatch: false
     action_names: ["forward", "back", "right", "rightfw", "left", "leftfw"]

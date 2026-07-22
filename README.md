@@ -186,8 +186,19 @@ RVizの「2D Pose Estimate」で初期姿勢を設定し、「Nav2 Goal」で移
 `planner:=vi`では、新しいゴールを受けた最初の経路計算で価値反復が地図全体を
 解くため、地図サイズに応じて数秒〜数十秒かかることがあります（`vi_planner`の
 ログに計算時間が出力されます）。同じゴールへのリプランはキャッシュされた
-価値関数を使うため高速です。計算された価値関数（θ=0スライス）は
-`/value_function`トピック（OccupancyGrid）でRVizに表示できます。
+価値関数を使うため高速です。
+
+価値反復の計算過程はRVizで見られます（`rviz/nav2_default.rviz`に表示を追加済み）。
+いずれもOccupancyGridで、`costmap`カラースキームのMap表示で描画されます。
+
+- `/value_function` — グローバル（`vi_planner`）の価値関数（θ=0スライス）。
+  solve中も`value_publish_interval_ms`（既定500ms）ごとに途中経過が配信される
+  ため、ゴールから波面が広がる様子が見える
+- `/local_value_function` — ローカル（`vi_local_planner`）が自前で解く価値関数の
+  solve経過と完成形（既定のRViz設定では非表示。グローバルとほぼ同じ絵になるため）
+- `/local_window_value` — 追従中にロボット周辺±1mのローカルウィンドウを現在方位の
+  θスライスで配信。スキャン由来のペナルティ注入と局所反復の結果がリアルタイムに
+  見える（`local_planner:=vi`のとき）
 
 ## Docker環境の起動
 
