@@ -77,8 +77,8 @@ RUN rosdep update --rosdistro=humble \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR ${RASPICAT2_WS}
-RUN source /opt/ros/humble/setup.bash \
-    && colcon build --symlink-install
+RUN /bin/bash -lc 'source /opt/ros/humble/setup.bash \
+    && colcon build --symlink-install'
 
 RUN printf '%s\n' \
       'source /opt/ros/humble/setup.bash' \

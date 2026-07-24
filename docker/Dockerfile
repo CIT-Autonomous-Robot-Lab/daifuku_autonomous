@@ -170,6 +170,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ros-humble-robot-localization \
       ros-humble-rosbag2 \
       ros-humble-slam-toolbox \
+      ros-humble-teleop-twist-joy \
+      ros-humble-teleop-twist-keyboard \
       ros-humble-topic-tools \
     && rm -rf /var/lib/apt/lists/*
 

@@ -143,6 +143,41 @@ ros2 run tf2_ros tf2_echo odom base_footprint
 ros2 topic hz /scan
 ```
 
+Podman Hyper-V VMを実機と同じEthernetへ直接接続すると、Windows画面のRVizから実機の
+DDSトピックをライブ表示できます。管理者PowerShellで一度だけ次を実行してください。
+既存のPodman NAT用NICは残したまま、外部NIC `192.168.137.2/24`を追加します。
+
+```powershell
+.\docker_dev\tools\add-podman-robot-network.ps1
+```
+
+`compose.yaml`は`network_mode: host`なので、コンテナを起動し直せばPiと同一セグメントで
+DDSマルチキャストを使用します。PiのDHCPアドレスが変わっても設定変更は不要です。
+
+```powershell
+podman compose -f docker_dev/compose.yaml up -d
+podman exec -d daifuku-raspicat-dev bash -lc `
+  "source /opt/ros/humble/setup.bash; source /workspaces/daifuku_autonomous/install/setup.bash; rviz2 -d /workspaces/daifuku_autonomous/src/autonomous_nav/rviz/nav2_default.rviz"
+```
+
+SSH経由で実機の状態だけを確認するときは、PowerShellの自動検出スクリプトも使用できます。
+DHCPでRaspberry PiのIPが変わっても、mDNS、Windowsの近隣キャッシュ、専用Ethernetの
+SSHスキャンを順に試し、`/odom` Publisherが存在する実機だけを選択します。
+
+```powershell
+# トピック一覧
+.\docker_dev\tools\pi-topics.ps1 -EthernetAlias "Ethernet"
+
+# ノード一覧、詳細、1メッセージ、周波数
+.\docker_dev\tools\pi-topics.ps1 -Action Nodes -EthernetAlias "Ethernet"
+.\docker_dev\tools\pi-topics.ps1 -Action Info -Topic /odom -EthernetAlias "Ethernet"
+.\docker_dev\tools\pi-topics.ps1 -Action Echo -Topic /odom -EthernetAlias "Ethernet"
+.\docker_dev\tools\pi-topics.ps1 -Action Hz -Topic /scan -EthernetAlias "Ethernet"
+
+# IPが分かっている場合は探索を省略
+.\docker_dev\tools\pi-topics.ps1 -PiAddress 192.168.137.167
+```
+
 現在のROS 2 Humbleで動作確認済みのNavFn構成をデバッグ起動する例:
 
 ```bash

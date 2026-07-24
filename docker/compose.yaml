@@ -19,7 +19,12 @@ services:
       # namespace. Force UDP so Fast DDS does not select unusable SHM paths.
       FASTDDS_BUILTIN_TRANSPORTS: UDPv4
     volumes:
+      # joy_node uses evdev devices. The cgroup rule also permits hot-plugged
+      # controllers whose minor number was not present at container creation.
+      - /dev/input:/dev/input:ro
       - ../src/autonomous_nav:/opt/ros_ws/install/share/autonomous_nav
       # ament_cargo does not install package.xml's <install>launch</install>.
       # Keep the VI Nav2 launch available to the already-built Pi image.
       - ../src/value_iteration3/vi_ros2/vi_global_planner/launch:/opt/ros_ws/install/share/vi_global_planner/launch:ro
+    device_cgroup_rules:
+      - "c 13:* r"

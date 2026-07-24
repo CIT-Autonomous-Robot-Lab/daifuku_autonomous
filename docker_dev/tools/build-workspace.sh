@@ -15,7 +15,12 @@ vcs import . --skip-existing < autonomous_bot.repos
 # names in the upstream repository.
 cp src/livox_ros_driver2/package_ROS2.xml src/livox_ros_driver2/package.xml
 rm -rf src/livox_ros_driver2/launch
-cp -a src/livox_ros_driver2/launch_ROS2 src/livox_ros_driver2/launch
+# Windows/Podman bind mounts do not support setting every Unix timestamp.
+mkdir -p src/livox_ros_driver2/launch
+while IFS= read -r -d '' launch_file; do
+  target="src/livox_ros_driver2/launch/${launch_file##*/}"
+  dd if="${launch_file}" of="${target}" status=none
+done < <(find src/livox_ros_driver2/launch_ROS2 -maxdepth 1 -type f -print0)
 
 # The image removes apt indexes to stay reasonably small. rosdep may still
 # discover source-specific packages (for example libaprutil1-dev), so refresh

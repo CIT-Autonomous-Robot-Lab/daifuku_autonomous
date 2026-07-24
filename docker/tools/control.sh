@@ -8,6 +8,10 @@ SERVICE="${CONTROL_SERVICE:-ros2}"
 MOTOR_SERVICE="${MOTOR_SERVICE:-/motor_power}"
 CMD_VEL_TOPIC="${CMD_VEL_TOPIC:-/cmd_vel}"
 ROS_TIMEOUT="${ROS_TIMEOUT:-10}"
+TELEOP_LINEAR_SPEED="${TELEOP_LINEAR_SPEED:-0.2}"
+TELEOP_ANGULAR_SPEED="${TELEOP_ANGULAR_SPEED:-1.0}"
+JOYSTICK_ID="${JOYSTICK_ID:-0}"
+JOYSTICK_CONFIG="${JOYSTICK_CONFIG:-xbox}"
 
 DOCKER=()
 COMPOSE=()
@@ -18,6 +22,8 @@ usage() {
   control.sh motor on       モーター電源を入れる
   control.sh motor off      停止指令を送ってからモーター電源を切る
   control.sh stop           /cmd_vel へ停止指令を1回送る
+  control.sh teleop keyboard キーボードで操作する（Ctrl-Cで終了）
+  control.sh teleop joystick ジョイスティックで操作する（Ctrl-Cで終了）
   control.sh status         コンテナ、ROSノード、モーターサービスを確認する
   control.sh nodes          ROSノード一覧を表示する
   control.sh topics         ROSトピック一覧を表示する
@@ -31,6 +37,10 @@ usage() {
   MOTOR_SERVICE    モーター電源サービス（既定: /motor_power）
   CMD_VEL_TOPIC    速度指令トピック（既定: /cmd_vel）
   ROS_TIMEOUT      ROS操作のタイムアウト秒数（既定: 10）
+  TELEOP_LINEAR_SPEED  キーボード操作の並進速度 m/s（既定: 0.2）
+  TELEOP_ANGULAR_SPEED キーボード操作の旋回速度 rad/s（既定: 1.0）
+  JOYSTICK_ID      joyデバイスID（既定: 0）
+  JOYSTICK_CONFIG  teleop_twist_joyの設定名（既定: xbox）
 EOF
 }
 
@@ -70,6 +80,11 @@ run_ros() {
   "${COMPOSE[@]}" exec -T "${SERVICE}" /ros_entrypoint.sh ros2 "$@"
 }
 
+run_ros_interactive() {
+  # teleop_twist_keyboard reads raw keystrokes from the controlling terminal.
+  "${COMPOSE[@]}" exec "${SERVICE}" /ros_entrypoint.sh ros2 "$@"
+}
+
 run_ros_timed() {
   "${COMPOSE[@]}" exec -T "${SERVICE}" \
     timeout --foreground "${ROS_TIMEOUT}s" /ros_entrypoint.sh ros2 "$@"
@@ -84,6 +99,21 @@ set_motor_power() {
   local enabled="$1"
   run_ros_timed service call "${MOTOR_SERVICE}" \
     std_srvs/srv/SetBool "{data: ${enabled}}"
+}
+
+run_keyboard_teleop() {
+  run_ros_interactive run teleop_twist_keyboard teleop_twist_keyboard \
+    --ros-args \
+    -p "speed:=${TELEOP_LINEAR_SPEED}" \
+    -p "turn:=${TELEOP_ANGULAR_SPEED}" \
+    -r "cmd_vel:=${CMD_VEL_TOPIC}"
+}
+
+run_joystick_teleop() {
+  run_ros launch teleop_twist_joy teleop-launch.py \
+    "joy_config:=${JOYSTICK_CONFIG}" \
+    "joy_dev:=${JOYSTICK_ID}" \
+    "joy_vel:=${CMD_VEL_TOPIC}"
 }
 
 show_status() {
@@ -147,6 +177,25 @@ main() {
       init_docker
       ensure_running
       publish_stop
+      ;;
+    teleop)
+      local input="${1:-}"
+      [[ -n "${input}" ]] || die "teleop の後に keyboard または joystick を指定してください。"
+      shift
+      require_no_args "$@"
+      [[ "${input}" == "keyboard" || "${input}" == "joystick" ]] || \
+        die "不明な teleop 入力です: ${input}（keyboard または joystick を指定してください）"
+      init_docker
+      ensure_running
+      case "${input}" in
+        keyboard)
+          run_keyboard_teleop
+          ;;
+        joystick)
+          [[ "${JOYSTICK_ID}" =~ ^[0-9]+$ ]] || die "JOYSTICK_ID は0以上の整数で指定してください。"
+          run_joystick_teleop
+          ;;
+      esac
       ;;
     status)
       require_no_args "$@"
