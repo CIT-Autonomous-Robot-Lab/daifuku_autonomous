@@ -8,9 +8,9 @@ COMPOSE_FILES=(-f "${DEV_DIR}/compose.yaml")
 if grep -qi microsoft /proc/sys/kernel/osrelease 2>/dev/null; then
   COMPOSE_FILES+=(-f "${DEV_DIR}/compose.wsl.yaml")
   WIN_SCRIPT="$(wslpath -w "${TOOLS_DIR}/network-windows.ps1")"
-  echo "Requesting Administrator permission to enable Windows ICS/DHCP..."
+  echo "Requesting Administrator permission to configure the Windows static robot LAN..."
   powershell.exe -NoProfile -Command \
-    "Start-Process powershell.exe -Verb RunAs -Wait -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File \"${WIN_SCRIPT}\" -Mode Enable'"
+    "Start-Process powershell.exe -Verb RunAs -Wait -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File \"${WIN_SCRIPT}\" -Mode Static'"
 else
   COMPOSE_FILES+=(-f "${DEV_DIR}/compose.linux.yaml")
   bash "${TOOLS_DIR}/network-linux.sh" up "${RASPICAT_ETHERNET_IF:-}"

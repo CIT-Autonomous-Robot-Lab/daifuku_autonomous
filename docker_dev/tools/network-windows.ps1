@@ -1,8 +1,13 @@
 param(
-    [ValidateSet('Enable', 'Disable')]
-    [string]$Mode = 'Enable',
+    [ValidateSet('Static', 'Disable')]
+    [string]$Mode = 'Static',
     [string]$EthernetAlias = '',
-    [string]$InternetAlias = ''
+    # Kept for command-line compatibility; static mode does not use an
+    # Internet-facing adapter or NAT.
+    [string]$InternetAlias = '',
+    [string]$RobotHostAddress = '192.168.1.3',
+    [ValidateRange(1, 32)]
+    [int]$RobotPrefixLength = 24
 )
 
 $ErrorActionPreference = 'Stop'
@@ -12,13 +17,6 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
     throw 'Run this script from an Administrator PowerShell session.'
 }
 
-$sharing = New-Object -ComObject HNetCfg.HNetShare
-$connections = @($sharing.EnumEveryConnection())
-$items = foreach ($connection in $connections) {
-    $properties = $sharing.NetConnectionProps($connection)
-    [pscustomobject]@{ Connection = $connection; Name = $properties.Name; Device = $properties.DeviceName }
-}
-
 if (-not $EthernetAlias) {
     $upEthernet = @(Get-NetAdapter -Physical | Where-Object {
         $_.Status -eq 'Up' -and $_.MediaType -eq '802.3'
@@ -26,39 +24,77 @@ if (-not $EthernetAlias) {
     if ($upEthernet.Count -ne 1) {
         throw "Could not choose one wired adapter. Pass -EthernetAlias. Candidates: $($upEthernet.Name -join ', ')"
     }
+
     $EthernetAlias = $upEthernet[0].Name
+
+    # Once the physical adapter is attached to an external Hyper-V switch,
+    # assign the host address to the management-OS vEthernet adapter.
+    $externalSwitch = Get-VMSwitch -SwitchType External -ErrorAction SilentlyContinue |
+        Where-Object NetAdapterInterfaceDescription -eq $upEthernet[0].InterfaceDescription |
+        Select-Object -First 1
+    if ($externalSwitch) {
+        $managementAdapter = Get-VMNetworkAdapter -ManagementOS -SwitchName $externalSwitch.Name |
+            Select-Object -First 1
+        if ($managementAdapter) {
+            $managementAlias = "vEthernet ($($managementAdapter.Name))"
+            if (Get-NetAdapter -Name $managementAlias -ErrorAction SilentlyContinue) {
+                $EthernetAlias = $managementAlias
+            }
+        }
+    }
 }
 
-$privateItem = $items | Where-Object Name -eq $EthernetAlias | Select-Object -First 1
-if (-not $privateItem) { throw "Adapter '$EthernetAlias' was not found by Internet Connection Sharing." }
+$sharing = New-Object -ComObject HNetCfg.HNetShare
+foreach ($connection in @($sharing.EnumEveryConnection())) {
+    $config = $sharing.INetSharingConfigurationForINetConnection($connection)
+    if ($config.SharingEnabled) { $config.DisableSharing() }
+}
+
+# An older setup may have installed Open DHCP Server separately from ICS.
+# Keep its files/configuration intact, but prevent it from serving leases on
+# the fixed robot LAN or restarting at the next Windows boot.
+$openDhcp = Get-Service -Name 'OpenDHCPServer' -ErrorAction SilentlyContinue
+if ($openDhcp) {
+    if ($openDhcp.Status -ne 'Stopped') {
+        Stop-Service -Name 'OpenDHCPServer' -Force
+    }
+    Set-Service -Name 'OpenDHCPServer' -StartupType Disabled
+}
+
+# Remove the legacy ICS subnet. Raspberry Pi Cat and Livox use fixed addresses
+# on 192.168.1.0/24, so no DHCP or NAT is required on this cable.
+Get-NetIPAddress `
+    -InterfaceAlias $EthernetAlias `
+    -AddressFamily IPv4 `
+    -IPAddress '192.168.137.1' `
+    -ErrorAction SilentlyContinue |
+    Remove-NetIPAddress -Confirm:$false
 
 if ($Mode -eq 'Disable') {
-    foreach ($item in $items) {
-        $config = $sharing.INetSharingConfigurationForINetConnection($item.Connection)
-        if ($config.SharingEnabled) { $config.DisableSharing() }
-    }
-    Write-Host "ICS/DHCP disabled for $EthernetAlias."
+    Get-NetIPAddress `
+        -InterfaceAlias $EthernetAlias `
+        -AddressFamily IPv4 `
+        -IPAddress $RobotHostAddress `
+        -ErrorAction SilentlyContinue |
+        Remove-NetIPAddress -Confirm:$false
+    Write-Host "RasPiCat static network removed from $EthernetAlias; ICS/DHCP remains disabled."
     exit 0
 }
 
-if (-not $InternetAlias) {
-    $defaultRoute = Get-NetRoute -DestinationPrefix '0.0.0.0/0' |
-        Sort-Object RouteMetric, InterfaceMetric | Select-Object -First 1
-    if (-not $defaultRoute) { throw 'No default IPv4 Internet route was found. Pass -InternetAlias.' }
-    $InternetAlias = (Get-NetAdapter -InterfaceIndex $defaultRoute.InterfaceIndex).Name
+if ($RobotHostAddress) {
+    $robotAddress = Get-NetIPAddress `
+        -InterfaceAlias $EthernetAlias `
+        -AddressFamily IPv4 `
+        -IPAddress $RobotHostAddress `
+        -ErrorAction SilentlyContinue
+    if (-not $robotAddress) {
+        New-NetIPAddress `
+            -InterfaceAlias $EthernetAlias `
+            -IPAddress $RobotHostAddress `
+            -PrefixLength $RobotPrefixLength | Out-Null
+    }
 }
-if ($InternetAlias -eq $EthernetAlias) { throw 'Internet and Raspberry Pi adapters must be different.' }
 
-$publicItem = $items | Where-Object Name -eq $InternetAlias | Select-Object -First 1
-if (-not $publicItem) { throw "Internet adapter '$InternetAlias' was not found by Internet Connection Sharing." }
-
-# ICS owns its DHCP/NAT configuration. Windows normally uses 192.168.137.1/24.
-foreach ($item in $items) {
-    $config = $sharing.INetSharingConfigurationForINetConnection($item.Connection)
-    if ($config.SharingEnabled) { $config.DisableSharing() }
-}
-$sharing.INetSharingConfigurationForINetConnection($publicItem.Connection).EnableSharing(0)
-$sharing.INetSharingConfigurationForINetConnection($privateItem.Connection).EnableSharing(1)
-
-Write-Host "Windows ICS/DHCP enabled: $InternetAlias -> $EthernetAlias."
-Write-Host 'The wired host address is normally 192.168.137.1; the robot receives a 192.168.137.x lease.'
+Write-Host "Static RasPiCat network configured on $EthernetAlias."
+Write-Host "Windows=$RobotHostAddress/$RobotPrefixLength, Podman=192.168.1.2, Pi=192.168.1.50, Livox=192.168.1.108."
+Write-Host 'Windows ICS/DHCP/NAT is disabled for the robot LAN.'

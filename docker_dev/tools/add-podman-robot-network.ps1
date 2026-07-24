@@ -6,8 +6,8 @@ param(
     [string]$EthernetAlias = 'Ethernet',
     [string]$SwitchName = 'RasPiCat External',
     [string]$AdapterName = 'RasPiCat LAN',
-    [string]$VmInterface = 'eth0',
-    [string]$VmAddress = '192.168.137.2/24'
+    [string]$VmInterface = 'raspi0',
+    [string]$VmAddress = '192.168.1.2/24'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -51,6 +51,17 @@ $connectionUri = [uri]$connection.URI
 $sshTarget = '{0}@{1}' -f $connectionUri.UserInfo, $connectionUri.Host
 $remoteCommand = @"
 set -eu
+if ! ip link show '$VmInterface' >/dev/null 2>&1; then
+  current_interface='eth0'
+  connection_name=`$(nmcli -g GENERAL.CONNECTION device show "`$current_interface")
+  mac=`$(cat "/sys/class/net/`$current_interface/address")
+  sudo nmcli connection modify "`$connection_name" connection.interface-name '$VmInterface'
+  printf 'SUBSYSTEM=="net", ACTION=="add", ATTR{address}=="%s", NAME="$VmInterface"\n' "`$mac" | \
+    sudo tee /etc/udev/rules.d/70-raspicat-lan.rules >/dev/null
+  sudo ip link set "`$current_interface" down
+  sudo ip link set "`$current_interface" name '$VmInterface'
+  sudo ip link set '$VmInterface' up
+fi
 connection_name=`$(nmcli -g GENERAL.CONNECTION device show '$VmInterface')
 sudo nmcli connection modify "`$connection_name" \
   ipv4.method manual ipv4.addresses '$VmAddress' ipv4.gateway '' \

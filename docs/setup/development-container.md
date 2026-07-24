@@ -6,7 +6,8 @@ Raspberry Pi本体のOS、GPIOカーネルドライバ、モータードライ�
 
 ## 推奨の起動方法
 
-専用Ethernet NICを確認してから実行してください。起動ラッパーはコンテナより先にホスト側のDHCP/NATを設定します。
+専用Ethernet NICを確認してから実行してください。起動ラッパーはコンテナより先に
+ホスト側へ固定IP`192.168.1.3/24`を設定し、ICS/DHCPを解除します。
 
 Linux:
 
@@ -19,10 +20,11 @@ bash docker_dev/tools/up.sh
 Windows PowerShell:
 
 ```powershell
-.\docker_dev\tools\up.ps1 -EthernetAlias "Ethernet" -InternetAlias "Wi-Fi"
+.\docker_dev\tools\up.ps1
 ```
 
-WSL2シェルからは次を実行できます。管理者権限の確認画面が開き、Windows側のICSが設定されます。
+WSL2シェルからは次を実行できます。管理者権限の確認画面が開き、Windows側の固定IPが
+設定されます。
 
 ```bash
 bash docker_dev/tools/up.sh
@@ -71,12 +73,13 @@ ros2 launch raspicat_bringup teleop.launch.py teleop:=key
 ## GUI
 
 - WSLg: WSLシェルの`DISPLAY`と`WAYLAND_DISPLAY`を確認
-- Windows X Server: X Serverを起動し、必要なら`DISPLAY=host.docker.internal:0.0`を指定
+- Windows X Server: `up.ps1`がVcXsrv Display `:400`を起動し、
+  `DISPLAY=host.docker.internal:400.0`を指定
 - Linux X11: 起動前に`xhost +si:localuser:root`、終了後に`xhost -si:localuser:root`を実行
 
 ## Dockerだけを手動起動する
 
-DHCP/NATを設定済みの場合のみ使用します。
+固定IPを設定済みの場合のみ使用します。
 
 ```bash
 docker compose -f docker_dev/compose.yaml up -d --build
@@ -91,4 +94,4 @@ docker compose \
   up -d --build
 ```
 
-この方法ではDHCP/NATは設定されません。通常は`up.sh`または`up.ps1`を利用してください。
+この方法では固定IPは設定されません。通常は`up.sh`または`up.ps1`を利用してください。

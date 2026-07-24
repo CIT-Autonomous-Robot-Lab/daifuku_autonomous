@@ -47,7 +47,18 @@ firewall=true
 
 ## 専用Ethernetで機体を接続する
 
-`docker_dev/`には、専用NICでDHCPとインターネット共有を開始する補助スクリプトがあります。社内LANなど別用途のNICを選ばないでください。既存のNIC設定が変更されます。
+`docker_dev/`には、専用NICを固定IPで設定する補助スクリプトがあります。DHCP/NATは
+使用しません。社内LANなど別用途のNICを選ばないでください。
+
+| 機器 | 固定IP |
+|---|---|
+| Windows / Linuxホスト | `192.168.1.3/24` |
+| Podman Hyper-V VM | `192.168.1.2/24` |
+| Raspberry Pi Cat | `192.168.1.50/24` |
+| Livox Mid-360 | `192.168.1.108/24` |
+
+Piの`/etc/netplan/99-livox.yaml`では、`eth0`に`dhcp4: false`と
+`192.168.1.50/24`を明示します。
 
 Linux:
 
@@ -56,7 +67,8 @@ export RASPICAT_ETHERNET_IF=enp3s0
 bash docker_dev/tools/up.sh
 ```
 
-Linux側はNetworkManagerプロファイル`raspicat-docker-dev`を作り、通常`10.42.0.1/24`でDHCP/NATを提供します。終了後に戻す場合:
+Linux側はNetworkManagerプロファイル`raspicat-docker-dev`を作り、
+`192.168.1.3/24`を設定します。終了後に戻す場合:
 
 ```bash
 bash docker_dev/tools/network-linux.sh down "$RASPICAT_ETHERNET_IF"
@@ -65,17 +77,21 @@ bash docker_dev/tools/network-linux.sh down "$RASPICAT_ETHERNET_IF"
 Windows PowerShell:
 
 ```powershell
-# Get-NetAdapterで名前を確認してから実行
-.\docker_dev\tools\up.ps1 -EthernetAlias "Ethernet" -InternetAlias "Wi-Fi"
+.\docker_dev\tools\up.ps1
+# 自動判定できない場合
+.\docker_dev\tools\up.ps1 -EthernetAlias "vEthernet (RasPiCat External)"
 ```
 
-Windows Internet Connection Sharing（ICS）では通常、ホストが`192.168.137.1/24`、機体が`192.168.137.x`になります。ICSを解除する場合は管理者PowerShellで実行します。
+Windows用スクリプトは既存のICS共有を解除し、旧`OpenDHCPServer`サービスがあれば
+停止・無効化して、ホストへ`192.168.1.3/24`を設定します。
+固定IPを解除する場合は管理者PowerShellで実行します。
 
 ```powershell
-.\docker_dev\tools\network-windows.ps1 -Mode Disable -EthernetAlias "Ethernet"
+.\docker_dev\tools\network-windows.ps1 -Mode Disable `
+  -EthernetAlias "vEthernet (RasPiCat External)"
 ```
 
-注意: Windows用スクリプトは競合を避けるため、既存のICS共有を解除してから対象NICへ設定します。
+通常の接続先は`ssh ubuntu@192.168.1.50`です。
 
 ## 接続を確認する
 

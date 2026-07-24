@@ -87,6 +87,7 @@ function Find-SshHosts {
 if ($PiAddress) {
     Add-Candidate $PiAddress.IPAddressToString
 } else {
+    Add-Candidate '192.168.1.50'
     foreach ($hostName in @('raspicat.local', 'ubuntu.local')) {
         try {
             $dnsTask = [Net.Dns]::GetHostAddressesAsync($hostName)
@@ -124,7 +125,7 @@ if (-not $foundAddress -and -not $PiAddress) {
             $_.IPAddress -notlike '127.*' -and
             (-not $EthernetAlias -or $_.InterfaceAlias -eq $EthernetAlias)
         } |
-        Sort-Object @{ Expression = { if ($_.IPAddress -eq '192.168.137.1') { 0 } else { 1 } } } |
+        Sort-Object @{ Expression = { if ($_.IPAddress -eq '192.168.1.3') { 0 } else { 1 } } } |
         Select-Object -First 1
     if (-not $hostAddress) {
         throw 'Could not determine the wired IPv4 subnet. Pass -PiAddress or -EthernetAlias.'
@@ -142,7 +143,7 @@ if (-not $foundAddress -and -not $PiAddress) {
 }
 
 if (-not $foundAddress) {
-    throw 'Raspberry Pi Cat was not found. Confirm Ethernet, DHCP, SSH public-key login, and ROS_DOMAIN_ID.'
+    throw 'Raspberry Pi Cat was not found. Confirm Ethernet, fixed IP 192.168.1.50, SSH public-key login, and ROS_DOMAIN_ID.'
 }
 
 Write-Host "Raspberry Pi Cat: $User@$foundAddress (ROS_DOMAIN_ID=$DomainId)" -ForegroundColor Green

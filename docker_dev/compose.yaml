@@ -14,7 +14,7 @@ services:
     security_opt:
       - seccomp:unconfined
     environment:
-      DISPLAY: ${DISPLAY:-host.docker.internal:0.0}
+      DISPLAY: ${DISPLAY:-host.docker.internal:400.0}
       WAYLAND_DISPLAY: ${WAYLAND_DISPLAY:-}
       XDG_RUNTIME_DIR: ${XDG_RUNTIME_DIR:-}
       LIBGL_ALWAYS_SOFTWARE: ${LIBGL_ALWAYS_SOFTWARE:-1}

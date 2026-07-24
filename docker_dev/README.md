@@ -1,8 +1,8 @@
 # Raspberry Pi Cat development container
 
 公式ドキュメントのPC側環境（Ubuntu 22.04、ROS 2 Humble、`raspicat-pc.repos`）を
-Dockerで再現する開発環境です。起動ラッパーはコンテナより先にホスト側のDHCP/NATを
-有効化します。
+Dockerで再現する開発環境です。ロボット用EthernetはDHCPを使用せず、
+`192.168.1.0/24`の固定IPで構成します。
 
 ## 構成
 
@@ -17,11 +17,44 @@ Dockerで再現する開発環境です。起動ラッパーはコンテナよ�
 Raspberry Pi本体のOS、GPIOカーネルドライバ、モータードライバはコンテナ化しません。
 それらは実機Raspberry Piへ導入し、PC側コンテナとはEthernet上のROS 2で通信します。
 
-## 配線前の注意
+## 固定IP
 
-DHCPを開始する前に、Raspberry Pi Catにつながる専用Ethernet NICを確認してください。
-起動処理はそのNICの既存ネットワーク設定を切り替えます。社内LANなどにつながったNICを
-選択しないでください。
+| 機器 | アドレス |
+|---|---|
+| Windows / Linuxホスト | `192.168.1.3/24` |
+| Podman Hyper-V VM | `192.168.1.2/24` |
+| Raspberry Pi Cat | `192.168.1.50/24` |
+| Livox Mid-360 | `192.168.1.108/24` |
+
+Raspberry Pi Catにつながる専用Ethernet NICを確認してください。起動処理はそのNICの
+既存ネットワーク設定を切り替えます。社内LANなどにつながったNICを選択しないでください。
+
+### Raspberry Pi側
+
+Piの`/etc/netplan/99-livox.yaml`を次の内容にします。複数のNetplanファイルはマージされる
+ため、cloud-init側に`dhcp4: true`があっても、優先度の高いこのファイルで明示的に
+`false`へ上書きします。
+
+```yaml
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    eth0:
+      dhcp4: false
+      addresses:
+        - 192.168.1.50/24
+      optional: true
+```
+
+```bash
+sudo chmod 600 /etc/netplan/99-livox.yaml
+sudo netplan generate
+sudo netplan apply
+ip -brief address show eth0
+```
+
+Wi-Fiをインターネット用のデフォルト経路、有線をPi/Livox専用ネットワークとして使用します。
 
 ## Linux（Ubuntu）
 
@@ -36,14 +69,11 @@ bash docker_dev/tools/up.sh
 `up.sh`は次の順序で処理します。
 
 1. `raspicat-docker-dev`というNetworkManagerプロファイルを作成
-2. ホストを`10.42.0.1/24`に設定し、DHCPとインターネット共有（NAT）を開始
+2. ホストを`192.168.1.3/24`に設定（DHCP/NATなし）
 3. Dockerイメージをビルドしてコンテナを起動
 
-実機へ払い出されたIPは次のように確認できます。
-
 ```bash
-sudo arp-scan --localnet --interface "$RASPICAT_ETHERNET_IF"
-ssh ubuntu@10.42.0.x
+ssh ubuntu@192.168.1.50
 ```
 
 終了後にネットワーク設定も戻す場合:
@@ -52,7 +82,39 @@ ssh ubuntu@10.42.0.x
 bash docker_dev/tools/network-linux.sh down "$RASPICAT_ETHERNET_IF"
 ```
 
-## Windows + Docker Desktop / WSL2
+## Windows + Podman Hyper-V
+
+Windows PowerShellから起動します。`up.ps1`はPodman Hyper-V APIを明示的に使用し、
+固定IP設定とVcXsrv Display `:400`の起動後にComposeを実行します。
+
+```powershell
+# アダプター名は Get-NetAdapter で確認
+.\docker_dev\tools\up.ps1
+# 自動判定できない場合
+.\docker_dev\tools\up.ps1 -EthernetAlias "vEthernet (RasPiCat External)"
+```
+
+管理者権限の確認画面が開き、ICS/DHCP共有を解除してWindows側へ
+`192.168.1.3/24`を設定します。旧環境の`OpenDHCPServer`サービスが存在する場合は、
+ファイルを削除せずサービスを停止・無効化します。Piは常に`192.168.1.50`です。
+
+実機はWindows側から直接確認できます。
+
+```powershell
+ping 192.168.1.50
+ssh ubuntu@192.168.1.50
+```
+
+固定IPを解除する場合は管理者PowerShellで実行します。
+
+```powershell
+.\docker_dev\tools\network-windows.ps1 -Mode Disable `
+  -EthernetAlias "vEthernet (RasPiCat External)"
+```
+
+`network-windows.ps1 -Mode Static`は競合防止のため既存のICS共有を解除します。
+
+### Docker Desktop / WSL2
 
 Docker Desktopでhost networkingを有効にしてください。WSL2から使う場合は、Windows
 11 22H2以降のmirrored networkingも推奨します。`%UserProfile%\.wslconfig`の例:
@@ -64,24 +126,11 @@ firewall=true
 ```
 
 設定変更後は`wsl --shutdown`を実行し、Docker Desktopを再起動します。
-
-Windows PowerShellから起動する場合:
-
-```powershell
-# アダプター名は Get-NetAdapter で確認
-.\docker_dev\tools\up.ps1 -EthernetAlias "Ethernet" -InternetAlias "Wi-Fi"
-```
-
 WSL2シェルから起動する場合:
 
 ```bash
 bash docker_dev/tools/up.sh
 ```
-
-管理者権限の確認画面が開き、Windows Internet Connection Sharing (ICS) を設定します。
-ICSがWindows側でDHCP/NATを提供します。通常、Windows側は`192.168.137.1/24`、実機は
-`192.168.137.x`です。Dockerコンテナ内にDHCPサーバーを置かないのは、Docker Desktopの
-Linux VMからWindowsの物理Ethernet NICへ直接DHCPブロードキャストを出せないためです。
 
 同じ制約はROS 2 DDSのマルチキャスト探索にも影響します。Docker Desktopのhost
 networkingはLinux VM内のL4接続であり、コンテナからWindowsの物理NICへ直接bind
@@ -94,22 +143,6 @@ networkingはLinux VM内のL4接続であり、コンテナからWindowsの物�
 - Piでrosbagを記録し、Docker Desktop側のこの環境で再生してローカルデバッグする
 
 Windows + Docker Desktopでも、ビルド、GDB、RViz、rosbag再生には利用できます。
-
-払い出し後の実機はWindows側で確認します。
-
-```powershell
-Get-NetNeighbor -InterfaceAlias "Ethernet" -AddressFamily IPv4 |
-  Where-Object State -ne Unreachable
-ssh ubuntu@192.168.137.x
-```
-
-ICSを解除する場合は管理者PowerShellで実行します。
-
-```powershell
-.\docker_dev\tools\network-windows.ps1 -Mode Disable -EthernetAlias "Ethernet"
-```
-
-注意: ICSを有効にすると、このスクリプトは競合を避けるため既存のICS共有を解除します。
 
 ## コンテナの利用
 
@@ -145,28 +178,39 @@ ros2 topic hz /scan
 
 Podman Hyper-V VMを実機と同じEthernetへ直接接続すると、Windows画面のRVizから実機の
 DDSトピックをライブ表示できます。管理者PowerShellで一度だけ次を実行してください。
-既存のPodman NAT用NICは残したまま、外部NIC `192.168.137.2/24`を追加します。
+既存のPodman NAT用`vsock0`は残したまま、外部NIC `raspi0`へ
+`192.168.1.2/24`を設定します。
 
 ```powershell
 .\docker_dev\tools\add-podman-robot-network.ps1
 ```
 
 `compose.yaml`は`network_mode: host`なので、コンテナを起動し直せばPiと同一セグメントで
-DDSマルチキャストを使用します。PiのDHCPアドレスが変わっても設定変更は不要です。
+DDSマルチキャストを使用します。
 
 ```powershell
-podman compose -f docker_dev/compose.yaml up -d
-podman exec -d daifuku-raspicat-dev bash -lc `
-  "source /opt/ros/humble/setup.bash; source /workspaces/daifuku_autonomous/install/setup.bash; rviz2 -d /workspaces/daifuku_autonomous/src/autonomous_nav/rviz/nav2_default.rviz"
+$env:DOCKER_HOST = "npipe:////./pipe/podman-hyperv"
+Remove-Item Env:DOCKER_CONTEXT -ErrorAction SilentlyContinue
+docker compose -f docker_dev/compose.yaml up -d
+# VcXsrvの起動も含めてRVizをバックグラウンド起動
+.\docker_dev\tools\rviz.ps1
+
+# 設定変更後などにRVizを再起動
+.\docker_dev\tools\rviz.ps1 -Restart
 ```
 
-SSH経由で実機の状態だけを確認するときは、PowerShellの自動検出スクリプトも使用できます。
-DHCPでRaspberry PiのIPが変わっても、mDNS、Windowsの近隣キャッシュ、専用Ethernetの
-SSHスキャンを順に試し、`/odom` Publisherが存在する実機だけを選択します。
+起動ログは次のコマンドで確認できます。
+
+```powershell
+podman exec daifuku-raspicat-dev tail -n 50 /tmp/rviz.log
+```
+
+SSH経由で実機の状態だけを確認するときは、PowerShellスクリプトも使用できます。
+固定IP`192.168.1.50`を最初に確認し、`/odom` Publisherが存在する実機だけを選択します。
 
 ```powershell
 # トピック一覧
-.\docker_dev\tools\pi-topics.ps1 -EthernetAlias "Ethernet"
+.\docker_dev\tools\pi-topics.ps1 -EthernetAlias "vEthernet (RasPiCat External)"
 
 # ノード一覧、詳細、1メッセージ、周波数
 .\docker_dev\tools\pi-topics.ps1 -Action Nodes -EthernetAlias "Ethernet"
@@ -175,7 +219,7 @@ SSHスキャンを順に試し、`/odom` Publisherが存在する実機だけを
 .\docker_dev\tools\pi-topics.ps1 -Action Hz -Topic /scan -EthernetAlias "Ethernet"
 
 # IPが分かっている場合は探索を省略
-.\docker_dev\tools\pi-topics.ps1 -PiAddress 192.168.137.167
+.\docker_dev\tools\pi-topics.ps1 -PiAddress 192.168.1.50
 ```
 
 現在のROS 2 Humbleで動作確認済みのNavFn構成をデバッグ起動する例:
@@ -205,13 +249,14 @@ ros2 launch raspicat_bringup teleop.launch.py teleop:=key
 GUIが表示されない場合:
 
 - WSLg: WSLシェルの`DISPLAY`と`WAYLAND_DISPLAY`が設定されているか確認
-- Windows X Server: X Serverを起動し、必要なら`DISPLAY=host.docker.internal:0.0`を指定
+- Windows X Server: `up.ps1`はVcXsrv Display `:400`を使用し、
+  `DISPLAY=host.docker.internal:400.0`を設定
 - Linux X11: 起動前に`xhost +si:localuser:root`、終了後に
   `xhost -si:localuser:root`を実行
 
 ## 手動でDockerだけ起動する場合
 
-DHCP/NATを別途設定済みなら、Composeを直接使用できます。
+固定IPを別途設定済みなら、Composeを直接使用できます。
 
 ```bash
 docker compose -f docker_dev/compose.yaml up -d --build
@@ -223,5 +268,5 @@ LinuxではGUIソケット用のオーバーライドも指定します。
 docker compose -f docker_dev/compose.yaml -f docker_dev/compose.linux.yaml up -d --build
 ```
 
-ただし、この方法ではDHCP設定は実行されません。通常は`up.sh`または`up.ps1`を使って
+ただし、この方法では固定IP設定は実行されません。通常は`up.sh`または`up.ps1`を使って
 ください。
