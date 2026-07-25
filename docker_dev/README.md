@@ -19,11 +19,19 @@ Raspberry Pi本体のOS、GPIOカーネルドライバ、モータードライ�
 
 ## tools/の構成
 
-| パス | 実行環境 | 内容 |
+`tools/windows/`はWindowsホスト（PowerShell、Podman Hyper-V）、`tools/linux/`は
+Linux/WSLホスト（bash）で実行します。`tools/build-workspace.sh`だけはコンテナ内で
+動くビルドスクリプトで、イメージへ`build-autonomous`として組み込まれます。
+
+| スクリプト | 用途 | 管理者権限 |
 |---|---|---|
-| `tools/windows/` | Windowsホスト（PowerShell、Podman Hyper-V） | `up.ps1`、`shell.ps1`、`network.ps1`、`rviz.ps1`、`pi-topics.ps1`、`add-podman-robot-network.ps1` |
-| `tools/linux/` | Linux/WSLホスト（bash） | `up.sh`、`shell.sh`、`network.sh` |
-| `tools/build-workspace.sh` | コンテナ内 | イメージへ`build-autonomous`として組み込まれるビルドスクリプト |
+| `windows/up.ps1` / `linux/up.sh` | 固定IP設定、X Server起動、Compose起動までの一括実行 | あり（内部で昇格） |
+| `windows/shell.ps1` / `linux/shell.sh` | 起動済みコンテナへ入る | なし |
+| `windows/network.ps1` / `linux/network.sh` | ホストの固定IPだけを設定・解除 | あり |
+| `windows/rviz.ps1` | コンテナ内のRVizをWindows画面へ表示 | なし |
+| `windows/pi-ros.ps1` | SSH経由で実機の`ros2`コマンドを実行 | なし |
+| `windows/podman-network.ps1` | Podman VMを実機Ethernetへ接続（初回のみ） | あり |
+| `windows/common.ps1` | 上記が読み込む共通処理（単体では実行しない） | — |
 
 WSLから`tools/linux/up.sh`を実行した場合のみ、Windows側の固定IP設定のために
 `tools/windows/network.ps1`を管理者権限で呼び出します。
@@ -193,7 +201,7 @@ DDSトピックをライブ表示できます。管理者PowerShellで一度だ�
 `192.168.1.2/24`を設定します。
 
 ```powershell
-.\docker_dev\tools\windows\add-podman-robot-network.ps1
+.\docker_dev\tools\windows\podman-network.ps1
 ```
 
 `compose.yaml`は`network_mode: host`なので、コンテナを起動し直せばPiと同一セグメントで
@@ -217,20 +225,20 @@ podman exec daifuku-raspicat-dev tail -n 50 /tmp/rviz.log
 ```
 
 SSH経由で実機の状態だけを確認するときは、PowerShellスクリプトも使用できます。
-固定IP`192.168.1.50`を最初に確認し、`/odom` Publisherが存在する実機だけを選択します。
+Windows側でDDSを起動せず、固定IP`192.168.1.50`へSSHして`ros2`を実行します。
 
 ```powershell
 # トピック一覧
-.\docker_dev\tools\windows\pi-topics.ps1 -EthernetAlias "vEthernet (RasPiCat External)"
+.\docker_dev\tools\windows\pi-ros.ps1
 
 # ノード一覧、詳細、1メッセージ、周波数
-.\docker_dev\tools\windows\pi-topics.ps1 -Action Nodes -EthernetAlias "Ethernet"
-.\docker_dev\tools\windows\pi-topics.ps1 -Action Info -Topic /odom -EthernetAlias "Ethernet"
-.\docker_dev\tools\windows\pi-topics.ps1 -Action Echo -Topic /odom -EthernetAlias "Ethernet"
-.\docker_dev\tools\windows\pi-topics.ps1 -Action Hz -Topic /scan -EthernetAlias "Ethernet"
+.\docker_dev\tools\windows\pi-ros.ps1 -Action Nodes
+.\docker_dev\tools\windows\pi-ros.ps1 -Action Info -Topic /odom
+.\docker_dev\tools\windows\pi-ros.ps1 -Action Echo -Topic /odom
+.\docker_dev\tools\windows\pi-ros.ps1 -Action Hz -Topic /scan
 
-# IPが分かっている場合は探索を省略
-.\docker_dev\tools\windows\pi-topics.ps1 -PiAddress 192.168.1.50
+# 実機が別アドレスの場合
+.\docker_dev\tools\windows\pi-ros.ps1 -PiAddress 192.168.1.60
 ```
 
 現在のROS 2 Humbleで動作確認済みのNavFn構成をデバッグ起動する例:

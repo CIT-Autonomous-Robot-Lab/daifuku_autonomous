@@ -1,5 +1,12 @@
+param(
+    [string]$PodmanConnection = 'podman-hyperv-root',
+    [string]$PodmanPipe = 'podman-hyperv'
+)
+
 $ErrorActionPreference = 'Stop'
-$devDir = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$composeFile = Join-Path $devDir 'compose.yaml'
-docker compose -f $composeFile exec raspicat-dev /ros_entrypoint.sh bash
+. (Join-Path $PSScriptRoot 'common.ps1')
+
+Set-DockerToPodman -Connection $PodmanConnection -Pipe $PodmanPipe
+
+docker compose -f $RaspicatComposeFile exec raspicat-dev /ros_entrypoint.sh bash
 if ($LASTEXITCODE -ne 0) { throw 'Could not enter the development container.' }

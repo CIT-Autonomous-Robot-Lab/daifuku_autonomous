@@ -8,35 +8,17 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'common.ps1')
 
-podman system connection default $PodmanConnection *> $null
-if ($LASTEXITCODE -ne 0) {
-    throw "Podman connection '$PodmanConnection' was not found. Start the podman-hyperv machine first."
-}
+Set-PodmanConnection -Name $PodmanConnection
 
 $running = podman inspect --format '{{.State.Running}}' $Container 2>$null
 if ($LASTEXITCODE -ne 0 -or $running.Trim() -ne 'true') {
     throw "Container '$Container' is not running. Run .\docker_dev\tools\windows\up.ps1 first."
 }
 
-# Display :400 maps to TCP 6400 and avoids the WinNAT-reserved range around
-# TCP 6000 that can prevent the usual X display :0 from starting.
-$xPort = 6000 + $XDisplay
-$xServer = 'C:\Program Files\VcXsrv\vcxsrv.exe'
-$xListener = Get-NetTCPConnection -LocalPort $xPort -State Listen -ErrorAction SilentlyContinue
-if (-not $xListener) {
-    if (-not (Test-Path -LiteralPath $xServer)) {
-        throw "VcXsrv was not found at '$xServer'. Install or start an X server on TCP $xPort."
-    }
-
-    Start-Process -FilePath $xServer -ArgumentList @(
-        ":$XDisplay", '-multiwindow', '-clipboard', '-ac', '-nowgl', '-listen', 'tcp'
-    )
-    Start-Sleep -Seconds 3
-    $xListener = Get-NetTCPConnection -LocalPort $xPort -State Listen -ErrorAction SilentlyContinue
-    if (-not $xListener) {
-        throw "VcXsrv did not start listening on TCP $xPort."
-    }
+if (-not (Start-XServer $XDisplay)) {
+    throw "No X server is listening on TCP $(Get-XPort $XDisplay). Install VcXsrv at 'C:\Program Files\VcXsrv\vcxsrv.exe' or start an X server yourself."
 }
 
 podman exec $Container test -f $RvizConfig
@@ -56,7 +38,7 @@ if ($rvizPid) {
     Start-Sleep -Seconds 1
 }
 
-$display = "host.docker.internal:$XDisplay.0"
+$display = Get-DisplayTarget $XDisplay
 $launchCommand = @"
 source /opt/ros/humble/setup.bash
 if [ -f /workspaces/daifuku_autonomous/install/setup.bash ]; then
