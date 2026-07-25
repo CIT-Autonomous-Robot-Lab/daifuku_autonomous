@@ -15,7 +15,7 @@ usage() {
 Raspberry Pi / Ubuntu 22.04へLivox SDK2とlivox_ros_driver2を導入します。
 
 Usage:
-  bash scripts/setup_livox_native.sh [options]
+  bash scripts/setup_native_livox.sh [options]
 
 Options:
   --workspace PATH   ROS 2ワークスペース（既定: リポジトリルート）
