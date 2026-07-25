@@ -8,9 +8,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$toolsDir = $PSScriptRoot
-$devDir = Split-Path -Parent $toolsDir
-$networkScript = Join-Path $toolsDir 'network-windows.ps1'
+$windowsDir = $PSScriptRoot
+$devDir = Split-Path -Parent (Split-Path -Parent $windowsDir)
+$networkScript = Join-Path $windowsDir 'network.ps1'
 $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $networkScript, '-Mode', 'Static')
 if ($EthernetAlias) { $arguments += @('-EthernetAlias', $EthernetAlias) }
 if ($InternetAlias) { $arguments += @('-InternetAlias', $InternetAlias) }

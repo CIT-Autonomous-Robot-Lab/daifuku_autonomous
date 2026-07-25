@@ -17,6 +17,17 @@ Dockerで再現する開発環境です。ロボット用EthernetはDHCPを使�
 Raspberry Pi本体のOS、GPIOカーネルドライバ、モータードライバはコンテナ化しません。
 それらは実機Raspberry Piへ導入し、PC側コンテナとはEthernet上のROS 2で通信します。
 
+## tools/の構成
+
+| パス | 実行環境 | 内容 |
+|---|---|---|
+| `tools/windows/` | Windowsホスト（PowerShell、Podman Hyper-V） | `up.ps1`、`shell.ps1`、`network.ps1`、`rviz.ps1`、`pi-topics.ps1`、`add-podman-robot-network.ps1` |
+| `tools/linux/` | Linux/WSLホスト（bash） | `up.sh`、`shell.sh`、`network.sh` |
+| `tools/build-workspace.sh` | コンテナ内 | イメージへ`build-autonomous`として組み込まれるビルドスクリプト |
+
+WSLから`tools/linux/up.sh`を実行した場合のみ、Windows側の固定IP設定のために
+`tools/windows/network.ps1`を管理者権限で呼び出します。
+
 ## 固定IP
 
 | 機器 | アドレス |
@@ -63,10 +74,10 @@ Wi-Fiをインターネット用のデフォルト経路、有線をPi/Livox専�
 ```bash
 sudo apt install network-manager
 export RASPICAT_ETHERNET_IF=enp3s0  # NICが1個だけなら省略可
-bash docker_dev/tools/up.sh
+bash docker_dev/tools/linux/up.sh
 ```
 
-`up.sh`は次の順序で処理します。
+`linux/up.sh`は次の順序で処理します。
 
 1. `raspicat-docker-dev`というNetworkManagerプロファイルを作成
 2. ホストを`192.168.1.3/24`に設定（DHCP/NATなし）
@@ -79,19 +90,19 @@ ssh ubuntu@192.168.1.50
 終了後にネットワーク設定も戻す場合:
 
 ```bash
-bash docker_dev/tools/network-linux.sh down "$RASPICAT_ETHERNET_IF"
+bash docker_dev/tools/linux/network.sh down "$RASPICAT_ETHERNET_IF"
 ```
 
 ## Windows + Podman Hyper-V
 
-Windows PowerShellから起動します。`up.ps1`はPodman Hyper-V APIを明示的に使用し、
+Windows PowerShellから起動します。`windows/up.ps1`はPodman Hyper-V APIを明示的に使用し、
 固定IP設定とVcXsrv Display `:400`の起動後にComposeを実行します。
 
 ```powershell
 # アダプター名は Get-NetAdapter で確認
-.\docker_dev\tools\up.ps1
+.\docker_dev\tools\windows\up.ps1
 # 自動判定できない場合
-.\docker_dev\tools\up.ps1 -EthernetAlias "vEthernet (RasPiCat External)"
+.\docker_dev\tools\windows\up.ps1 -EthernetAlias "vEthernet (RasPiCat External)"
 ```
 
 管理者権限の確認画面が開き、ICS/DHCP共有を解除してWindows側へ
@@ -108,11 +119,11 @@ ssh ubuntu@192.168.1.50
 固定IPを解除する場合は管理者PowerShellで実行します。
 
 ```powershell
-.\docker_dev\tools\network-windows.ps1 -Mode Disable `
+.\docker_dev\tools\windows\network.ps1 -Mode Disable `
   -EthernetAlias "vEthernet (RasPiCat External)"
 ```
 
-`network-windows.ps1 -Mode Static`は競合防止のため既存のICS共有を解除します。
+`windows/network.ps1 -Mode Static`は競合防止のため既存のICS共有を解除します。
 
 ### Docker Desktop / WSL2
 
@@ -129,7 +140,7 @@ firewall=true
 WSL2シェルから起動する場合:
 
 ```bash
-bash docker_dev/tools/up.sh
+bash docker_dev/tools/linux/up.sh
 ```
 
 同じ制約はROS 2 DDSのマルチキャスト探索にも影響します。Docker Desktopのhost
@@ -147,9 +158,9 @@ Windows + Docker Desktopでも、ビルド、GDB、RViz、rosbag再生には利�
 ## コンテナの利用
 
 ```bash
-bash docker_dev/tools/shell.sh
+bash docker_dev/tools/linux/shell.sh
 # PowerShellの場合
-.\docker_dev\tools\shell.ps1
+.\docker_dev\tools\windows\shell.ps1
 ```
 
 初回と、C++ソースまたは依存関係を変更した後は、コンテナ内で開発用ワークスペースを
@@ -182,7 +193,7 @@ DDSトピックをライブ表示できます。管理者PowerShellで一度だ�
 `192.168.1.2/24`を設定します。
 
 ```powershell
-.\docker_dev\tools\add-podman-robot-network.ps1
+.\docker_dev\tools\windows\add-podman-robot-network.ps1
 ```
 
 `compose.yaml`は`network_mode: host`なので、コンテナを起動し直せばPiと同一セグメントで
@@ -193,10 +204,10 @@ $env:DOCKER_HOST = "npipe:////./pipe/podman-hyperv"
 Remove-Item Env:DOCKER_CONTEXT -ErrorAction SilentlyContinue
 docker compose -f docker_dev/compose.yaml up -d
 # VcXsrvの起動も含めてRVizをバックグラウンド起動
-.\docker_dev\tools\rviz.ps1
+.\docker_dev\tools\windows\rviz.ps1
 
 # 設定変更後などにRVizを再起動
-.\docker_dev\tools\rviz.ps1 -Restart
+.\docker_dev\tools\windows\rviz.ps1 -Restart
 ```
 
 起動ログは次のコマンドで確認できます。
@@ -210,16 +221,16 @@ SSH経由で実機の状態だけを確認するときは、PowerShellスクリ�
 
 ```powershell
 # トピック一覧
-.\docker_dev\tools\pi-topics.ps1 -EthernetAlias "vEthernet (RasPiCat External)"
+.\docker_dev\tools\windows\pi-topics.ps1 -EthernetAlias "vEthernet (RasPiCat External)"
 
 # ノード一覧、詳細、1メッセージ、周波数
-.\docker_dev\tools\pi-topics.ps1 -Action Nodes -EthernetAlias "Ethernet"
-.\docker_dev\tools\pi-topics.ps1 -Action Info -Topic /odom -EthernetAlias "Ethernet"
-.\docker_dev\tools\pi-topics.ps1 -Action Echo -Topic /odom -EthernetAlias "Ethernet"
-.\docker_dev\tools\pi-topics.ps1 -Action Hz -Topic /scan -EthernetAlias "Ethernet"
+.\docker_dev\tools\windows\pi-topics.ps1 -Action Nodes -EthernetAlias "Ethernet"
+.\docker_dev\tools\windows\pi-topics.ps1 -Action Info -Topic /odom -EthernetAlias "Ethernet"
+.\docker_dev\tools\windows\pi-topics.ps1 -Action Echo -Topic /odom -EthernetAlias "Ethernet"
+.\docker_dev\tools\windows\pi-topics.ps1 -Action Hz -Topic /scan -EthernetAlias "Ethernet"
 
 # IPが分かっている場合は探索を省略
-.\docker_dev\tools\pi-topics.ps1 -PiAddress 192.168.1.50
+.\docker_dev\tools\windows\pi-topics.ps1 -PiAddress 192.168.1.50
 ```
 
 現在のROS 2 Humbleで動作確認済みのNavFn構成をデバッグ起動する例:
@@ -249,7 +260,7 @@ ros2 launch raspicat_bringup teleop.launch.py teleop:=key
 GUIが表示されない場合:
 
 - WSLg: WSLシェルの`DISPLAY`と`WAYLAND_DISPLAY`が設定されているか確認
-- Windows X Server: `up.ps1`はVcXsrv Display `:400`を使用し、
+- Windows X Server: `windows/up.ps1`はVcXsrv Display `:400`を使用し、
   `DISPLAY=host.docker.internal:400.0`を設定
 - Linux X11: 起動前に`xhost +si:localuser:root`、終了後に
   `xhost -si:localuser:root`を実行
@@ -268,5 +279,5 @@ LinuxではGUIソケット用のオーバーライドも指定します。
 docker compose -f docker_dev/compose.yaml -f docker_dev/compose.linux.yaml up -d --build
 ```
 
-ただし、この方法では固定IP設定は実行されません。通常は`up.sh`または`up.ps1`を使って
+ただし、この方法では固定IP設定は実行されません。通常は`linux/up.sh`または`windows/up.ps1`を使って
 ください。

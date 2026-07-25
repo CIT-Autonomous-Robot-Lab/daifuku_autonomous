@@ -14,20 +14,20 @@ Linux:
 ```bash
 sudo apt install network-manager
 export RASPICAT_ETHERNET_IF=enp3s0
-bash docker_dev/tools/up.sh
+bash docker_dev/tools/linux/up.sh
 ```
 
 Windows PowerShell:
 
 ```powershell
-.\docker_dev\tools\up.ps1
+.\docker_dev\tools\windows\up.ps1
 ```
 
 WSL2シェルからは次を実行できます。管理者権限の確認画面が開き、Windows側の固定IPが
 設定されます。
 
 ```bash
-bash docker_dev/tools/up.sh
+bash docker_dev/tools/linux/up.sh
 ```
 
 ネットワークの詳細と戻し方は[ROS 2ネットワーク](network.md#専用ethernetで機体を接続する)を参照してください。
@@ -35,8 +35,8 @@ bash docker_dev/tools/up.sh
 ## コンテナを使う
 
 ```bash
-bash docker_dev/tools/shell.sh
-# PowerShell: .\docker_dev\tools\shell.ps1
+bash docker_dev/tools/linux/shell.sh
+# PowerShell: .\docker_dev\tools\windows\shell.ps1
 build-autonomous
 source install/setup.bash
 ros2 pkg list | grep raspicat
@@ -73,7 +73,7 @@ ros2 launch raspicat_bringup teleop.launch.py teleop:=key
 ## GUI
 
 - WSLg: WSLシェルの`DISPLAY`と`WAYLAND_DISPLAY`を確認
-- Windows X Server: `up.ps1`がVcXsrv Display `:400`を起動し、
+- Windows X Server: `windows/up.ps1`がVcXsrv Display `:400`を起動し、
   `DISPLAY=host.docker.internal:400.0`を指定
 - Linux X11: 起動前に`xhost +si:localuser:root`、終了後に`xhost -si:localuser:root`を実行
 
@@ -94,4 +94,4 @@ docker compose \
   up -d --build
 ```
 
-この方法では固定IPは設定されません。通常は`up.sh`または`up.ps1`を利用してください。
+この方法では固定IPは設定されません。通常は`linux/up.sh`または`windows/up.ps1`を利用してください。

@@ -16,7 +16,7 @@ if ($LASTEXITCODE -ne 0) {
 
 $running = podman inspect --format '{{.State.Running}}' $Container 2>$null
 if ($LASTEXITCODE -ne 0 -or $running.Trim() -ne 'true') {
-    throw "Container '$Container' is not running. Run .\docker_dev\tools\up.ps1 first."
+    throw "Container '$Container' is not running. Run .\docker_dev\tools\windows\up.ps1 first."
 }
 
 # Display :400 maps to TCP 6400 and avoids the WinNAT-reserved range around

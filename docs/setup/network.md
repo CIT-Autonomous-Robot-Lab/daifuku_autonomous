@@ -64,22 +64,22 @@ Linux:
 
 ```bash
 export RASPICAT_ETHERNET_IF=enp3s0
-bash docker_dev/tools/up.sh
+bash docker_dev/tools/linux/up.sh
 ```
 
 Linux側はNetworkManagerプロファイル`raspicat-docker-dev`を作り、
 `192.168.1.3/24`を設定します。終了後に戻す場合:
 
 ```bash
-bash docker_dev/tools/network-linux.sh down "$RASPICAT_ETHERNET_IF"
+bash docker_dev/tools/linux/network.sh down "$RASPICAT_ETHERNET_IF"
 ```
 
 Windows PowerShell:
 
 ```powershell
-.\docker_dev\tools\up.ps1
+.\docker_dev\tools\windows\up.ps1
 # 自動判定できない場合
-.\docker_dev\tools\up.ps1 -EthernetAlias "vEthernet (RasPiCat External)"
+.\docker_dev\tools\windows\up.ps1 -EthernetAlias "vEthernet (RasPiCat External)"
 ```
 
 Windows用スクリプトは既存のICS共有を解除し、旧`OpenDHCPServer`サービスがあれば
@@ -87,7 +87,7 @@ Windows用スクリプトは既存のICS共有を解除し、旧`OpenDHCPServer`
 固定IPを解除する場合は管理者PowerShellで実行します。
 
 ```powershell
-.\docker_dev\tools\network-windows.ps1 -Mode Disable `
+.\docker_dev\tools\windows\network.ps1 -Mode Disable `
   -EthernetAlias "vEthernet (RasPiCat External)"
 ```
 
