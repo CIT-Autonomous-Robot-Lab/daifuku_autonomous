@@ -13,8 +13,13 @@ export ROS_LOCALHOST_ONLY=0
 ```
 
 Raspberry Pi上のネイティブROSノードとDocker内のFast DDSを確実に接続するため、
-両Composeでは`network_mode: host`を使用し、コンテナ側の
-`FASTDDS_BUILTIN_TRANSPORTS`を`UDPv4`に固定します。
+両Composeとも`network_mode: host`を使用します。トランスポートの設定は環境ごとに
+異なります。
+
+| 環境 | Fast DDSの設定 |
+|---|---|
+| `docker/` | `FASTRTPS_DEFAULT_PROFILES_FILE`でXMLプロファイルを指定し、UDPを特定インターフェースへ限定したうえでSHMを併用（[下記](#raspberry-pi本体でのdds設定)） |
+| `docker_dev/` | `FASTDDS_BUILTIN_TRANSPORTS=UDPv4`。別ホストであるPi上のノードを同一ホストの相手と誤認させないため、SHMを使わない |
 
 次も確認してください。
 
@@ -22,6 +27,40 @@ Raspberry Pi上のネイティブROSノードとDocker内のFast DDSを確実に
 - ファイアウォールがDDSのUDPとマルチキャストを許可
 - 両側で互換性のあるRMW実装を使用
 - VPNや複数NICがDDS探索を妨げていない
+
+## Raspberry Pi本体でのDDS設定
+
+Pi本体でネイティブのROS 2ノードを動かし、同じPi上の`docker/`コンテナと通信する構成
+では、ホストとコンテナで同じFast DDSプロファイル`docker/fastdds_udp_whitelist.xml`
+を使います。コンテナ側は`compose.yaml`がマウントと環境変数を設定するため、追加の
+作業はホスト側だけです。
+
+```bash
+# Pi本体の ~/.bashrc へ追記
+export FASTRTPS_DEFAULT_PROFILES_FILE=/path/to/daifuku_autonomous/docker/fastdds_udp_whitelist.xml
+```
+
+このプロファイルは2つの実測問題に対処しています。
+
+- **UDPインターフェースの限定**: 制限しない場合、各参加者はwlan0側（別セグメント）の
+  ロケータも広告します。相手から到達できないロケータとUDPバッファの逼迫により、
+  高負荷時にノードが現れたり消えたりする状態になりました。whitelistでループバックと
+  ロボットLANのアドレスだけを広告します。
+- **同一ホスト通信のSHM化**: ナビゲーションスタック、LiDARパイプライン、機体
+  ドライバで約20個の参加者をUDPのみで動かすと、購読者ごとの`sendmsg`でカーネルが
+  飽和し（Pi 4でsys 57%、load 24）、TFのタイムスタンプが20秒以上遅れてゴールが
+  中断しました。同一ホスト内はSHMへ切り替えています。
+
+そのため、次の3点が前提になります。
+
+- `docker/compose.yaml`の`ipc: host`（`/dev/shm`をホストと共有する）
+- `docker/compose.yaml`の`user: "1000:1000"`。Fast DDSはSHMセグメントを0644で作るため、
+  ホスト側ROSプロセスとuidを揃えないと互いのポートを開けません
+- whitelist内の`192.168.1.50`はPiの固定IPそのものです。ロボットLANのアドレスが
+  異なる場合はXMLを書き換えてください
+
+`docker_dev/`は別ホスト（PC）で動くため、SHMは使わず`FASTDDS_BUILTIN_TRANSPORTS=UDPv4`
+のままです。
 
 ## Docker Desktop
 

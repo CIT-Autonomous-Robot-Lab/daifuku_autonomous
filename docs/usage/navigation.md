@@ -21,6 +21,10 @@ ros2 launch autonomous_nav navigation.launch.py \
   publish_lidar_tf:=true lidar_z:=0.30
 ```
 
+> ネイティブ環境と`docker_dev/`で`lidar:=mid360`を使う場合は、事前に
+> [スタンプ打ち直しの既知の制限](../setup/lidar.md#タイムスタンプの打ち直し)を
+> 確認してください。対応しないと`/scan_raw`が配信されません。
+
 軽量Docker環境:
 
 ```bash

@@ -1,6 +1,8 @@
 # Docker環境
 
-`docker/`はRaspberry Piを含む`arm64`と`amd64`向けの軽量な実行環境です。ROS 2 Humble、Nav2、SLAM Toolbox、EMCL2、価値反復プランナ、Livox関連ノードを含みます。イメージはヘッドレスで、RVizは含みません。
+`docker/`はRaspberry Piを含む`arm64`と`amd64`向けの軽量な実行環境です。ROS 2 Humble、Nav2、SLAM Toolbox、EMCL2、価値反復プランナ、Livox関連ノード、teleopノード（`teleop_twist_keyboard`、`teleop_twist_joy`）を含みます。イメージはヘッドレスで、RVizは含みません。
+
+ディレクトリ内の各ファイルの役割は[`docker/README.md`](../../docker/README.md)にまとめています。
 
 ## 必要なもの
 
@@ -9,6 +11,33 @@
 - 機体とホスト間のROS 2通信が可能なネットワーク
 
 Docker Desktopでは[ネットワーク設定](network.md#docker-desktop)も先に確認してください。
+
+## Pi本体側で先に設定すること
+
+Pi本体でもネイティブのROS 2ノード（モータードライバなど）を動かす構成では、
+コンテナを起動する前に、ホスト側のFast DDSを同じプロファイルへ合わせてください。
+`docker/compose.yaml`はコンテナへ`docker/fastdds_udp_whitelist.xml`をマウントし、
+UDPの送信インターフェースをループバックとロボットLANへ限定したうえで、同一ホスト内の
+通信に共有メモリ（SHM）を使います。ホスト側が既定設定のままだと、SHMを使う側と
+使わない側が混在して通信が成立しません。
+
+Pi本体の`~/.bashrc`へ次を追記します。
+
+```bash
+export FASTRTPS_DEFAULT_PROFILES_FILE=/path/to/daifuku_autonomous/docker/fastdds_udp_whitelist.xml
+```
+
+次の2点は環境によって書き換えが必要です。
+
+- whitelist内の`192.168.1.50`はPiの固定IPです。ロボットLANのアドレスが異なる場合は
+  XMLを編集してください。
+- `compose.yaml`の`user: "1000:1000"`は、ホストのROSプロセスがuid 1000（`ubuntu`）で
+  動くことを前提にしています。Fast DDSはSHMセグメントを0644で作成するため、uidが
+  一致しないと互いのSHMポートを開けず、ホストからコンテナへのトピックが静かに
+  止まります（Fast DDS 2.6にはUDPへのフォールバックがありません）。
+
+SHMを使うため、`compose.yaml`は`ipc: host`で`/dev/shm`をホストと共有します。理由と
+経緯は[ROS 2ネットワーク](network.md#raspberry-pi本体でのdds設定)を参照してください。
 
 ## ビルドと起動
 
@@ -58,11 +87,21 @@ docker compose -f docker/compose.yaml exec ros2 \
   /ros_entrypoint.sh bash
 ```
 
-リポジトリに含まれる補助スクリプトから対話シェルを開くこともできます。
+リポジトリに含まれる補助スクリプトから対話シェルを開くこともできます。コンテナが
+停止していれば自動的に起動します。
 
 ```bash
-bash docker/tools/bash.sh
+bash docker/tools/shell.sh
 ```
+
+モーター電源、遠隔操作、状態確認は`docker/tools/control.sh`にまとめています。
+
+```bash
+bash docker/tools/control.sh status
+bash docker/tools/control.sh teleop keyboard
+```
+
+サブコマンドと環境変数の一覧は[日常操作と確認](../usage/operations.md#controlshで操作する)を参照してください。
 
 `src/autonomous_nav`はコンテナのインストール先へマウントされます。ホストで変更したlaunch、config、maps、rvizは再ビルドなしで反映され、コンテナで保存した地図もホストに残ります。依存関係、Dockerfile、CMake設定、外部パッケージを変更した場合は再ビルドしてください。
 

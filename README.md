@@ -6,6 +6,7 @@
 - SLAM Toolboxによる地図作成
 - EMCL2またはAMCLによる自己位置推定
 - 価値反復プランナ（既定）またはNavFnによる経路計画
+- キーボードとジョイスティックによる遠隔操作
 - Docker（ヘッドレス）またはUbuntu 22.04 / ROS 2 Humbleで実行可能
 
 > Raspberry Pi Catのモータードライバと車輪オドメトリは含まれません。機体側で`/cmd_vel`、`/odom`、TF、センサーデータを提供してください。
@@ -30,6 +31,9 @@
   - [設定リファレンス](docs/usage/configuration.md)
   - [構成とパッケージ](docs/usage/architecture.md)
   - [トラブルシューティング](docs/usage/troubleshooting.md)
+
+各Docker環境のディレクトリ構成は[`docker/README.md`](docker/README.md)と
+[`docker_dev/README.md`](docker_dev/README.md)にまとめています。
 
 ## ライセンス
 

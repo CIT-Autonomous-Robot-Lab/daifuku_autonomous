@@ -64,6 +64,12 @@ ros2 launch autonomous_nav navigation.launch.py \
   publish_lidar_tf:=true lidar_z:=0.30 use_rviz:=true
 ```
 
+> `docker_dev/`では`autonomous_nav`をcolconでビルドするため、
+> `share/autonomous_nav/scripts/`がインストールされず、Mid-360のスタンプ打ち直しが
+> 起動しません。`lidar:=mid360`を使う前に
+> [スタンプ打ち直しの既知の制限](lidar.md#タイムスタンプの打ち直し)を確認して
+> ください。
+
 キーボード操作の例:
 
 ```bash

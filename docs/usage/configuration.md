@@ -6,6 +6,7 @@
 |---|---|
 | `config/nav2_params.yaml` | Nav2、価値反復プランナ、コストマップ、速度、ゴール判定 |
 | `config/emcl2_params.yaml` | EMCL2のフレーム、初期姿勢、粒子数、オドメトリモデル |
+| `config/lifecycle_bond_params.yaml` | ライフサイクルマネージャのbondタイムアウト |
 | `config/slam_toolbox_params.yaml` | SLAM Toolboxのmapping設定 |
 | `config/scan_filter.yaml` | LiDARの角度フィルタ |
 | `config/MID360_config.json` | Mid-360とホストのIP |
@@ -32,7 +33,7 @@
 | `lidar` | `2d` | `2d` / `mid360` |
 | `use_rviz` | `true` | RVizを起動するか |
 | `use_sim_time` | `false` | シミュレーション時刻を使うか |
-| `use_composition` | `True` | Nav2ノードをコンポーネント化するか |
+| `use_composition` | `False` | Nav2ノードを1プロセスへ合成するか（Pi 4では既定の分離を推奨） |
 | `scan_filter_enabled` | `true` | 角度フィルタを使うか |
 | `use_mid360_imu` | `true` | Mid-360のIMU融合を使うか |
 | `publish_lidar_tf` | `false` | 暫定的なセンサーTFを配信するか |
@@ -51,6 +52,35 @@ ros2 launch autonomous_nav navigation.launch.py --show-args
 ```bash
 ros2 launch autonomous_nav mapping.launch.py --show-args
 ```
+
+## Raspberry Pi 4向けの調整値
+
+実機での負荷試験を受けて、既定値を次のように下げています。PCなど余裕のある環境で
+動かす場合は戻して構いません。
+
+| 項目 | 値 | 理由 |
+|---|---|---|
+| `controller_server.controller_frequency` | `10.0` | 20 HzではPi 4のCPUが飽和し、bond心拍の途絶を招いた。最高速0.2 m/s級の車体には10 Hzで十分 |
+| `planner_server.expected_planner_frequency` | `1.0` | 実測7.6 HzしかでずWARNが続いた。BTの再計画周期は1 Hzのため |
+| `lifecycle_manager_*.bond_timeout` | `60.0` | 非合成起動では8プロセスが同時に立ち上がりloadが10〜19まで上がるため、既定の4秒ではbond形成が間に合わない |
+| `use_composition` | `False` | 合成起動時のディスカバリ不能とbond途絶を回避する |
+
+`planner_server`は`planner:=navfn`のときだけ起動します。
+
+## 自己位置推定の暫定設定
+
+`config/emcl2_params.yaml`のリセット関連は、現在の地図に合わせた**暫定値**です。
+
+| パラメータ | 値 | 従来値 |
+|---|---|---|
+| `alpha_threshold` | `0.2` | `0.5` |
+| `expansion_radius_orientation` | `0.05` | `0.2` |
+| `sensor_reset` | `false` | `true` |
+
+有効ビームの28%が地図上の壁を貫通しており、非貫通率（alpha）が0.0〜0.4に張り付く
+状態でした。閾値0.5のままでは膨張リセットとセンサーリセットが毎スキャン発動し、
+推定姿勢がその場で回転してしまいます。根本原因は地図と実環境の不整合のため、地図を
+取り直したあとは既定寄りの値へ戻してください。
 
 ## ロボット固有の調整
 

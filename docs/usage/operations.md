@@ -29,11 +29,55 @@ docker compose -f docker/compose.yaml exec ros2 \
   /ros_entrypoint.sh bash
 ```
 
-補助スクリプト:
+補助スクリプトから対話シェルを開くこともできます。コンテナが停止していれば自動的に
+起動します。
 
 ```bash
-bash docker/tools/bash.sh
+bash docker/tools/shell.sh
 ```
+
+## control.shで操作する
+
+`docker/tools/control.sh`は、モーター電源、遠隔操作、状態確認をまとめたスクリプト
+です。こちらもコンテナを自動起動します。
+
+```bash
+bash docker/tools/control.sh help
+```
+
+| サブコマンド | 動作 |
+|---|---|
+| `motor on` | モーター電源を入れる |
+| `motor off` | `/cmd_vel`へ停止指令を送ってからモーター電源を切る |
+| `stop` | `/cmd_vel`へ停止指令を1回送る |
+| `teleop keyboard` | キーボードで操作する（Ctrl-Cで終了） |
+| `teleop joystick` | ジョイスティックで操作する（Ctrl-Cで終了） |
+| `status` | コンテナ、ROSノード、モーターサービスを確認する |
+| `nodes` / `topics` / `services` | それぞれの一覧を表示する |
+| `ros ARGS...` | 任意の`ros2`コマンドを実行する |
+| `logs [ARGS...]` | コンテナのログを表示する（例: `logs -f`） |
+
+動作は環境変数で変更できます。
+
+| 環境変数 | 既定値 | 用途 |
+|---|---|---|
+| `CONTROL_SERVICE` | `ros2` | Composeサービス名 |
+| `MOTOR_SERVICE` | `/motor_power` | モーター電源サービス |
+| `CMD_VEL_TOPIC` | `/cmd_vel` | 速度指令トピック |
+| `ROS_TIMEOUT` | `10` | ROS操作のタイムアウト秒数 |
+| `TELEOP_LINEAR_SPEED` | `0.2` | キーボード操作の並進速度 m/s |
+| `TELEOP_ANGULAR_SPEED` | `1.0` | キーボード操作の旋回速度 rad/s |
+| `JOYSTICK_ID` | `0` | joyデバイスID |
+| `JOYSTICK_CONFIG` | `xbox` | `teleop_twist_joy`の設定名 |
+
+たとえば遠隔操作の速度を落とす場合:
+
+```bash
+TELEOP_LINEAR_SPEED=0.1 bash docker/tools/control.sh teleop keyboard
+```
+
+`motor off`は停止指令を送ってから電源を切ります。停止指令の送信に失敗しても警告を
+出したうえで電源OFFへ進みます。作業を終えるときは`motor off`を実行してください。
 
 ## 設定変更を反映する
 
@@ -58,11 +102,23 @@ docker compose -f docker/compose.yaml up -d
 ```bash
 docker compose -f docker/compose.yaml logs
 docker compose -f docker/compose.yaml logs -f ros2
+bash docker/tools/control.sh logs -f
+```
+
+コンテナは`HOME=/tmp`で動くため、ROS 2のログファイルは`/tmp/ros/log`に出力されます。
+コンテナを作り直すと消えるので、残したいログはホストへ取り出してください。
+
+```bash
+docker compose -f docker/compose.yaml exec ros2 ls /tmp/ros/log
+docker compose -f docker/compose.yaml cp ros2:/tmp/ros/log ./ros_log
 ```
 
 ## 終了する
 
+走行を伴う作業のあとは、コンテナを止める前にモーター電源を切ります。
+
 ```bash
+bash docker/tools/control.sh motor off
 docker compose -f docker/compose.yaml down
 ```
 

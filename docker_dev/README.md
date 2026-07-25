@@ -239,7 +239,13 @@ Windows側でDDSを起動せず、固定IP`192.168.1.50`へSSHして`ros2`を実
 
 # 実機が別アドレスの場合
 .\docker_dev\tools\windows\pi-ros.ps1 -PiAddress 192.168.1.60
+
+# ドメインIDやログインユーザーを変える場合
+.\docker_dev\tools\windows\pi-ros.ps1 -DomainId 10 -User ubuntu
 ```
+
+固定アドレスへ直接SSHするため、Windows側でのDDS探索は行いません。BatchModeで接続
+するので、公開鍵によるSSHログインを設定しておいてください。
 
 現在のROS 2 Humbleで動作確認済みのNavFn構成をデバッグ起動する例:
 
@@ -251,6 +257,12 @@ ros2 launch autonomous_nav navigation.launch.py \
 
 `lidar_z`は実際の取付高さへ変更してください。モーター電源は、この起動確認だけでは
 有効にしません。
+
+`docker_dev/`は`autonomous_nav`をcolconでビルドするため、
+`share/autonomous_nav/scripts/`がインストールされず、Mid-360のスタンプ打ち直しが
+起動しません（`/scan_raw`が配信されません）。詳細と対処は
+[LiDARとオドメトリ](../docs/setup/lidar.md#タイムスタンプの打ち直し)を参照して
+ください。
 
 ネイティブノードをGDBで起動する場合は、例えば次のようにします。
 

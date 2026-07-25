@@ -7,12 +7,17 @@ Raspberry Pi Cat                         Docker / ネイティブPC
 ────────────────────                    ──────────────────────
 モータードライバ  ←── /cmd_vel ─────── 経路追従 / 遠隔操作
 車輪オドメトリ    ─── /odom ─────────→ Nav2 / SLAM / 自己位置推定
-2D LiDAR          ─── /scan_raw ─┐
-Mid-360 ─ /livox/lidar ─ 3D→2D ─┴→ 角度フィルタ → /scan
+2D LiDAR          ─── /scan_raw ───────────────────┐
+Mid-360 ─ /livox/lidar ─ 3D→2D ─ スタンプ打ち直し ─┴→ 角度フィルタ → /scan
 TF                ─── odom → base_footprint → センサーフレーム
 ```
 
 Mid-360 + IMUの場合、車輪入力は`/wheel/odom`となり、EKFが最終的な`/odom`と`odom -> base_footprint`を生成します。
+
+Mid-360は時刻同期がないためスタンプが実時計からずれていきます。`restamp_scan.py`が
+`/scan_mid360_prestamp`を受信時刻で打ち直して`/scan_raw`へ流し、以降は2D LiDARと同じ
+経路になります。詳細は[LiDARとオドメトリ](../setup/lidar.md#タイムスタンプの打ち直し)を
+参照してください。
 
 ## autonomous_nav
 
@@ -57,6 +62,16 @@ Mid-360 + IMUの場合、車輪入力は`/wheel/odom`となり、EKFが最終的
 - `nav2_lifecycle_manager`: ライフサイクル管理
 
 ローカルコストマップはVoxelLayer + InflationLayer、グローバルコストマップはStaticLayer + ObstacleLayer + InflationLayerを使い、障害物入力は`/scan`です。
+
+### プロセス構成
+
+Nav2の各ノードは既定でプロセスを分けて起動します（`use_composition:=False`）。
+Raspberry Pi 4で1プロセスへ合成すると、DDS参加者あたりのエンドポイント数が大きく
+なりすぎて新規参加者からディスカバリできなくなり、さらにCPU飢餓でライフサイクル
+マネージャのbond心拍が途絶して自動シャットダウンする事象が頻発しました。あわせて
+`config/lifecycle_bond_params.yaml`でbondのタイムアウトを60秒へ延長しています。
+
+PCなど余裕のある環境では`use_composition:=True`も利用できます。
 
 ## 外部パッケージ
 

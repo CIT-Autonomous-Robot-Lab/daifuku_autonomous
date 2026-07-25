@@ -35,6 +35,10 @@ ros2 launch autonomous_nav mapping.launch.py \
   publish_lidar_tf:=true lidar_z:=0.30
 ```
 
+> ネイティブ環境と`docker_dev/`で`lidar:=mid360`を使う場合は、事前に
+> [スタンプ打ち直しの既知の制限](../setup/lidar.md#タイムスタンプの打ち直し)を
+> 確認してください。対応しないと`/scan_raw`が配信されません。
+
 軽量Docker環境:
 
 ```bash
@@ -45,7 +49,24 @@ docker compose -f docker/compose.yaml exec ros2 \
 
 ## 3. 地図を作る
 
-機体側の操作ノードやゲームパッドで、地図を作成する範囲をゆっくり走行します。操作ノードは`/cmd_vel`へ`geometry_msgs/msg/Twist`を配信する必要があります。
+地図を作成する範囲をゆっくり走行します。操作ノードは`/cmd_vel`へ`geometry_msgs/msg/Twist`を配信する必要があります。
+
+軽量Docker環境では、モーター電源を入れてから`control.sh`で操作できます。SLAMを
+起動したターミナルとは別のターミナルで実行してください。
+
+```bash
+bash docker/tools/control.sh motor on
+bash docker/tools/control.sh teleop keyboard
+# ジョイスティックを使う場合
+bash docker/tools/control.sh teleop joystick
+```
+
+速度は`TELEOP_LINEAR_SPEED`と`TELEOP_ANGULAR_SPEED`で変更できます。地図作成では
+既定より遅くしたほうが安定します。
+
+```bash
+TELEOP_LINEAR_SPEED=0.1 bash docker/tools/control.sh teleop keyboard
+```
 
 RVizを使える環境では、次を確認しながら走行します。
 
@@ -74,5 +95,11 @@ docker compose -f docker/compose.yaml exec ros2 \
 
 - `src/autonomous_nav/maps/map.yaml`
 - `src/autonomous_nav/maps/map.pgm`
+
+保存が終わったらモーター電源を切ります。
+
+```bash
+bash docker/tools/control.sh motor off
+```
 
 保存後は[自律移動](navigation.md)へ進みます。

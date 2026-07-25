@@ -33,6 +33,14 @@ docker compose -f docker/compose.yaml exec ros2 \
 複雑なコマンドは先にコンテナシェルへ入ると扱いやすくなります。
 
 ```bash
-docker compose -f docker/compose.yaml exec ros2 \
-  /ros_entrypoint.sh bash
+bash docker/tools/shell.sh
 ```
+
+モーター電源、遠隔操作、状態確認は`docker/tools/control.sh`にまとめています。
+
+```bash
+bash docker/tools/control.sh status
+bash docker/tools/control.sh teleop keyboard
+```
+
+一覧は[日常操作と確認](operations.md#controlshで操作する)を参照してください。
