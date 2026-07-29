@@ -162,7 +162,19 @@ controller_server:
       sim_time: 1.7
       linear_granularity: 0.05
       angular_granularity: 0.025
-      transform_tolerance: 0.2
+      # dwb_core::transformGlobalPlan がロボット姿勢を経路の frame に変換する際の
+      # 許容遅延 [s]。0.2 は実機のスキャン経路の遅延そのものだった。
+      # 2026-07-29 実機計測: map->odom の遅延は 67 件すべてが 0.20〜0.47 s に収まり、
+      # 最小値がちょうど 0.2 = この閾値。閾値の直上に貼り付いた定常オフセットで、
+      # emcl2 の TF 再発行は約 110ms 間隔で一定 (= 止まってはいない)。遅延の実体は
+      # livox -> pointcloud_to_laserscan -> restamp_scan -> filter chain -> emcl2 の
+      # パイプラインで、TF はスキャン時刻で打たれる。結果、制御周期の 11% が
+      # "Transform data too old" で落ち、連続失敗が failure_tolerance 0.3 s を
+      # 超えた時点で follow_path が Aborting → ゴールが ABORTED になった。
+      # 1.0 は amcl セクションと同値。代償は最大 1 s 古い姿勢で制御しうること
+      # (最高速 0.2 m/s なので位置ずれは最大 0.2 m)。
+      # 本筋の対処はスキャン経路の遅延そのものを削ること。
+      transform_tolerance: 1.0
       xy_goal_tolerance: 0.25
       trans_stopped_velocity: 0.25
       short_circuit_trajectory_evaluation: true
@@ -312,7 +324,16 @@ vi_global_planner:
     path_spacing: 0.05            # [m] Path の姿勢間隔 (DWB 向け補間; 0 で無効)
     goal_tolerance_xy: 0.25       # [m] 価値関数キャッシュを再利用するゴール一致判定
     goal_tolerance_deg: 10.0      # [deg]
-    cost_drawing_threshold: 60    # value_function 可視化のスケール上限 (ステップ数)
+    # value_function 可視化のスケール上限 [ステップ数≒秒]。これを超えるセルは
+    # すべて 100 に飽和するので、RViz 上ではゴールから離れた領域が一様に潰れて
+    # 「価値関数が途中で途切れている」ように見える (経路計算には一切影響しない、
+    # 表示専用のパラメータ)。
+    # 2026-07-29 実機計測 (map_10cm, 458x289): 60 だと到達可能セルの 66% が
+    # 100 に張り付き、グラデーションが出るのはゴールから 60 ステップ以内の
+    # 6.83% だけだった (未到達 -1 が 80.07% / 飽和 100 が 13.10% / 1..99 が 6.83%)。
+    # 1 ステップ = action_forward_m 0.3 m なので 60 ステップ ≒ 18 m 相当で、
+    # 建物一周の廊下長にまったく足りない。
+    cost_drawing_threshold: 1000
     publish_value_function: true
     value_publish_interval_ms: 500  # [ms] solve 途中経過の配信間隔 (0 で完了時のみ)
     unknown_as_obstacle: true
