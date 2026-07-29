@@ -3,6 +3,54 @@
 
 $RaspicatDevDir = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $RaspicatComposeFile = Join-Path $RaspicatDevDir 'compose.yaml'
+$RaspicatRepoDir = Split-Path -Parent $RaspicatDevDir
+# compose.yaml mounts the repo root here.
+$RaspicatWorkspace = '/workspaces/daifuku_autonomous'
+
+function Resolve-ContainerFile {
+    # Returns a path that is readable inside $Container for a file that lives in
+    # the repo.
+    #
+    # The Hyper-V podman machine periodically loses its Windows bind mount: the
+    # container keeps running but every access under the workspace fails with
+    # "Input/output error" (statfs on /mnt/c). The named volumes (build/install/
+    # log) are unaffected because they live inside the VM. When that happens,
+    # copy the file in rather than failing, so the GUI tools still work.
+    param(
+        [Parameter(Mandatory)][string]$Container,
+        [Parameter(Mandatory)][string]$Path,
+        [string]$StageDir = '/tmp/host-staged'
+    )
+
+    podman exec $Container test -r $Path *> $null
+    if ($LASTEXITCODE -eq 0) {
+        return $Path
+    }
+
+    if (-not $Path.StartsWith("$RaspicatWorkspace/")) {
+        throw "'$Path' is unreadable in '$Container' and is outside $RaspicatWorkspace, so it cannot be staged from the host."
+    }
+
+    $relative = $Path.Substring($RaspicatWorkspace.Length).TrimStart('/')
+    $hostPath = Join-Path $RaspicatRepoDir ($relative -replace '/', '\')
+    if (-not (Test-Path -LiteralPath $hostPath -PathType Leaf)) {
+        throw "'$Path' is unreadable in '$Container' and the host copy '$hostPath' does not exist either."
+    }
+
+    $staged = "$StageDir/$relative"
+    podman exec $Container mkdir -p (Split-Path -Parent $staged).Replace('\', '/')
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to create '$StageDir' in '$Container'."
+    }
+
+    podman cp $hostPath "${Container}:$staged"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to copy '$hostPath' into '$Container'."
+    }
+
+    Write-Host "Workspace mount is unreadable in '$Container'; staged $relative from the host to $staged."
+    return $staged
+}
 
 function Set-PodmanConnection {
     param([string]$Name = 'podman-hyperv-root')

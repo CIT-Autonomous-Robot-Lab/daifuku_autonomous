@@ -21,10 +21,7 @@ if (-not (Start-XServer $XDisplay)) {
     throw "No X server is listening on TCP $(Get-XPort $XDisplay). Install VcXsrv at 'C:\Program Files\VcXsrv\vcxsrv.exe' or start an X server yourself."
 }
 
-podman exec $Container test -f $RvizConfig
-if ($LASTEXITCODE -ne 0) {
-    throw "RViz config does not exist in the container: $RvizConfig"
-}
+$RvizConfig = Resolve-ContainerFile -Container $Container -Path $RvizConfig
 
 $rvizPid = podman exec $Container bash -lc 'pgrep -x rviz2 | head -n 1' 2>$null
 if ($rvizPid) {
