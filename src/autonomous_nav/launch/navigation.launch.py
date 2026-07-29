@@ -168,7 +168,8 @@ def generate_launch_description():
         後勝ちで重ねる:
           1. params_dir/*.yaml をファイル名順に合成 (params_file:= を明示した
              場合は合成せずそのファイルを土台にする)
-          2. overrides:=<名前> -> params_dir/../overrides/<名前>.yaml
+          2. overrides:=<名前> -> <pkg_share>/config/overrides/<名前>.yaml
+             (params_dir:= を変えても override の置き場は動かない)
           3. extra_params_file:=<パス>
 
         SetParameter / SetParametersFromFile では params_file に既にあるキーを

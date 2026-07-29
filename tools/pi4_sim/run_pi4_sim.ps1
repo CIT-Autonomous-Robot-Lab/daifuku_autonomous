@@ -100,6 +100,10 @@ foreach ($f in Get-ChildItem (Join-Path $PSScriptRoot "*") -Include *.py, *.sh, 
     podman @c cp $f.FullName "${Container}:/opt/pi4_sim/$($f.Name)" | Out-Null
 }
 podman @c cp (Join-Path $PSScriptRoot "fastdds_local.xml") "${Container}:/etc/fastdds/local.xml" | Out-Null
+# podman cp は「足す」だけで消さないので、リネーム・移動したファイルが
+# コンテナ側に残り続ける (config/ を分割したときの旧 nav2_params.yaml など)。
+# 読まれはしないが紛らわしいので、上書き前に消しておく。
+podman @c exec $Container bash -lc "rm -rf $share/config" | Out-Null
 foreach ($d in "behavior_trees", "config", "launch", "maps", "rviz", "scripts") {
     $src = Join-Path $pkg $d
     if (Test-Path $src) { podman @c cp $src "${Container}:${share}/" | Out-Null }
