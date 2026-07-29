@@ -5,6 +5,8 @@
 | ファイル | 内容 |
 |---|---|
 | `config/nav2_params.yaml` | Nav2、価値反復プランナ、コストマップ、速度、ゴール判定 |
+| `config/tsudanuma_overrides.yaml` | 広域地図`map_tsudanuma.yaml`用の追加設定（`extra_params_file`で重ねる） |
+| `behavior_trees/*.xml` | `planner:=vi`用のビヘイビアツリー（起動時に自動で選択） |
 | `config/emcl2_params.yaml` | EMCL2のフレーム、初期姿勢、粒子数、オドメトリモデル |
 | `config/lifecycle_bond_params.yaml` | ライフサイクルマネージャのbondタイムアウト |
 | `config/slam_toolbox_params.yaml` | SLAM Toolboxのmapping設定 |
@@ -26,6 +28,7 @@
 |---|---|---|
 | `map` | パッケージ内`maps/map.yaml` | 使用する地図YAMLのフルパス |
 | `params_file` | `config/nav2_params.yaml` | Nav2パラメータ |
+| `extra_params_file` | 空（無効） | `params_file`へ重ねる追加パラメータ。地図固有の設定用（例`config/tsudanuma_overrides.yaml`） |
 | `emcl2_params_file` | `config/emcl2_params.yaml` | EMCL2パラメータ |
 | `localization` | `emcl2` | `emcl2` / `emcl` / `amcl` |
 | `planner` | `vi` | `vi` / `navfn` |

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  docker/fastdds_udp_whitelist.xml のローカル検証版。
+
+  実機用プロファイルは UDP を 127.0.0.1 と 192.168.1.50 (Pi の eth0) に
+  限定しているが、192.168.1.50 はローカル PC に存在しないためそのままでは
+  使えない。ここでは同じ構成 (SHM + ホワイトリスト UDP、
+  useBuiltinTransports=false) を保ったままループバックだけに絞る。
+
+  SHM を無効化しないこと: 実機の障害 (SHM セグメントの 0644 パーミッションで
+  ホスト <-> コンテナが片方向不通、Fast DDS 2.6 は UDP へフォールバックしない)
+  と、UDP-only 化がカーネルを飽和させた件の両方が SHM の有無に依存しており、
+  検証環境で通信方式を変えると再現性が落ちる。
+-->
+<profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+  <transport_descriptors>
+    <transport_descriptor>
+      <transport_id>shm_local</transport_id>
+      <type>SHM</type>
+      <segment_size>8388608</segment_size>
+    </transport_descriptor>
+    <transport_descriptor>
+      <transport_id>udp_loopback_only</transport_id>
+      <type>UDPv4</type>
+      <interfaceWhiteList>
+        <address>127.0.0.1</address>
+      </interfaceWhiteList>
+    </transport_descriptor>
+  </transport_descriptors>
+  <participant profile_name="pi4_sim_participant" is_default_profile="true">
+    <rtps>
+      <userTransports>
+        <transport_id>shm_local</transport_id>
+        <transport_id>udp_loopback_only</transport_id>
+      </userTransports>
+      <useBuiltinTransports>false</useBuiltinTransports>
+    </rtps>
+  </participant>
+</profiles>

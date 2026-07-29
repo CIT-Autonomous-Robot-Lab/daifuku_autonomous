@@ -1,0 +1,21 @@
+<!--
+  bt_navigator の navigate_through_poses 用スタブ BT。
+
+  nav2 1.1.20 (Humble) の BtNavigator は navigate_to_pose と
+  navigate_through_poses の両ナビゲータをハードコードで持ち、on_configure で
+  両方の BT XML を読む (Iron 以降の `navigators` パラメータは無い)。
+  既定の navigate_through_poses_w_replanning_and_recovery.xml は
+  ComputePathThroughPoses を含み、BtActionNode のコンストラクタが
+  wait_for_service_timeout 内にアクションサーバを見つけられないと例外を投げる。
+
+  planner:=vi では planner_server を起動せず、vi_global_planner は
+  compute_path_to_pose しか提供しないため、この XML を差し替えないと
+  bt_navigator が configure できず lifecycle manager が bringup を中断する。
+
+  NavigateThroughPoses は使わない前提なので、常に失敗する最小の木にしておく。
+-->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <AlwaysFailure/>
+  </BehaviorTree>
+</root>

@@ -2,7 +2,7 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, OpaqueFunction
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, OpaqueFunction
 from launch.conditions import IfCondition, UnlessCondition
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
@@ -154,8 +154,23 @@ def generate_launch_description():
             ],
             remappings=[
                 ("cloud_in", "/livox/lidar"),
-                ("scan", LaunchConfiguration("scan_raw_topic")),
+                # The MID360 device clock is not PTP-synced and drifts by
+                # seconds per minute against the system clock, so the raw
+                # scan is restamped with the receive time below before it
+                # reaches the filter chain and the rest of the stack.
+                ("scan", "/scan_mid360_prestamp"),
             ],
+        ),
+
+        ExecuteProcess(
+            condition=IfCondition(is_mid360),
+            cmd=[
+                "python3",
+                os.path.join(pkg_share, "scripts", "restamp_scan.py"),
+                "/scan_mid360_prestamp",
+                LaunchConfiguration("scan_raw_topic"),
+            ],
+            output="screen",
         ),
 
         Node(

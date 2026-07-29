@@ -11,14 +11,28 @@ services:
     tty: true
     command: ["sleep", "infinity"]
     network_mode: host
+    # Share /dev/shm with the host so Fast DDS SHM works between the
+    # container and the native driver processes. UDP-only fan-out to ~20
+    # participants saturated the Pi4 kernel (57% sys, load 24) and lagged
+    # TF by 20+ s.
+    ipc: host
+    # Run as the same uid as the host ROS processes (ubuntu, 1000). Fast DDS
+    # creates SHM segments with 0644, so mixed root/non-root participants
+    # cannot open each other's ports and host->container topics silently
+    # stop (no UDP fallback in Fast DDS 2.6).
+    user: "1000:1000"
     environment:
+      HOME: /tmp
+      ROS_HOME: /tmp/ros
+      ROS_LOG_DIR: /tmp/ros/log
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-90}
       ROS_LOCALHOST_ONLY: "0"
       RMW_IMPLEMENTATION: rmw_fastrtps_cpp
-      # Native ROS and Docker are on the same Pi but do not share a process
-      # namespace. Force UDP so Fast DDS does not select unusable SHM paths.
-      FASTDDS_BUILTIN_TRANSPORTS: UDPv4
+      # Restrict DDS to lo/eth0 so wlan0 locators are never advertised
+      # (unreachable locators made discovery flap under load).
+      FASTRTPS_DEFAULT_PROFILES_FILE: /etc/fastdds/udp_whitelist.xml
     volumes:
+      - ./fastdds_udp_whitelist.xml:/etc/fastdds/udp_whitelist.xml:ro
       # joy_node uses evdev devices. The cgroup rule also permits hot-plugged
       # controllers whose minor number was not present at container creation.
       - /dev/input:/dev/input:ro

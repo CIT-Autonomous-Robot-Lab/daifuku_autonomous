@@ -3,7 +3,10 @@ project(autonomous_nav)
 
 find_package(ament_cmake REQUIRED)
 
-install(DIRECTORY config launch maps rviz
+# scripts も share へ入れる: lidar_bringup.launch.py が
+# share/autonomous_nav/scripts/restamp_scan.py を ExecuteProcess で直接叩く
+# (lidar:=mid360 のときのみ)。
+install(DIRECTORY behavior_trees config launch maps rviz scripts
   DESTINATION share/${PROJECT_NAME}
 )
 

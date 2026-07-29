@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Fast DDS transport profile for the Pi host and the docker container.
+
+  1) UDP is restricted to loopback and the robot LAN (192.168.1.50).
+     Without the whitelist, participants also announce locators on wlan0
+     (192.168.23.x), which peers cannot reach; the unreachable locators plus
+     UDP buffer pressure made discovery flap (nodes appearing/disappearing).
+
+  2) SHM is enabled for same-host traffic. With ~20 participants (nav stack,
+     lidar pipeline, robot driver) forced onto UDP-only, the kernel drowned
+     in per-subscriber sendmsg fan-out (57% sys / load 24 on the Pi4,
+     2026-07-24) and TF stamps lagged 20+ s, aborting every nav goal.
+     Container <-> host SHM requires "ipc: host" in docker/compose.yaml so
+     /dev/shm is shared. segment_size covers the MID360 point cloud
+     (~640 KB per message at 10 Hz).
+
+  Used by both the Pi host (FASTRTPS_DEFAULT_PROFILES_FILE in ~/.bashrc)
+  and the docker container (mounted via docker/compose.yaml).
+-->
+<profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+  <transport_descriptors>
+    <transport_descriptor>
+      <transport_id>shm_local</transport_id>
+      <type>SHM</type>
+      <segment_size>8388608</segment_size>
+    </transport_descriptor>
+    <transport_descriptor>
+      <transport_id>udp_eth0_only</transport_id>
+      <type>UDPv4</type>
+      <interfaceWhiteList>
+        <address>127.0.0.1</address>
+        <address>192.168.1.50</address>
+      </interfaceWhiteList>
+    </transport_descriptor>
+  </transport_descriptors>
+  <participant profile_name="udp_eth0_only_participant" is_default_profile="true">
+    <rtps>
+      <userTransports>
+        <transport_id>shm_local</transport_id>
+        <transport_id>udp_eth0_only</transport_id>
+      </userTransports>
+      <useBuiltinTransports>false</useBuiltinTransports>
+    </rtps>
+  </participant>
+</profiles>

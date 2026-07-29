@@ -16,10 +16,14 @@ emcl2:
     odom_rot_dev_per_rot: 0.2
     laser_likelihood_max_dist: 0.2
     scan_increment: 1
-    alpha_threshold: 0.5
+    # 2026-07-24: 実測で非貫通率(alpha)が0.0-0.4に張り付き、閾値0.5では
+    # 膨張リセット+センサリセットが毎スキャン発動して推定姿勢が回転した。
+    # 地図と環境の不整合(有効ビームの28%が地図の壁を貫通)が根因のため、
+    # 地図を取り直すまでリセットを保守的にする。
+    alpha_threshold: 0.2
     open_space_threshold: 0.05
     expansion_radius_position: 0.1
-    expansion_radius_orientation: 0.2
+    expansion_radius_orientation: 0.05
     extraction_rate: 0.1
     range_threshold: 0.3
-    sensor_reset: true
+    sensor_reset: false

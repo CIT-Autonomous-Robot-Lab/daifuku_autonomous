@@ -1,0 +1,45 @@
+<!--
+  planner:=vi 用の navigate_to_pose BT。
+
+  nav2 既定の navigate_to_pose_w_replanning_and_recovery.xml は
+  ClearEntireCostmap を 3 箇所で使い、それぞれ
+
+    global_costmap/clear_entirely_global_costmap  <- planner_server のコストマップ
+    local_costmap/clear_entirely_local_costmap    <- controller_server のコストマップ
+
+  が提供するサービスを要求する。vi_global_planner は planner_server の
+  compute_path_to_pose だけを置き換え、コストマップとそのサービスは持たない
+  (vi_local_planner も同様)。BtActionNode / BtServiceNode はコンストラクタで
+  wait_for_service_timeout 内にサーバが見つからないと例外を投げるので、既定の
+  BT のままでは bt_navigator が on_configure で落ち、lifecycle manager が
+  bringup を中断する。
+
+  そこでコストマップクリアを外し、リカバリは behavior_server が提供する
+  Spin / Wait / BackUp だけにする。VI 構成には nav2 のコストマップが存在せず、
+  クリアすべき対象自体が無いため機能的な損失はない。
+
+  補足: local_planner:=vi では controller_server も起動しないため
+  local_costmap/costmap_raw が誰も publish せず、behavior_server の
+  Spin / BackUp はコストマップ待ちで失敗しうる。リカバリまで確実に効かせたい
+  なら local_planner:=nav2 を選ぶこと。
+-->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <RecoveryNode number_of_retries="6" name="NavigateRecovery">
+      <PipelineSequence name="NavigateWithReplanning">
+        <RateController hz="1.0">
+          <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+        </RateController>
+        <FollowPath path="{path}" controller_id="FollowPath"/>
+      </PipelineSequence>
+      <ReactiveFallback name="RecoveryFallback">
+        <GoalUpdated/>
+        <RoundRobin name="RecoveryActions">
+          <Spin spin_dist="1.57"/>
+          <Wait wait_duration="5"/>
+          <BackUp backup_dist="0.30" backup_speed="0.05"/>
+        </RoundRobin>
+      </ReactiveFallback>
+    </RecoveryNode>
+  </BehaviorTree>
+</root>
