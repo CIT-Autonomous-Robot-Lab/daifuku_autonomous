@@ -268,7 +268,7 @@ ros2 launch autonomous_nav navigation.launch.py \
 
 ```bash
 gdb --args install/emcl2/lib/emcl2/emcl2_node \
-  --ros-args --params-file src/autonomous_nav/config/emcl2_params.yaml
+  --ros-args --params-file src/autonomous_nav/config/localization/emcl2.yaml
 ```
 
 キーボード操作の例:

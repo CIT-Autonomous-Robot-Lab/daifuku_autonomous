@@ -13,8 +13,10 @@
 #                               1963x1334@0.15m = 1.57 億状態)
 #   VI_COMPACT_SINK_DIR=        compact 経路の確定出力を置くディレクトリ ("" = RAM)
 #   SIM_UNKNOWN_AS_OBSTACLE=1   シム LiDAR が未観測セルも壁として返す
+#   OVERRIDES=                  navigation.launch.py の overrides
+#                               (config/overrides/<名前>.yaml。例 map_tsudanuma)
 #   EXTRA_PARAMS=               navigation.launch.py の extra_params_file
-#                               (地図固有の上書き。例 config/tsudanuma_overrides.yaml)
+#                               (config/overrides/ に無い任意パスの上書き)
 #   MAP_FREE_THRESH=            指定すると map.yaml の free_thresh を差し替えた
 #                               コピーを使う (実機は 0.25 = 未観測 205 が free 扱い)
 #   VI_SOLVER=                  vi_*_planner の solver パラメータ上書き
@@ -68,15 +70,14 @@ rm -rf "$RUN"; mkdir -p "$RUN"
 export ROS_LOG_DIR=$RUN/log
 
 MAP=$SHARE/maps/${MAP_NAME:-map}.yaml
-PARAMS=$SHARE/config/nav2_params.yaml
 if [ ! -f "$MAP" ]; then
     echo "map not found: $MAP" >&2
     exit 2
 fi
 
-python3 - "$MAP" "$PARAMS" "$RUN" "$(dirname "$0")" <<'PY'
+python3 - "$MAP" "$RUN" "$(dirname "$0")" <<'PY'
 import os, subprocess, sys, yaml
-map_in, params_in, run, tools = sys.argv[1:5]
+map_in, run, tools = sys.argv[1:4]
 
 free_thresh = os.environ.get("MAP_FREE_THRESH", "")
 scale = os.environ.get("MAP_SCALE", "")
@@ -98,49 +99,59 @@ elif free_thresh:
     yaml.safe_dump(meta, open(out, "w"))
     print(f"MAP_OVERRIDE {out} free_thresh={free_thresh}")
 
+# パラメータの上書きは launch と同じ経路 (extra_params_file) に載せる。ここで
+# nav2_params 相当を作り直すと config/nav2/*.yaml の合成を素通りしてしまうので、
+# 環境変数で触るキーだけの overlay を書く。
+# BT の差し替え (planner:=vi 用) は navigation.launch.py 自身が behavior_trees/ を
+# 指すので、ハーネス側では何もしない。
+overlay = {}
+
+
+def put(node, key, value):
+    overlay.setdefault(node, {}).setdefault("ros__parameters", {})[key] = value
+
+
 solver = os.environ.get("VI_SOLVER", "")
 pub_vf = os.environ.get("VI_PUBLISH_VF", "")
 planner_freq = os.environ.get("PLANNER_EXPECTED_FREQ", "")
 map_scale = os.environ.get("VI_MAP_SCALE", "")
 sink_dir = os.environ.get("VI_COMPACT_SINK_DIR", "")
-# BT の差し替え (planner:=vi 用) は navigation.launch.py 自身が behavior_trees/ を
-# 指すので、ハーネス側では何もしない。
-if (solver or pub_vf or planner_freq or map_scale or sink_dir
-        or os.environ.get("BT_SERVER_TIMEOUT", "")):
-    params = yaml.safe_load(open(params_in))
-    for node in ("vi_global_planner", "vi_local_planner"):
-        rp = params.get(node, {}).get("ros__parameters")
-        if rp is None:
-            continue
-        if solver:
-            rp["solver"] = solver
-        if pub_vf:
-            rp["publish_value_function"] = pub_vf.lower() == "true"
-        # map_scale / compact_sink_dir は vi_global_planner だけが持つ。
-        if node == "vi_global_planner":
-            if map_scale:
-                rp["map_scale"] = int(map_scale)
-            if sink_dir:
-                rp["compact_sink_dir"] = sink_dir
-    if os.environ.get("BT_SERVER_TIMEOUT", ""):
-        # bt_navigator の BtActionNode がゴール受理 ack を待つ時間 [ms]。
-        # nav2 既定は 20ms で、CPU 飢餓時はこれを超えて全アクションが即失敗する。
-        params["bt_navigator"]["ros__parameters"]["default_server_timeout"] = int(
-            os.environ["BT_SERVER_TIMEOUT"]
-        )
-    if planner_freq:
-        # planner_server は達成できない周波数を設定したときだけ実測値を WARN に
-        # 出す。キャリブレーション (実機実測 7.6Hz) はこれを読む。
-        params["planner_server"]["ros__parameters"]["expected_planner_frequency"] = float(
-            planner_freq
-        )
-    out = os.path.join(run, "nav2_params.yaml")
-    yaml.safe_dump(params, open(out, "w"))
-    print(f"PARAMS_OVERRIDE {out} solver={solver or '-'} publish_vf={pub_vf or '-'}")
+bt_timeout = os.environ.get("BT_SERVER_TIMEOUT", "")
+
+for node in ("vi_global_planner", "vi_local_planner"):
+    if solver:
+        put(node, "solver", solver)
+    if pub_vf:
+        put(node, "publish_value_function", pub_vf.lower() == "true")
+# map_scale / compact_sink_dir は vi_global_planner だけが持つ。
+if map_scale:
+    put("vi_global_planner", "map_scale", int(map_scale))
+if sink_dir:
+    put("vi_global_planner", "compact_sink_dir", sink_dir)
+if bt_timeout:
+    # bt_navigator の BtActionNode がゴール受理 ack を待つ時間 [ms]。
+    # nav2 既定は 20ms で、CPU 飢餓時はこれを超えて全アクションが即失敗する。
+    put("bt_navigator", "default_server_timeout", int(bt_timeout))
+if planner_freq:
+    # planner_server は達成できない周波数を設定したときだけ実測値を WARN に
+    # 出す。キャリブレーション (実機実測 7.6Hz) はこれを読む。
+    put("planner_server", "expected_planner_frequency", float(planner_freq))
+
+if overlay:
+    out = os.path.join(run, "overlay.yaml")
+    yaml.safe_dump(overlay, open(out, "w"))
+    print(f"PARAMS_OVERLAY {out} solver={solver or '-'} publish_vf={pub_vf or '-'}")
 PY
 
 [ -f "$RUN/map.yaml" ] && MAP=$RUN/map.yaml
-[ -f "$RUN/nav2_params.yaml" ] && PARAMS=$RUN/nav2_params.yaml
+# overlay と EXTRA_PARAMS は compose_params が後勝ちで重ねる (カンマ区切り)。
+# ros2 launch は `arg:=` (値が空) を malformed として弾くので、値があるときだけ渡す。
+EXTRA=""
+[ -f "$RUN/overlay.yaml" ] && EXTRA=$RUN/overlay.yaml
+[ -n "${EXTRA_PARAMS:-}" ] && EXTRA="${EXTRA:+$EXTRA,}${EXTRA_PARAMS}"
+params_arg=()
+[ -n "${OVERRIDES:-}" ] && params_arg+=(overrides:="$OVERRIDES")
+[ -n "$EXTRA" ] && params_arg+=(extra_params_file:="$EXTRA")
 
 obs_arg=()
 if [ -n "$EXTRA_OBSTACLES" ]; then
@@ -168,8 +179,7 @@ sleep 3
 
 ros2 launch autonomous_nav navigation.launch.py \
     lidar:=2d use_rviz:=false \
-    map:="$MAP" params_file:="$PARAMS" \
-    extra_params_file:="${EXTRA_PARAMS:-}" \
+    map:="$MAP" "${params_arg[@]}" \
     planner:="$PLANNER" local_planner:="$LOCAL_PLANNER" \
     localization:="$LOCALIZATION" >"$RUN/nav.log" 2>&1 &
 NAV_PID=$!

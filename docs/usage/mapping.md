@@ -14,7 +14,7 @@ Mid-360 + IMUの場合:
 
 - 車輪オドメトリを`/wheel/odom`へ配信
 - 車輪側の`odom -> base_footprint` TFを停止
-- `MID360_config.json`のIPとセンサーTFを設定
+- `config/sensors/MID360_config.json`のIPとセンサーTFを設定
 
 詳しくは[LiDARとオドメトリ](../setup/lidar.md)を参照してください。
 

@@ -4,21 +4,21 @@
 
 | ファイル | 内容 |
 |---|---|
-| `config/nav2_params.yaml` | Nav2、価値反復プランナ、コストマップ、速度、ゴール判定 |
-| `config/tsudanuma_overrides.yaml` | 広域地図`map_tsudanuma.yaml`用の追加設定（`extra_params_file`で重ねる） |
+| `config/nav2/*.yaml` | Nav2、価値反復プランナ、コストマップ、速度、ゴール判定（起動時に1つへ合成） |
+| `config/overrides/*.yaml` | 地図・環境ごとの上書き（`overrides:=`で重ねる） |
 | `behavior_trees/*.xml` | `planner:=vi`用のビヘイビアツリー（起動時に自動で選択） |
-| `config/emcl2_params.yaml` | EMCL2のフレーム、初期姿勢、粒子数、オドメトリモデル |
-| `config/lifecycle_bond_params.yaml` | ライフサイクルマネージャのbondタイムアウト |
-| `config/slam_toolbox_params.yaml` | SLAM Toolboxのmapping設定 |
-| `config/scan_filter.yaml` | LiDARの角度フィルタ |
-| `config/MID360_config.json` | Mid-360とホストのIP |
-| `config/mid360_scan.yaml` | 3D点群から2D LaserScanへの変換 |
-| `config/mid360_ekf.yaml` | Mid-360 IMUと車輪オドメトリの融合 |
+| `config/localization/emcl2.yaml` | EMCL2のフレーム、初期姿勢、粒子数、オドメトリモデル |
+| `config/lifecycle_bond.yaml` | ライフサイクルマネージャのbondタイムアウト |
+| `config/mapping/slam_toolbox.yaml` | SLAM Toolboxのmapping設定 |
+| `config/sensors/scan_filter.yaml` | LiDARの角度フィルタ |
+| `config/sensors/MID360_config.json` | Mid-360とホストのIP |
+| `config/sensors/mid360_scan.yaml` | 3D点群から2D LaserScanへの変換 |
+| `config/sensors/mid360_ekf.yaml` | Mid-360 IMUと車輪オドメトリの融合 |
 | `rviz/mapping.rviz` | 地図作成用RViz |
 | `rviz/nav2_default.rviz` | 自律移動用RViz |
 | `maps/*.yaml`, `maps/*.pgm` | 保存済み地図 |
 
-すべて`src/autonomous_nav/`以下にあります。
+すべて`src/autonomous_nav/`以下にあります。`config/`の分け方と合成順序は`src/autonomous_nav/config/README.md`にまとめてあります。
 
 ## navigation.launch.py
 
@@ -27,9 +27,11 @@
 | 引数 | 既定値 | 説明 |
 |---|---|---|
 | `map` | パッケージ内`maps/map.yaml` | 使用する地図YAMLのフルパス |
-| `params_file` | `config/nav2_params.yaml` | Nav2パラメータ |
-| `extra_params_file` | 空（無効） | `params_file`へ重ねる追加パラメータ。地図固有の設定用（例`config/tsudanuma_overrides.yaml`） |
-| `emcl2_params_file` | `config/emcl2_params.yaml` | EMCL2パラメータ |
+| `params_dir` | `config/nav2` | 合成するNav2パラメータ断片のディレクトリ |
+| `params_file` | 空（`params_dir`を合成） | Nav2パラメータを1ファイルで与える。指定すると`params_dir`は無視 |
+| `overrides` | 空（無効） | `config/overrides/<名前>.yaml`を重ねる。カンマ区切りで複数可（例`overrides:=map_tsudanuma`） |
+| `extra_params_file` | 空（無効） | `overrides`の後に重ねる任意パスのファイル。カンマ区切りで複数可 |
+| `emcl2_params_file` | `config/localization/emcl2.yaml` | EMCL2パラメータ |
 | `localization` | `emcl2` | `emcl2` / `emcl` / `amcl` |
 | `planner` | `vi` | `vi` / `navfn` |
 | `local_planner` | `auto` | `auto` / `vi` / `nav2` |
@@ -72,7 +74,7 @@ ros2 launch autonomous_nav mapping.launch.py --show-args
 
 ## 自己位置推定の暫定設定
 
-`config/emcl2_params.yaml`のリセット関連は、現在の地図に合わせた**暫定値**です。
+`config/localization/emcl2.yaml`のリセット関連は、現在の地図に合わせた**暫定値**です。
 
 | パラメータ | 値 | 従来値 |
 |---|---|---|
@@ -96,4 +98,4 @@ ros2 launch autonomous_nav mapping.launch.py --show-args
 - LiDAR搭載位置と除外角度
 - ゴール許容誤差
 
-`vi_global_planner`のソルバ、スレッド数、キャッシュ許容差、経路補間間隔と、`vi_local_planner`の制御周期、局所反復時間などは`nav2_params.yaml`内の各セクションで設定します。
+`vi_global_planner`のソルバ、スレッド数、キャッシュ許容差、経路補間間隔と、`vi_local_planner`の制御周期、局所反復時間などは`config/nav2/vi_planner.yaml`で設定します。

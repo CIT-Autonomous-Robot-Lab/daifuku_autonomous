@@ -216,8 +216,8 @@ OOM に至る前の実行では、BT の全アクションが即座に失敗し�
 [WARN] BehaviorTreeEngine: Behavior Tree tick rate 100.00 was exceeded!
 ```
 
-`bt_navigator` の `default_server_timeout` は **20 ms** (nav2 既定, `nav2_params.yaml`
-にもその値が入っている)。cgroup の統計で `nr_throttled=31904`,
+`bt_navigator` の `default_server_timeout` は **20 ms** (nav2 既定, 当時は
+`config/nav2/bt_navigator.yaml` 相当にもその値が入っていた)。cgroup の統計で `nr_throttled=31904`,
 `throttled_usec=546s` という状態では、rclrs のアクションサーバが 20 ms 以内に
 ack を返せずゴールが即失敗する。`default_server_timeout: 500` に上げると
 この段階は通過し、次の OOM まで進んだ。
@@ -299,7 +299,7 @@ calib_navfn2 で planner_server が出した実測値は **11.19 Hz** (navfn 1 �
 ## 実機に反映するときの提案 (実機が復帰してから適用すること)
 
 Pi には触れていないので、以下は**提案**であって適用済みではない。唯一
-`config/nav2_params.yaml` の `default_server_timeout` だけリポジトリに入れた
+`config/nav2/bt_navigator.yaml` の `default_server_timeout` だけリポジトリに入れた
 (下記)。
 
 ### `planner:=vi` を Pi4 で動かすのに必要な 5 点 (全部必要)
@@ -402,7 +402,7 @@ start (53.07,-21.62,90°) → goal (44.08,-5.12,0°)、測地距離 25.5m。
 | ケース | 結果 | 備考 |
 |---|---|---|
 | `planner:=navfn local_planner:=nav2` | **SUCCEEDED 61.9s** / リカバリ 0 | 地図は 0.05m のまま。cgroup ピーク 1.5GB |
-| `planner:=vi local_planner:=nav2` + `extra_params_file:=config/tsudanuma_overrides.yaml` | **SUCCEEDED 110.5s / リカバリ 0** | 初回 solve 41.6s (1670 iters、576 姿勢)。以降のリプランはキャッシュヒットで 0.00s。到達時の自己位置誤差 0.02m。別ランでは solve 25s・112.0s・リカバリ 1 |
+| `planner:=vi local_planner:=nav2` + `overrides:=map_tsudanuma` | **SUCCEEDED 110.5s / リカバリ 0** | 初回 solve 41.6s (1670 iters、576 姿勢)。以降のリプランはキャッシュヒットで 0.00s。到達時の自己位置誤差 0.02m。別ランでは solve 25s・112.0s・リカバリ 1 |
 
 **メモリ (これが Pi4 での本題)**: `vi_global_planner` のピーク RSS 3.98GB の内訳は
 **anon 2.16GB + file 1.81GB**。file 側は sink の mmap (逼迫時に回収できる
@@ -422,7 +422,7 @@ start (53.07,-21.62,90°) → goal (44.08,-5.12,0°)、測地距離 25.5m。
 
 ```bash
 CASE=tsuda_vi MAP_NAME=map_tsudanuma PLANNER=vi LOCAL_PLANNER=nav2 \
-EXTRA_PARAMS=/opt/ros_ws/install/share/autonomous_nav/config/tsudanuma_overrides.yaml \
+OVERRIDES=map_tsudanuma \
 START_X=53.07 START_Y=-21.62 START_YAW_DEG=90 \
 GOAL_X=44.08 GOAL_Y=-5.12 GOAL_YAW_DEG=0 SETTLE=120 TIMEOUT=900 \
 bash /opt/pi4_sim/run_case.sh
@@ -459,16 +459,17 @@ penalty を 1 にすると同じ地図・同じゴールで V 120→0 と単調�
 壁に寄りすぎるようなら 5 程度まで上げてから他をいじること (penalty 1 の実測は
 リカバリ 0 なので、この経路では寄りすぎていない)。
 
-### 罠 2: `extra_params_file` は SetParametersFromFile では効かない
+### 罠 2: パラメータ上書きは SetParametersFromFile では効かない
 
 launch_ros は global params (SetParameter / SetParametersFromFile) を先に、
 ノード個別の `parameters=[...]` を後に渡す。ROS は後勝ちなので、
 **`params_file` に既にあるキーは上書きできない**。`bond_timeout` が効くのは
-`nav2_params.yaml` に無いキーだからで、`solver` や `map_scale` は効かない
+`config/nav2/*.yaml` のどこにも無いキーだからで、`solver` や `map_scale` は効かない
 (実測: overlay を書いても `map_scale=1` のまま起動した)。
-`navigation.launch.py` は `merge_extra_params` で YAML の段階でマージし、
-`params_file` 自体を差し替えている。BT XML の 2 キーは `nav2_params.yaml` に
-無いので `SetParameter` で足りる (`planner:=vi` の bringup はこれで通る)。
+`navigation.launch.py` は `compose_params` で YAML の段階でマージし、
+`params_file` 自体を作っている (`overrides:=` / `extra_params_file:=` の両方が
+この経路)。BT XML の 2 キーは `config/nav2/*.yaml` に無いので `SetParameter` で
+足りる (`planner:=vi` の bringup はこれで通る)。
 
 ### 罠 3: `bt_navigator` の `wait_for_service_timeout` (既定 1000ms)
 
@@ -477,7 +478,7 @@ launch_ros は global params (SetParameter / SetParametersFromFile) を先に、
 間に合わず、`"compute_path_to_pose" action server not available after waiting for
 1.00s` → `Error loading XML file` → `Failed to bring up all requested nodes` で
 bringup が全滅した (BT の差し替え自体は成功していたのに、その次で落ちる)。
-`nav2_params.yaml` で 60000ms にした。起動時にしか効かない待ち。
+`config/nav2/bt_navigator.yaml` で 60000ms にした。起動時にしか効かない待ち。
 
 ### 罠 4: `/initialpose` の 1 発だけでは取りこぼす
 

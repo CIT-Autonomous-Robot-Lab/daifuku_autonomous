@@ -74,15 +74,15 @@ def generate_launch_description():
         DeclareLaunchArgument("scan_filter_enabled", default_value="true"),
         DeclareLaunchArgument(
             "scan_filter_params_file",
-            default_value=os.path.join(pkg_share, "config", "scan_filter.yaml"),
+            default_value=os.path.join(pkg_share, "config", "sensors", "scan_filter.yaml"),
         ),
         DeclareLaunchArgument(
             "mid360_config",
-            default_value=os.path.join(pkg_share, "config", "MID360_config.json"),
+            default_value=os.path.join(pkg_share, "config", "sensors", "MID360_config.json"),
         ),
         DeclareLaunchArgument(
             "mid360_scan_params_file",
-            default_value=os.path.join(pkg_share, "config", "mid360_scan.yaml"),
+            default_value=os.path.join(pkg_share, "config", "sensors", "mid360_scan.yaml"),
         ),
         DeclareLaunchArgument("mid360_publish_freq", default_value="10.0"),
         DeclareLaunchArgument("lidar_frame", default_value="livox_frame"),
@@ -97,7 +97,7 @@ def generate_launch_description():
         DeclareLaunchArgument("use_mid360_imu", default_value="true"),
         DeclareLaunchArgument(
             "mid360_ekf_params_file",
-            default_value=os.path.join(pkg_share, "config", "mid360_ekf.yaml"),
+            default_value=os.path.join(pkg_share, "config", "sensors", "mid360_ekf.yaml"),
         ),
         DeclareLaunchArgument("wheel_odom_topic", default_value="/wheel/odom"),
         DeclareLaunchArgument("odom_topic", default_value="/odom"),

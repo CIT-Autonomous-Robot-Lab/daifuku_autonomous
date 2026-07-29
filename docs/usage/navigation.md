@@ -74,7 +74,7 @@ ros2 launch autonomous_nav navigation.launch.py \
 価値反復はゴールごとに`nx × ny × theta_cell_num`の状態空間を扱うため、この地図を
 0.05 mのまま解くと14.1億状態になり、既定の密ソルバでは状態配列だけで79 GBを要求して起動と同時に落ちます。
 
-`config/tsudanuma_overrides.yaml`を`extra_params_file`で重ねると、プランナ内部だけを
+`config/overrides/map_tsudanuma.yaml`を`overrides:=map_tsudanuma`で重ねると、プランナ内部だけを
 0.15 m/セル（`map_scale: 3`、1963×1334＝1.57億状態）に粗くし、状態配列を確保しない
 アウトオブコアソルバ（`frontier2d_sparse_compact`）へ切り替えます。確定した価値関数と方策は
 `compact_sink_dir`のmmapファイル（約1.9 GB）に置かれます。地図サーバ、コストマップ、
@@ -83,11 +83,11 @@ ros2 launch autonomous_nav navigation.launch.py \
 ```bash
 ros2 launch autonomous_nav navigation.launch.py \
   map:=$PWD/src/autonomous_nav/maps/map_tsudanuma.yaml \
-  extra_params_file:=$PWD/src/autonomous_nav/config/tsudanuma_overrides.yaml \
+  overrides:=map_tsudanuma \
   planner:=vi local_planner:=nav2
 ```
 
-NavFnとDWBで動かす場合、`extra_params_file`は不要です。
+NavFnとDWBで動かす場合、`overrides`は不要です。
 
 ```bash
 ros2 launch autonomous_nav navigation.launch.py \

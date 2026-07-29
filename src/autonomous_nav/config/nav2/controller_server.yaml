@@ -1,0 +1,69 @@
+# local_planner:=nav2 のローカルプランナ (controller_server + DWB)。
+# local_planner:=vi では起動せず、vi_local_planner が follow_path を提供する。
+# config/nav2/*.yaml の断片。合成順序と上書きは ../README.md を参照。
+
+controller_server:
+  ros__parameters:
+    use_sim_time: false
+    # Pi4はCPU飽和気味 (20Hzはbond心拍途絶=CRITICAL FAILUREの誘因になった)。
+    # 最高速0.2m/s級の車体には10Hzで十分。
+    controller_frequency: 10.0
+    min_x_velocity_threshold: 0.001
+    min_y_velocity_threshold: 0.5
+    min_theta_velocity_threshold: 0.001
+    failure_tolerance: 0.3
+    progress_checker_plugin: "progress_checker"
+    goal_checker_plugins: ["general_goal_checker"]
+    controller_plugins: ["FollowPath"]
+    progress_checker:
+      plugin: "nav2_controller::SimpleProgressChecker"
+      required_movement_radius: 0.5
+      movement_time_allowance: 10.0
+    general_goal_checker:
+      stateful: true
+      plugin: "nav2_controller::SimpleGoalChecker"
+      xy_goal_tolerance: 0.25
+      yaw_goal_tolerance: 0.25
+    FollowPath:
+      plugin: "dwb_core::DWBLocalPlanner"
+      debug_trajectory_details: true
+      min_vel_x: 0.0
+      min_vel_y: 0.0
+      max_vel_x: 0.4
+      max_vel_y: 0.0
+      max_vel_theta: 1.0
+      min_speed_xy: 0.0
+      max_speed_xy: 0.4
+      min_speed_theta: 0.0
+      acc_lim_x: 2.5
+      acc_lim_y: 0.0
+      acc_lim_theta: 3.2
+      decel_lim_x: -2.5
+      decel_lim_y: 0.0
+      decel_lim_theta: -3.2
+      vx_samples: 20
+      vy_samples: 5
+      vtheta_samples: 20
+      sim_time: 1.7
+      linear_granularity: 0.05
+      angular_granularity: 0.025
+      # [s] 姿勢を経路の frame へ変換するときの許容遅延。既定の 0.2 は実機の
+      # スキャン経路の遅延 (実測 0.20〜0.47s) とちょうど同値で、制御周期の 11% が
+      # "Transform data too old" で落ちてゴールが ABORTED になっていた。
+      # 遅延そのものを削るまでの緩和 (計測の詳細は ../README.md)。
+      transform_tolerance: 1.0
+      xy_goal_tolerance: 0.25
+      trans_stopped_velocity: 0.25
+      short_circuit_trajectory_evaluation: true
+      stateful: true
+      critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
+      BaseObstacle.scale: 0.02
+      PathAlign.scale: 32.0
+      PathAlign.forward_point_distance: 0.1
+      GoalAlign.scale: 24.0
+      GoalAlign.forward_point_distance: 0.1
+      PathDist.scale: 32.0
+      GoalDist.scale: 24.0
+      RotateToGoal.scale: 32.0
+      RotateToGoal.slowing_factor: 5.0
+      RotateToGoal.lookahead_time: -1.0

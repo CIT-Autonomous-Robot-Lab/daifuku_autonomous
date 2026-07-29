@@ -2,7 +2,7 @@
 
 `mapping.launch.py`と`navigation.launch.py`は`lidar:=2d|mid360`でセンサー構成を切り替えます。どちらも入力を`/scan_raw`へ集約し、角度フィルタ後の`/scan`をSLAMとNav2へ渡します。
 
-既定の`config/scan_filter.yaml`は、コネクタがある後方60度（+150度から-150度まで、±180度をまたぐ範囲）を無効化します。
+既定の`config/sensors/scan_filter.yaml`は、コネクタがある後方60度（+150度から-150度まで、±180度をまたぐ範囲）を無効化します。
 
 センサーごとのトピックの流れは次のとおりです。
 
@@ -32,7 +32,7 @@ ros2 run <2d_lidar_package> <2d_lidar_node> \
 
 ### IPアドレス
 
-`src/autonomous_nav/config/MID360_config.json`を実ネットワークに合わせます。
+`src/autonomous_nav/config/sensors/MID360_config.json`を実ネットワークに合わせます。
 
 - `host_net_info`内の4個の`*_data_ip`: ドライバを動かすPCの固定IP
 - `lidar_configs[0].ip`: Mid-360本体のIP
@@ -91,7 +91,7 @@ IMU融合を無効にする場合は`use_mid360_imu:=false`を指定します。
 
 ## スキャンフィルタを変更する
 
-恒久的に除外角度を変える場合は`src/autonomous_nav/config/scan_filter.yaml`の`angle_min`と`angle_max`をラジアンで編集します。別ファイルを使う場合:
+恒久的に除外角度を変える場合は`src/autonomous_nav/config/sensors/scan_filter.yaml`の`angle_min`と`angle_max`をラジアンで編集します。別ファイルを使う場合:
 
 ```bash
 ros2 launch autonomous_nav mapping.launch.py \

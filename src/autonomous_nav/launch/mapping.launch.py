@@ -12,7 +12,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
     pkg_share = get_package_share_directory("autonomous_nav")
 
-    default_slam_params = os.path.join(pkg_share, "config", "slam_toolbox_params.yaml")
+    default_slam_params = os.path.join(pkg_share, "config", "mapping", "slam_toolbox.yaml")
     default_rviz_config = os.path.join(pkg_share, "rviz", "mapping.rviz")
     lidar_bringup_launch = os.path.join(pkg_share, "launch", "lidar_bringup.launch.py")
 
@@ -37,11 +37,11 @@ def generate_launch_description():
         DeclareLaunchArgument("scan_filter_enabled", default_value="true"),
         DeclareLaunchArgument(
             "scan_filter_params_file",
-            default_value=os.path.join(pkg_share, "config", "scan_filter.yaml"),
+            default_value=os.path.join(pkg_share, "config", "sensors", "scan_filter.yaml"),
         ),
         DeclareLaunchArgument(
             "mid360_config",
-            default_value=os.path.join(pkg_share, "config", "MID360_config.json"),
+            default_value=os.path.join(pkg_share, "config", "sensors", "MID360_config.json"),
         ),
         DeclareLaunchArgument("use_mid360_imu", default_value="true"),
         DeclareLaunchArgument("publish_lidar_tf", default_value="false"),

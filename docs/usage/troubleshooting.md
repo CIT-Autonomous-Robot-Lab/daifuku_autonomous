@@ -62,7 +62,7 @@ ls -l /dev/shm | head
 プロセスが同時に立ち上がってloadが10〜19まで跳ね、bond形成が既定の4秒に間に合いま
 せん。
 
-`config/lifecycle_bond_params.yaml`でタイムアウトを60秒へ延長しています。値が効いて
+`config/lifecycle_bond.yaml`でタイムアウトを60秒へ延長しています。値が効いて
 いるか確認してください。
 
 ```bash
@@ -109,7 +109,7 @@ RESETのログが毎スキャン出て、推定姿勢が回り続ける場合で
 
 1. RVizでスキャンと地図の壁が重なるか確認する
 2. ずれている場合は[地図作成](mapping.md)からやり直す
-3. 地図を取り直すまでの暫定処置として、`config/emcl2_params.yaml`の
+3. 地図を取り直すまでの暫定処置として、`config/localization/emcl2.yaml`の
    `alpha_threshold`を下げ、`sensor_reset: false`にしてリセットを抑制する
 
 現在の設定値と背景は[設定リファレンス](configuration.md#自己位置推定の暫定設定)を
@@ -125,7 +125,7 @@ RESETのログが毎スキャン出て、推定姿勢が回り続ける場合で
 
 ## Mid-360で`bind failed`になる
 
-`MID360_config.json`の`host_net_info`に設定したIPが、ROS 2ノードを動かすPCの対象NICへ実際に割り当てられているか確認します。LiDAR本体IPも同一セグメントに合わせます。
+`config/sensors/MID360_config.json`の`host_net_info`に設定したIPが、ROS 2ノードを動かすPCの対象NICへ実際に割り当てられているか確認します。LiDAR本体IPも同一セグメントに合わせます。
 
 ## TFが競合または不安定になる
 

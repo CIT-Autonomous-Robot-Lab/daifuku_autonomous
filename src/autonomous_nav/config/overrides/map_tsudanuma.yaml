@@ -1,0 +1,35 @@
+# map_tsudanuma.yaml (5888x4000 @0.05m = 294.4m x 200m) 用の上書き。
+#
+#   ros2 launch autonomous_nav navigation.launch.py \
+#       map:=<share>/maps/map_tsudanuma.yaml \
+#       overrides:=map_tsudanuma planner:=vi local_planner:=nav2
+#
+# VI はゴールごとに nx*ny*n_theta の状態空間を扱う。この地図を 0.05m のまま解くと
+# 5888*4000*60 = 14.1 億状態、既定の密ソルバでは State 56B/state = 79GB を確保
+# しようとして起動と同時に死ぬ。プランナ内部だけ粗くし (map_scale)、確定出力を
+# ディスクへ逃がす (compact) ことで通す。
+#
+# 導出・実測値と既知の制約 (Pi4 4GB では未確認、local_planner:=vi は使えない、
+# 通路が片側最大 0.10m 細る、この地図は 68.2% が未観測) は ../README.md を参照。
+
+vi_global_planner:
+  ros__parameters:
+    # states を確保しないアウトオブコア経路。確定出力 12B/state だけを持つ。
+    solver: "frontier2d_sparse_compact"
+    # プランナ内部だけ 0.15m/cell (1963x1334 = 1.57 億状態) にする。
+    # map_server / costmap / 自己位置は 0.05m のまま。
+    map_scale: 3
+    # 確定出力 (1.89GB) の置き場。**tmpfs でないこと**を確認すること
+    # (`findmnt -no FSTYPE /tmp`)。tmpfs だと結局 RAM に載るので、
+    # メモリ退避の意味が無くなる。実ディスク上のパスを指定してもよい。
+    compact_sink_dir: "/tmp/vi_global_planner_sink"
+    # [秒/セル] 既定の 30 はこの地図では使えない。通路が細く 0.15m セルでは
+    # ほとんどの自由セルが safety_radius 0.2m 以内に入るため、価値関数が移動時間
+    # ではなくペナルティの積算で決まり、貪欲ロールアウトが降下できずに
+    # LoopDetected になる。壁に寄りすぎるなら 5 程度まで上げてから他をいじること。
+    safety_radius_penalty: 1
+    # 広域なのでゴールから遠い start でもロールアウトが届くように上限を上げる。
+    max_rollout_steps: 100000
+    # 2.6M セル (2.6MB) の OccupancyGrid を繰り返し配信することになるので、
+    # RViz で見ないなら切る。
+    publish_value_function: false

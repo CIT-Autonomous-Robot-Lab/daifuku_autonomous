@@ -69,7 +69,7 @@ Nav2の各ノードは既定でプロセスを分けて起動します（`use_co
 Raspberry Pi 4で1プロセスへ合成すると、DDS参加者あたりのエンドポイント数が大きく
 なりすぎて新規参加者からディスカバリできなくなり、さらにCPU飢餓でライフサイクル
 マネージャのbond心拍が途絶して自動シャットダウンする事象が頻発しました。あわせて
-`config/lifecycle_bond_params.yaml`でbondのタイムアウトを60秒へ延長しています。
+`config/lifecycle_bond.yaml`でbondのタイムアウトを60秒へ延長しています。
 
 PCなど余裕のある環境では`use_composition:=True`も利用できます。
 

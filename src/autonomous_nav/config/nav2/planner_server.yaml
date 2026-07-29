@@ -1,0 +1,15 @@
+# planner:=navfn のグローバルプランナ。planner:=vi では起動せず、
+# vi_planner.yaml の vi_global_planner が compute_path_to_pose を提供する。
+# config/nav2/*.yaml の断片。合成順序と上書きは ../README.md を参照。
+
+planner_server:
+  ros__parameters:
+    # 実測7.6Hzしか出ずWARN連発していた。BTの再プラン周期は1Hzなので1.0で十分。
+    expected_planner_frequency: 1.0
+    use_sim_time: false
+    planner_plugins: ["GridBased"]
+    GridBased:
+      plugin: "nav2_navfn_planner/NavfnPlanner"
+      tolerance: 0.5
+      use_astar: false
+      allow_unknown: true

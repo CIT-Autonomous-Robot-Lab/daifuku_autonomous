@@ -8,6 +8,7 @@ from launch.actions import (
     DeclareLaunchArgument,
     GroupAction,
     IncludeLaunchDescription,
+    LogInfo,
     OpaqueFunction,
     SetEnvironmentVariable,
     SetLaunchConfiguration,
@@ -32,12 +33,15 @@ def generate_launch_description():
     pkg_share = get_package_share_directory("autonomous_nav")
     nav2_share = get_package_share_directory("nav2_bringup")
 
-    default_params = os.path.join(pkg_share, "config", "nav2_params.yaml")
+    # nav2 のパラメータは config/nav2/ に断片で置き、起動時に 1 つへ合成する
+    # (compose_params)。分割・合成順序・上書きの規則は config/README.md。
+    default_params_dir = os.path.join(pkg_share, "config", "nav2")
+    overrides_dir = os.path.join(pkg_share, "config", "overrides")
     # Pi4 高負荷時の bond 4 秒タイムアウト対策 (詳細はファイル内コメント参照)。
     # nav2 の navigation_launch.py はマネージャに bond_timeout を渡せないため、
     # SetParametersFromFile でグループスコープ内の全ノードに注入する。
-    bond_params = os.path.join(pkg_share, "config", "lifecycle_bond_params.yaml")
-    default_emcl2_params = os.path.join(pkg_share, "config", "emcl2_params.yaml")
+    bond_params = os.path.join(pkg_share, "config", "lifecycle_bond.yaml")
+    default_emcl2_params = os.path.join(pkg_share, "config", "localization", "emcl2.yaml")
     default_rviz_config = os.path.join(pkg_share, "rviz", "nav2_default.rviz")
     default_map = os.path.join(pkg_share, "maps", "map.yaml")
     bringup_launch = os.path.join(nav2_share, "launch", "bringup_launch.py")
@@ -56,6 +60,8 @@ def generate_launch_description():
     use_namespace = LaunchConfiguration("use_namespace")
     map_yaml = LaunchConfiguration("map")
     params_file = LaunchConfiguration("params_file")
+    params_dir_arg = LaunchConfiguration("params_dir")
+    overrides = LaunchConfiguration("overrides")
     emcl2_params_file = LaunchConfiguration("emcl2_params_file")
     rviz_config = LaunchConfiguration("rviz_config")
     use_sim_time = LaunchConfiguration("use_sim_time")
@@ -103,12 +109,12 @@ def generate_launch_description():
     # パラメータが無く through_poses を無効化できないので、木そのものを VI 用
     # (behavior_trees/) に差し替える。
     #
-    # これらのキーは nav2_params.yaml に存在しないので SetParameter (グループ全体への
+    # これらのキーは config/nav2/*.yaml に存在しないので SetParameter (グループ全体への
     # 注入) で足りる。逆に params_file に**ある**キーは SetParameter/
     # SetParametersFromFile では上書きできない (launch_ros は global params を先に、
     # ノード個別の parameters= を後に渡すため、後勝ちでノード側が勝つ)。
     # extra_params_file の上書きが効かないのはこれが理由なので、あちらは
-    # merge_extra_params で params_file 自体をマージして解決する。
+    # compose_params で params_file 自体をマージして解決する。
     vi_bt_dir = PathJoinSubstitution([FindPackageShare("autonomous_nav"), "behavior_trees"])
     vi_bt_params = GroupAction(
         condition=IfCondition(use_vi),
@@ -156,47 +162,103 @@ def generate_launch_description():
         allow_substs=True,
     )
 
-    def merge_extra_params(context, *args, **kwargs):
-        """extra_params_file を params_file にマージし、params_file を差し替える。
+    def compose_params(context, *args, **kwargs):
+        """params_file を組み立てる。以降の参照 (RewrittenYaml / 各 include) 用。
 
-        SetParametersFromFile では params_file に既にあるキーを上書きできない
-        (上のコメント参照) ため、YAML の段階で深くマージした一時ファイルを作り、
-        以降の params_file 参照 (RewrittenYaml / 各 include) をそちらへ向ける。
-        マージは「ノード名 -> ros__parameters -> キー」の 3 段で、後者 (extra) が勝つ。
+        後勝ちで重ねる:
+          1. params_dir/*.yaml をファイル名順に合成 (params_file:= を明示した
+             場合は合成せずそのファイルを土台にする)
+          2. overrides:=<名前> -> params_dir/../overrides/<名前>.yaml
+          3. extra_params_file:=<パス>
+
+        SetParameter / SetParametersFromFile では params_file に既にあるキーを
+        上書きできない (上のコメント参照) ため、YAML の段階で深くマージした
+        一時ファイルを作る。マージは「ノード名 -> ros__parameters -> キー」の 3 段。
         """
-        extra = extra_params_file.perform(context)
-        if not extra:
-            return []
-        if not os.path.isfile(extra):
-            raise RuntimeError(f"extra_params_file does not exist: {extra}")
-
+        import glob
         import tempfile
 
         import yaml
 
-        base_path = params_file.perform(context)
-        with open(base_path) as f:
-            merged = yaml.safe_load(f) or {}
-        with open(extra) as f:
-            overlay = yaml.safe_load(f) or {}
+        def load(path):
+            with open(path, "rb") as f:
+                return yaml.safe_load(f.read().decode("utf-8")) or {}
 
-        for node_name, node_body in overlay.items():
-            if not isinstance(node_body, dict):
-                merged[node_name] = node_body
-                continue
-            base_body = merged.setdefault(node_name, {})
-            for section, values in node_body.items():
-                if section == "ros__parameters" and isinstance(values, dict):
-                    base_body.setdefault("ros__parameters", {}).update(values)
-                else:
-                    base_body[section] = values
+        def overlay(base, extra):
+            for node_name, node_body in extra.items():
+                if not isinstance(node_body, dict):
+                    base[node_name] = node_body
+                    continue
+                base_body = base.setdefault(node_name, {})
+                for section, values in node_body.items():
+                    if section == "ros__parameters" and isinstance(values, dict):
+                        base_body.setdefault("ros__parameters", {}).update(values)
+                    else:
+                        base_body[section] = values
+
+        explicit = params_file.perform(context)
+        if explicit:
+            if not os.path.isfile(explicit):
+                raise RuntimeError(f"params_file does not exist: {explicit}")
+            merged = load(explicit)
+            origin = explicit
+        else:
+            params_dir = params_dir_arg.perform(context)
+            fragments = sorted(glob.glob(os.path.join(params_dir, "*.yaml")))
+            if not fragments:
+                raise RuntimeError(f"No parameter fragments found in {params_dir}")
+            merged, owner = {}, {}
+            for frag in fragments:
+                body = load(frag)
+                for node_name in body:
+                    if node_name in owner:
+                        # 断片はノード単位で重複しない前提 (config/README.md)。
+                        # 重なると「どちらが勝つか分からない」状態になるので止める。
+                        raise RuntimeError(
+                            f"Node '{node_name}' is defined in two fragments: "
+                            f"{owner[node_name]} and {frag}.\n"
+                            "config/nav2/*.yaml must partition the nodes; put "
+                            "map-specific overrides in config/overrides/ instead."
+                        )
+                    owner[node_name] = frag
+                merged.update(body)
+            origin = f"{len(fragments)} fragments from {params_dir}"
+
+        applied = []
+        for name in [n.strip() for n in overrides.perform(context).split(",") if n.strip()]:
+            path = os.path.join(overrides_dir, f"{name}.yaml")
+            if not os.path.isfile(path):
+                available = sorted(
+                    os.path.splitext(f)[0]
+                    for f in os.listdir(overrides_dir)
+                    if f.endswith(".yaml")
+                ) if os.path.isdir(overrides_dir) else []
+                raise RuntimeError(
+                    f"Unknown overrides name: {name}\n"
+                    f"Available: {', '.join(available) or '(none)'}\n"
+                    "Use extra_params_file:=<path> for a file outside "
+                    "config/overrides/."
+                )
+            overlay(merged, load(path))
+            applied.append(f"overrides:{name}")
+
+        for extra in [p.strip() for p in extra_params_file.perform(context).split(",") if p.strip()]:
+            if not os.path.isfile(extra):
+                raise RuntimeError(f"extra_params_file does not exist: {extra}")
+            overlay(merged, load(extra))
+            applied.append(extra)
 
         out = tempfile.NamedTemporaryFile(
-            mode="w", prefix="nav2_params_merged_", suffix=".yaml", delete=False
+            mode="w", prefix="nav2_params_", suffix=".yaml", delete=False,
+            encoding="utf-8",
         )
-        yaml.safe_dump(merged, out, default_flow_style=False)
+        yaml.safe_dump(merged, out, default_flow_style=False, allow_unicode=True)
         out.close()
-        return [SetLaunchConfiguration("params_file", out.name)]
+        return [
+            LogInfo(msg=f"params: composed {origin} -> {out.name}"
+                        + (f" (+ {', '.join(applied)})" if applied else "")),
+            SetLaunchConfiguration("params_file", out.name),
+        ]
 
     def validate_map_file(context, *args, **kwargs):
         map_path = map_yaml.perform(context)
@@ -309,13 +371,29 @@ def generate_launch_description():
             default_value=default_map,
             description="Full path to the map yaml file.",
         ),
-        DeclareLaunchArgument("params_file", default_value=default_params),
+        DeclareLaunchArgument(
+            "params_file",
+            default_value="",
+            description="nav2 パラメータを 1 ファイルで与える (空なら params_dir の "
+                        "断片を合成する)。指定すると params_dir は無視される。",
+        ),
+        DeclareLaunchArgument(
+            "params_dir",
+            default_value=default_params_dir,
+            description="合成する nav2 パラメータ断片のディレクトリ。"
+                        "*.yaml をファイル名順に深くマージする (config/README.md)。",
+        ),
+        DeclareLaunchArgument(
+            "overrides",
+            default_value="",
+            description="config/overrides/<名前>.yaml を上に重ねる (カンマ区切りで複数可)。"
+                        "例: overrides:=map_tsudanuma",
+        ),
         DeclareLaunchArgument(
             "extra_params_file",
             default_value="",
-            description="params_file の上に重ねる追加パラメータファイル (空で無効)。"
-                        "地図固有の設定を params_file 全体を複製せずに与えるためのもの。"
-                        "例: extra_params_file:=<share>/config/tsudanuma_overrides.yaml",
+            description="overrides の後にさらに重ねる任意パスのファイル (カンマ区切りで"
+                        "複数可)。config/overrides/ に置けない一時的な上書き用。",
         ),
         DeclareLaunchArgument("emcl2_params_file", default_value=default_emcl2_params),
         DeclareLaunchArgument("rviz_config", default_value=default_rviz_config),
@@ -354,11 +432,11 @@ def generate_launch_description():
         DeclareLaunchArgument("scan_filter_enabled", default_value="true"),
         DeclareLaunchArgument(
             "scan_filter_params_file",
-            default_value=os.path.join(pkg_share, "config", "scan_filter.yaml"),
+            default_value=os.path.join(pkg_share, "config", "sensors", "scan_filter.yaml"),
         ),
         DeclareLaunchArgument(
             "mid360_config",
-            default_value=os.path.join(pkg_share, "config", "MID360_config.json"),
+            default_value=os.path.join(pkg_share, "config", "sensors", "MID360_config.json"),
         ),
         DeclareLaunchArgument("use_mid360_imu", default_value="true"),
         DeclareLaunchArgument("publish_lidar_tf", default_value="false"),
@@ -370,7 +448,7 @@ def generate_launch_description():
         DeclareLaunchArgument("lidar_yaw", default_value="0.0"),
         DeclareLaunchArgument("wheel_odom_topic", default_value="/wheel/odom"),
 
-        OpaqueFunction(function=merge_extra_params),
+        OpaqueFunction(function=compose_params),
         OpaqueFunction(function=validate_map_file),
         OpaqueFunction(function=validate_localization),
         OpaqueFunction(function=validate_planner),
