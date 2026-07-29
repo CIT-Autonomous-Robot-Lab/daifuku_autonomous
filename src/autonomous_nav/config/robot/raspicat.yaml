@@ -1,0 +1,81 @@
+# raspimouse (Raspberry Pi Cat 本体ドライバ) のパラメータ。
+# robot_bringup.launch.py が LifecycleNode の parameters= に直接渡す。
+#
+# 上流 raspicat_ros の config/raspicat.param.yaml の**完全なコピー**であって、
+# 差分だけの override ではない。理由は launch_ros のパラメータ優先順位:
+# launch_ros/actions/node.py は
+#   「Expand global parameters first, so they can be overridden with specific
+#     parameters of this Node」
+# の順で展開する。つまり SetParametersFromFile (グローバル) は、ノード自身の
+# parameters= に書かれたファイルに**負ける**。上流 raspicat.launch.py は
+# raspicat.param.yaml をノードに直接渡しているので、そこへ差分を重ねる方式では
+# use_pulse_counters が黙って false のままになる。だから launch ごと自前で持ち、
+# このファイルを唯一の参照元にしている。
+# (nav2 側の lifecycle_bond.yaml が SetParametersFromFile で効いているのは、
+#  bond_timeout が nav2 の断片に一切書かれていない = 競合しないからで、
+#  「グローバルが勝つ」わけではない。)
+#
+# 上流との差分は use_pulse_counters の 1 点のみ。他は追従すること。
+raspimouse:
+  ros__parameters:
+    odometry_scale_left_wheel : 1.0
+    odometry_scale_right_wheel: 1.0
+    use_light_sensors         : true
+
+    # ★ 上流は false。true にして /dev/rtcounter_{l,r}* のロータリエンコーダから
+    #   odom を積む。**上流との唯一の差分**。
+    #
+    # false (開ループ) だと raspimouse は「最後に受け取った cmd_vel」を積分し続け、
+    # 次の実害が出る (2026-07-29 実機実測):
+    #   * nav2 を回転中に止める/再起動するとゼロ速度が届かず、odom が -45deg/s で
+    #     無限に回り続ける (/cmd_vel の publisher が 0 でも止まらない)
+    #   * その幻の回転を emcl2 が打ち消そうとして map->odom も振り回され、
+    #     RViz の Fixed Frame が map だとローカルコストマップごと回って見える
+    #   * モータ OFF でも odom が動くので dry-run が成立しない
+    #     (静止したまま自己位置がゴールまで「走る」)
+    #
+    # true での実測 (2026-07-29、モータ OFF、-0.785 rad/s を 6 秒指令):
+    #   odom yaw の peak-to-peak = 0.000 deg、x = 0.0000 m、i2c エラー 0 件。
+    #   false のときは同じ指令で -45deg/s の無限回転になっていた。**これが対処**。
+    #
+    # ▲▲ それでも false にしてある。この機体の I2C カウンタが不安定なため。▲▲
+    #
+    # 2026-07-29 の 1 セッション中に **2 回**、read がタイムアウトして復旧不能に
+    # なった (1 回目は起動直後、2 回目は正常動作 1〜4 分後に突然)。dmesg:
+    #     i2c-bcm2835 fe804000.i2c: i2c transfer timed out
+    #     i2c_counter_read: Failed reading from i2c counter device, addr=0x10 / 0x11
+    # 一度失敗するとドライバの mutex が握られたままになり、以後 /dev/rtcounter_*
+    # を読む者は全員 `mutex_lock -> i2c_counter_read` で **D (uninterruptible)
+    # 状態に永久固着**する。raspimouse は単一スレッドなのでノードごと沈黙し
+    # (/odom も TF も lifecycle 応答も停止)、**SIGKILL でも殺せず復旧はリブートのみ**。
+    # nav2 側は `Invalid frame ID "odom"` で bringup が止まる。
+    # `cat /dev/rtcounter_l0` でも同じ症状になる。
+    #
+    # つまり天秤は:
+    #   false = odom の幻回転 (ゼロ Twist を投げれば必ず止まる。決して固着しない)
+    #   true  = odom は正しいが、**走行中にランダムでロボットごと固着**しリブートが要る
+    # 実験中の突然死のほうが害が大きいと判断して false にしている。
+    # カウンタ基板側の I2C (0x10/0x11) が直れば true が本来の正解。
+    # 緩和案 (未検証): odom_hz を 100 から下げて I2C トラフィックを減らす。
+    #
+    # ▲ ノードの自己診断はあてにならない: raspimouse_component.cpp の
+    #   「Testing counters」は ifstream::is_open() を見るだけで read を試さない。
+    #   "Using pulse counters for odometry" は**フラグが適用された**証拠にはなるが、
+    #   **エンコーダが読める**証拠にはならない。実際の確認は
+    #   「モータ OFF で回転を指令して odom が動かないこと」で行うこと。
+    #
+    # false のあいだの運用: nav2 を止めた直後に必ずゼロ Twist を投げる。
+    #   ros2 topic pub --times 5 /cmd_vel geometry_msgs/msg/Twist \
+    #     '{linear: {x: 0.0}, angular: {z: 0.0}}'
+    use_pulse_counters        : false
+
+    wheel_diameter            : 0.1524  # meters
+    wheel_tread               : 0.27918 # meters
+    pulses_per_revolution     : 400.0
+    light_sensors_hz          : 100.0
+    odom_hz                   : 100.0
+    switches_hz               : 10.0
+    initial_motor_power       : false
+    odom_frame_id             : "odom"
+    odom_child_frame_id       : "base_footprint"
+    odom_frame_prefix         : ""

@@ -124,6 +124,8 @@ RUN source /opt/ros/${ROS_DISTRO}/setup.bash \
     && colcon build --merge-install \
          --parallel-workers "${BUILD_JOBS}" \
          --packages-select autonomous_nav emcl2 livox_ros_driver2 \
+                          raspicat_bringup raspicat_description \
+                          raspimouse raspimouse_msgs \
          --cmake-args -DROS_EDITION=ROS2 \
                       -DDISTRO_ROS=${ROS_DISTRO} \
                       "-DCMAKE_LIBRARY_PATH=/opt/ros/${ROS_DISTRO}/lib;/usr/lib/${MULTIARCH};/lib/${MULTIARCH}" \
@@ -162,18 +164,32 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libapr1 \
       ros-humble-diagnostic-updater \
       ros-humble-grid-map-msgs \
+      ros-humble-joint-state-publisher \
       ros-humble-laser-filters \
       ros-humble-nav2-bringup \
       ros-humble-navigation2 \
       ros-humble-pcl-conversions \
       ros-humble-pointcloud-to-laserscan \
       ros-humble-robot-localization \
+      ros-humble-robot-state-publisher \
       ros-humble-rosbag2 \
       ros-humble-slam-toolbox \
       ros-humble-teleop-twist-joy \
       ros-humble-teleop-twist-keyboard \
       ros-humble-topic-tools \
+      ros-humble-urdf \
+      ros-humble-xacro \
     && rm -rf /var/lib/apt/lists/*
+
+# raspicat_bringup / raspicat_description が package.xml で宣言している依存のうち、
+# 次のものは意図的に runtime へ入れていない。build 段では rosdep が入れるので
+# ビルドは通り、抜いているのは実行イメージだけ。
+#   * urg_node   — 本機の LiDAR は MID360。robot_bringup.launch.py は上流の
+#                  raspicat.launch.py と違って urg 系を一切起動しないので到達不能。
+#   * rviz2 / joint_state_publisher_gui
+#                — raspicat_description の表示用 launch 専用。runtime は headless。
+#   * joy_linux  — ジョイスティック teleop 用 (teleop_twist_joy は入っている)。
+#                  使うならここに足すこと。
 
 COPY --from=builder /usr/local/lib/liblivox_lidar_sdk_shared.so /usr/local/lib/
 COPY --from=builder /opt/ros2_rust_ws/install /opt/ros2_rust_ws/install

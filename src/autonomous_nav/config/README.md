@@ -10,6 +10,12 @@
 | `lifecycle_bond.yaml` | `navigation.launch.py` | `SetParametersFromFile` でグループ内の全ノードへ注入 |
 | `sensors/*` | `lidar_bringup.launch.py` | 各ノードへ直接（`scan_filter_params_file` など） |
 | `mapping/slam_toolbox.yaml` | `mapping.launch.py` | `slam_params_file` でノードへ直接 |
+| `robot/raspicat.yaml` | `robot_bringup.launch.py` | `raspimouse` (LifecycleNode) へ直接 |
+
+`robot/raspicat.yaml` だけは**上流ファイルの完全なコピー**で、差分ではありません。
+launch_ros はノード自身の `parameters=` をグローバル (`SetParametersFromFile`) より
+**後に**展開する = ノード側が勝つため、上流 `raspicat.launch.py` を include して
+差分を重ねる方式では上書きできないからです。詳細はファイル内のコメント。
 
 ## nav2/ の合成
 

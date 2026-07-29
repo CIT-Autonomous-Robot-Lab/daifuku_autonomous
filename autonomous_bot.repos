@@ -14,3 +14,21 @@ repositories:
     type: git
     url: https://github.com/NOPLAB/value_iteration3.git
     version: main
+  # 取り込まないもの:
+  #   * RaspberryPiMouse    — rtmouse カーネルモジュール。コンテナからは insmod
+  #                           できないのでホスト側の責務のまま (raspicat_setup_scripts
+  #                           が導入する)。コンテナは /dev/rt* を借りるだけ。
+  #   * raspicat_slam_navigation / raspicat_speak2 / raspicat_setup_scripts
+  #                         — 本リポジトリのナビゲーションでは使わない。
+  src/raspicat_ros:
+    type: git
+    url: https://github.com/CIT-Autonomous-Robot-Lab/raspicat_ros.git
+    version: ros2
+  src/raspicat_description:
+    type: git
+    url: https://github.com/CIT-Autonomous-Robot-Lab/raspicat_description.git
+    version: ros2
+  src/raspimouse2:
+    type: git
+    url: https://github.com/CIT-Autonomous-Robot-Lab/raspimouse2.git
+    version: master

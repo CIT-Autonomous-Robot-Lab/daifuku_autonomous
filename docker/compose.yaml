@@ -42,3 +42,58 @@ services:
       - ../src/value_iteration3/vi_ros2/vi_global_planner/launch:/opt/ros_ws/install/share/vi_global_planner/launch:ro
     device_cgroup_rules:
       - "c 13:* r"
+
+  # Raspberry Pi Cat 本体ドライバ (raspimouse + robot_state_publisher)。
+  # 従来はホストの ~/raspicat2 ワークスペースから直接起動していたものを、
+  # ナビゲーションと同じイメージ・同じ compose に取り込んだもの。
+  #
+  # ナビゲーションとは別サービスにしてある。ros2 サービスだけを
+  # `docker compose restart ros2` で入れ替えてもドライバは生き続けるため、
+  # odom の累積が落ちない/取り違える事故が起きにくい。
+  #
+  # 前提: rtmouse カーネルモジュールがホストで insmod 済みであること
+  # (コンテナからは insmod できない。raspicat_setup_scripts が導入する)。
+  raspicat:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        BUILD_JOBS: ${BUILD_JOBS:-2}
+    image: daifuku-autonomous:humble
+    container_name: daifuku-raspicat
+    stdin_open: true
+    tty: true
+    command:
+      - /ros_entrypoint.sh
+      - ros2
+      - launch
+      - autonomous_nav
+      - robot_bringup.launch.py
+    restart: unless-stopped
+    network_mode: host
+    ipc: host
+    user: "1000:1000"
+    environment:
+      HOME: /tmp
+      ROS_HOME: /tmp/ros
+      ROS_LOG_DIR: /tmp/ros/log
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-90}
+      ROS_LOCALHOST_ONLY: "0"
+      RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+      FASTRTPS_DEFAULT_PROFILES_FILE: /etc/fastdds/udp_whitelist.xml
+    volumes:
+      - ./fastdds_udp_whitelist.xml:/etc/fastdds/udp_whitelist.xml:ro
+      - ../src/autonomous_nav:/opt/ros_ws/install/share/autonomous_nav
+      # rtmouse は out-of-tree モジュールで、char デバイスのメジャー番号を
+      # insmod のたびに動的に取る (実測 497-506)。したがって `devices:` や
+      # メジャー固定の device_cgroup_rules は、モジュール再読込やリブートで
+      # 古い番号を焼き付けたまま静かにモータ/エンコーダを掴めなくなる。
+      # use_pulse_counters: true では、それが「odom がまったく動かない」という
+      # 別のバグの顔をして出るので特にたちが悪い。
+      # そこで /dev を丸ごと渡し、char デバイスを広く許可している。
+      # これは character device に関してはほぼ privileged 相当。狭める場合は
+      # rtmouse 側でメジャー番号を固定し、ここに列挙する必要がある
+      # (人手で同期を保つコストと引き換え)。
+      - /dev:/dev
+    device_cgroup_rules:
+      - "c *:* rwm"
