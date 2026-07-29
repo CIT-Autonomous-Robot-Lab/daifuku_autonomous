@@ -197,7 +197,7 @@ Visualization Manager:
       Color Scheme: costmap
       Draw Behind: false
       Enabled: true
-      Name: Global Value Function (VI)
+      Name: Value Function (VI)
       Topic:
         Depth: 1
         Durability Policy: Transient Local
@@ -213,27 +213,6 @@ Visualization Manager:
         Value: /value_function_updates
       Use Timestamp: false
       Value: true
-    - Alpha: 0.699999988079071
-      Class: rviz_default_plugins/Map
-      Color Scheme: costmap
-      Draw Behind: false
-      Enabled: false
-      Name: Local Value Function (VI)
-      Topic:
-        Depth: 1
-        Durability Policy: Transient Local
-        Filter size: 10
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /local_value_function
-      Update Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /local_value_function_updates
-      Use Timestamp: false
-      Value: false
     - Alpha: 0.8999999761581421
       Class: rviz_default_plugins/Map
       Color Scheme: costmap

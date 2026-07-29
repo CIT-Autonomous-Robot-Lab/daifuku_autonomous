@@ -1,5 +1,5 @@
 # local_planner:=nav2 のローカルプランナ (controller_server + DWB)。
-# local_planner:=vi では起動せず、vi_local_planner が follow_path を提供する。
+# local_planner:=vi では起動せず、vi_planner が follow_path も提供する。
 # config/nav2/*.yaml の断片。合成順序と上書きは ../README.md を参照。
 
 controller_server:

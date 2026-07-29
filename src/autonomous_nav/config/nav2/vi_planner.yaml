@@ -1,14 +1,66 @@
 # 価値反復プランナ (value_iteration3, Rust)。
 # config/nav2/*.yaml の断片。合成順序と上書きは ../README.md を参照。
 #
-# 広域地図で必要になる solver / map_scale / compact_sink_dir の使い方は
-# ../overrides/map_tsudanuma.yaml が実例。地図・アクション系のパラメータは
-# vi_global_planner と vi_local_planner で一致させること (別プロセスで同じ
-# 価値関数を解き直すため)。
+# ノードは 2 つあり、**同時には起動されない**。local_planner でどちらかが選ばれる:
+#
+#   local_planner:=vi (auto + planner:=vi の既定)
+#     vi_planner 1 ノードだけ。compute_path_to_pose と follow_path の両方を
+#     **1 本の価値関数**から提供する。ゴールごとの solve は 1 回。
+#
+#   local_planner:=nav2
+#     vi_global_planner (広域のみ) + controller_server (DWB)。vi_planner に無い
+#     map_scale / アウトオブコア (compact) ソルバがあるので、密に解けない広域地図
+#     (../overrides/map_tsudanuma.yaml が実例) はこちらを使う。
+#
+# 両者で意味の同じキーは値を揃えておくこと (どちらで起動しても挙動が変わらない
+# ように)。pose_topic / scan_topic は launch 側が上書きする。
 
-# planner:=vi (デフォルト) のグローバルプランナ。planner_server の代わりに
-# compute_path_to_pose を提供する。
-# pose_topic は launch 側 (localization に応じて mcl_pose / amcl_pose) が上書きする。
+# ── local_planner:=vi: 統合プランナ (planner_server + controller_server 置換) ──
+# ゴール判定は VI の final_state (goal_margin_*) 自体が担う。
+vi_planner:
+  ros__parameters:
+    use_sim_time: false
+    solver: "frontier2d_sparse"   # compact 系は非対応 (起動時に弾かれる)
+    theta_cell_num: 60
+    safety_radius: 0.2            # [m] 障害物近傍ペナルティ半径 (VI 内部の膨張)
+    # [秒/セル] safety_radius 以内のセルを通るときの加算コスト。1 手 = 1 秒なので、
+    # 30 は「近寄るくらいなら 30 手迂回する」という強い忌避になる。細い通路ばかりの
+    # 地図では下げる必要がある (../README.md)。
+    safety_radius_penalty: 30
+    goal_margin_radius: 0.3       # [m] final_state (ゴール圏) 判定半径 = ゴール許容差
+    goal_margin_theta: 15.0       # [deg]
+    map_wait_sec: 60
+    vi_threads: 0                 # 0 = 論理コア数 (VI_THREADS)
+    solve_chunk: 64               # プリエンプト観測間隔 (VI イテレーション)
+    max_solve_iter: 1000000
+    goal_tolerance_xy: 0.25       # [m] 価値関数キャッシュを再利用するゴール一致判定
+    goal_tolerance_deg: 10.0      # [deg]
+    unknown_as_obstacle: true
+    # ── 広域 (compute_path_to_pose) ──
+    max_rollout_steps: 10000
+    start_tolerance: 0.5          # [m] start が方策なしセルのときの近傍スナップ半径
+    path_spacing: 0.05            # [m] Path の姿勢間隔 (0 で無効)
+    # ── 狭域 (follow_path) ──
+    control_frequency: 10.0       # [Hz] 制御周期 (本家 ViNode::decision の 100ms)
+    refine_budget_ms: 40          # [ms/tick] ローカルウィンドウ価値反復の時間予算
+    action_tolerance: 0.2         # [m] 方策なしセルでの近傍行動探索半径
+    no_action_timeout_sec: 3.0    # pose/方策なしがこの秒数続いたら追従を中断
+    # ── 可視化 ──
+    publish_value_function: true
+    value_publish_interval_ms: 500  # [ms] solve 途中経過の配信間隔 (0 で完了時のみ)
+    # value_function の色スケール上限 [ステップ数≒秒]。表示専用で経路計算には影響
+    # しない。値の根拠と選び方は下の vi_global_planner の同名キー (../README.md)。
+    cost_drawing_threshold: 180
+    # local_window_value (±1m 窓) のスケール上限。窓は近傍 1m だけを描くので、
+    # 全域用の値ではほぼ一様に潰れる。旧 vi_local_planner と同じ 60。
+    window_cost_drawing_threshold: 60
+    allow_action_mismatch: false
+    action_names: ["forward", "back", "right", "rightfw", "left", "leftfw"]
+    action_forward_m: [0.3, -0.2, 0.0, 0.2, 0.0, 0.2]
+    action_rotation_deg: [0.0, 0.0, -20.0, -20.0, 20.0, 20.0]
+
+# ── local_planner:=nav2: 広域のみ (planner_server 置換、追従は controller_server) ──
+# vi_planner との違いは map_scale / compact 系を持つことだけ。
 vi_global_planner:
   ros__parameters:
     use_sim_time: false
@@ -51,37 +103,6 @@ vi_global_planner:
     cost_drawing_threshold: 180
     publish_value_function: true
     value_publish_interval_ms: 500  # [ms] solve 途中経過の配信間隔 (0 で完了時のみ)
-    unknown_as_obstacle: true
-    allow_action_mismatch: false
-    action_names: ["forward", "back", "right", "rightfw", "left", "leftfw"]
-    action_forward_m: [0.3, -0.2, 0.0, 0.2, 0.0, 0.2]
-    action_rotation_deg: [0.0, 0.0, -20.0, -20.0, 20.0, 20.0]
-
-# local_planner:=vi の狭域プランナ。controller_server の代わりに follow_path を
-# 提供する。ゴール判定は VI の final_state (goal_margin_*) 自体が担う。
-# pose_topic / scan_topic は launch 側が上書きする。
-vi_local_planner:
-  ros__parameters:
-    use_sim_time: false
-    solver: "frontier2d_sparse"
-    theta_cell_num: 60
-    safety_radius: 0.2
-    safety_radius_penalty: 30
-    goal_margin_radius: 0.3       # [m] final_state (ゴール圏) 判定半径 = ゴール許容差
-    goal_margin_theta: 15.0       # [deg]
-    map_wait_sec: 60
-    vi_threads: 0
-    solve_chunk: 64
-    max_solve_iter: 1000000
-    goal_tolerance_xy: 0.25       # [m] 価値関数キャッシュを再利用するゴール一致判定
-    goal_tolerance_deg: 10.0      # [deg]
-    control_frequency: 10.0       # [Hz] 制御周期 (本家 ViNode::decision の 100ms)
-    refine_budget_ms: 40          # [ms/tick] ローカルウィンドウ価値反復の時間予算
-    action_tolerance: 0.2         # [m] 方策なしセルでの近傍行動探索半径
-    no_action_timeout_sec: 3.0    # pose/方策なしがこの秒数続いたら追従を中断
-    cost_drawing_threshold: 60    # local_value_function / local_window_value のスケール上限
-    publish_value_function: true  # solve 経過を local_value_function、追従中の±1m 窓を local_window_value へ
-    value_publish_interval_ms: 500  # [ms] 可視化配信間隔 (0 で solve 完了時のみ)
     unknown_as_obstacle: true
     allow_action_mismatch: false
     action_names: ["forward", "back", "right", "rightfw", "left", "leftfw"]

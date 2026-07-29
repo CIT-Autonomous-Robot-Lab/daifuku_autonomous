@@ -48,7 +48,7 @@ ros2 launch autonomous_nav navigation.launch.py \
 
 ## プランナを選ぶ
 
-既定の`planner:=vi`は`vi_global_planner`を使います。経路追従も自動的に`vi_local_planner`になります。
+既定の`planner:=vi`は価値反復プランナを使います。`local_planner`も既定（`auto`）では`vi`になり、`vi_planner`1ノードが経路計画と経路追従の両方を1本の価値関数から担います（ゴールごとのVI計算は1回だけです）。
 
 NavFnとNav2 DWBへ切り替える場合:
 
@@ -97,8 +97,9 @@ ros2 launch autonomous_nav navigation.launch.py \
 
 注意点:
 
-- `local_planner:=vi`は使えません。`vi_local_planner`はアウトオブコア経路を持たず、
-  同じ全域の価値関数をもう1プロセス分、密に解き直すためです。`local_planner:=nav2`を指定してください。
+- `local_planner:=vi`は使えません。`vi_planner`はアウトオブコア経路も`map_scale`も
+  持たず、地図全体を密に解くためです。`local_planner:=nav2`を指定してください
+  （`vi_global_planner`＋`controller_server`の構成になります）。
 - 初回のゴールでは地図全体を解くため時間がかかります（ローカル16コアの実測で約25秒）。
   同じゴールへの再計画はキャッシュヒットで即座に返ります。
 - `bt_navigator`の`wait_for_service_timeout`は60秒にしてあります。`planner:=vi`では
@@ -129,8 +130,10 @@ RVizで次の順に操作します。
 
 `rviz/nav2_default.rviz`には次のOccupancyGrid表示があります。
 
-- `/value_function`: グローバル価値関数のθ=0スライス。計算途中も既定500 ms間隔で更新
-- `/local_value_function`: ローカル価値関数の計算過程と完成形。既定のRViz設定では非表示
+- `/value_function`: 価値関数のθ=0スライス。計算途中も既定500 ms間隔で更新
 - `/local_window_value`: ロボット周辺±1 mの値。スキャン由来ペナルティと局所反復をリアルタイム表示
+  （`local_planner:=vi`のときのみ）
+
+価値関数は1本しかないため、以前あった`/local_value_function`はありません。
 
 表示にはRVizのMapを使い、Color Schemeを`costmap`にします。

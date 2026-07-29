@@ -48,8 +48,10 @@ def generate_launch_description():
     navigation_launch = os.path.join(nav2_share, "launch", "navigation_launch.py")
     localization_launch = os.path.join(nav2_share, "launch", "localization_launch.py")
     lidar_bringup_launch = os.path.join(pkg_share, "launch", "lidar_bringup.launch.py")
-    # planner:=vi 用: planner_server の代わりに vi_global_planner を起動する
+    # planner:=vi 用: planner_server の代わりに価値反復プランナを起動する
     # navigation_launch.py の vi 版 (vi_global_planner パッケージが提供)。
+    # local_planner:=vi なら vi_planner 1 ノード (両アクション)、local_planner:=nav2 なら
+    # vi_global_planner + controller_server を立てる (排他)。
     # vi_global_planner 未インストールでも planner:=navfn で起動できるよう、パス解決は
     # include 実行時 (条件成立時) まで遅延させる。
     vi_navigation_launch = PathJoinSubstitution(
@@ -83,7 +85,8 @@ def generate_launch_description():
     use_mid360_imu = LaunchConfiguration("use_mid360_imu")
 
     # local_planner:=auto (デフォルト) はグローバルプランナに連動する:
-    # planner:=vi なら vi_local_planner、それ以外は nav2 (controller_server)。
+    # planner:=vi なら vi (= vi_planner 1 ノードが両アクションを提供)、
+    # それ以外は nav2 (vi_global_planner + controller_server)。
     effective_local_planner = PythonExpression([
         "'", local_planner, "' if '", local_planner, "' != 'auto' else "
         "('vi' if '", planner, "' == 'vi' else 'nav2')"
@@ -316,8 +319,8 @@ def generate_launch_description():
             raise RuntimeError(
                 f"Unsupported local_planner: {selected}\n"
                 "Use local_planner:=auto (follow the global planner), "
-                "local_planner:=nav2 (controller_server) or local_planner:=vi "
-                "(vi_local_planner)."
+                "local_planner:=nav2 (vi_global_planner + controller_server) or "
+                "local_planner:=vi (vi_planner: one node, both actions)."
             )
         if selected == "vi" and planner.perform(context) != "vi":
             # local_planner:=vi は vi 版 navigation_launch.py 経由でのみ効く
@@ -328,36 +331,40 @@ def generate_launch_description():
                 "vi_global_planner's navigation_launch.py)."
             )
         if effective_local_planner.perform(context) == "vi":
-            # vi_local_planner はアウトオブコア経路 (compact) も map_scale も持たず、
-            # 地図全体を密に解き直す。vi_global_planner 側が map_scale を上げている
-            # = 密には解けない大きさの地図、ということなので、そのまま起動させると
+            # local_planner:=vi では vi_planner 1 ノードが compute_path_to_pose と
+            # follow_path の両方を提供する (vi_global_planner は起動しない)。
+            # vi_planner はアウトオブコア経路 (compact) も map_scale も持たず、
+            # 地図全体を密に解く。overrides が map_scale を上げている = 密には
+            # 解けない大きさの地図、ということなので、そのまま起動させると
             # 状態配列の確保だけで数十 GB を要求して落ちる。auto で選ばれた場合も
             # 同じなので、ここで明示的に止める。
             import yaml
 
             with open(params_file.perform(context)) as f:
                 merged = yaml.safe_load(f) or {}
-            scale = (
-                merged.get("vi_global_planner", {})
-                .get("ros__parameters", {})
-                .get("map_scale", 1)
-            )
-            if int(scale) > 1:
+            gp = merged.get("vi_global_planner", {}).get("ros__parameters", {})
+            scale = int(gp.get("map_scale", 1))
+            solver = str(gp.get("solver", ""))
+            if scale > 1 or solver.endswith("_compact"):
+                reason = (
+                    f"vi_global_planner.map_scale={scale}"
+                    if scale > 1
+                    else f"vi_global_planner.solver={solver}"
+                )
                 raise RuntimeError(
-                    f"local_planner:=vi cannot be used with vi_global_planner.map_scale="
-                    f"{scale}.\n"
-                    "vi_local_planner has no out-of-core path and no map_scale, so it "
-                    "would allocate the full-resolution state array for this map.\n"
-                    "Use local_planner:=nav2."
+                    f"local_planner:=vi cannot be used with {reason}.\n"
+                    "vi_planner has no out-of-core path and no map_scale, so it would "
+                    "allocate the full-resolution state array for this map.\n"
+                    "Use local_planner:=nav2 (vi_global_planner + controller_server)."
                 )
             try:
-                get_package_prefix("vi_local_planner")
+                get_package_prefix("vi_planner")
             except PackageNotFoundError as exc:
                 raise RuntimeError(
-                    "vi_local_planner package is not available (local planner "
-                    "defaults to vi when planner:=vi).\n"
+                    "vi_planner package is not available (local planner defaults to "
+                    "vi when planner:=vi).\n"
                     "Import value_iteration3 (vcs import src < autonomous_bot.repos) and "
-                    "build it (colcon build --packages-select vi_local_planner), or "
+                    "build it (colcon build --packages-select vi_planner), or "
                     "fall back to local_planner:=nav2."
                 ) from exc
         return []
@@ -425,9 +432,11 @@ def generate_launch_description():
             "local_planner",
             default_value="auto",
             description="Local planner backend: auto (follow the global planner: "
-                        "planner:=vi -> vi, otherwise nav2), nav2 "
-                        "(controller_server/DWB) or vi (vi_local_planner; requires "
-                        "planner:=vi).",
+                        "planner:=vi -> vi, otherwise nav2), vi (vi_planner — one "
+                        "node serving compute_path_to_pose and follow_path from a "
+                        "single value function; requires planner:=vi) or nav2 "
+                        "(vi_global_planner + controller_server/DWB, the wiring "
+                        "needed for maps that use map_scale / the compact solver).",
         ),
         DeclareLaunchArgument("lidar", default_value="2d"),
         DeclareLaunchArgument("scan_filter_enabled", default_value="true"),

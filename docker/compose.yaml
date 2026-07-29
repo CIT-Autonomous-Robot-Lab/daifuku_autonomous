@@ -40,6 +40,7 @@ services:
       # ament_cargo does not install package.xml's <install>launch</install>.
       # Keep the VI Nav2 launch available to the already-built Pi image.
       - ../src/value_iteration3/vi_ros2/vi_global_planner/launch:/opt/ros_ws/install/share/vi_global_planner/launch:ro
+      - ../src/value_iteration3/vi_ros2/vi_planner/launch:/opt/ros_ws/install/share/vi_planner/launch:ro
     device_cgroup_rules:
       - "c 13:* r"
 

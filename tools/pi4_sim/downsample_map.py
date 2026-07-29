@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """占有格子地図を整数倍でダウンサンプルする (障害物優先の保守的プーリング)。
 
-vi_global_planner / vi_local_planner は地図全体 × theta_cell_num の状態を密に
+vi_planner / vi_global_planner は地図全体 × theta_cell_num の状態を密に
 確保する (915x577x60 = 3168万状態 = 56B/state で 1.65GB)。theta_cell_num は
 vi_core の N_THETA とのコンパイル時一致チェックがあるため実行時に減らせない。
 残る現実的な手段が解像度で、0.05 -> 0.10 m にすると状態数は 1/4 になる。

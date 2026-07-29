@@ -9,7 +9,7 @@
 
   が提供するサービスを要求する。vi_global_planner は planner_server の
   compute_path_to_pose だけを置き換え、コストマップとそのサービスは持たない
-  (vi_local_planner も同様)。BtActionNode / BtServiceNode はコンストラクタで
+  (vi_planner も同様)。BtActionNode / BtServiceNode はコンストラクタで
   wait_for_service_timeout 内にサーバが見つからないと例外を投げるので、既定の
   BT のままでは bt_navigator が on_configure で落ち、lifecycle manager が
   bringup を中断する。

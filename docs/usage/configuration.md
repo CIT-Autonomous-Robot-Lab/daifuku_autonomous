@@ -98,4 +98,4 @@ ros2 launch autonomous_nav mapping.launch.py --show-args
 - LiDAR搭載位置と除外角度
 - ゴール許容誤差
 
-`vi_global_planner`のソルバ、スレッド数、キャッシュ許容差、経路補間間隔と、`vi_local_planner`の制御周期、局所反復時間などは`config/nav2/vi_planner.yaml`で設定します。
+ソルバ、スレッド数、キャッシュ許容差、経路補間間隔、制御周期、局所反復時間などは`config/nav2/vi_planner.yaml`で設定します。同ファイルには`vi_planner`（既定の統合ノード）と`vi_global_planner`（`local_planner:=nav2`用の広域専用ノード）の2セクションがあり、同時に起動されることはありません。

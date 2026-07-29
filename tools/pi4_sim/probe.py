@@ -3,7 +3,7 @@
 
 実機で取った診断プローブ (plan=0 / cmd_vel_nav=0 / cmd_vel=49 → ABORTED) と
 同じ指標をローカルシムでも取れるようにしたもの。加えて Pi4 4GB 再現で本命に
-なるメモリを継続サンプリングする (vi_global_planner / vi_local_planner の RSS、
+なるメモリを継続サンプリングする (vi_planner / vi_global_planner の RSS、
 コンテナの memory.current / memory.events)。
 
   python3 probe.py --goal-x 4.28 --goal-y -2.92 --goal-yaw -24 --timeout 300
@@ -31,7 +31,7 @@ STATUS = {
     GoalStatus.STATUS_CANCELED: "CANCELED",
 }
 
-WATCH = ("vi_global_planner", "vi_local_planner", "controller_server",
+WATCH = ("vi_planner", "vi_global_planner", "controller_server",
          "planner_server", "bt_navigator", "emcl2", "map_server")
 
 
@@ -101,13 +101,13 @@ class Probe(Node):
     def __init__(self, args):
         super().__init__("pi4_sim_probe")
         self.args = args
-        # 注意: planner:=vi では /plan に publisher がいない (vi_global_planner は
-        # Path を action の Result で返すだけで、nav2 の planner_server のように
-        # /plan を publish しない)。実機プローブの plan=0 はこれで説明がつくので、
-        # VI が実際に解けたかは value_function / local_value_function で見る。
+        # 注意: planner:=vi では /plan に publisher がいない (vi_planner /
+        # vi_global_planner は Path を action の Result で返すだけで、nav2 の
+        # planner_server のように /plan を publish しない)。実機プローブの plan=0 は
+        # これで説明がつくので、VI が実際に解けたかは value_function で見る。
         self.counts = dict(
             plan=0, cmd_vel_nav=0, cmd_vel=0, mcl_pose=0, truth=0,
-            value_function=0, local_value_function=0, local_window_value=0,
+            value_function=0, local_window_value=0,
         )
         self.first_plan_t = None
         self.t0 = time.time()
@@ -148,7 +148,7 @@ class Probe(Node):
             reliability=QoSReliabilityPolicy.RELIABLE,
             durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
         )
-        for topic in ("value_function", "local_value_function", "local_window_value"):
+        for topic in ("value_function", "local_window_value"):
             self.create_subscription(OccupancyGrid, f"/{topic}", bump(topic), vf_qos)
 
         self.create_timer(1.0, self.sample)

@@ -39,7 +39,7 @@ launch_ros はノード自身の `parameters=` をグローバル (`SetParameter
 | `nav2/costmaps.yaml` | `local_costmap`, `global_costmap` |
 | `nav2/map_server.yaml` | `map_server`, `map_saver` |
 | `nav2/planner_server.yaml` | `planner_server`（navfn） |
-| `nav2/vi_planner.yaml` | `vi_global_planner`, `vi_local_planner` |
+| `nav2/vi_planner.yaml` | `vi_planner`, `vi_global_planner` |
 
 `amcl` が `localization/` ではなく `nav2/` にあるのは、nav2 の
 `localization_launch.py` が `params_file` の中から読むためです。
@@ -140,8 +140,9 @@ nav2 既定は 1000ms。`planner:=vi` では `vi_global_planner` が `/map` を�
 
 ### `map_tsudanuma` で `planner:=vi` を使うときの制約
 
-* `local_planner:=vi` は使えません。`vi_local_planner` はアウトオブコア経路も
-  `map_scale` も持たず、全域を密に解き直すためです（launch が明示的に止めます）。
+* `local_planner:=vi` は使えません。`vi_planner` はアウトオブコア経路も
+  `map_scale` も持たず、全域を密に解くためです（launch が明示的に止めます）。
+  `local_planner:=nav2`（`vi_global_planner` + `controller_server`）を使ってください。
 * `map_scale: 3` の 3x3 プーリングは障害物優先なので、通路は片側最大 0.10m 細ります。
   `robot_radius` 0.22 / `inflation_radius` 0.55 と合わせて通れるかは経路ごとに確認を。
 * この地図は 68.2% が未観測 (205) で、真の占有セルは 0.4% しかありません。

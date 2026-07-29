@@ -50,7 +50,7 @@ RUN git clone --depth 1 --branch "${LIVOX_SDK2_REF}" \
     && cmake --install /tmp/Livox-SDK2/build \
     && rm -rf /tmp/Livox-SDK2
 
-# vi_global_planner and vi_local_planner use rclrs.  Rust and all build tools
+# vi_planner and vi_global_planner use rclrs.  Rust and all build tools
 # stay in the builder stage; only their installed runtime artifacts are copied.
 RUN pip3 install --no-cache-dir colcon-cargo colcon-ros-cargo \
     && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
@@ -142,7 +142,7 @@ RUN source /opt/ros/${ROS_DISTRO}/setup.bash \
     && source ${ROS_WS}/install/local_setup.bash \
     && colcon build --merge-install \
          --parallel-workers "${BUILD_JOBS}" \
-         --packages-select vi_global_planner vi_local_planner \
+         --packages-select vi_global_planner vi_planner \
          --cargo-args --release \
     && install -D -m 0644 \
          src/value_iteration3/vi_ros2/vi_global_planner/launch/navigation_launch.py \

@@ -7,7 +7,9 @@ repositories:
     type: git
     url: https://github.com/CIT-Autonomous-Robot-Lab/emcl2_ros2.git
     version: main
-  # 価値反復プランナ (vi_global_planner: 広域 / vi_local_planner: 狭域) を含む。
+  # 価値反復プランナを含む。vi_planner (広域+狭域を 1 ノード・1 価値関数で提供、
+  # local_planner:=vi の既定) と vi_global_planner (広域のみ。map_scale と
+  # アウトオブコアソルバを持つので広域地図はこちら。local_planner:=nav2)。
   # colcon では --packages-select でこの 2 つのみビルドする (vi_node /
   # vi_interfaces は ros2_rust の Docker 環境向けで、通常はビルド対象にしない)。
   src/value_iteration3:

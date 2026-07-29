@@ -11,7 +11,7 @@ CARGO_PROFILE_ARG="--release"
 
 usage() {
   cat <<'EOF'
-価値反復プランナ（vi_global_planner: 広域 / vi_local_planner: 狭域）を
+価値反復プランナ（vi_planner: 広域+狭域を 1 ノード / vi_global_planner: 広域のみ）を
 ビルドします。事前にscripts/setup_native_ros2_rust.shを実行してください。
 
 Usage:
@@ -94,7 +94,7 @@ if ! command -v cargo-ament-build >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "[1/2] Building vi_global_planner and vi_local_planner"
+echo "[1/2] Building vi_planner and vi_global_planner"
 # shellcheck disable=SC1090
 source "${ROS_SETUP}"
 # shellcheck disable=SC1090
@@ -108,7 +108,7 @@ cd "${WORKSPACE}"
 COLCON_ARGS=(
   --symlink-install
   --parallel-workers "${BUILD_JOBS}"
-  --packages-select vi_global_planner vi_local_planner
+  --packages-select vi_planner vi_global_planner
 )
 if [[ -n "${CARGO_PROFILE_ARG}" ]]; then
   COLCON_ARGS+=(--cargo-args "${CARGO_PROFILE_ARG}")
@@ -139,5 +139,5 @@ Load the environment with:
 
 Verify with:
   ros2 pkg prefix vi_global_planner
-  ros2 pkg prefix vi_local_planner
+  ros2 pkg prefix vi_planner
 EOF

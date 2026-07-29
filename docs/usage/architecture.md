@@ -37,11 +37,14 @@ Mid-360は時刻同期がないためスタンプが実時計からずれてい�
 
 `planner:=vi`（既定）:
 
-- `vi_global_planner`が`planner_server`の代わりに`compute_path_to_pose`アクションを提供
-- 静的地図から(x, y, θ)の価値関数を計算し、方策のロールアウトで経路を生成
-- 同一ゴールへの再計画はキャッシュを利用
-- `local_planner:=auto`では`vi_local_planner`が`controller_server`の代わりに`follow_path`を提供
-- ローカル価値関数へ`/scan`由来のペナルティを加え、`cmd_vel`を生成
+- `local_planner:=auto`（既定）では`vi_planner`**1ノード**が`planner_server`と
+  `controller_server`の両方を置き換え、`compute_path_to_pose`と`follow_path`を提供
+- 静的地図から(x, y, θ)の価値関数を**ゴールにつき1回だけ**計算する。経路はその
+  価値関数の方策ロールアウト、追従は同じ価値関数の±1 mウィンドウ精密化
+- ウィンドウへ`/scan`由来のペナルティを加え、貪欲行動を`cmd_vel`として出力
+- 同一ゴールへの再計画はキャッシュを利用（ロールアウトのみ）
+- `local_planner:=nav2`では`vi_global_planner`（広域のみ）＋Nav2標準`controller_server`。
+  `map_scale`とアウトオブコアソルバが要る広域地図はこちら
 
 `planner:=navfn`:
 

@@ -90,7 +90,9 @@ CPU quota のキャリブレーションは、実機で取れている数少な�
   `theta_cell_num != N_THETA` を弾く (`N_THETA` は `vi_core` のコンパイル時定数)。
   減らすには `vi_core` を作り直してイメージを再ビルドする必要がある。
 - `vi_global_planner` と `vi_local_planner` は**別プロセスで同じ全地図の価値関数を
-  それぞれ解く**。つまり所要メモリは 2 倍。
+  それぞれ解く**。つまり所要メモリは 2 倍。→ **2026-07-29 に解消**: 両アクションを
+  1 ノード・1 価値関数で提供する `vi_planner` に統合し、`local_planner:=vi` では
+  solve もメモリも 1 本になった (以下の 2 倍という記述は当時の 2 プロセス構成の話)。
 
 実測 (手元 Ryzen 7 8840U, `VI_THREADS=4`, `bench_map --solver frontier2d_sparse`):
 
@@ -109,7 +111,8 @@ CPU quota のキャリブレーションは、実機で取れている数少な�
 する方 (解像度 or theta) だけ**。
 
 Pi4 は 4GB でスワップ無し。プランナ 1 プロセスのピークだけで載らず、そこへ
-vi_local_planner がもう 1 つ同じものを積む。`plan=0` はこれで十分説明がつく
+当時は vi_local_planner がもう 1 つ同じものを積んでいた (現在は `vi_planner` に
+統合され 1 本)。`plan=0` はこれで十分説明がつく
 (OOM kill かスラッシングかは実機の `dmesg` / `swapon --show` で確定させる。
 実機で load 21.9 のままスタックが応答していたのはスラッシング寄りの挙動)。
 
@@ -125,8 +128,9 @@ vi_local_planner がもう 1 つ同じものを積む。`plan=0` はこれで十
 (value_iteration3 側の変更、下の「広域地図 (map_tsudanuma) 対応」節)。
 `solver: frontier2d_sparse_compact` を選ぶと `solve_compact_mapped` を直接呼び、
 `states` を一切確保しない。ロールアウトは確定出力 (sink) を方策ビューとして
-読む (`vi_reference::planner::CompactPolicy`)。`vi_local_planner` は未対応
-なので、広域地図では `local_planner:=nav2` を使う。
+読む (`vi_reference::planner::CompactPolicy`)。統合ノードの `vi_planner` は
+compact 非対応 (追従ループが `states` に書き戻すため) なので、広域地図では
+`local_planner:=nav2` = `vi_global_planner` + `controller_server` を使う。
 
 ### 4. 地図を切り詰めても効かない
 
@@ -174,8 +178,8 @@ behavior_server の Spin/Wait/BackUp のみ)。2026-07-29 に `navigation.launch
 `vi_global_planner` は **`/plan` を publish しない**。Path は action の Result で
 返すだけで、`/plan` を出しているのは nav2 の planner_server。つまり
 `planner:=vi` では `/plan` に publisher が存在せず、実機プローブの `plan=0` は
-正常時でもそうなる。実際に見るべきは `cmd_vel_nav=0` と、VI の
-`value_function` / `local_value_function` の有無。
+正常時でもそうなる (統合後の `vi_planner` も同じ)。実際に見るべきは
+`cmd_vel_nav=0` と、VI の `value_function` の有無。
 
 ### C. 本命: vi_global_planner が OOM で SIGKILL される
 

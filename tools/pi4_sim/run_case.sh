@@ -118,7 +118,7 @@ map_scale = os.environ.get("VI_MAP_SCALE", "")
 sink_dir = os.environ.get("VI_COMPACT_SINK_DIR", "")
 bt_timeout = os.environ.get("BT_SERVER_TIMEOUT", "")
 
-for node in ("vi_global_planner", "vi_local_planner"):
+for node in ("vi_planner", "vi_global_planner"):
     if solver:
         put(node, "solver", solver)
     if pub_vf:

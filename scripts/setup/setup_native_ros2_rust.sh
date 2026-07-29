@@ -9,7 +9,7 @@ SKIP_APT=0
 
 usage() {
   cat <<'EOF'
-価値反復プランナ（vi_global_planner / vi_local_planner）が必要とする
+価値反復プランナ（vi_planner / vi_global_planner）が必要とする
 Rust toolchainとros2_rust（rclrs）ワークスペースを構築します。
 
 Usage:
