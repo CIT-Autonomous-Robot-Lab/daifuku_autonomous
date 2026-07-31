@@ -128,7 +128,7 @@ RVizで次の順に操作します。
 
 `planner:=vi`では、新しいゴールの最初の計算で地図全体を解くため、地図サイズにより数秒から数十秒かかる場合があります。同じゴールへの再計画は価値関数キャッシュにより高速です。
 
-`rviz/nav2_default.rviz`には次のOccupancyGrid表示があります。
+`rviz/navigation.rviz`には次のOccupancyGrid表示があります。
 
 - `/value_function`: 価値関数のθ=0スライス。計算途中も既定500 ms間隔で更新
 - `/local_window_value`: ロボット周辺±1 mの値。スキャン由来ペナルティと局所反復をリアルタイム表示

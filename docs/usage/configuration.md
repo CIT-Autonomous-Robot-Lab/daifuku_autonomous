@@ -15,7 +15,7 @@
 | `config/sensors/mid360_scan.yaml` | 3D点群から2D LaserScanへの変換 |
 | `config/sensors/mid360_ekf.yaml` | Mid-360 IMUと車輪オドメトリの融合 |
 | `rviz/mapping.rviz` | 地図作成用RViz |
-| `rviz/nav2_default.rviz` | 自律移動用RViz |
+| `rviz/navigation.rviz` | 自律移動用RViz |
 | `maps/*.yaml`, `maps/*.pgm` | 保存済み地図 |
 
 すべて`src/autonomous_nav/`以下にあります。`config/`の分け方と合成順序は`src/autonomous_nav/config/README.md`にまとめてあります。

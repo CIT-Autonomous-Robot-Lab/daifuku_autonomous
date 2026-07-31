@@ -3,7 +3,7 @@ param(
     [string]$PodmanConnection = 'podman-hyperv-root',
     [ValidateRange(0, 999)]
     [int]$XDisplay = 400,
-    [string]$RvizConfig = '/workspaces/daifuku_autonomous/src/autonomous_nav/rviz/nav2_default.rviz',
+    [string]$RvizConfig = '/workspaces/daifuku_autonomous/src/autonomous_nav/rviz/navigation.rviz',
     [switch]$Restart
 )
 

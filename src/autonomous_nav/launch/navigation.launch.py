@@ -42,7 +42,7 @@ def generate_launch_description():
     # SetParametersFromFile でグループスコープ内の全ノードに注入する。
     bond_params = os.path.join(pkg_share, "config", "lifecycle_bond.yaml")
     default_emcl2_params = os.path.join(pkg_share, "config", "localization", "emcl2.yaml")
-    default_rviz_config = os.path.join(pkg_share, "rviz", "nav2_default.rviz")
+    default_rviz_config = os.path.join(pkg_share, "rviz", "navigation.rviz")
     default_map = os.path.join(pkg_share, "maps", "map.yaml")
     bringup_launch = os.path.join(nav2_share, "launch", "bringup_launch.py")
     navigation_launch = os.path.join(nav2_share, "launch", "navigation_launch.py")
