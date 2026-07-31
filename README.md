@@ -32,8 +32,10 @@
   - [構成とパッケージ](docs/usage/architecture.md)
   - [トラブルシューティング](docs/usage/troubleshooting.md)
 
-各Docker環境のディレクトリ構成は[`docker/README.md`](docker/README.md)と
-[`docker_dev/README.md`](docker_dev/README.md)にまとめています。
+Docker環境は`docker/`以下に実機用（`raspberrypi/`）と開発用（`dev/`）があります。
+全体像は[`docker/README.md`](docker/README.md)、各環境のディレクトリ構成は
+[`docker/raspberrypi/README.md`](docker/raspberrypi/README.md)と
+[`docker/dev/README.md`](docker/dev/README.md)にまとめています。
 
 ## ライセンス
 

@@ -196,7 +196,7 @@ COPY --from=builder /opt/ros2_rust_ws/install /opt/ros2_rust_ws/install
 COPY --from=builder /opt/ros_ws/install /opt/ros_ws/install
 RUN ldconfig
 
-COPY docker/entrypoint.sh /ros_entrypoint.sh
+COPY docker/common/entrypoint.sh /ros_entrypoint.sh
 RUN chmod +x /ros_entrypoint.sh
 
 WORKDIR ${ROS_WS}

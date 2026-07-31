@@ -3,6 +3,8 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DOCKER_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+source "$(cd -- "${DOCKER_DIR}/../common/lib" && pwd)/compose.sh"
+
 COMPOSE_FILE="${DOCKER_DIR}/compose.yaml"
 SERVICE="${CONTROL_SERVICE:-ros2}"
 MOTOR_SERVICE="${MOTOR_SERVICE:-/motor_power}"
@@ -13,7 +15,6 @@ TELEOP_ANGULAR_SPEED="${TELEOP_ANGULAR_SPEED:-1.0}"
 JOYSTICK_ID="${JOYSTICK_ID:-0}"
 JOYSTICK_CONFIG="${JOYSTICK_CONFIG:-xbox}"
 
-DOCKER=()
 COMPOSE=()
 
 usage() {
@@ -54,39 +55,29 @@ require_no_args() {
 }
 
 init_docker() {
-  if docker info >/dev/null 2>&1; then
-    DOCKER=(docker)
-  elif sudo -n docker info >/dev/null 2>&1; then
-    DOCKER=(sudo -n docker)
-  else
-    die "Dockerへ接続できません。Dockerが起動しているか、実行権限があるか確認してください。"
-  fi
-
-  COMPOSE=("${DOCKER[@]}" compose -f "${COMPOSE_FILE}")
+  # 到達できない理由は compose_init 側が出す。
+  compose_init "${COMPOSE_FILE}" || exit 1
 }
 
 is_running() {
-  [[ -n "$("${COMPOSE[@]}" ps --status running --quiet "${SERVICE}")" ]]
+  compose_is_running "${SERVICE}"
 }
 
 ensure_running() {
-  if ! is_running; then
-    echo "${SERVICE} コンテナを起動します..."
-    "${COMPOSE[@]}" up -d --no-build "${SERVICE}"
-  fi
+  compose_ensure_running "${SERVICE}"
 }
 
 run_ros() {
-  "${COMPOSE[@]}" exec -T "${SERVICE}" /ros_entrypoint.sh ros2 "$@"
+  compose exec -T "${SERVICE}" /ros_entrypoint.sh ros2 "$@"
 }
 
 run_ros_interactive() {
   # teleop_twist_keyboard reads raw keystrokes from the controlling terminal.
-  "${COMPOSE[@]}" exec "${SERVICE}" /ros_entrypoint.sh ros2 "$@"
+  compose exec "${SERVICE}" /ros_entrypoint.sh ros2 "$@"
 }
 
 run_ros_timed() {
-  "${COMPOSE[@]}" exec -T "${SERVICE}" \
+  compose exec -T "${SERVICE}" \
     timeout --foreground "${ROS_TIMEOUT}s" /ros_entrypoint.sh ros2 "$@"
 }
 
@@ -117,7 +108,7 @@ run_joystick_teleop() {
 }
 
 show_status() {
-  "${COMPOSE[@]}" ps "${SERVICE}"
+  compose ps "${SERVICE}"
 
   if ! is_running; then
     echo "ROS状態: ${SERVICE} コンテナは停止しています。"
@@ -216,7 +207,7 @@ main() {
       ;;
     logs)
       init_docker
-      "${COMPOSE[@]}" logs "$@" "${SERVICE}"
+      compose logs "$@" "${SERVICE}"
       ;;
     *)
       usage >&2

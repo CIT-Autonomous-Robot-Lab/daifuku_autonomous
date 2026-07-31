@@ -1,8 +1,13 @@
+# Composeはプロジェクト名を既定でcompose.yamlのあるディレクトリ名から作る。
+# それだとディレクトリを動かすたびにネットワーク名やボリューム名が変わるので、
+# 明示的に固定する。
+name: daifuku-autonomous
+
 services:
   ros2:
     build:
-      context: ..
-      dockerfile: docker/Dockerfile
+      context: ../..
+      dockerfile: docker/raspberrypi/Dockerfile
       args:
         BUILD_JOBS: ${BUILD_JOBS:-2}
     image: daifuku-autonomous:humble
@@ -36,11 +41,11 @@ services:
       # joy_node uses evdev devices. The cgroup rule also permits hot-plugged
       # controllers whose minor number was not present at container creation.
       - /dev/input:/dev/input:ro
-      - ../src/autonomous_nav:/opt/ros_ws/install/share/autonomous_nav
+      - ../../src/autonomous_nav:/opt/ros_ws/install/share/autonomous_nav
       # ament_cargo does not install package.xml's <install>launch</install>.
       # Keep the VI Nav2 launch available to the already-built Pi image.
-      - ../src/value_iteration3/vi_ros2/vi_global_planner/launch:/opt/ros_ws/install/share/vi_global_planner/launch:ro
-      - ../src/value_iteration3/vi_ros2/vi_planner/launch:/opt/ros_ws/install/share/vi_planner/launch:ro
+      - ../../src/value_iteration3/vi_ros2/vi_global_planner/launch:/opt/ros_ws/install/share/vi_global_planner/launch:ro
+      - ../../src/value_iteration3/vi_ros2/vi_planner/launch:/opt/ros_ws/install/share/vi_planner/launch:ro
     device_cgroup_rules:
       - "c 13:* r"
 
@@ -56,8 +61,8 @@ services:
   # (コンテナからは insmod できない。raspicat_setup_scripts が導入する)。
   raspicat:
     build:
-      context: ..
-      dockerfile: docker/Dockerfile
+      context: ../..
+      dockerfile: docker/raspberrypi/Dockerfile
       args:
         BUILD_JOBS: ${BUILD_JOBS:-2}
     image: daifuku-autonomous:humble
@@ -84,7 +89,7 @@ services:
       FASTRTPS_DEFAULT_PROFILES_FILE: /etc/fastdds/udp_whitelist.xml
     volumes:
       - ./fastdds_udp_whitelist.xml:/etc/fastdds/udp_whitelist.xml:ro
-      - ../src/autonomous_nav:/opt/ros_ws/install/share/autonomous_nav
+      - ../../src/autonomous_nav:/opt/ros_ws/install/share/autonomous_nav
       # rtmouse は out-of-tree モジュールで、char デバイスのメジャー番号を
       # insmod のたびに動的に取る (実測 497-506)。したがって `devices:` や
       # メジャー固定の device_cgroup_rules は、モジュール再読込やリブートで

@@ -92,8 +92,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libaprutil1-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY docker_dev/entrypoint.sh /ros_entrypoint.sh
-COPY docker_dev/tools/build-workspace.sh /usr/local/bin/build-autonomous
+COPY docker/common/entrypoint.sh /ros_entrypoint.sh
+COPY docker/dev/tools/build-workspace.sh /usr/local/bin/build-autonomous
 RUN chmod +x /ros_entrypoint.sh /usr/local/bin/build-autonomous
 
 WORKDIR /workspaces/daifuku_autonomous

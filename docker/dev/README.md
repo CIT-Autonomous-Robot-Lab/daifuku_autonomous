@@ -36,6 +36,10 @@ Linux/WSLホスト（bash）で実行します。`tools/build-workspace.sh`だ�
 WSLから`tools/linux/up.sh`を実行した場合のみ、Windows側の固定IP設定のために
 `tools/windows/network.ps1`を管理者権限で呼び出します。
 
+`raspberrypi/`と共通の部分は[`docker/common/`](../common)にあります。イメージには
+`docker/common/entrypoint.sh`が`/ros_entrypoint.sh`として入り、`tools/linux/`は
+`docker/common/lib/compose.sh`を読み込みます。
+
 ## 固定IP
 
 | 機器 | アドレス |
@@ -82,7 +86,7 @@ Wi-Fiをインターネット用のデフォルト経路、有線をPi/Livox専�
 ```bash
 sudo apt install network-manager
 export RASPICAT_ETHERNET_IF=enp3s0  # NICが1個だけなら省略可
-bash docker_dev/tools/linux/up.sh
+bash docker/dev/tools/linux/up.sh
 ```
 
 `linux/up.sh`は次の順序で処理します。
@@ -98,7 +102,7 @@ ssh ubuntu@192.168.1.50
 終了後にネットワーク設定も戻す場合:
 
 ```bash
-bash docker_dev/tools/linux/network.sh down "$RASPICAT_ETHERNET_IF"
+bash docker/dev/tools/linux/network.sh down "$RASPICAT_ETHERNET_IF"
 ```
 
 ## Windows + Podman Hyper-V
@@ -108,9 +112,9 @@ Windows PowerShellから起動します。`windows/up.ps1`はPodman Hyper-V API�
 
 ```powershell
 # アダプター名は Get-NetAdapter で確認
-.\docker_dev\tools\windows\up.ps1
+.\docker\dev\tools\windows\up.ps1
 # 自動判定できない場合
-.\docker_dev\tools\windows\up.ps1 -EthernetAlias "vEthernet (RasPiCat External)"
+.\docker\dev\tools\windows\up.ps1 -EthernetAlias "vEthernet (RasPiCat External)"
 ```
 
 管理者権限の確認画面が開き、ICS/DHCP共有を解除してWindows側へ
@@ -127,7 +131,7 @@ ssh ubuntu@192.168.1.50
 固定IPを解除する場合は管理者PowerShellで実行します。
 
 ```powershell
-.\docker_dev\tools\windows\network.ps1 -Mode Disable `
+.\docker\dev\tools\windows\network.ps1 -Mode Disable `
   -EthernetAlias "vEthernet (RasPiCat External)"
 ```
 
@@ -148,7 +152,7 @@ firewall=true
 WSL2シェルから起動する場合:
 
 ```bash
-bash docker_dev/tools/linux/up.sh
+bash docker/dev/tools/linux/up.sh
 ```
 
 同じ制約はROS 2 DDSのマルチキャスト探索にも影響します。Docker Desktopのhost
@@ -166,9 +170,9 @@ Windows + Docker Desktopでも、ビルド、GDB、RViz、rosbag再生には利�
 ## コンテナの利用
 
 ```bash
-bash docker_dev/tools/linux/shell.sh
+bash docker/dev/tools/linux/shell.sh
 # PowerShellの場合
-.\docker_dev\tools\windows\shell.ps1
+.\docker\dev\tools\windows\shell.ps1
 ```
 
 初回と、C++ソースまたは依存関係を変更した後は、コンテナ内で開発用ワークスペースを
@@ -201,7 +205,7 @@ DDSトピックをライブ表示できます。管理者PowerShellで一度だ�
 `192.168.1.2/24`を設定します。
 
 ```powershell
-.\docker_dev\tools\windows\podman-network.ps1
+.\docker\dev\tools\windows\podman-network.ps1
 ```
 
 `compose.yaml`は`network_mode: host`なので、コンテナを起動し直せばPiと同一セグメントで
@@ -210,12 +214,12 @@ DDSマルチキャストを使用します。
 ```powershell
 $env:DOCKER_HOST = "npipe:////./pipe/podman-hyperv"
 Remove-Item Env:DOCKER_CONTEXT -ErrorAction SilentlyContinue
-docker compose -f docker_dev/compose.yaml up -d
+docker compose -f docker/dev/compose.yaml up -d
 # VcXsrvの起動も含めてRVizをバックグラウンド起動
-.\docker_dev\tools\windows\rviz.ps1
+.\docker\dev\tools\windows\rviz.ps1
 
 # 設定変更後などにRVizを再起動
-.\docker_dev\tools\windows\rviz.ps1 -Restart
+.\docker\dev\tools\windows\rviz.ps1 -Restart
 ```
 
 起動ログは次のコマンドで確認できます。
@@ -229,19 +233,19 @@ Windows側でDDSを起動せず、固定IP`192.168.1.50`へSSHして`ros2`を実
 
 ```powershell
 # トピック一覧
-.\docker_dev\tools\windows\pi-ros.ps1
+.\docker\dev\tools\windows\pi-ros.ps1
 
 # ノード一覧、詳細、1メッセージ、周波数
-.\docker_dev\tools\windows\pi-ros.ps1 -Action Nodes
-.\docker_dev\tools\windows\pi-ros.ps1 -Action Info -Topic /odom
-.\docker_dev\tools\windows\pi-ros.ps1 -Action Echo -Topic /odom
-.\docker_dev\tools\windows\pi-ros.ps1 -Action Hz -Topic /scan
+.\docker\dev\tools\windows\pi-ros.ps1 -Action Nodes
+.\docker\dev\tools\windows\pi-ros.ps1 -Action Info -Topic /odom
+.\docker\dev\tools\windows\pi-ros.ps1 -Action Echo -Topic /odom
+.\docker\dev\tools\windows\pi-ros.ps1 -Action Hz -Topic /scan
 
 # 実機が別アドレスの場合
-.\docker_dev\tools\windows\pi-ros.ps1 -PiAddress 192.168.1.60
+.\docker\dev\tools\windows\pi-ros.ps1 -PiAddress 192.168.1.60
 
 # ドメインIDやログインユーザーを変える場合
-.\docker_dev\tools\windows\pi-ros.ps1 -DomainId 10 -User ubuntu
+.\docker\dev\tools\windows\pi-ros.ps1 -DomainId 10 -User ubuntu
 ```
 
 固定アドレスへ直接SSHするため、Windows側でのDDS探索は行いません。BatchModeで接続
@@ -258,10 +262,10 @@ ros2 launch autonomous_nav navigation.launch.py \
 `lidar_z`は実際の取付高さへ変更してください。モーター電源は、この起動確認だけでは
 有効にしません。
 
-`docker_dev/`は`autonomous_nav`をcolconでビルドするため、
+`docker/dev/`は`autonomous_nav`をcolconでビルドするため、
 `share/autonomous_nav/scripts/`がインストールされず、Mid-360のスタンプ打ち直しが
 起動しません（`/scan_raw`が配信されません）。詳細と対処は
-[LiDARとオドメトリ](../docs/setup/lidar.md#タイムスタンプの打ち直し)を参照して
+[LiDARとオドメトリ](../../docs/setup/lidar.md#タイムスタンプの打ち直し)を参照して
 ください。
 
 ネイティブノードをGDBで起動する場合は、例えば次のようにします。
@@ -290,13 +294,13 @@ GUIが表示されない場合:
 固定IPを別途設定済みなら、Composeを直接使用できます。
 
 ```bash
-docker compose -f docker_dev/compose.yaml up -d --build
+docker compose -f docker/dev/compose.yaml up -d --build
 ```
 
 LinuxではGUIソケット用のオーバーライドも指定します。
 
 ```bash
-docker compose -f docker_dev/compose.yaml -f docker_dev/compose.linux.yaml up -d --build
+docker compose -f docker/dev/compose.yaml -f docker/dev/compose.linux.yaml up -d --build
 ```
 
 ただし、この方法では固定IP設定は実行されません。通常は`linux/up.sh`または`windows/up.ps1`を使って

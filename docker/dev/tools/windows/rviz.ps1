@@ -14,7 +14,7 @@ Set-PodmanConnection -Name $PodmanConnection
 
 $running = podman inspect --format '{{.State.Running}}' $Container 2>$null
 if ($LASTEXITCODE -ne 0 -or $running.Trim() -ne 'true') {
-    throw "Container '$Container' is not running. Run .\docker_dev\tools\windows\up.ps1 first."
+    throw "Container '$Container' is not running. Run .\docker\dev\tools\windows\up.ps1 first."
 }
 
 if (-not (Start-XServer $XDisplay)) {

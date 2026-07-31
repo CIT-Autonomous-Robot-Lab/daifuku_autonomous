@@ -1,9 +1,11 @@
 # Shared helpers for the Windows host scripts. Dot-source it with:
 #   . (Join-Path $PSScriptRoot 'common.ps1')
 
+# $PSScriptRoot = <repo>/docker/dev/tools/windows
 $RaspicatDevDir = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $RaspicatComposeFile = Join-Path $RaspicatDevDir 'compose.yaml'
-$RaspicatRepoDir = Split-Path -Parent $RaspicatDevDir
+# <repo>/docker/dev -> <repo>/docker -> <repo>
+$RaspicatRepoDir = Split-Path -Parent (Split-Path -Parent $RaspicatDevDir)
 # compose.yaml mounts the repo root here.
 $RaspicatWorkspace = '/workspaces/daifuku_autonomous'
 

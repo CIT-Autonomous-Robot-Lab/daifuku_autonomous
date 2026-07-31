@@ -35,14 +35,14 @@ ros2 launch autonomous_nav mapping.launch.py \
   publish_lidar_tf:=true lidar_z:=0.30
 ```
 
-> ネイティブ環境と`docker_dev/`で`lidar:=mid360`を使う場合は、事前に
+> ネイティブ環境と`docker/dev/`で`lidar:=mid360`を使う場合は、事前に
 > [スタンプ打ち直しの既知の制限](../setup/lidar.md#タイムスタンプの打ち直し)を
 > 確認してください。対応しないと`/scan_raw`が配信されません。
 
 軽量Docker環境:
 
 ```bash
-docker compose -f docker/compose.yaml exec ros2 \
+docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
   /ros_entrypoint.sh ros2 launch autonomous_nav mapping.launch.py \
   lidar:=2d use_sim_time:=false use_rviz:=false
 ```
@@ -55,17 +55,17 @@ docker compose -f docker/compose.yaml exec ros2 \
 起動したターミナルとは別のターミナルで実行してください。
 
 ```bash
-bash docker/tools/control.sh motor on
-bash docker/tools/control.sh teleop keyboard
+bash docker/raspberrypi/tools/control.sh motor on
+bash docker/raspberrypi/tools/control.sh teleop keyboard
 # ジョイスティックを使う場合
-bash docker/tools/control.sh teleop joystick
+bash docker/raspberrypi/tools/control.sh teleop joystick
 ```
 
 速度は`TELEOP_LINEAR_SPEED`と`TELEOP_ANGULAR_SPEED`で変更できます。地図作成では
 既定より遅くしたほうが安定します。
 
 ```bash
-TELEOP_LINEAR_SPEED=0.1 bash docker/tools/control.sh teleop keyboard
+TELEOP_LINEAR_SPEED=0.1 bash docker/raspberrypi/tools/control.sh teleop keyboard
 ```
 
 RVizを使える環境では、次を確認しながら走行します。
@@ -86,7 +86,7 @@ ros2 run nav2_map_server map_saver_cli \
 軽量Docker環境:
 
 ```bash
-docker compose -f docker/compose.yaml exec ros2 \
+docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
   /ros_entrypoint.sh ros2 run nav2_map_server map_saver_cli \
   -f /opt/ros_ws/install/share/autonomous_nav/maps/map
 ```
@@ -99,7 +99,7 @@ docker compose -f docker/compose.yaml exec ros2 \
 保存が終わったらモーター電源を切ります。
 
 ```bash
-bash docker/tools/control.sh motor off
+bash docker/raspberrypi/tools/control.sh motor off
 ```
 
 保存後は[自律移動](navigation.md)へ進みます。

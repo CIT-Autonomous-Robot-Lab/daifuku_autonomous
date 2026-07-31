@@ -6,11 +6,11 @@
 
 | 環境 | 向いている用途 | 手順 |
 |---|---|---|
-| `docker/` | Raspberry Piやサーバーでの軽量・ヘッドレス実行 | [Docker環境](docker.md) |
+| `docker/raspberrypi/` | Raspberry Piやサーバーでの軽量・ヘッドレス実行 | [Docker環境](docker.md) |
 | Ubuntu 22.04 + ROS 2 Humble | RVizを含む通常の開発・実行 | [ネイティブ環境](native.md) |
-| `docker_dev/` | Raspberry Pi Cat公式PC環境とGUIをまとめた開発 | [GUI付き開発コンテナ](development-container.md) |
+| `docker/dev/` | Raspberry Pi Cat公式PC環境とGUIをまとめた開発 | [GUI付き開発コンテナ](development-container.md) |
 
-`docker/`のイメージにはRVizを含みません。RVizを使う場合はネイティブ環境または`docker_dev/`を利用してください。
+`docker/raspberrypi/`のイメージにはRVizを含みません。RVizを使う場合はネイティブ環境または`docker/dev/`を利用してください。
 
 ## 2. 機体側を準備する
 

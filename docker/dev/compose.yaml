@@ -1,8 +1,13 @@
+# ディレクトリ名からプロジェクト名を作らせない。名前付きボリューム
+# (autonomous-build/install/log) はプロジェクト名を接頭辞に持つので、
+# 固定しないとディレクトリ移動でcolconのキャッシュが別ボリュームに化ける。
+name: daifuku-raspicat-dev
+
 services:
   raspicat-dev:
     build:
-      context: ..
-      dockerfile: docker_dev/Dockerfile
+      context: ../..
+      dockerfile: docker/dev/Dockerfile
     image: daifuku-raspicat-dev:humble
     container_name: daifuku-raspicat-dev
     network_mode: host
@@ -28,7 +33,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ..:/workspaces/daifuku_autonomous
+      - ../..:/workspaces/daifuku_autonomous
       - autonomous-build:/workspaces/daifuku_autonomous/build
       - autonomous-install:/workspaces/daifuku_autonomous/install
       - autonomous-log:/workspaces/daifuku_autonomous/log

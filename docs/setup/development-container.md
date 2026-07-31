@@ -1,6 +1,6 @@
 # GUI付き開発コンテナ
 
-`docker_dev/`はRaspberry Pi Cat公式のPC側環境をDockerで再現します。Ubuntu 22.04、ROS 2 Humble Desktop Full、RViz、`CIT-Autonomous-Robot-Lab/raspicat2`のPC用ワークスペース（確認済みコミット`500a20c`）を含みます。
+`docker/dev/`はRaspberry Pi Cat公式のPC側環境をDockerで再現します。Ubuntu 22.04、ROS 2 Humble Desktop Full、RViz、`CIT-Autonomous-Robot-Lab/raspicat2`のPC用ワークスペース（確認済みコミット`500a20c`）を含みます。
 
 Raspberry Pi本体のOS、GPIOカーネルドライバ、モータードライバはコンテナ化しません。
 
@@ -14,20 +14,20 @@ Linux:
 ```bash
 sudo apt install network-manager
 export RASPICAT_ETHERNET_IF=enp3s0
-bash docker_dev/tools/linux/up.sh
+bash docker/dev/tools/linux/up.sh
 ```
 
 Windows PowerShell:
 
 ```powershell
-.\docker_dev\tools\windows\up.ps1
+.\docker\dev\tools\windows\up.ps1
 ```
 
 WSL2シェルからは次を実行できます。管理者権限の確認画面が開き、Windows側の固定IPが
 設定されます。
 
 ```bash
-bash docker_dev/tools/linux/up.sh
+bash docker/dev/tools/linux/up.sh
 ```
 
 ネットワークの詳細と戻し方は[ROS 2ネットワーク](network.md#専用ethernetで機体を接続する)を参照してください。
@@ -35,8 +35,8 @@ bash docker_dev/tools/linux/up.sh
 ## コンテナを使う
 
 ```bash
-bash docker_dev/tools/linux/shell.sh
-# PowerShell: .\docker_dev\tools\windows\shell.ps1
+bash docker/dev/tools/linux/shell.sh
+# PowerShell: .\docker\dev\tools\windows\shell.ps1
 build-autonomous
 source install/setup.bash
 ros2 pkg list | grep raspicat
@@ -64,7 +64,7 @@ ros2 launch autonomous_nav navigation.launch.py \
   publish_lidar_tf:=true lidar_z:=0.30 use_rviz:=true
 ```
 
-> `docker_dev/`では`autonomous_nav`をcolconでビルドするため、
+> `docker/dev/`では`autonomous_nav`をcolconでビルドするため、
 > `share/autonomous_nav/scripts/`がインストールされず、Mid-360のスタンプ打ち直しが
 > 起動しません。`lidar:=mid360`を使う前に
 > [スタンプ打ち直しの既知の制限](lidar.md#タイムスタンプの打ち直し)を確認して
@@ -88,15 +88,15 @@ ros2 launch raspicat_bringup teleop.launch.py teleop:=key
 固定IPを設定済みの場合のみ使用します。
 
 ```bash
-docker compose -f docker_dev/compose.yaml up -d --build
+docker compose -f docker/dev/compose.yaml up -d --build
 ```
 
 LinuxでGUIソケットを渡す場合:
 
 ```bash
 docker compose \
-  -f docker_dev/compose.yaml \
-  -f docker_dev/compose.linux.yaml \
+  -f docker/dev/compose.yaml \
+  -f docker/dev/compose.linux.yaml \
   up -d --build
 ```
 

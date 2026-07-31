@@ -50,13 +50,13 @@ ros2 run <2d_lidar_package> <2d_lidar_node> \
 センサー側をPTP同期できるようになれば、この中継は不要になります。
 
 > **既知の制限**: `restamp_scan.py`は`share/autonomous_nav/scripts/`から起動され
-> ますが、`CMakeLists.txt`はこのディレクトリをインストールしません。`docker/`の
+> ますが、`CMakeLists.txt`はこのディレクトリをインストールしません。`docker/raspberrypi/`の
 > Compose環境では`src/autonomous_nav`が`share/autonomous_nav`へまるごとマウント
-> されるため動作しますが、ネイティブビルドと`docker_dev/`ではファイルが存在せず、
+> されるため動作しますが、ネイティブビルドと`docker/dev/`ではファイルが存在せず、
 > 中継が起動しません。しかも`ExecuteProcess`は失敗しても他のノードを止めないため、
 > エラーは出ないまま`/scan_raw`だけが配信されない状態になります。
 >
-> `docker/`以外で`lidar:=mid360`を使う場合は、先に`CMakeLists.txt`へ次を追加して
+> `docker/raspberrypi/`以外で`lidar:=mid360`を使う場合は、先に`CMakeLists.txt`へ次を追加して
 > ください。launch側が`share`配下を参照するため、宛先は`lib/`ではなく`share/`です。
 >
 > ```cmake

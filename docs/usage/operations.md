@@ -23,9 +23,9 @@ ros2 topic hz /wheel/odom
 ## Dockerでコマンドを実行する
 
 ```bash
-docker compose -f docker/compose.yaml exec ros2 \
+docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
   /ros_entrypoint.sh ros2 topic list
-docker compose -f docker/compose.yaml exec ros2 \
+docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
   /ros_entrypoint.sh bash
 ```
 
@@ -33,16 +33,16 @@ docker compose -f docker/compose.yaml exec ros2 \
 起動します。
 
 ```bash
-bash docker/tools/shell.sh
+bash docker/raspberrypi/tools/shell.sh
 ```
 
 ## control.shで操作する
 
-`docker/tools/control.sh`は、モーター電源、遠隔操作、状態確認をまとめたスクリプト
+`docker/raspberrypi/tools/control.sh`は、モーター電源、遠隔操作、状態確認をまとめたスクリプト
 です。こちらもコンテナを自動起動します。
 
 ```bash
-bash docker/tools/control.sh help
+bash docker/raspberrypi/tools/control.sh help
 ```
 
 | サブコマンド | 動作 |
@@ -73,7 +73,7 @@ bash docker/tools/control.sh help
 たとえば遠隔操作の速度を落とす場合:
 
 ```bash
-TELEOP_LINEAR_SPEED=0.1 bash docker/tools/control.sh teleop keyboard
+TELEOP_LINEAR_SPEED=0.1 bash docker/raspberrypi/tools/control.sh teleop keyboard
 ```
 
 `motor off`は停止指令を送ってから電源を切ります。停止指令の送信に失敗しても警告を
@@ -85,32 +85,32 @@ TELEOP_LINEAR_SPEED=0.1 bash docker/tools/control.sh teleop keyboard
 
 次を変更した場合はイメージを再ビルドします。
 
-- `docker/Dockerfile`
+- `docker/raspberrypi/Dockerfile`
 - 依存パッケージ
 - `autonomous_bot.repos`
 - CMakeやビルド対象
 - 外部パッケージのソース
 
 ```bash
-docker compose -f docker/compose.yaml down
-docker compose -f docker/compose.yaml build
-docker compose -f docker/compose.yaml up -d
+docker compose -f docker/raspberrypi/compose.yaml down
+docker compose -f docker/raspberrypi/compose.yaml build
+docker compose -f docker/raspberrypi/compose.yaml up -d
 ```
 
 ## ログを見る
 
 ```bash
-docker compose -f docker/compose.yaml logs
-docker compose -f docker/compose.yaml logs -f ros2
-bash docker/tools/control.sh logs -f
+docker compose -f docker/raspberrypi/compose.yaml logs
+docker compose -f docker/raspberrypi/compose.yaml logs -f ros2
+bash docker/raspberrypi/tools/control.sh logs -f
 ```
 
 コンテナは`HOME=/tmp`で動くため、ROS 2のログファイルは`/tmp/ros/log`に出力されます。
 コンテナを作り直すと消えるので、残したいログはホストへ取り出してください。
 
 ```bash
-docker compose -f docker/compose.yaml exec ros2 ls /tmp/ros/log
-docker compose -f docker/compose.yaml cp ros2:/tmp/ros/log ./ros_log
+docker compose -f docker/raspberrypi/compose.yaml exec ros2 ls /tmp/ros/log
+docker compose -f docker/raspberrypi/compose.yaml cp ros2:/tmp/ros/log ./ros_log
 ```
 
 ## 終了する
@@ -118,8 +118,8 @@ docker compose -f docker/compose.yaml cp ros2:/tmp/ros/log ./ros_log
 走行を伴う作業のあとは、コンテナを止める前にモーター電源を切ります。
 
 ```bash
-bash docker/tools/control.sh motor off
-docker compose -f docker/compose.yaml down
+bash docker/raspberrypi/tools/control.sh motor off
+docker compose -f docker/raspberrypi/compose.yaml down
 ```
 
 ネイティブ環境ではlaunchを実行したターミナルで`Ctrl+C`を押します。停止後も機体側ドライバが動いている場合があるため、必要に応じて機体側も安全に停止してください。

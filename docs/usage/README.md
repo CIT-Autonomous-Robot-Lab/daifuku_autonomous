@@ -26,21 +26,21 @@
 各ページはネイティブ環境の`ros2 ...`を基本形として記載します。軽量Docker環境では先頭に次を付け、RVizを起動しないよう`use_rviz:=false`を追加します。
 
 ```bash
-docker compose -f docker/compose.yaml exec ros2 \
+docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
   /ros_entrypoint.sh ros2 ...
 ```
 
 複雑なコマンドは先にコンテナシェルへ入ると扱いやすくなります。
 
 ```bash
-bash docker/tools/shell.sh
+bash docker/raspberrypi/tools/shell.sh
 ```
 
-モーター電源、遠隔操作、状態確認は`docker/tools/control.sh`にまとめています。
+モーター電源、遠隔操作、状態確認は`docker/raspberrypi/tools/control.sh`にまとめています。
 
 ```bash
-bash docker/tools/control.sh status
-bash docker/tools/control.sh teleop keyboard
+bash docker/raspberrypi/tools/control.sh status
+bash docker/raspberrypi/tools/control.sh teleop keyboard
 ```
 
 一覧は[日常操作と確認](operations.md#controlshで操作する)を参照してください。

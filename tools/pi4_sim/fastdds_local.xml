@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  docker/fastdds_udp_whitelist.xml のローカル検証版。
+  docker/raspberrypi/fastdds_udp_whitelist.xml のローカル検証版。
 
   実機用プロファイルは UDP を 127.0.0.1 と 192.168.1.50 (Pi の eth0) に
   限定しているが、192.168.1.50 はローカル PC に存在しないためそのままでは

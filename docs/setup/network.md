@@ -4,8 +4,8 @@ Raspberry Pi Catとナビゲーション環境はDDSで直接通信します。�
 
 ## 共通設定
 
-両側で`ROS_DOMAIN_ID`を同じ値にします。`docker/compose.yaml`と
-`docker_dev/compose.yaml`の既定はどちらも`90`です。
+両側で`ROS_DOMAIN_ID`を同じ値にします。`docker/raspberrypi/compose.yaml`と
+`docker/dev/compose.yaml`の既定はどちらも`90`です。
 
 ```bash
 export ROS_DOMAIN_ID=90
@@ -18,8 +18,8 @@ Raspberry Pi上のネイティブROSノードとDocker内のFast DDSを確実に
 
 | 環境 | Fast DDSの設定 |
 |---|---|
-| `docker/` | `FASTRTPS_DEFAULT_PROFILES_FILE`でXMLプロファイルを指定し、UDPを特定インターフェースへ限定したうえでSHMを併用（[下記](#raspberry-pi本体でのdds設定)） |
-| `docker_dev/` | `FASTDDS_BUILTIN_TRANSPORTS=UDPv4`。別ホストであるPi上のノードを同一ホストの相手と誤認させないため、SHMを使わない |
+| `docker/raspberrypi/` | `FASTRTPS_DEFAULT_PROFILES_FILE`でXMLプロファイルを指定し、UDPを特定インターフェースへ限定したうえでSHMを併用（[下記](#raspberry-pi本体でのdds設定)） |
+| `docker/dev/` | `FASTDDS_BUILTIN_TRANSPORTS=UDPv4`。別ホストであるPi上のノードを同一ホストの相手と誤認させないため、SHMを使わない |
 
 次も確認してください。
 
@@ -30,14 +30,14 @@ Raspberry Pi上のネイティブROSノードとDocker内のFast DDSを確実に
 
 ## Raspberry Pi本体でのDDS設定
 
-Pi本体でネイティブのROS 2ノードを動かし、同じPi上の`docker/`コンテナと通信する構成
-では、ホストとコンテナで同じFast DDSプロファイル`docker/fastdds_udp_whitelist.xml`
+Pi本体でネイティブのROS 2ノードを動かし、同じPi上の`docker/raspberrypi/`コンテナと通信する構成
+では、ホストとコンテナで同じFast DDSプロファイル`docker/raspberrypi/fastdds_udp_whitelist.xml`
 を使います。コンテナ側は`compose.yaml`がマウントと環境変数を設定するため、追加の
 作業はホスト側だけです。
 
 ```bash
 # Pi本体の ~/.bashrc へ追記
-export FASTRTPS_DEFAULT_PROFILES_FILE=/path/to/daifuku_autonomous/docker/fastdds_udp_whitelist.xml
+export FASTRTPS_DEFAULT_PROFILES_FILE=/path/to/daifuku_autonomous/docker/raspberrypi/fastdds_udp_whitelist.xml
 ```
 
 このプロファイルは2つの実測問題に対処しています。
@@ -53,18 +53,18 @@ export FASTRTPS_DEFAULT_PROFILES_FILE=/path/to/daifuku_autonomous/docker/fastdds
 
 そのため、次の3点が前提になります。
 
-- `docker/compose.yaml`の`ipc: host`（`/dev/shm`をホストと共有する）
-- `docker/compose.yaml`の`user: "1000:1000"`。Fast DDSはSHMセグメントを0644で作るため、
+- `docker/raspberrypi/compose.yaml`の`ipc: host`（`/dev/shm`をホストと共有する）
+- `docker/raspberrypi/compose.yaml`の`user: "1000:1000"`。Fast DDSはSHMセグメントを0644で作るため、
   ホスト側ROSプロセスとuidを揃えないと互いのポートを開けません
 - whitelist内の`192.168.1.50`はPiの固定IPそのものです。ロボットLANのアドレスが
   異なる場合はXMLを書き換えてください
 
-`docker_dev/`は別ホスト（PC）で動くため、SHMは使わず`FASTDDS_BUILTIN_TRANSPORTS=UDPv4`
+`docker/dev/`は別ホスト（PC）で動くため、SHMは使わず`FASTDDS_BUILTIN_TRANSPORTS=UDPv4`
 のままです。
 
 ## Docker Desktop
 
-`docker/compose.yaml`と`docker_dev/compose.yaml`は`network_mode: host`を使います。Docker Desktop 4.34以降で、Settings > Resources > Networkの「Enable host networking」を有効にしてください。
+`docker/raspberrypi/compose.yaml`と`docker/dev/compose.yaml`は`network_mode: host`を使います。Docker Desktop 4.34以降で、Settings > Resources > Networkの「Enable host networking」を有効にしてください。
 
 WindowsファイアウォールではDocker Desktop、WSL、ROS 2で使用するネットワークの通信を許可します。
 
@@ -86,7 +86,7 @@ firewall=true
 
 ## 専用Ethernetで機体を接続する
 
-`docker_dev/`には、専用NICを固定IPで設定する補助スクリプトがあります。DHCP/NATは
+`docker/dev/`には、専用NICを固定IPで設定する補助スクリプトがあります。DHCP/NATは
 使用しません。社内LANなど別用途のNICを選ばないでください。
 
 | 機器 | 固定IP |
@@ -103,22 +103,22 @@ Linux:
 
 ```bash
 export RASPICAT_ETHERNET_IF=enp3s0
-bash docker_dev/tools/linux/up.sh
+bash docker/dev/tools/linux/up.sh
 ```
 
 Linux側はNetworkManagerプロファイル`raspicat-docker-dev`を作り、
 `192.168.1.3/24`を設定します。終了後に戻す場合:
 
 ```bash
-bash docker_dev/tools/linux/network.sh down "$RASPICAT_ETHERNET_IF"
+bash docker/dev/tools/linux/network.sh down "$RASPICAT_ETHERNET_IF"
 ```
 
 Windows PowerShell:
 
 ```powershell
-.\docker_dev\tools\windows\up.ps1
+.\docker\dev\tools\windows\up.ps1
 # 自動判定できない場合
-.\docker_dev\tools\windows\up.ps1 -EthernetAlias "vEthernet (RasPiCat External)"
+.\docker\dev\tools\windows\up.ps1 -EthernetAlias "vEthernet (RasPiCat External)"
 ```
 
 Windows用スクリプトは既存のICS共有を解除し、旧`OpenDHCPServer`サービスがあれば
@@ -126,7 +126,7 @@ Windows用スクリプトは既存のICS共有を解除し、旧`OpenDHCPServer`
 固定IPを解除する場合は管理者PowerShellで実行します。
 
 ```powershell
-.\docker_dev\tools\windows\network.ps1 -Mode Disable `
+.\docker\dev\tools\windows\network.ps1 -Mode Disable `
   -EthernetAlias "vEthernet (RasPiCat External)"
 ```
 
@@ -143,7 +143,7 @@ ros2 topic echo /odom --once
 Docker環境では:
 
 ```bash
-docker compose -f docker/compose.yaml exec ros2 \
+docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
   /ros_entrypoint.sh ros2 topic list
 ```
 

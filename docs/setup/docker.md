@@ -1,8 +1,8 @@
 # Docker環境
 
-`docker/`はRaspberry Piを含む`arm64`と`amd64`向けの軽量な実行環境です。ROS 2 Humble、Nav2、SLAM Toolbox、EMCL2、価値反復プランナ、Livox関連ノード、teleopノード（`teleop_twist_keyboard`、`teleop_twist_joy`）を含みます。イメージはヘッドレスで、RVizは含みません。
+`docker/raspberrypi/`はRaspberry Piを含む`arm64`と`amd64`向けの軽量な実行環境です。ROS 2 Humble、Nav2、SLAM Toolbox、EMCL2、価値反復プランナ、Livox関連ノード、teleopノード（`teleop_twist_keyboard`、`teleop_twist_joy`）を含みます。イメージはヘッドレスで、RVizは含みません。
 
-ディレクトリ内の各ファイルの役割は[`docker/README.md`](../../docker/README.md)にまとめています。
+ディレクトリ内の各ファイルの役割は[`docker/raspberrypi/README.md`](../../docker/raspberrypi/README.md)にまとめています。
 
 ## 必要なもの
 
@@ -16,7 +16,7 @@ Docker Desktopでは[ネットワーク設定](network.md#docker-desktop)も先�
 
 Pi本体でもネイティブのROS 2ノード（モータードライバなど）を動かす構成では、
 コンテナを起動する前に、ホスト側のFast DDSを同じプロファイルへ合わせてください。
-`docker/compose.yaml`はコンテナへ`docker/fastdds_udp_whitelist.xml`をマウントし、
+`docker/raspberrypi/compose.yaml`はコンテナへ`docker/raspberrypi/fastdds_udp_whitelist.xml`をマウントし、
 UDPの送信インターフェースをループバックとロボットLANへ限定したうえで、同一ホスト内の
 通信に共有メモリ（SHM）を使います。ホスト側が既定設定のままだと、SHMを使う側と
 使わない側が混在して通信が成立しません。
@@ -24,7 +24,7 @@ UDPの送信インターフェースをループバックとロボットLANへ�
 Pi本体の`~/.bashrc`へ次を追記します。
 
 ```bash
-export FASTRTPS_DEFAULT_PROFILES_FILE=/path/to/daifuku_autonomous/docker/fastdds_udp_whitelist.xml
+export FASTRTPS_DEFAULT_PROFILES_FILE=/path/to/daifuku_autonomous/docker/raspberrypi/fastdds_udp_whitelist.xml
 ```
 
 次の2点は環境によって書き換えが必要です。
@@ -44,22 +44,22 @@ SHMを使うため、`compose.yaml`は`ipc: host`で`/dev/shm`をホストと共
 リポジトリルートで実行します。
 
 ```bash
-docker compose -f docker/compose.yaml build
-docker compose -f docker/compose.yaml up -d
-docker compose -f docker/compose.yaml ps
+docker compose -f docker/raspberrypi/compose.yaml build
+docker compose -f docker/raspberrypi/compose.yaml up -d
+docker compose -f docker/raspberrypi/compose.yaml ps
 ```
 
 Raspberry Pi 4などでメモリが不足する場合はビルド並列数を減らします。
 
 ```bash
-BUILD_JOBS=1 docker compose -f docker/compose.yaml build
+BUILD_JOBS=1 docker compose -f docker/raspberrypi/compose.yaml build
 ```
 
 PowerShellでは次のように指定します。
 
 ```powershell
 $env:BUILD_JOBS = "1"
-docker compose -f docker/compose.yaml build
+docker compose -f docker/raspberrypi/compose.yaml build
 ```
 
 ## ROS_DOMAIN_ID
@@ -68,12 +68,12 @@ Composeの既定値は`90`です。機体側が別の値なら、起動前に合
 
 ```bash
 export ROS_DOMAIN_ID=10
-docker compose -f docker/compose.yaml up -d
+docker compose -f docker/raspberrypi/compose.yaml up -d
 ```
 
 ```powershell
 $env:ROS_DOMAIN_ID = "10"
-docker compose -f docker/compose.yaml up -d
+docker compose -f docker/raspberrypi/compose.yaml up -d
 ```
 
 ## コンテナを操作する
@@ -81,9 +81,9 @@ docker compose -f docker/compose.yaml up -d
 入口スクリプトがROS 2とビルド済みワークスペースを自動的に読み込みます。
 
 ```bash
-docker compose -f docker/compose.yaml exec ros2 \
+docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
   /ros_entrypoint.sh ros2 pkg list
-docker compose -f docker/compose.yaml exec ros2 \
+docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
   /ros_entrypoint.sh bash
 ```
 
@@ -91,14 +91,14 @@ docker compose -f docker/compose.yaml exec ros2 \
 停止していれば自動的に起動します。
 
 ```bash
-bash docker/tools/shell.sh
+bash docker/raspberrypi/tools/shell.sh
 ```
 
-モーター電源、遠隔操作、状態確認は`docker/tools/control.sh`にまとめています。
+モーター電源、遠隔操作、状態確認は`docker/raspberrypi/tools/control.sh`にまとめています。
 
 ```bash
-bash docker/tools/control.sh status
-bash docker/tools/control.sh teleop keyboard
+bash docker/raspberrypi/tools/control.sh status
+bash docker/raspberrypi/tools/control.sh teleop keyboard
 ```
 
 サブコマンドと環境変数の一覧は[日常操作と確認](../usage/operations.md#controlshで操作する)を参照してください。
@@ -108,25 +108,25 @@ bash docker/tools/control.sh teleop keyboard
 ## 動作確認
 
 ```bash
-docker compose -f docker/compose.yaml exec ros2 \
+docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
   /ros_entrypoint.sh ros2 topic list
-docker compose -f docker/compose.yaml exec ros2 \
+docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
   /ros_entrypoint.sh ros2 topic echo /scan_raw --once
-docker compose -f docker/compose.yaml exec ros2 \
+docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
   /ros_entrypoint.sh ros2 topic echo /odom --once
 ```
 
 ## ログと終了
 
 ```bash
-docker compose -f docker/compose.yaml logs
-docker compose -f docker/compose.yaml down
+docker compose -f docker/raspberrypi/compose.yaml logs
+docker compose -f docker/raspberrypi/compose.yaml down
 ```
 
 キャッシュを使わず再ビルドする場合:
 
 ```bash
-docker compose -f docker/compose.yaml build --no-cache
+docker compose -f docker/raspberrypi/compose.yaml build --no-cache
 ```
 
 次は[LiDARとオドメトリ](lidar.md)を設定し、[地図作成](../usage/mapping.md)または[自律移動](../usage/navigation.md)へ進みます。Dockerでlaunchする際は`use_rviz:=false`を指定してください。

@@ -10,23 +10,23 @@
 6. 機体側ドライバが起動しているか確認する
 7. VPNや不要なNICを一時的に切り分ける
 
-`docker/compose.yaml`と`docker_dev/compose.yaml`の`ROS_DOMAIN_ID`既定値は`90`です。
+`docker/raspberrypi/compose.yaml`と`docker/dev/compose.yaml`の`ROS_DOMAIN_ID`既定値は`90`です。
 
 Pi本体のネイティブノードと同じPi上のコンテナとの間でトピックが見えない場合は、
 下記のディスカバリとSHMの項目も確認してください。
 
 ## ノードが現れたり消えたりする（ディスカバリが不安定）
 
-Pi本体でネイティブノードと`docker/`コンテナを同時に動かす構成で、負荷が上がると
+Pi本体でネイティブノードと`docker/raspberrypi/`コンテナを同時に動かす構成で、負荷が上がると
 発生します。原因は、各DDS参加者が相手から到達できないwlan0側のロケータまで広告し、
 そのぶんUDPバッファが逼迫することです。
 
-`docker/fastdds_udp_whitelist.xml`をホストとコンテナの両方で使ってください。
+`docker/raspberrypi/fastdds_udp_whitelist.xml`をホストとコンテナの両方で使ってください。
 コンテナ側は`compose.yaml`が設定済みなので、必要な作業はPi本体側だけです。
 
 ```bash
 # Pi本体の ~/.bashrc へ追記
-export FASTRTPS_DEFAULT_PROFILES_FILE=/path/to/daifuku_autonomous/docker/fastdds_udp_whitelist.xml
+export FASTRTPS_DEFAULT_PROFILES_FILE=/path/to/daifuku_autonomous/docker/raspberrypi/fastdds_udp_whitelist.xml
 echo "$FASTRTPS_DEFAULT_PROFILES_FILE"
 ```
 
@@ -42,8 +42,8 @@ Nav2のゴールが次々と中断します。
 同一ホスト内の通信を共有メモリ（SHM）へ切り替えて解消します。上記のプロファイル
 設定に加えて、次の2点を確認してください。
 
-- `docker/compose.yaml`に`ipc: host`があること（`/dev/shm`をホストと共有する）
-- `docker/compose.yaml`の`user`が、ホストのROSプロセスのuidと一致していること
+- `docker/raspberrypi/compose.yaml`に`ipc: host`があること（`/dev/shm`をホストと共有する）
+- `docker/raspberrypi/compose.yaml`の`user`が、ホストのROSプロセスのuidと一致していること
 
 Fast DDSはSHMセグメントを0644で作成するため、root権限のコンテナと非rootのホストが
 混在すると互いのポートを開けません。Fast DDS 2.6にはUDPへのフォールバックがないので、
@@ -91,8 +91,8 @@ ros2 topic hz /scan_raw
 
 `/scan_mid360_prestamp`だけが流れて`/scan_raw`が止まっている場合は、中継ノードが
 起動していません。`CMakeLists.txt`が`scripts/`をインストールしないため、
-`docker/`のCompose環境以外では`share/autonomous_nav/scripts/restamp_scan.py`が存在
-しないことが原因です（`docker/`では`src/autonomous_nav`がマウントされるため動作
+`docker/raspberrypi/`のCompose環境以外では`share/autonomous_nav/scripts/restamp_scan.py`が存在
+しないことが原因です（`docker/raspberrypi/`では`src/autonomous_nav`がマウントされるため動作
 します）。`ExecuteProcess`の失敗は他のノードを止めないので、エラーが出ないまま
 `/scan_raw`だけが欠けた状態になります。
 
@@ -141,7 +141,7 @@ ros2 topic hz /odom
 
 ## RVizが表示されない
 
-軽量な`docker/`イメージにはRVizがありません。ネイティブ環境または`docker_dev/`を使ってください。
+軽量な`docker/raspberrypi/`イメージにはRVizがありません。ネイティブ環境または`docker/dev/`を使ってください。
 
 GUI付き環境では次を確認します。
 
@@ -152,10 +152,10 @@ GUI付き環境では次を確認します。
 
 ## コンテナ内で`ros2`が見つからない
 
-Compose経由でシェルを開きます。`docker/entrypoint.sh`が環境を読み込みます。
+Compose経由でシェルを開きます。`docker/raspberrypi/entrypoint.sh`が環境を読み込みます。
 
 ```bash
-docker compose -f docker/compose.yaml exec ros2 \
+docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
   /ros_entrypoint.sh bash
 ```
 
@@ -164,7 +164,7 @@ docker compose -f docker/compose.yaml exec ros2 \
 メモリ不足の可能性があります。並列数を1にします。
 
 ```bash
-BUILD_JOBS=1 docker compose -f docker/compose.yaml build
+BUILD_JOBS=1 docker compose -f docker/raspberrypi/compose.yaml build
 ```
 
 ## 価値反復の最初の経路計算が遅い
@@ -174,7 +174,7 @@ BUILD_JOBS=1 docker compose -f docker/compose.yaml build
 ## ログを確認する
 
 ```bash
-docker compose -f docker/compose.yaml logs -f ros2
+docker compose -f docker/raspberrypi/compose.yaml logs -f ros2
 ```
 
 ネイティブ環境ではlaunchを起動したターミナルのログを確認します。

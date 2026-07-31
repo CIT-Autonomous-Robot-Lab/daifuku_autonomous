@@ -11,12 +11,12 @@
      lidar pipeline, robot driver) forced onto UDP-only, the kernel drowned
      in per-subscriber sendmsg fan-out (57% sys / load 24 on the Pi4,
      2026-07-24) and TF stamps lagged 20+ s, aborting every nav goal.
-     Container <-> host SHM requires "ipc: host" in docker/compose.yaml so
+     Container <-> host SHM requires "ipc: host" in docker/raspberrypi/compose.yaml so
      /dev/shm is shared. segment_size covers the MID360 point cloud
      (~640 KB per message at 10 Hz).
 
   Used by both the Pi host (FASTRTPS_DEFAULT_PROFILES_FILE in ~/.bashrc)
-  and the docker container (mounted via docker/compose.yaml).
+  and the docker container (mounted via docker/raspberrypi/compose.yaml).
 -->
 <profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
   <transport_descriptors>
