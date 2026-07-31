@@ -13,7 +13,7 @@ usage() {
 Rust toolchainとros2_rust（rclrs）ワークスペースを構築します。
 
 Usage:
-  bash scripts/setup_native_ros2_rust.sh [options]
+  bash tools/setup/setup_native_ros2_rust.sh [options]
 
 Options:
   --ros2-rust-ws PATH   ros2_rustワークスペース（既定: ~/ros2_rust_ws）
@@ -22,7 +22,7 @@ Options:
   --skip-apt            aptによる依存パッケージ導入を省略
   -h, --help            このヘルプを表示
 
-ビルド後はscripts/setup_native_vi.shで価値反復パッケージをビルドします。
+ビルド後はtools/setup/setup_native_vi.shで価値反復パッケージをビルドします。
 EOF
 }
 
@@ -170,5 +170,5 @@ apt版のcolcon-coreがユーザーサイトの物に隠れています。次で
   pip3 uninstall colcon-core
 
 Next step:
-  bash scripts/setup_native_vi.sh --ros2-rust-ws ${RUST_WORKSPACE}
+  bash tools/setup/setup_native_vi.sh --ros2-rust-ws ${RUST_WORKSPACE}
 EOF

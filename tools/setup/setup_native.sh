@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-DEFAULT_WORKSPACE="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+DEFAULT_WORKSPACE="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
 
 WORKSPACE="${DEFAULT_WORKSPACE}"
 RUST_WORKSPACE="${ROS2_RUST_WS:-${HOME}/ros2_rust_ws}"
@@ -22,7 +22,7 @@ Ubuntu 22.04 / ROS 2 Humbleのネイティブ環境を一括で構築します�
   4. setup_native_vi.sh          vi_planner / vi_global_planner
 
 Usage:
-  bash scripts/setup_native.sh [options]
+  bash tools/setup/setup_native.sh [options]
 
 Options:
   --workspace PATH      ROS 2ワークスペース（既定: リポジトリルート）

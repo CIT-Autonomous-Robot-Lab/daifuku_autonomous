@@ -16,7 +16,7 @@ Ubuntu 22.04へインストールしたROS 2 Humble上で直接ビルドしま�
 
 ## セットアップスクリプト
 
-`scripts/`にコンポーネントごとのセットアップスクリプトを用意しています。すべてUbuntu 22.04 / ROS 2 Humbleを前提とし、リポジトリルートから実行します。
+`tools/setup/`にコンポーネントごとのセットアップスクリプトを用意しています。すべてUbuntu 22.04 / ROS 2 Humbleを前提とし、リポジトリルートから実行します。
 
 | スクリプト | 対象 |
 |---|---|
@@ -29,19 +29,19 @@ Ubuntu 22.04へインストールしたROS 2 Humble上で直接ビルドしま�
 ### 一括で導入する
 
 ```bash
-bash scripts/setup_native.sh
+bash tools/setup/setup_native.sh
 ```
 
 低メモリ環境では並列数を1にします。
 
 ```bash
-bash scripts/setup_native.sh --jobs 1
+bash tools/setup/setup_native.sh --jobs 1
 ```
 
 構成に応じて省略できます。2D LiDARだけならLivoxを、NavFnだけを使うなら価値反復プランナを外します。
 
 ```bash
-bash scripts/setup_native.sh --no-livox --no-vi
+bash tools/setup/setup_native.sh --no-livox --no-vi
 ```
 
 主なオプションは`--workspace`、`--ros2-rust-ws`、`--jobs`、`--skip-apt`、`--no-livox`、`--no-vi`です。
@@ -51,10 +51,10 @@ bash scripts/setup_native.sh --no-livox --no-vi
 `setup_native.sh`と同じ順序で実行します。`--jobs`と`--skip-apt`は各スクリプトに共通です。
 
 ```bash
-bash scripts/setup_native_base.sh
-bash scripts/setup_native_livox.sh
-bash scripts/setup_native_ros2_rust.sh
-bash scripts/setup_native_vi.sh
+bash tools/setup/setup_native_base.sh
+bash tools/setup/setup_native_livox.sh
+bash tools/setup/setup_native_ros2_rust.sh
+bash tools/setup/setup_native_vi.sh
 ```
 
 `setup_native_base.sh`は`vcs import . < autonomous_bot.repos`により`src/`へ次を取得します。

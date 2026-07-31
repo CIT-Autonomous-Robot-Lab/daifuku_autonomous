@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-DEFAULT_WORKSPACE="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+DEFAULT_WORKSPACE="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
 
 WORKSPACE="${DEFAULT_WORKSPACE}"
 BUILD_JOBS="${BUILD_JOBS:-2}"
@@ -16,7 +16,7 @@ Ubuntu 22.04 / ROS 2 HumbleへNav2などの共通依存を導入し、autonomous
 emcl2をビルドします。他のsetup_native_*.shより先に実行してください。
 
 Usage:
-  bash scripts/setup_native_base.sh [options]
+  bash tools/setup/setup_native_base.sh [options]
 
 Options:
   --workspace PATH   ROS 2ワークスペース（既定: リポジトリルート）
@@ -26,8 +26,8 @@ Options:
   --skip-build       colconビルドを省略（依存導入のみ）
   -h, --help         このヘルプを表示
 
-Livoxドライバはscripts/setup_native_livox.sh、価値反復プランナは
-scripts/setup_native_ros2_rust.shとscripts/setup_native_vi.shで導入します。
+Livoxドライバはtools/setup/setup_native_livox.sh、価値反復プランナは
+tools/setup/setup_native_ros2_rust.shとtools/setup/setup_native_vi.shで導入します。
 EOF
 }
 
@@ -152,7 +152,7 @@ Verify with:
   ros2 pkg prefix emcl2
 
 Next steps:
-  Mid-360を使う場合   : bash scripts/setup_native_livox.sh
-  価値反復プランナ    : bash scripts/setup_native_ros2_rust.sh
-                        bash scripts/setup_native_vi.sh
+  Mid-360を使う場合   : bash tools/setup/setup_native_livox.sh
+  価値反復プランナ    : bash tools/setup/setup_native_ros2_rust.sh
+                        bash tools/setup/setup_native_vi.sh
 EOF

@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-DEFAULT_WORKSPACE="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+DEFAULT_WORKSPACE="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
 
 WORKSPACE="${DEFAULT_WORKSPACE}"
 RUST_WORKSPACE="${ROS2_RUST_WS:-${HOME}/ros2_rust_ws}"
@@ -12,10 +12,10 @@ CARGO_PROFILE_ARG="--release"
 usage() {
   cat <<'EOF'
 価値反復プランナ（vi_planner: 広域+狭域を 1 ノード / vi_global_planner: 広域のみ）を
-ビルドします。事前にscripts/setup_native_ros2_rust.shを実行してください。
+ビルドします。事前にtools/setup/setup_native_ros2_rust.shを実行してください。
 
 Usage:
-  bash scripts/setup_native_vi.sh [options]
+  bash tools/setup/setup_native_vi.sh [options]
 
 Options:
   --workspace PATH      ROS 2ワークスペース（既定: リポジトリルート）
@@ -75,14 +75,14 @@ fi
 
 if [[ ! -d "${VI_DIR}" ]]; then
   echo "value_iteration3 was not found: ${VI_DIR}" >&2
-  echo "Run scripts/setup_native_base.sh first (vcs import)." >&2
+  echo "Run tools/setup/setup_native_base.sh first (vcs import)." >&2
   exit 1
 fi
 
 RUST_OVERLAY="${RUST_WORKSPACE}/install/local_setup.bash"
 if [[ ! -f "${RUST_OVERLAY}" ]]; then
   echo "ros2_rust overlay was not found: ${RUST_OVERLAY}" >&2
-  echo "Run scripts/setup_native_ros2_rust.sh first." >&2
+  echo "Run tools/setup/setup_native_ros2_rust.sh first." >&2
   exit 1
 fi
 
@@ -90,7 +90,7 @@ fi
 export PATH="${HOME}/.local/bin:${HOME}/.cargo/bin:${PATH}"
 if ! command -v cargo-ament-build >/dev/null 2>&1; then
   echo "cargo-ament-build was not found in PATH" >&2
-  echo "Run scripts/setup_native_ros2_rust.sh first." >&2
+  echo "Run tools/setup/setup_native_ros2_rust.sh first." >&2
   exit 1
 fi
 

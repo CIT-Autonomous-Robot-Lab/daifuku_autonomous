@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-DEFAULT_WORKSPACE="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+DEFAULT_WORKSPACE="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
 
 WORKSPACE="${DEFAULT_WORKSPACE}"
 BUILD_JOBS="${BUILD_JOBS:-2}"
@@ -15,7 +15,7 @@ usage() {
 Raspberry Pi / Ubuntu 22.04へLivox SDK2とlivox_ros_driver2を導入します。
 
 Usage:
-  bash scripts/setup_native_livox.sh [options]
+  bash tools/setup/setup_native_livox.sh [options]
 
 Options:
   --workspace PATH   ROS 2ワークスペース（既定: リポジトリルート）

@@ -12,6 +12,10 @@
 
 `docker/raspberrypi/`のイメージにはRVizを含みません。RVizを使う場合はネイティブ環境または`docker/dev/`を利用してください。
 
+Raspberry Pi 4 / 5のSDカードを一から用意する場合は、[`tools/image/`](../../tools/image/README.md)の
+`create_image.py`でOSイメージの書き込みと初期設定をまとめて行えます。Docker、rtmouseカーネル
+モジュール、DDS向けのカーネルパラメータなど、コンテナの外に置くしかないものはここで入ります。
+
 ## 2. 機体側を準備する
 
 このリポジトリはモータードライバと車輪オドメトリを提供しません。Raspberry Pi Cat側で次のインターフェースを用意します。
