@@ -140,15 +140,27 @@ nav2 既定は 1000ms。`planner:=vi` では `vi_global_planner` が `/map` を�
 
 ### `map_tsudanuma` で `planner:=vi` を使うときの制約
 
-* `local_planner:=vi` は使えません。`vi_planner` はアウトオブコア経路も
-  `map_scale` も持たず、全域を密に解くためです（launch が明示的に止めます）。
-  `local_planner:=nav2`（`vi_global_planner` + `controller_server`）を使ってください。
-* `map_scale: 3` の 3x3 プーリングは障害物優先なので、通路は片側最大 0.10m 細ります。
-  `robot_radius` 0.22 / `inflation_radius` 0.55 と合わせて通れるかは経路ごとに確認を。
+* `local_planner:=vi`（`vi_planner` 1 ノード）と `local_planner:=nav2`
+  （`vi_global_planner` + `controller_server`）のどちらも使えます。どちらも
+  `map_scale` とアウトオブコア経路 (`frontier2d_sparse_compact`) を持ちます。
+  `vi_planner` の狭域追従だけは密な状態配列を要るので、全域ではなくロボット近傍の
+  パッチ（±1m ウィンドウ + 遷移到達距離 + 余裕、0.25m セルで 27x27x60 ≒ 2.5MB）を
+  compact の場から起こして回します。ただし **`map_scale > 1` で密ソルバのままだと
+  launch が止めます** — 全域の状態配列 56 B/state を実際に確保してしまうためです。
+* `map_scale: 5` は `downsample_policy: optimistic`（ブロック内に free が 1 つでも
+  あれば free）とセットです。既定の保守的プーリング（障害物優先）だと通路のセル幅が
+  VI の遷移分布（約 2 セル幅）を下回り、`map_scale >= 4` で波がゴール近傍から広がりません。
+  楽観側は通路を細らせない代わりに壁側に寄るので、`robot_radius` 0.22 /
+  `inflation_radius` 0.55 と合わせて通れるかは経路ごとに確認を。
 * この地図は 68.2% が未観測 (205) で、真の占有セルは 0.4% しかありません。
   `unknown_as_obstacle: true`（既定）だと未観測が全て壁になる＝舗装路のみ通行可。
   一方 emcl2/AMCL のスキャンマッチングは占有セルの尤度場を使うので、この地図では
   拠り所がほとんどありません（別途要検討）。
-* `vi_global_planner` のピーク RSS は実測 3.98GB（匿名 2.16GB + mmap 1.81GB）で、
-  **Raspberry Pi 4 4GB で通るかは未確認**です。実測の詳細は
-  `tools/pi4_sim/README.md`。
+* メモリは `map_scale: 5` + compact で `vi_global_planner` / `vi_planner` とも
+  ピーク RSS 約 1.5GB（匿名 0.83GB + sink の mmap 0.66GB）。`map_scale: 3` +
+  保守的プーリングだった頃の 3.98GB（匿名 2.16GB + mmap 1.81GB）から下がり、
+  Pi4 4GB の枠には収まります。実測の詳細は `tools/pi4_sim/README.md`。
+* 一方 **`tools/pi4_sim` の枠（0.6 コアを stack 全体で共有）では、solve 中に
+  emcl2 まで巻き込んで 900 秒でも `/plan` が出ません**。実機 Pi4 は 4 コアあるので
+  同じにはなりませんが、`vi_threads: 3` を明示して 1 コアを stack に残すのは
+  そのためです。実機での通し確認は別途。

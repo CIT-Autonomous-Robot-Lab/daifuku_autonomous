@@ -333,29 +333,30 @@ def generate_launch_description():
         if effective_local_planner.perform(context) == "vi":
             # local_planner:=vi では vi_planner 1 ノードが compute_path_to_pose と
             # follow_path の両方を提供する (vi_global_planner は起動しない)。
-            # vi_planner はアウトオブコア経路 (compact) も map_scale も持たず、
-            # 地図全体を密に解く。overrides が map_scale を上げている = 密には
-            # 解けない大きさの地図、ということなので、そのまま起動させると
-            # 状態配列の確保だけで数十 GB を要求して落ちる。auto で選ばれた場合も
-            # 同じなので、ここで明示的に止める。
+            # vi_planner は map_scale もアウトオブコア経路 (compact) も持つが、
+            # 密ソルバのままだと状態配列 (56 B/state) を全域ぶん**実際に**確保する。
+            # overrides が map_scale を上げている = 密には解けない大きさの地図、という
+            # ことなので、compact を選んでいない設定はここで止める (auto で選ばれた
+            # 場合も同じ)。
             import yaml
 
             with open(params_file.perform(context)) as f:
                 merged = yaml.safe_load(f) or {}
+            vp = merged.get("vi_planner", {}).get("ros__parameters", {})
             gp = merged.get("vi_global_planner", {}).get("ros__parameters", {})
-            scale = int(gp.get("map_scale", 1))
-            solver = str(gp.get("solver", ""))
-            if scale > 1 or solver.endswith("_compact"):
-                reason = (
-                    f"vi_global_planner.map_scale={scale}"
-                    if scale > 1
-                    else f"vi_global_planner.solver={solver}"
-                )
+            # vi_planner セクションが無い overrides では、広域側の map_scale が
+            # 「この地図は密には解けない」という同じ合図になる。
+            scale = int(vp.get("map_scale", gp.get("map_scale", 1)))
+            solver = str(vp.get("solver", ""))
+            if scale > 1 and not solver.endswith("_compact"):
                 raise RuntimeError(
-                    f"local_planner:=vi cannot be used with {reason}.\n"
-                    "vi_planner has no out-of-core path and no map_scale, so it would "
-                    "allocate the full-resolution state array for this map.\n"
-                    "Use local_planner:=nav2 (vi_global_planner + controller_server)."
+                    f"local_planner:=vi with map_scale={scale} needs the out-of-core "
+                    f"solver, but vi_planner.solver={solver or '(default, dense)'}.\n"
+                    "map_scale > 1 means the map is too large to solve densely, and a "
+                    "dense solve really allocates 56 B/state for the whole map.\n"
+                    'Set vi_planner.solver: "frontier2d_sparse_compact" (plus '
+                    "compact_sink_dir) in the overrides, or use local_planner:=nav2 "
+                    "(vi_global_planner + controller_server)."
                 )
             try:
                 get_package_prefix("vi_planner")

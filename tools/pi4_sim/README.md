@@ -491,6 +491,190 @@ volatile。23.5MB の地図受信が遅い津田沼では初回の 1 発が捨�
 初期姿勢 (0,0) のまま走り続けた (自己位置 (-0.43,-1.03) / 真値 (53.36,-21.60)、
 当然プランは失敗)。`fake_robot.py` は自己位置が近傍に来るまで再送するようにした。
 
+## 津田沼を Pi4 相当で走らせた (2026-07-31)
+
+2026-07-29 に「Pi4 4GB でこの設定が通るとは言えない」と書いたまま残していた点を、
+実際に cgroup を絞って確かめた。条件は他のケースと同じ (4 コア可視 /
+quota 6000・period 10000 = 合計 0.6 コア / メモリ 3GB・スワップ無し)。
+start (53.07,-21.62,90°) → goal (44.08,-5.12,0°)、`planner:=vi local_planner:=nav2`
+`overrides:=map_tsudanuma` (map_scale 3 / compact / sink はコンテナの overlayfs
+= 実ディスク。`findmnt -no FSTYPE /tmp` が `overlayfs` であることは確認済み)。
+
+**結論: 解けるし、走破もする。ただし初回 solve に 45 分かかり、メモリは 3GB の
+上限に貼り付いたまま。同じ地図・同じゴールを navfn なら 111 秒・1.3GB で走る。**
+
+計 5 走行:
+
+| # | 構成 | 制限 | 結果 | ピーク mem |
+|---|---|---|---|---|
+| 1 | vi + nav2 | Pi4 相当 | solve 3243.92s。**`SUCCEEDED` は偽陽性**で不動 (TF 凍結) | 3072 MB (上限) |
+| 2 | navfn + nav2 | 制限なし | **SUCCEEDED 61.6 s** / リカバリ 0 | 1288 MB |
+| 3 | navfn + nav2 | Pi4 相当 | **SUCCEEDED 111.5 s** / リカバリ 0 / 到達誤差 0.22 m | 1311 MB |
+| 4 | vi + nav2 | Pi4 相当 | 再走行。**TF 凍結は再現せず** (確認後 goal 側で打ち切り) | — |
+| 5 | vi + nav2 | Pi4 相当 | **SUCCEEDED 2794.1 s (46.6 分)** / リカバリ 0 / 到達誤差 0.24 m | 3072 MB (上限) |
+
+**1 と 5 は同じ構成で、1 の失敗は再現しない。** したがって 1 の不動は
+フレークとして扱うこと (経緯は 2〜3 節)。**Pi4 相当で津田沼を VI で走破できる**
+というのが 5 の主張で、この節の結論はそちら。
+
+### 1. 解ける。初回 solve は 45〜54 分。メモリは上限に貼り付いたまま生き残る
+
+| 指標 | 走行 1 | 走行 5 (走破した方) |
+|---|---|---|
+| 初回 VI solve | **3243.92 s (54 分)** / 1844 iters / 576 姿勢 | **2706.05 s (45 分)** / 1844 iters / 576 姿勢 |
+| リプラン | 0.00 s (`solved_now=false`) | 0.00〜0.06 s。**姿勢数が 576→366 と単調に減る** = 実際に前進している |
+| OOM kill | **無し** (`oom_kill 0`) | **無し** (`oom_kill 0`) |
+| `memory.events max` | 19316 | 17759 |
+| cgroup ピーク | **3072 MB = 上限ちょうど** | **3072 MB = 上限ちょうど** |
+| `vi_global_planner` ピーク RSS | 2461 MB (**anon 2148 MB** + file 1815 MB) | 2485 MB (**anon 2148 MB** + file 1815 MB) |
+| 回収の激しさ | `pgmajfault 147` / `workingset_refault_file 11951` (≒47 MB) | — |
+| sink | 1.89 GB (ディスク mmap) | 同左 |
+| CPU スロットル | `nr_throttled 314510` | `nr_throttled 274088` |
+
+`anon 2148.4 MB` は 2 走行で**完全に一致**した (再現性がある数字)。
+ピーク RSS が anon+file の合計にならないのは、両者のピーク時刻が違うため。
+
+無制限ローカル (16 コア) の 41.6 s に対して **78 倍**。
+`nr_throttled` が示すとおり CPU は常時絞られており、これは quota どおりの結果。
+
+メモリについては 2026-07-29 の観測と整合する: **anon は 2148 MB まで伸びる**
+(当時の 2.16 GB とほぼ同じ)。3GB に収まったのは sink の 1.8 GB が
+**回収可能なページキャッシュ**だったからで、`memory.events max` が 19316 回
+立っているのは「上限に達して回収が走った」回数。つまり余裕があって通ったのではなく、
+**上限に貼り付きながら回収でしのいで通った**。`pgmajfault` が 147 と小さいので
+スラッシングには至っていない (ディスクに逃がした設計が効いている)。
+
+実機 Pi4 では、ここからさらにカーネルとコンテナ外の ROS ノード
+(raspicat ドライバ / robot_state_publisher / livox / pointcloud_to_laserscan /
+restamp / filter chain) の取り分が引かれる。**anon 2.15 GB は回収できない**ので、
+この余白は実機には無い。加えて quota 6000 は既存のキャリブレーション
+(navfn 11.19Hz vs 実機 7.6Hz) で**実機より約 1.5 倍速い**から、実機の solve は
+**80 分以上**と見るのが妥当。運用に耐える数字ではない。
+
+### 2. 走行 1 の SUCCEEDED は偽陽性だった (再現しない)
+
+**この節は走行 1 だけの話で、走行 5 では起きていない。**それでも残すのは、
+`PROBE_SUMMARY` の `SUCCEEDED` を無条件に信じてはいけない実例だから。
+
+走行 1 の `PROBE_SUMMARY` は `"result": "SUCCEEDED"`, `elapsed_s 3246.8`,
+`number_of_recoveries 0`, `distance_remaining 0.0` を返した。**が、走っていない。**
+
+**`result` は走破の判定に使えない。**見るべきは次の 2 つで、走破した走行 5 と
+並べると差は明らかになる:
+
+| 指標 | 走行 1 (偽陽性) | 走行 5 (本物) |
+|---|---|---|
+| `cmd_vel_nav` | **2 本** (`cmd_vel` 12 本) | **877 本** (`cmd_vel` 1719 本) |
+| `ground_truth` | **(53.07, -21.62)** = スタートのまま | **(44.32, -5.11)** ≒ goal (44.08, -5.12) |
+
+ゴールは測地 25.5 m 先なので、走行 1 はロボットが 1 mm も動いていない。
+
+ログの該当箇所:
+
+```
+[bt_navigator]: Begin navigating from current location (0.00, 0.00) to (44.08, -5.12)
+...
+[controller_server]: Received a goal, begin computing control effort.
+[controller_server]: Unable to transform robot pose into global plan's frame
+[controller_server]: Reached the goal!          <- パス受領の 0.2 秒後
+[bt_navigator]: Goal succeeded
+```
+
+`Begin navigating from current location (0.00, 0.00)` が出ている時点で
+bt_navigator は自己位置を取れていない。goal_checker は変換できないまま
+「到達」と判定し、BT は成功を返した。**VI の経路は正しかった** —
+`vi_global_planner: plan (53.07, -21.62) -> (44.08, -5.12)` と自前の pose topic から
+正しい start で解いており、576 姿勢の経路を返している。壊れているのは TF 側。
+
+### 3. 走行 1 の原因: emcl2 の map→odom TF が固まる (solve より前に起きている)
+
+19853 本の Extrapolation Error は**すべて同じ要求時刻** `1785494439.480997` を指す。
+`tf_help` は `Transform time: 1785494439s 480996809ns` と出しており、これは
+**map→odom の TF が その時刻で凍結した**ことを意味する。
+
+重要なのは**時刻**で、凍結は **1785494439.48 = ゴール送信 (…494.89) の 55 秒前**、
+つまり **VI が解き始める前**に起きている。最初の Extrapolation Error は
+ゴール送信のわずか 0.16 秒後に出ている。**54 分の solve が原因ではない。**
+
+`src/emcl2_ros2/src/emcl2_node.cpp` を読むと機構が分かる:
+
+- `publishOdomFrame()` は map→odom を **`scan_time_stamp_`** (最後に受けたスキャンの
+  スタンプ) で打つ。
+- その中の `tf_->transform(...)` が投げると、`catch` は **`RCLCPP_DEBUG` を出して
+  黙って return する**。既定のログレベルでは**何も表示されない**。
+- `loop()` は `odom_freq` (20Hz) のタイマで回り続け、キャッシュ済みスキャンで
+  `ALPHA` を出し続ける。**ノードは生きているように見える。**
+
+したがって **/scan が emcl2 に届かなくなると `scan_time_stamp_` が凍り、
+やがて TF バッファ (10 s) から外れて `transform` が投げ始め、以降 map→odom は
+永久に更新されない**。`ALPHA: 1.000000` が出続けるのは、止まったロボットが
+自分の古いスキャンと完全一致するため。**移動量ゲートの類は存在しない**ので、
+`SETTLE` を延ばしたこと自体が原因ではない (ソースを読んで確認した)。
+
+odom→base_footprint 側は無実: `fake_robot.py` の `step()` は odom TF と
+`/sim/ground_truth` を同じ呼び出しで出しており、その ground_truth が
+3246 秒で 77704 本 (≒24Hz) 届いているので、odom TF は最後まで健全だった。
+
+なお 2026-07-29 の実機初走行で ABORTED になった際も
+「emcl2 の map→odom 遅延」を疑っている。**同じ形がシムでも出た**ことになる。
+
+**ただし同条件の再走行 (走行 4・5) では凍結しなかった** — `Begin navigating from
+current location (53.07, -21.62)` と正しい自己位置が出て、Extrapolation Error は 0 本。
+つまりこれは **0.6 コアで VI を回すことの決定的な帰結ではなく、間欠的に踏む不具合**。
+ただし踏むと `SUCCEEDED` を返して黙って死ぬので、たちは悪い。
+`publishOdomFrame()` の `catch` が `RCLCPP_DEBUG` なのが発見を遅らせる原因なので、
+ここを `RCLCPP_WARN_THROTTLE` に上げるのが妥当な対処 (未実施)。
+
+### 4. 対照: 資源制限を外すと同じ地図・同じゴールで普通に走る
+
+TF 凍結が「Pi4 相当の資源」のせいなのか、ハーネスや環境の問題なのかを
+切り分けるため、**cgroup 制限だけを外した** navfn 対照を取った
+(`-Container pi4sim_full -NoLimits -DomainId 92`, 16 コア・メモリ無制限)。
+
+| | navfn 制限なし (走行 2) | navfn Pi4 相当 (走行 3) | vi Pi4 相当・偽陽性 (走行 1) |
+|---|---|---|---|
+| `Begin navigating from current location` | **(53.07, -21.62)** | **(53.07, -21.62)** | **(0.00, 0.00)** |
+| Extrapolation Error | 0 本 | 0 本 | 19853 本 |
+| 結果 | **SUCCEEDED 61.6 s** / `/plan` 50 本 / `cmd_vel_nav` 614 本 | **SUCCEEDED 111.5 s** / `/plan` 46 本 / `cmd_vel_nav` 1038 本 | 不動 |
+| 到達位置 | truth (44.30, -5.00) | truth (44.30, -5.00) | スタートから動かず |
+| リカバリ | 0 | 0 | 0 (回るところまで行っていない) |
+| ピーク mem | 1288 MB | 1311 MB | 3072 MB (上限) |
+
+**navfn は制限の有無にかかわらず走破する** (61.6 s → 111.5 s、約 1.8 倍に鈍るだけ)。
+資源制限そのものが TF を壊すわけではない、というのがこの対照の主張。
+走行 1 の (0.00, 0.00) は走行 4/5 で再現しなかったので、資源の帰結ではなく間欠不具合。
+
+### 5. 途中で踏んだハーネス側の問題 (結果の解釈に必要)
+
+Pi4 相当の navfn 対照は 2 回失敗しており、どちらも**ハーネス由来**で
+「津田沼が Pi4 で走れない証拠」ではない。混同しないこと。
+
+| 症状 | 実際の原因 |
+|---|---|
+| `NO_ACTION_SERVER`。`lifecycle_manager` が `map_server/get_state` を待ち続ける | 前ケース (VI) を殺した残骸。`/dev/shm` に `fastrtps_*` が 69 個残っており、新しい参加者の探索が通らない。**コンテナを作り直す (`-Recreate`) と 40 秒で active になった**。なお同時に居た PID 123/129 は**ゾンビ**で、これは無害 (コンテナの PID 1 が `sleep infinity` で刈り取らないだけ) |
+| `GOAL_REJECTED`。`Invalid frame ID "map" ... frame does not exist` | `fake_robot.py` の `/initialpose` 再送上限 (既定 8 回 x 5 秒 = 40 秒) を撃ち切った。低 CPU + 広域地図では emcl2 が最初のループを回すまで 100 秒以上かかる (実測: 最後の再送から 67 秒後にようやく最初の `ALPHA`)。受理されないまま諦めるので **map フレームが一度も生えない** |
+
+後者のために `run_case.sh` に `INITIALPOSE_MAX_TRIES` / `INITIALPOSE_DELAY` を
+足した (`fake_robot.py` 側は元からパラメータを持っていた)。
+
+### この節の読み方
+
+- **メモリの問い (2026-07-29 の宿題) には答えが出た**: 3GB で OOM はしない。
+  ただし上限ちょうどに貼り付き、回収 (`memory.events max` 約 1.8 万回) でしのいでいる。
+  **anon だけで 2148 MB** は 2 走行で一致した再現性のある数字で、ここは回収できない。
+  実機 Pi4 では、ここからカーネルとコンテナ外ノードの取り分が引かれる。**余白は無い。**
+- **走破はする**: Pi4 相当で 2794 秒 (46.6 分)、リカバリ 0、到達誤差 0.24 m。
+  内訳はほぼ初回 solve (45 分) で、以降のリプランはキャッシュヒットで 0.0x 秒。
+- **速度が実用上の失格点**: quota 6000 は既存キャリブレーションで実機より約 1.5 倍速い
+  ので、**実機の初回 solve は 70 分前後**と見るべき。ゴール 1 つにこれは使えない。
+- **地図のせいではない**: 同じ地図・同じゴールを navfn + DWB は Pi4 相当で
+  **111.5 秒 / 1311 MB** で走破する (走行 3)。津田沼が Pi4 に載らないのではなく、
+  **この地図規模の VI が載らない**。
+- 詰めるなら `map_scale` (常駐は概ね `nx × 常駐行数 × nθ` に比例)。
+  `--compact-band` が効かないという 2026-07-29 の観測は**無制限下 (`freed_blocks=0`)
+  のもの**で、上限に貼り付いて回収が約 1.8 万回走る今回の条件では測り直していない。
+  効かないと決めつけずに、必要なら再測すること。
+
 ## ハーネスを触るときの落とし穴 (実際に踏んだもの)
 
 - **`pgrep -f` / `pkill -f` の自己マッチ。** `podman exec bash -lc "pgrep -f

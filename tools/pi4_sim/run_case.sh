@@ -21,6 +21,11 @@
 #                               コピーを使う (実機は 0.25 = 未観測 205 が free 扱い)
 #   VI_SOLVER=                  vi_*_planner の solver パラメータ上書き
 #   VI_PUBLISH_VF=true|false    publish_value_function 上書き
+#   INITIALPOSE_MAX_TRIES=      /initialpose の再送上限 (fake_robot 既定 8)。
+#                               広域地図 + 低 CPU では emcl2 が最初のループを回すまで
+#                               100 秒以上かかることがあり、既定の 8 回 x 5 秒では
+#                               「受理される前に打ち切る」→ map フレームが生えない。
+#   INITIALPOSE_DELAY=          その再送間隔 [s] (fake_robot 既定 5.0)
 #   START_X/START_Y/START_YAW_DEG   シムのスポーン位置 (既定は実機プローブ時の自己位置)
 #   GOAL_X/GOAL_Y/GOAL_YAW_DEG      ゴール (既定は実機プローブと同じ)
 #   SETTLE=                     ゴール送信前の待機秒 (bringup 完了待ち)
@@ -170,10 +175,16 @@ cpu.max=$(cat /sys/fs/cgroup/cpu.max 2>/dev/null)"
 yaw_rad=$(python3 -c "import math;print(math.radians($START_YAW_DEG))")
 sim_unknown=false
 [ "${SIM_UNKNOWN_AS_OBSTACLE:-0}" = "1" ] && sim_unknown=true
+init_arg=()
+[ -n "${INITIALPOSE_MAX_TRIES:-}" ] && \
+    init_arg+=(-p "initialpose_max_tries:=$INITIALPOSE_MAX_TRIES")
+[ -n "${INITIALPOSE_DELAY:-}" ] && \
+    init_arg+=(-p "initialpose_delay:=$INITIALPOSE_DELAY")
+
 python3 "$(dirname "$0")/fake_robot.py" --ros-args \
     -p map_yaml:="$MAP" -p unknown_as_obstacle:="$sim_unknown" \
     -p initial_x:="$START_X" -p initial_y:="$START_Y" -p initial_yaw:="$yaw_rad" \
-    "${obs_arg[@]}" >"$RUN/fake_robot.log" 2>&1 &
+    "${init_arg[@]}" "${obs_arg[@]}" >"$RUN/fake_robot.log" 2>&1 &
 SIM_PID=$!
 sleep 3
 
