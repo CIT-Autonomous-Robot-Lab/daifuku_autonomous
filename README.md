@@ -23,7 +23,7 @@ rosdep install --from-paths src --ignore-src -r -y
 ## Build
 
 ```bash
-colcon build --packages-select autonomous_nav emcl2
+colcon build --packages-select autonomous_nav emcl2 nav2_waypoint_manager
 source install/setup.sh
 ```
 
@@ -90,6 +90,14 @@ ros2 launch autonomous_nav navigation.launch.py map:=$PWD/src/autonomous_nav/map
 
 
 RVizの**2D Pose Estimate** で地図上のロボットの初期姿勢を設定する
+
+### Waypoint Managerパネル
+
+Nav2起動後、RViz2で **Panels → Add New Panel** から
+`nav2_waypoint_manager/WaypointManagerPanel` を追加します。パネルで登録した
+Waypointは `/waypoint_markers` に表示され、**Start** で
+`/follow_waypoints` Actionへ送信されます。詳細は
+[`nav2_waypoint_manager/README.md`](src/nav2_waypoint_manager/README.md) を参照してください。
 
 ### 4. RVizからゴールを送る
 

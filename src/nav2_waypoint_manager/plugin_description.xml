@@ -1,0 +1,7 @@
+<library path="nav2_waypoint_manager">
+  <class name="nav2_waypoint_manager/WaypointManagerPanel"
+         type="nav2_waypoint_manager::WaypointManagerPanel"
+         base_class_type="rviz_common::Panel">
+    <description>Creates, saves, and sends ordered waypoints to Nav2 NavigateThroughPoses.</description>
+  </class>
+</library>
