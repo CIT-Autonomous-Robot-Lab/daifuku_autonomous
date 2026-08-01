@@ -2,6 +2,73 @@
 
 保存済み地図を読み込み、自己位置推定、経路計画、経路追従を起動します。
 
+## tmuxで一式を起動する
+
+Raspberry Pi本体にSSHでつなぎ、保存済み地図で自律移動を始める手順です。そのまま
+貼り付けて実行できます。tmuxの基本操作は[日常操作と確認](operations.md#tmuxで作業する)を
+参照してください。
+
+まずコンテナを起動します。`raspicat`サービスが機体ドライバを立ち上げます。
+
+```bash
+cd ~/daifuku_autonomous   # リポジトリを置いた場所
+docker compose -f docker/raspberrypi/compose.yaml up -d
+```
+
+続いてセッションを作り、3つの窓に割り当てます。
+
+```bash
+cd ~/daifuku_autonomous
+tmux new-session -d -s nav -c "$PWD" -n nav
+tmux send-keys -t nav:nav 'docker compose -f docker/raspberrypi/compose.yaml exec ros2 /ros_entrypoint.sh ros2 launch autonomous_nav navigation.launch.py map:=/opt/ros_ws/install/share/autonomous_nav/maps/map.yaml use_sim_time:=false localization:=emcl2 planner:=vi lidar:=mid360 use_mid360_imu:=false use_rviz:=false publish_lidar_tf:=true lidar_z:=0.30' Enter
+
+tmux new-window -t nav -c "$PWD" -n motor
+tmux send-keys -t nav:motor 'bash docker/raspberrypi/tools/control.sh motor on'
+
+tmux new-window -t nav -c "$PWD" -n check
+tmux send-keys -t nav:check 'bash docker/raspberrypi/tools/control.sh status' Enter
+
+tmux attach -t nav
+```
+
+| 窓 | 中身 | 操作 |
+|---|---|---|
+| `nav` | Nav2、EMCL2、価値反復プランナ、センサー | 終了は`Ctrl-C` |
+| `motor` | モーター電源 | `Enter`で実行。止めるときは同じ窓で`control.sh stop` |
+| `check` | ノードとトピックの確認 | |
+
+`motor`の窓だけ`Enter`を送っていません。機体が動ける状態になる操作なので、周囲を
+確認してから自分で実行してください。
+
+`check`の窓では、起動後に次を確認します。
+
+```bash
+bash docker/raspberrypi/tools/control.sh ros topic hz /scan
+bash docker/raspberrypi/tools/control.sh ros topic hz /odom
+bash docker/raspberrypi/tools/control.sh nodes
+```
+
+初期姿勢の設定とゴールの指定はRVizから行います。`docker/raspberrypi/`のイメージには
+RVizが入っていないため、PC側の[GUI付き開発コンテナ](../setup/development-container.md)か
+ネイティブ環境でRVizを開き、同じ`ROS_DOMAIN_ID`で接続してください。操作の順序は
+[ゴールを指定する](#ゴールを指定する)にまとめています。
+
+作業を終えるときは、モーター電源を切ってからセッションを閉じます。
+
+```bash
+bash docker/raspberrypi/tools/control.sh motor off
+tmux kill-session -t nav
+```
+
+`use_mid360_imu:=false`は`raspicat`サービスに合わせた指定です。`raspimouse`は`/odom`と
+`odom -> base_footprint`を自分で配信し、`/wheel/odom`は出しません。既定の`true`のままだと
+EKFが入力を受け取れないうえ、`/odom`とTFの配信元が二重になります。
+
+`lidar_z:=0.30`は搭載高さの例です。実測値に合わせてください。2D LiDAR構成では
+`lidar:=2d`に置き換え、`publish_lidar_tf`と`lidar_z`を外します。広域地図
+`map_tsudanuma`を使う場合は、`map:`と`overrides:`を[広域地図（map_tsudanuma）で動かす](#広域地図map_tsudanumaで動かす)の
+とおりに差し替えてください。
+
 ## 基本起動
 
 EMCL2、価値反復グローバル／ローカルプランナ、2D LiDARが既定構成です。

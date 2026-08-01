@@ -36,6 +36,43 @@ docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
 bash docker/raspberrypi/tools/shell.sh
 ```
 
+## tmuxで作業する
+
+SSHで機体につないで作業する場合は、tmuxの中でlaunchを起動してください。SSHが切れても
+ノードは動き続け、つなぎ直して`attach`すれば同じ画面に戻れます。ターミナルを何枚も
+開かなくても、launch・遠隔操作・状態確認を1つの接続で切り替えられます。
+
+`tools/image/`で作ったSDカードにはtmuxが入っています。入っていない場合は導入します。
+
+```bash
+sudo apt install -y tmux
+```
+
+セッションの操作:
+
+```bash
+tmux new-session -s nav      # 新しいセッションを作る
+tmux ls                      # セッションの一覧
+tmux attach -t nav           # つなぎ直す
+tmux kill-session -t nav     # セッションごと終了する（中のノードも止まる）
+```
+
+セッション内では、`Ctrl-b`を押して離してから次のキーを押します。
+
+| キー | 動作 |
+|---|---|
+| `Ctrl-b` `c` | 窓を新しく開く |
+| `Ctrl-b` `0`〜`9` | 番号で窓を切り替える |
+| `Ctrl-b` `n` / `p` | 次／前の窓へ移動する |
+| `Ctrl-b` `d` | デタッチする（ノードは動いたまま） |
+| `Ctrl-b` `[` | 画面をさかのぼる（`q`で戻る） |
+
+デタッチしてもノードは動き続けます。機体を止めるときは、アタッチしてlaunchの窓で
+`Ctrl-C`を押すか、別の窓から`control.sh stop`を送ってください。
+
+地図作成と自律移動それぞれの窓構成は、[地図作成](mapping.md#tmuxで一式を起動する)と
+[自律移動](navigation.md#tmuxで一式を起動する)にまとめています。
+
 ## control.shで操作する
 
 `docker/raspberrypi/tools/control.sh`は、モーター電源、遠隔操作、状態確認をまとめたスクリプト
