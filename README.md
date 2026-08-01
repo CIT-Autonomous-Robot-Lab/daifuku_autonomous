@@ -9,7 +9,7 @@
 - キーボードとジョイスティックによる遠隔操作
 - Docker（ヘッドレス）またはUbuntu 22.04 / ROS 2 Humbleで実行可能
 
-> Raspberry Pi Catのモータードライバと車輪オドメトリは含まれません。機体側で`/cmd_vel`、`/odom`、TF、センサーデータを提供してください。
+> Raspberry Pi Catのモータードライバと車輪オドメトリは含まれません。`/cmd_vel`、`/odom`、TF、センサーデータは機体側で用意してください。
 
 ## はじめる
 
@@ -32,7 +32,7 @@
   - [構成とパッケージ](docs/usage/architecture.md)
   - [トラブルシューティング](docs/usage/troubleshooting.md)
 
-Docker環境は`docker/`以下に実機用（`raspberrypi/`）と開発用（`dev/`）があります。
+`docker/`以下には、実機用（`raspberrypi/`）と開発用（`dev/`）の2つのDocker環境があります。
 全体像は[`docker/README.md`](docker/README.md)、各環境のディレクトリ構成は
 [`docker/raspberrypi/README.md`](docker/raspberrypi/README.md)と
 [`docker/dev/README.md`](docker/dev/README.md)にまとめています。

@@ -44,7 +44,7 @@
 | `publish_lidar_tf` | `false` | 暫定的なセンサーTFを配信するか |
 | `wheel_odom_topic` | `/wheel/odom` | EKFへ渡す車輪オドメトリ |
 
-このほか`namespace`、`use_namespace`、`autostart`、`use_respawn`、`log_level`、各種LiDAR搭載姿勢引数があります。全件は次で確認できます。
+このほかに`namespace`、`use_namespace`、`autostart`、`use_respawn`、`log_level`と、LiDARの搭載姿勢を指定する各種引数があります。全件は次のコマンドで確認できます。
 
 ```bash
 ros2 launch autonomous_nav navigation.launch.py --show-args
@@ -52,7 +52,7 @@ ros2 launch autonomous_nav navigation.launch.py --show-args
 
 ## mapping.launch.py
 
-主な引数は`slam_params_file`、`rviz_config`、`use_sim_time`、`use_rviz`、`lidar`、スキャンフィルタ、Mid-360関連設定です。
+主な引数は`slam_params_file`、`rviz_config`、`use_sim_time`、`use_rviz`、`lidar`と、スキャンフィルタおよびMid-360関連の設定です。
 
 ```bash
 ros2 launch autonomous_nav mapping.launch.py --show-args
@@ -66,7 +66,7 @@ ros2 launch autonomous_nav mapping.launch.py --show-args
 | 項目 | 値 | 理由 |
 |---|---|---|
 | `controller_server.controller_frequency` | `10.0` | 20 HzではPi 4のCPUが飽和し、bond心拍の途絶を招いた。最高速0.2 m/s級の車体には10 Hzで十分 |
-| `planner_server.expected_planner_frequency` | `1.0` | 実測7.6 HzしかでずWARNが続いた。BTの再計画周期は1 Hzのため |
+| `planner_server.expected_planner_frequency` | `1.0` | 実測で7.6 Hzしか出ずWARNが続いた。BTの再計画周期が1 Hzのため、これに合わせた |
 | `lifecycle_manager_*.bond_timeout` | `60.0` | 非合成起動では8プロセスが同時に立ち上がりloadが10〜19まで上がるため、既定の4秒ではbond形成が間に合わない |
 | `use_composition` | `False` | 合成起動時のディスカバリ不能とbond途絶を回避する |
 
@@ -84,10 +84,10 @@ ros2 launch autonomous_nav mapping.launch.py --show-args
 
 有効ビームの28%が地図上の壁を貫通しており、非貫通率（alpha）が0.0〜0.4に張り付く
 状態でした。閾値0.5のままでは膨張リセットとセンサーリセットが毎スキャン発動し、
-推定姿勢がその場で回転してしまいます。根本原因は地図と実環境の不整合のため、地図を
-取り直したあとは既定寄りの値へ戻してください。
+推定姿勢がその場で回転してしまいます。根本原因は地図と実環境の不整合にあります。
+地図を取り直したあとは、既定寄りの値へ戻してください。
 
-## ロボット固有の調整
+## 機体固有の調整
 
 実機に合わせて、少なくとも次を確認してください。
 

@@ -21,7 +21,7 @@ Mid-360は時刻同期がないためスタンプが実時計からずれてい�
 
 ## autonomous_nav
 
-このリポジトリの設定パッケージです。C++や通常のPythonノードは持たず、次をまとめます。
+このリポジトリの設定パッケージです。独自のC++ノードやPythonノードは持たず、次のものをまとめています。
 
 - Nav2、SLAM Toolbox、EMCL2の設定
 - LiDAR前処理とEKF
@@ -38,18 +38,18 @@ Mid-360は時刻同期がないためスタンプが実時計からずれてい�
 `planner:=vi`（既定）:
 
 - `local_planner:=auto`（既定）では`vi_planner`**1ノード**が`planner_server`と
-  `controller_server`の両方を置き換え、`compute_path_to_pose`と`follow_path`を提供
-- 静的地図から(x, y, θ)の価値関数を**ゴールにつき1回だけ**計算する。経路はその
-  価値関数の方策ロールアウト、追従は同じ価値関数の±1 mウィンドウ精密化
-- ウィンドウへ`/scan`由来のペナルティを加え、貪欲行動を`cmd_vel`として出力
-- 同一ゴールへの再計画はキャッシュを利用（ロールアウトのみ）
-- `local_planner:=nav2`では`vi_global_planner`（広域のみ）＋Nav2標準`controller_server`。
-  `map_scale`とアウトオブコアソルバが要る広域地図はこちら
+  `controller_server`の両方を置き換え、`compute_path_to_pose`と`follow_path`を提供する
+- 静的地図から(x, y, θ)の価値関数を**ゴールにつき1回だけ**計算する。経路はその価値
+  関数をロールアウトして求め、追従では同じ価値関数を±1 mのウィンドウで精密化する
+- ウィンドウへ`/scan`由来のペナルティを加え、貪欲行動を`cmd_vel`として出力する
+- 同一ゴールへの再計画ではキャッシュを使う（ロールアウトのみ実行する）
+- `local_planner:=nav2`では`vi_global_planner`（広域のみ）とNav2標準`controller_server`
+  の組み合わせになる。`map_scale`とアウトオブコアソルバが要る広域地図ではこちらを使う
 
 `planner:=navfn`:
 
-- Nav2標準`planner_server`と`NavfnPlanner`を使用
-- `local_planner:=auto`ではNav2標準`controller_server`とDWBを使用
+- Nav2標準の`planner_server`と`NavfnPlanner`を使う
+- `local_planner:=auto`ではNav2標準の`controller_server`とDWBを使う
 
 ## Nav2コンポーネント
 
@@ -70,9 +70,9 @@ Mid-360は時刻同期がないためスタンプが実時計からずれてい�
 
 Nav2の各ノードは既定でプロセスを分けて起動します（`use_composition:=False`）。
 Raspberry Pi 4で1プロセスへ合成すると、DDS参加者あたりのエンドポイント数が大きく
-なりすぎて新規参加者からディスカバリできなくなり、さらにCPU飢餓でライフサイクル
-マネージャのbond心拍が途絶して自動シャットダウンする事象が頻発しました。あわせて
-`config/lifecycle_bond.yaml`でbondのタイムアウトを60秒へ延長しています。
+なりすぎて、新規参加者からディスカバリできなくなります。さらにCPU飢餓でライフ
+サイクルマネージャのbond心拍が途絶え、自動シャットダウンする事象が頻発しました。
+あわせて`config/lifecycle_bond.yaml`でbondのタイムアウトを60秒へ延長しています。
 
 PCなど余裕のある環境では`use_composition:=True`も利用できます。
 

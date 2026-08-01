@@ -42,10 +42,10 @@ export FASTRTPS_DEFAULT_PROFILES_FILE=/path/to/daifuku_autonomous/docker/raspber
 
 このプロファイルは2つの実測問題に対処しています。
 
-- **UDPインターフェースの限定**: 制限しない場合、各参加者はwlan0側（別セグメント）の
-  ロケータも広告します。相手から到達できないロケータとUDPバッファの逼迫により、
-  高負荷時にノードが現れたり消えたりする状態になりました。whitelistでループバックと
-  ロボットLANのアドレスだけを広告します。
+- **UDPインターフェースの限定**: 限定しないと、各参加者はwlan0側（別セグメント）の
+  ロケータまで広告します。相手から到達できないロケータへ送信し続けるぶん
+  UDPバッファが逼迫し、高負荷時にはノードが現れたり消えたりしました。whitelistでは、
+  ループバックとロボットLANのアドレスだけを広告します。
 - **同一ホスト通信のSHM化**: ナビゲーションスタック、LiDARパイプライン、機体
   ドライバで約20個の参加者をUDPのみで動かすと、購読者ごとの`sendmsg`でカーネルが
   飽和し（Pi 4でsys 57%、load 24）、TFのタイムスタンプが20秒以上遅れてゴールが
@@ -56,8 +56,8 @@ export FASTRTPS_DEFAULT_PROFILES_FILE=/path/to/daifuku_autonomous/docker/raspber
 - `docker/raspberrypi/compose.yaml`の`ipc: host`（`/dev/shm`をホストと共有する）
 - `docker/raspberrypi/compose.yaml`の`user: "1000:1000"`。Fast DDSはSHMセグメントを0644で作るため、
   ホスト側ROSプロセスとuidを揃えないと互いのポートを開けません
-- whitelist内の`192.168.1.50`はPiの固定IPそのものです。ロボットLANのアドレスが
-  異なる場合はXMLを書き換えてください
+- whitelist内の`192.168.1.50`は、Piの固定IPをそのまま書いたものです。ロボットLANの
+  アドレスが異なる場合はXMLを書き換えてください
 
 `docker/dev/`は別ホスト（PC）で動くため、SHMは使わず`FASTDDS_BUILTIN_TRANSPORTS=UDPv4`
 のままです。
@@ -72,7 +72,7 @@ Docker Desktopのhost networkingはL4実装で、コンテナからWindowsホス
 直接bindできません。このためpingやユニキャストUDPが通っても、Raspberry Pi側との
 DDSマルチキャスト探索が成立しない場合があります。ライブDDS接続が必要な開発では、
 ネイティブUbuntuのDocker Engine、またはmirrored networkingのWSL2内で直接動かす
-Docker Engineを推奨します。Docker Desktop環境はrosbag再生によるデバッグにも利用できます。
+Docker Engineを推奨します。Docker Desktop環境でも、rosbagを再生してのデバッグはできます。
 
 WSL2からGUI付き開発コンテナを使う場合は、Windows 11 22H2以降のmirrored networkingを推奨します。`%UserProfile%\.wslconfig`の例:
 

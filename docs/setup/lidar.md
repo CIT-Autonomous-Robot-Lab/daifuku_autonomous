@@ -2,7 +2,7 @@
 
 `mapping.launch.py`と`navigation.launch.py`は`lidar:=2d|mid360`でセンサー構成を切り替えます。どちらも入力を`/scan_raw`へ集約し、角度フィルタ後の`/scan`をSLAMとNav2へ渡します。
 
-既定の`config/sensors/scan_filter.yaml`は、コネクタがある後方60度（+150度から-150度まで、±180度をまたぐ範囲）を無効化します。
+既定の`config/sensors/scan_filter.yaml`は、コネクタがある後方60度（+150度から-150度まで、±180度をまたぐ範囲）を除外します。
 
 センサーごとのトピックの流れは次のとおりです。
 
@@ -39,22 +39,23 @@ ros2 run <2d_lidar_package> <2d_lidar_node> \
 
 ### タイムスタンプの打ち直し
 
-本機のMid-360はPTP/gPTPの時刻同期をしていないため、`livox_ros_driver2`はデバイス
-内蔵時計の時刻を付けます。この時計はPiのシステム時計に対して毎分数秒ずれていくため、
-そのままではEMCL2の`map -> odom` TFやNav2コストマップのメッセージフィルタが、
-起動から数分でデータを「古すぎる」「未来の時刻」として破棄します。
+本機のMid-360はPTP/gPTPで時刻同期していないため、`livox_ros_driver2`は
+デバイス内蔵時計の時刻をスタンプに使います。この時計はPiのシステム時計から
+毎分数秒ずつずれていきます。そのままにすると、EMCL2の`map -> odom` TFや
+Nav2コストマップのメッセージフィルタが、起動から数分でデータを「古すぎる」
+「未来の時刻」として破棄します。
 
 対策として、`lidar:=mid360`のときだけ`scripts/restamp_scan.py`が
 `/scan_mid360_prestamp`を購読し、受信時刻でスタンプを打ち直して`/scan_raw`へ再配信
-します。これによりスキャンのスタンプが、車輪オドメトリ・TF・Nav2と同じ時計に揃います。
-センサー側をPTP同期できるようになれば、この中継は不要になります。
+します。こうするとスキャンのスタンプが、車輪オドメトリ・TF・Nav2と同じ時計に
+そろいます。センサー側をPTP同期できるようになれば、この中継は不要になります。
 
 > **既知の制限**: `restamp_scan.py`は`share/autonomous_nav/scripts/`から起動され
 > ますが、`CMakeLists.txt`はこのディレクトリをインストールしません。`docker/raspberrypi/`の
 > Compose環境では`src/autonomous_nav`が`share/autonomous_nav`へまるごとマウント
 > されるため動作しますが、ネイティブビルドと`docker/dev/`ではファイルが存在せず、
 > 中継が起動しません。しかも`ExecuteProcess`は失敗しても他のノードを止めないため、
-> エラーは出ないまま`/scan_raw`だけが配信されない状態になります。
+> エラーが出ないまま`/scan_raw`だけが配信されない状態になります。
 >
 > `docker/raspberrypi/`以外で`lidar:=mid360`を使う場合は、先に`CMakeLists.txt`へ次を追加して
 > ください。launch側が`share`配下を参照するため、宛先は`lib/`ではなく`share/`です。
@@ -66,7 +67,7 @@ ros2 run <2d_lidar_package> <2d_lidar_node> \
 
 ### センサーTF
 
-`base_footprint -> livox_frame`はURDFから配信することを推奨します。未設定の場合は、実測した搭載位置と姿勢をlaunch引数で一時配信できます。位置はメートル、姿勢はラジアンです。
+`base_footprint -> livox_frame`はURDFから配信することを推奨します。URDFから配信していない場合は、実測した搭載位置と姿勢をlaunch引数で渡し、暫定的に配信できます。位置はメートル、姿勢はラジアンです。
 
 ```bash
 publish_lidar_tf:=true \
@@ -123,5 +124,8 @@ ros2 run tf2_ros tf2_echo odom base_footprint
 ```
 
 2D LiDARでは`/scan_raw`がセンサー入力です。Mid-360ではセンサー入力が
-`/scan_mid360_prestamp`、スタンプを打ち直した結果が`/scan_raw`となります。いずれも
-SLAM/Nav2への入力は`/scan`です。Mid-360起動時に`bind failed`となる場合は、設定したホストIPが対象NICへ実際に割り当てられているか確認してください。
+`/scan_mid360_prestamp`、スタンプを打ち直した結果が`/scan_raw`になります。いずれの
+構成でも、SLAM/Nav2への入力は`/scan`です。
+
+Mid-360の起動時に`bind failed`となる場合は、設定したホストIPが対象NICへ
+実際に割り当てられているか確認してください。

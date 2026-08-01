@@ -1,6 +1,6 @@
 # Docker環境
 
-`docker/raspberrypi/`はRaspberry Piを含む`arm64`と`amd64`向けの軽量な実行環境です。ROS 2 Humble、Nav2、SLAM Toolbox、EMCL2、価値反復プランナ、Livox関連ノード、teleopノード（`teleop_twist_keyboard`、`teleop_twist_joy`）を含みます。イメージはヘッドレスで、RVizは含みません。
+`docker/raspberrypi/`は、Raspberry Piを含む`arm64`環境と`amd64`環境向けの軽量な実行環境です。ROS 2 Humble、Nav2、SLAM Toolbox、EMCL2、価値反復プランナ、Livox関連ノード、teleopノード（`teleop_twist_keyboard`、`teleop_twist_joy`）を含みます。イメージはヘッドレスで、RVizは含みません。
 
 ディレクトリ内の各ファイルの役割は[`docker/raspberrypi/README.md`](../../docker/raspberrypi/README.md)にまとめています。
 
@@ -15,7 +15,7 @@ Docker Desktopでは[ネットワーク設定](network.md#docker-desktop)も先�
 ## Pi本体側で先に設定すること
 
 Pi本体でもネイティブのROS 2ノード（モータードライバなど）を動かす構成では、
-コンテナを起動する前に、ホスト側のFast DDSを同じプロファイルへ合わせてください。
+コンテナを起動する前に、ホスト側のFast DDSを同じプロファイルへそろえてください。
 `docker/raspberrypi/compose.yaml`はコンテナへ`docker/raspberrypi/fastdds_udp_whitelist.xml`をマウントし、
 UDPの送信インターフェースをループバックとロボットLANへ限定したうえで、同一ホスト内の
 通信に共有メモリ（SHM）を使います。ホスト側が既定設定のままだと、SHMを使う側と
@@ -33,8 +33,8 @@ export FASTRTPS_DEFAULT_PROFILES_FILE=/path/to/daifuku_autonomous/docker/raspber
   XMLを編集してください。
 - `compose.yaml`の`user: "1000:1000"`は、ホストのROSプロセスがuid 1000（`ubuntu`）で
   動くことを前提にしています。Fast DDSはSHMセグメントを0644で作成するため、uidが
-  一致しないと互いのSHMポートを開けず、ホストからコンテナへのトピックが静かに
-  止まります（Fast DDS 2.6にはUDPへのフォールバックがありません）。
+  一致しないと互いのSHMポートを開けません。Fast DDS 2.6にはUDPへのフォールバックが
+  ないため、ホストからコンテナへのトピックがエラーも出ないまま止まります。
 
 SHMを使うため、`compose.yaml`は`ipc: host`で`/dev/shm`をホストと共有します。理由と
 経緯は[ROS 2ネットワーク](network.md#raspberry-pi本体でのdds設定)を参照してください。
@@ -78,7 +78,7 @@ docker compose -f docker/raspberrypi/compose.yaml up -d
 
 ## コンテナを操作する
 
-入口スクリプトがROS 2とビルド済みワークスペースを自動的に読み込みます。
+エントリポイントスクリプト（`/ros_entrypoint.sh`）がROS 2とビルド済みワークスペースを自動で読み込みます。
 
 ```bash
 docker compose -f docker/raspberrypi/compose.yaml exec ros2 \

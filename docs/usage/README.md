@@ -30,7 +30,7 @@ docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
   /ros_entrypoint.sh ros2 ...
 ```
 
-複雑なコマンドは先にコンテナシェルへ入ると扱いやすくなります。
+コマンドが長くなる場合は、先にコンテナのシェルへ入ったほうが扱いやすくなります。
 
 ```bash
 bash docker/raspberrypi/tools/shell.sh

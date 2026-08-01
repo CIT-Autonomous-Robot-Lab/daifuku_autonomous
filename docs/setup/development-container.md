@@ -6,8 +6,8 @@ Raspberry Pi本体のOS、GPIOカーネルドライバ、モータードライ�
 
 ## 推奨の起動方法
 
-専用Ethernet NICを確認してから実行してください。起動ラッパーはコンテナより先に
-ホスト側へ固定IP`192.168.1.3/24`を設定し、ICS/DHCPを解除します。
+専用Ethernet NICを確認してから実行してください。起動スクリプトは、コンテナを立ち上げる
+前にホスト側へ固定IP`192.168.1.3/24`を設定し、ICS/DHCPを解除します。
 
 Linux:
 
@@ -23,8 +23,8 @@ Windows PowerShell:
 .\docker\dev\tools\windows\up.ps1
 ```
 
-WSL2シェルからは次を実行できます。管理者権限の確認画面が開き、Windows側の固定IPが
-設定されます。
+WSL2のシェルからも次を実行できます。実行すると管理者権限の確認画面が開き、Windows側に
+固定IPが設定されます。
 
 ```bash
 bash docker/dev/tools/linux/up.sh
@@ -48,7 +48,7 @@ ros2 topic list
 `build`、`install`、`log`はDockerボリュームへ保存され、ソースはホストと共有されます。
 
 実機接続時は既定で`ROS_DOMAIN_ID=90`、`FASTDDS_BUILTIN_TRANSPORTS=UDPv4`です。
-次のコマンドで、ナビゲーションを起動する前にデータ到達を確認します。
+ナビゲーションを起動する前に、次のコマンドでデータが届いているか確認します。
 
 ```bash
 ros2 topic echo --once /odom

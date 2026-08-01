@@ -48,7 +48,7 @@ ros2 launch autonomous_nav navigation.launch.py \
 
 ## プランナを選ぶ
 
-既定の`planner:=vi`は価値反復プランナを使います。`local_planner`も既定（`auto`）では`vi`になり、`vi_planner`1ノードが経路計画と経路追従の両方を1本の価値関数から担います（ゴールごとのVI計算は1回だけです）。
+既定の`planner:=vi`は価値反復プランナを使います。`local_planner`も既定（`auto`）では`vi`になり、`vi_planner`1ノードが1本の価値関数で経路計画と経路追従の両方を担います。価値反復の計算はゴールごとに1回だけです。
 
 NavFnとNav2 DWBへ切り替える場合:
 
@@ -71,12 +71,13 @@ ros2 launch autonomous_nav navigation.launch.py \
 ## 広域地図（map_tsudanuma）で動かす
 
 `maps/map_tsudanuma.yaml`は5888×4000セル（0.05 m/セル、294.4 m×200 m）の広域地図です。
-価値反復はゴールごとに`nx × ny × theta_cell_num`の状態空間を扱うため、この地図を
-0.05 mのまま解くと14.1億状態になり、既定の密ソルバでは状態配列だけで79 GBを要求して起動と同時に落ちます。
+価値反復はゴールごとに`nx × ny × theta_cell_num`の状態空間を扱います。この地図を
+0.05 mのまま解くと状態数は14.1億に達し、既定の密ソルバは状態配列だけで79 GBを要求
+するため、起動と同時に落ちます。
 
-`config/overrides/map_tsudanuma.yaml`を`overrides:=map_tsudanuma`で重ねると、プランナ内部だけを
-0.15 m/セル（`map_scale: 3`、1963×1334＝1.57億状態）に粗くし、状態配列を確保しない
-アウトオブコアソルバ（`frontier2d_sparse_compact`）へ切り替えます。確定した価値関数と方策は
+`config/overrides/map_tsudanuma.yaml`を`overrides:=map_tsudanuma`で重ねると、プランナ内部だけが
+0.15 m/セル（`map_scale: 3`、1963×1334＝1.57億状態）に粗くなり、状態配列を確保しない
+アウトオブコアソルバ（`frontier2d_sparse_compact`）へ切り替わります。確定した価値関数と方策は
 `compact_sink_dir`のmmapファイル（約1.9 GB）に置かれます。地図サーバ、コストマップ、
 自己位置推定は0.05 mのままです。
 
@@ -106,13 +107,13 @@ ros2 launch autonomous_nav navigation.launch.py \
   `vi_global_planner`が`/map`を受け取ってから`compute_path_to_pose`を作るため、
   Nav2既定の1秒では間に合わずbringupが失敗します。
 - `map_scale`の3×3プーリングは障害物優先のため、通路は片側最大0.10 m細くなります。
-- メモリはローカル実測で`vi_global_planner`のピークRSS 3.98 GB（内訳: 匿名2.16 GB +
-  mmapページキャッシュ1.81 GB）です。mmapに逃がしても匿名2.16 GBが残るため、
+- ローカルでの実測では、`vi_global_planner`のピークRSSは3.98 GB（内訳: 匿名2.16 GB +
+  mmapページキャッシュ1.81 GB）でした。mmapに逃がしても匿名2.16 GBが残るため、
   Raspberry Pi 4 4GBでこの設定が通るかは未確認です。減らすには`map_scale`を上げます
   （詳細は`tools/pi4_sim/README.md`）。
 - この地図は68.2%が未観測セルで、占有セルは0.4%しかありません。EMCL2やAMCLの
-  スキャンマッチングはこの占有セルの尤度場に依存するため、この地図のままでは
-  自己位置推定の拠り所がほとんどありません（経路計画とは別の課題です）。
+  スキャンマッチングは占有セルの尤度場に依存するため、現状では自己位置推定の
+  拠り所がほとんどありません（経路計画とは別の課題です）。
 
 ## ゴールを指定する
 
@@ -131,7 +132,7 @@ RVizで次の順に操作します。
 `rviz/navigation.rviz`には次のOccupancyGrid表示があります。
 
 - `/value_function`: 価値関数のθ=0スライス。計算途中も既定500 ms間隔で更新
-- `/local_window_value`: ロボット周辺±1 mの値。スキャン由来ペナルティと局所反復をリアルタイム表示
+- `/local_window_value`: 機体周辺±1 mの値。スキャン由来のペナルティと局所反復をリアルタイムに表示
   （`local_planner:=vi`のときのみ）
 
 価値関数は1本しかないため、以前あった`/local_value_function`はありません。

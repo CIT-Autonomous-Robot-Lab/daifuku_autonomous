@@ -76,8 +76,8 @@ bash docker/raspberrypi/tools/control.sh help
 TELEOP_LINEAR_SPEED=0.1 bash docker/raspberrypi/tools/control.sh teleop keyboard
 ```
 
-`motor off`は停止指令を送ってから電源を切ります。停止指令の送信に失敗しても警告を
-出したうえで電源OFFへ進みます。作業を終えるときは`motor off`を実行してください。
+`motor off`は停止指令を送ってから電源を切ります。停止指令の送信に失敗した場合も、
+警告を出したうえで電源を切ります。作業を終えるときは`motor off`を実行してください。
 
 ## 設定変更を反映する
 

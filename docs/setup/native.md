@@ -38,7 +38,7 @@ bash tools/setup/setup_native.sh
 bash tools/setup/setup_native.sh --jobs 1
 ```
 
-構成に応じて省略できます。2D LiDARだけならLivoxを、NavFnだけを使うなら価値反復プランナを外します。
+構成に応じて不要なコンポーネントは省略できます。2D LiDARだけならLivoxを、NavFnだけを使うなら価値反復プランナを外します。
 
 ```bash
 bash tools/setup/setup_native.sh --no-livox --no-vi
@@ -63,7 +63,7 @@ bash tools/setup/setup_native_vi.sh
 - `emcl2_ros2`
 - `value_iteration3`
 
-`rclrs`系の依存をrosdepが解決できなくても、`-r`により残りの依存導入は継続します。
+rosdepには`-r`を付けているため、`rclrs`系の依存を解決できなくても、残りの依存導入は続きます。
 
 `setup_native_ros2_rust.sh`は既定で`~/ros2_rust_ws`へ`ros2_rust`を構築し、Rust toolchainを`~/.cargo`、colcon拡張を`~/.local`へ導入します。場所を変える場合は`--ros2-rust-ws`を使い、`setup_native_vi.sh`にも同じ値を渡します。Rust toolchainを常用するには`~/.bashrc`へ次を追記します。
 
@@ -73,7 +73,7 @@ export PATH="${HOME}/.local/bin:${HOME}/.cargo/bin:${PATH}"
 
 `setup_native_livox.sh`は`--sdk-ref`と`--driver-ref`でバージョンを、`setup_native_vi.sh`は`--debug`でcargoのプロファイルを変更できます。
 
-2D LiDARだけを使う場合、Livoxの手順は不要です。利用する2D LiDARドライバを別途導入してください。
+2D LiDARだけを使う場合、Livoxの手順は不要です。代わりに、利用する2D LiDARのドライバを別途導入してください。
 
 > ネイティブ環境で`lidar:=mid360`を使う場合は、`autonomous_nav`をビルドする前に
 > [スタンプ打ち直しの既知の制限](lidar.md#タイムスタンプの打ち直し)を確認して

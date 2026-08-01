@@ -46,8 +46,8 @@ Nav2のゴールが次々と中断します。
 - `docker/raspberrypi/compose.yaml`の`user`が、ホストのROSプロセスのuidと一致していること
 
 Fast DDSはSHMセグメントを0644で作成するため、root権限のコンテナと非rootのホストが
-混在すると互いのポートを開けません。Fast DDS 2.6にはUDPへのフォールバックがないので、
-トピックがエラーなく止まります。
+混在すると互いのポートを開けません。Fast DDS 2.6にはUDPへのフォールバックがないため、
+トピックがエラーも出ないまま止まります。
 
 ```bash
 # ホスト側のROSプロセスのuidを確認する
@@ -90,14 +90,14 @@ ros2 topic hz /scan_raw
 ```
 
 `/scan_mid360_prestamp`だけが流れて`/scan_raw`が止まっている場合は、中継ノードが
-起動していません。`CMakeLists.txt`が`scripts/`をインストールしないため、
-`docker/raspberrypi/`のCompose環境以外では`share/autonomous_nav/scripts/restamp_scan.py`が存在
-しないことが原因です（`docker/raspberrypi/`では`src/autonomous_nav`がマウントされるため動作
-します）。`ExecuteProcess`の失敗は他のノードを止めないので、エラーが出ないまま
+起動していません。原因は、`CMakeLists.txt`が`scripts/`をインストールしないことです。
+`docker/raspberrypi/`のCompose環境では`src/autonomous_nav`がまるごとマウントされるため
+動きますが、それ以外の環境では`share/autonomous_nav/scripts/restamp_scan.py`が存在
+しません。`ExecuteProcess`の失敗は他のノードを止めないので、エラーが出ないまま
 `/scan_raw`だけが欠けた状態になります。
 
-対処は[LiDARとオドメトリ](../setup/lidar.md#タイムスタンプの打ち直し)のインストール
-規則を追加することです。
+対処方法は、[LiDARとオドメトリ](../setup/lidar.md#タイムスタンプの打ち直し)に載せた
+インストール規則を`CMakeLists.txt`へ追加することです。
 
 ## EMCL2の推定姿勢がその場で回転する
 
