@@ -439,6 +439,12 @@ def generate_launch_description():
                         "needed for maps that use map_scale / the compact solver).",
         ),
         DeclareLaunchArgument("lidar", default_value="2d"),
+        DeclareLaunchArgument(
+            "lidar_driver",
+            default_value="true",
+            description="LiDAR の実機ドライバを起動するか。シミュレータ "
+                        "(simulator) から動かすときは false にする。",
+        ),
         DeclareLaunchArgument("scan_filter_enabled", default_value="true"),
         DeclareLaunchArgument(
             "scan_filter_params_file",
@@ -468,6 +474,7 @@ def generate_launch_description():
             PythonLaunchDescriptionSource(lidar_bringup_launch),
             launch_arguments={
                 "lidar": lidar,
+                "lidar_driver": LaunchConfiguration("lidar_driver"),
                 "use_sim_time": use_sim_time,
                 "scan_filter_enabled": scan_filter_enabled,
                 "scan_filter_params_file": scan_filter_params_file,

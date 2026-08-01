@@ -26,7 +26,22 @@ def generate_launch_description():
     lidar_frame = LaunchConfiguration("lidar_frame")
     base_frame = LaunchConfiguration("base_frame")
 
+    lidar_driver = LaunchConfiguration("lidar_driver")
+
+    # lidar_driver:=false は「LiDAR の生データを外部が出す」構成。
+    # シミュレータ (simulator) は /livox/lidar を PointCloud2 で直接出すので
+    # livox_ros_driver2 を立てない。実機の driver は xfer_format:=0 = PointCloud2 な
+    # ので、ドライバの出力とシムの出力は同型で、下流 (pointcloud_to_laserscan 以降)
+    # は一切変わらない。
+    #
+    # restamp_scan.py も同時に外す。あれは MID360 の**デバイス時計が PTP 同期されず
+    # 毎分数秒ドリフトする**ことへの対処であって、シムには存在しない問題である。
+    # とくに use_sim_time:=true では「受信時刻で押し直す」動作がシム時間と噛み合わず
+    # 積極的に有害になる。
     is_mid360 = PythonExpression(["'", lidar, "' == 'mid360'"])
+    use_livox_driver = PythonExpression([
+        "'", lidar, "' == 'mid360' and '", lidar_driver, "'.lower() == 'true'",
+    ])
     use_mid360_ekf = PythonExpression([
         "'", lidar, "' == 'mid360' and '", use_mid360_imu,
         "'.lower() == 'true'",
@@ -49,10 +64,13 @@ def generate_launch_description():
                 ("scan_filter_params_file", scan_filter_params_file.perform(context))
             )
         if selected == "mid360":
-            files.extend([
-                ("mid360_config", mid360_config.perform(context)),
-                ("mid360_scan_params_file", mid360_scan_params_file.perform(context)),
-            ])
+            files.append(
+                ("mid360_scan_params_file", mid360_scan_params_file.perform(context))
+            )
+            # MID360_config.json は livox_ros_driver2 のためだけのもの。
+            # lidar_driver:=false (シム) では driver を立てないので要求しない。
+            if lidar_driver.perform(context).lower() == "true":
+                files.append(("mid360_config", mid360_config.perform(context)))
             if use_mid360_imu.perform(context).lower() == "true":
                 files.append(
                     ("mid360_ekf_params_file", mid360_ekf_params_file.perform(context))
@@ -69,6 +87,15 @@ def generate_launch_description():
             description="LiDAR backend: 2d (external /scan_raw) or mid360.",
         ),
         DeclareLaunchArgument("use_sim_time", default_value="false"),
+        DeclareLaunchArgument(
+            "lidar_driver",
+            default_value="true",
+            description="LiDAR の実機ドライバ (livox_ros_driver2) と "
+                        "restamp_scan.py を起動するか。false にすると "
+                        "/livox/lidar と /livox/imu を外部 (シミュレータ) が "
+                        "出す前提になる。lidar:=2d では元から driver を"
+                        "起動しないので影響しない。",
+        ),
         DeclareLaunchArgument("scan_raw_topic", default_value="/scan_raw"),
         DeclareLaunchArgument("scan_topic", default_value="/scan"),
         DeclareLaunchArgument("scan_filter_enabled", default_value="true"),
@@ -105,7 +132,7 @@ def generate_launch_description():
         OpaqueFunction(function=validate),
 
         Node(
-            condition=IfCondition(is_mid360),
+            condition=IfCondition(use_livox_driver),
             package="livox_ros_driver2",
             executable="livox_ros_driver2_node",
             name="livox_lidar_publisher",
@@ -158,12 +185,18 @@ def generate_launch_description():
                 # seconds per minute against the system clock, so the raw
                 # scan is restamped with the receive time below before it
                 # reaches the filter chain and the rest of the stack.
-                ("scan", "/scan_mid360_prestamp"),
+                #
+                # lidar_driver:=false (シム) にはそのドリフトが無いので restamp を
+                # 挟まず、ここから直接 scan_raw_topic に出す。
+                ("scan", PythonExpression([
+                    "'/scan_mid360_prestamp' if '", lidar_driver,
+                    "'.lower() == 'true' else '", LaunchConfiguration("scan_raw_topic"), "'",
+                ])),
             ],
         ),
 
         ExecuteProcess(
-            condition=IfCondition(is_mid360),
+            condition=IfCondition(use_livox_driver),
             cmd=[
                 "python3",
                 os.path.join(pkg_share, "scripts", "restamp_scan.py"),
