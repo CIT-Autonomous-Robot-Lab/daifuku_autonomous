@@ -1,10 +1,14 @@
-.vscode
+.vscode/
 build/
 install/
 log/
+
+docker-dev-*.log
+
+.venv/
 __pycache__/
 *.pyc
-docker-dev-*.log
+
 src/emcl2_ros2/
 src/livox_ros_driver2/
 src/value_iteration3/

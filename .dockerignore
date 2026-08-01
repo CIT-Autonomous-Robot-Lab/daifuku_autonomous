@@ -10,3 +10,4 @@ src/raspicat_description
 src/raspimouse2
 **/__pycache__
 **/*.pyc
+**/.venv

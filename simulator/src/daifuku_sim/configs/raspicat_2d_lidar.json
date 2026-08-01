@@ -1,0 +1,57 @@
+{
+    "class": "sensor",
+    "type": "lidar",
+    "name": "raspicat_2d_lidar",
+    "driveWorksId": "GENERIC",
+    "profile": {
+        "scanType": "rotary",
+        "intensityProcessing": "normalization",
+        "rayType": "IDEALIZED",
+        "nearRangeM": 0.1,
+        "farRangeM": 30.0,
+        "effectiveApertureM": 0.02,
+        "focusDistM": 0.12,
+        "rangeResolutionM": 0.004,
+        "rangeAccuracyM": 0.02,
+        "avgPowerW": 0.002,
+        "minReflectance": 0.1,
+        "minReflectanceRange": 30.0,
+        "maxReturns": 1,
+        "scanRateBaseHz": 10.0,
+        "reportRateBaseHz": 7200,
+        "numberOfEmitters": 1,
+        "numberOfChannels": 1,
+        "numLines": 1,
+        "azimuthErrorMean": 0.0,
+        "azimuthErrorStd": 0.01,
+        "elevationErrorMean": 0.0,
+        "elevationErrorStd": 0.01,
+        "startAzimuthDeg": 0.0,
+        "endAzimuthDeg": 360.0,
+        "upElevationDeg": 0.0,
+        "downElevationDeg": 0.0,
+        "horizontalResolutionDeg": 0.5,
+        "emitterStates": [
+            {
+                "azimuthDeg": [
+                    0.0
+                ],
+                "elevationDeg": [
+                    0.0
+                ],
+                "fireTimeNs": [
+                    0
+                ],
+                "channelId": [
+                    0
+                ],
+                "rangeId": [
+                    0
+                ],
+                "bank": [
+                    0
+                ]
+            }
+        ]
+    }
+}

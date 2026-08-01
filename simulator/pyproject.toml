@@ -1,0 +1,64 @@
+[project]
+name = "daifuku-sim"
+version = "0.1.0"
+description = "Isaac Sim harness for the autonomous_nav stack (Raspberry Pi 4 speed emulation)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+    "pillow>=10.0",
+    "pyyaml>=6.0",
+]
+
+# Isaac Sim 本体。**既定では入らない** (新規 144 パッケージと大きいため)。
+#
+#     uv sync --extra isaac        # pip 版 Isaac Sim を venv に入れる
+#
+# 入れると isaac_raspicat.py を `uv run python` で起動できる。入れない場合は
+# バイナリ版 Isaac Sim の `python.sh` にファイルパスを渡す (README 参照)。
+# どちらの経路でも `from isaacsim import SimulationApp` 以降のコードは同じ。
+#
+# マーカが要る理由: isaacsim 6.0.1 の wheel は **cp312 のみ**で `Requires-Python:
+# ==3.12.*`。マーカ無しで書くと、このプロジェクトの requires-python (>=3.10) と
+# 衝突して `uv lock` が **extra を使わない人の分も含めて**失敗する
+# (No solution found ... requires Python ==3.12.*)。
+# 実際に venv を 3.12 にするのは .python-version が担当する。この 2 つは対。
+#
+# tinyobjloader / cuda-bindings / pyopengl はここに書かないと入らない。
+# isaacsim-core が == でプレリリースを指しているためで、[tool.uv] prerelease を
+# "explicit" にしたうえで**受け入れる 3 つだけを名指し**している。"allow" にすると
+# numpy などが将来の再 lock でプレリリースに化け得るので使わない。
+[project.optional-dependencies]
+isaac = [
+    "isaacsim[all]==6.0.1.0 ; python_full_version ~= '3.12.0'",
+    "tinyobjloader==2.0.0rc13 ; python_full_version ~= '3.12.0'",
+    "cuda-bindings==13.4.0b1 ; python_full_version ~= '3.12.0'",
+    "pyopengl==4.0.0a1 ; python_full_version ~= '3.12.0'",
+]
+
+[tool.uv]
+prerelease = "explicit"
+
+[project.scripts]
+map-to-usd = "daifuku_sim.map_to_usd:main"
+rtf-gate = "daifuku_sim.rtf_gate:main"
+# isaac_raspicat は console script にしない。モジュール読み込み時に
+# SimulationApp を起動する (それ以降でしか omni.* を import できない Kit の制約)
+# ので、import 経由で呼ぶ形にすると起動順が見えなくなる。
+
+# pypi.nvidia.com は explicit にする。こうしないと全パッケージの解決先候補に
+# 入り、無関係な依存が NVIDIA のミラーから引かれ得る。
+[[tool.uv.index]]
+name = "nvidia"
+url = "https://pypi.nvidia.com"
+explicit = true
+
+[tool.uv.sources]
+isaacsim = { index = "nvidia" }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/daifuku_sim"]
