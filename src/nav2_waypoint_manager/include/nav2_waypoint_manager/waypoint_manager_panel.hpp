@@ -15,7 +15,6 @@
 #include <rviz_common/panel.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 
-class QDoubleSpinBox;
 class QLabel;
 class QListWidget;
 class QPushButton;
@@ -34,7 +33,6 @@ public:
   void onInitialize() override;
 
 private Q_SLOTS:
-  void addWaypoint();
   void deleteSelected();
   void deleteLast();
   void clearWaypoints();
@@ -60,7 +58,6 @@ private:
   bool readYamlFile(const QString & filename, std::vector<geometry_msgs::msg::PoseStamped> * poses,
                     std::string * frame_id, QString * error) const;
   bool writeYamlFile(const QString & filename, QString * error) const;
-  geometry_msgs::msg::PoseStamped poseFromInputs() const;
   QString formatWaypoint(int index, const geometry_msgs::msg::PoseStamped & pose) const;
 
   std::string frame_id_{"map"};
@@ -72,10 +69,6 @@ private:
   rclcpp_action::Client<NavigateThroughPoses>::SharedPtr action_client_;
   GoalHandleNavigateThroughPoses::SharedPtr active_goal_;
 
-  QDoubleSpinBox * x_spinbox_{nullptr};
-  QDoubleSpinBox * y_spinbox_{nullptr};
-  QDoubleSpinBox * z_spinbox_{nullptr};
-  QDoubleSpinBox * yaw_spinbox_{nullptr};
   QListWidget * waypoint_list_{nullptr};
   QLabel * status_label_{nullptr};
   QPushButton * start_button_{nullptr};

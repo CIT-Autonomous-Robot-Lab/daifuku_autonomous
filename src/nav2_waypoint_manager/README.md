@@ -16,8 +16,8 @@ source install/setup.bash
 1. Nav2（`nav2_waypoint_follower` を含む）を起動します。
 2. RViz2で **Panels → Add New Panel** を選び、
    `nav2_waypoint_manager/WaypointManagerPanel` を追加します。
-3. X/Y/Z/Yawを入力して **Add Waypoint** を押すか、RVizのツールバーから
-   **2D Goal Pose** を選び、地図上でクリックして向きたい方向へドラッグします。
+3. RVizのツールバーから **2D Goal Pose** を選び、地図上でクリックして向きたい方向へ
+   ドラッグします。指定した姿勢がWaypointとして自動で追加されます。
    クリック位置とドラッグ方向がWaypointの位置・向きとして追加されます。
 4. RViz2に `MarkerArray` 表示を追加し、topicを `/waypoint_markers` に設定します。
 5. **Start** で巡回を開始し、必要なら **Cancel** で停止します。

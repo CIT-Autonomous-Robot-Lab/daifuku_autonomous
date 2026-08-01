@@ -1,13 +1,10 @@
 #include "nav2_waypoint_manager/waypoint_manager_panel.hpp"
 
-#include <cmath>
 #include <fstream>
 #include <utility>
 
-#include <QDoubleSpinBox>
 #include <QFileDialog>
 #include <QFileInfo>
-#include <QFormLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
@@ -33,15 +30,6 @@ constexpr char kActionName[] = "/navigate_through_poses";
 constexpr char kClickedPointTopic[] = "/clicked_point";
 constexpr char kWaypointPoseTopic[] = "/waypoint_pose";
 
-QDoubleSpinBox * makeSpinBox(QWidget * parent, double minimum, double maximum, double value)
-{
-  auto * spinbox = new QDoubleSpinBox(parent);
-  spinbox->setRange(minimum, maximum);
-  spinbox->setDecimals(3);
-  spinbox->setSingleStep(0.1);
-  spinbox->setValue(value);
-  return spinbox;
-}
 }  // namespace
 
 WaypointManagerPanel::WaypointManagerPanel(QWidget * parent)
@@ -89,26 +77,11 @@ void WaypointManagerPanel::buildUi()
   auto * layout = new QVBoxLayout(this);
   layout->setContentsMargins(4, 4, 4, 4);
 
-  auto * input_form = new QFormLayout();
-  x_spinbox_ = makeSpinBox(this, -100000.0, 100000.0, 0.0);
-  y_spinbox_ = makeSpinBox(this, -100000.0, 100000.0, 0.0);
-  z_spinbox_ = makeSpinBox(this, -100000.0, 100000.0, 0.0);
-  yaw_spinbox_ = makeSpinBox(this, -360.0, 360.0, 0.0);
-  input_form->addRow("X [m]", x_spinbox_);
-  input_form->addRow("Y [m]", y_spinbox_);
-  input_form->addRow("Z [m]", z_spinbox_);
-  input_form->addRow("Yaw [deg]", yaw_spinbox_);
-  layout->addLayout(input_form);
-
   auto * click_hint = new QLabel(
-    "Mouse input: select RViz's 2D Goal Pose tool, then click and drag on the map. "
+    "Select RViz's 2D Goal Pose tool, then click and drag on the map to add a waypoint. "
     "The click sets the position and the drag direction sets the waypoint orientation.", this);
   click_hint->setWordWrap(true);
   layout->addWidget(click_hint);
-
-  auto * add_button = new QPushButton("Add Waypoint", this);
-  connect(add_button, &QPushButton::clicked, this, &WaypointManagerPanel::addWaypoint);
-  layout->addWidget(add_button);
 
   auto * delete_row = new QHBoxLayout();
   auto * delete_selected = new QPushButton("Delete Selected", this);
@@ -159,30 +132,6 @@ void WaypointManagerPanel::buildUi()
   layout->addWidget(status_label_);
 }
 
-geometry_msgs::msg::PoseStamped WaypointManagerPanel::poseFromInputs() const
-{
-  geometry_msgs::msg::PoseStamped pose;
-  pose.header.frame_id = frame_id_;
-  pose.pose.position.x = x_spinbox_->value();
-  pose.pose.position.y = y_spinbox_->value();
-  pose.pose.position.z = z_spinbox_->value();
-  const double half_yaw = yaw_spinbox_->value() * M_PI / 360.0;
-  pose.pose.orientation.z = std::sin(half_yaw);
-  pose.pose.orientation.w = std::cos(half_yaw);
-  return pose;
-}
-
-void WaypointManagerPanel::addWaypoint()
-{
-  if (frame_id_.empty()) {
-    setStatus("Error: frame_id is not set");
-    return;
-  }
-  waypoints_.push_back(poseFromInputs());
-  refreshList();
-  publishMarkers();
-}
-
 void WaypointManagerPanel::addClickedPoint(const geometry_msgs::msg::PointStamped & point)
 {
   if (point.header.frame_id.empty()) {
@@ -195,10 +144,11 @@ void WaypointManagerPanel::addClickedPoint(const geometry_msgs::msg::PointStampe
   }
 
   frame_id_ = point.header.frame_id;
-  x_spinbox_->setValue(point.point.x);
-  y_spinbox_->setValue(point.point.y);
-  z_spinbox_->setValue(point.point.z);
-  waypoints_.push_back(poseFromInputs());
+  geometry_msgs::msg::PoseStamped pose;
+  pose.header = point.header;
+  pose.pose.position = point.point;
+  pose.pose.orientation.w = 1.0;
+  waypoints_.push_back(pose);
   refreshList();
   publishMarkers();
   setStatus(QString("Added waypoint %1 from map click").arg(waypoints_.size() - 1));
@@ -217,15 +167,6 @@ void WaypointManagerPanel::addClickedPose(const geometry_msgs::msg::PoseStamped 
 
   frame_id_ = pose.header.frame_id;
   waypoints_.push_back(pose);
-  x_spinbox_->setValue(pose.pose.position.x);
-  y_spinbox_->setValue(pose.pose.position.y);
-  z_spinbox_->setValue(pose.pose.position.z);
-  const double yaw = std::atan2(
-    2.0 * (pose.pose.orientation.w * pose.pose.orientation.z +
-    pose.pose.orientation.x * pose.pose.orientation.y),
-    1.0 - 2.0 * (pose.pose.orientation.y * pose.pose.orientation.y +
-    pose.pose.orientation.z * pose.pose.orientation.z));
-  yaw_spinbox_->setValue(yaw * 180.0 / M_PI);
   refreshList();
   publishMarkers();
   setStatus(QString("Added waypoint %1 from click and drag").arg(waypoints_.size() - 1));
