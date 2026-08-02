@@ -180,7 +180,7 @@ flowchart TD
 | 自己位置推定       | EMCL2（既定）                                    |   ×   | 地図、`/scan`、odomからの`map → odom`推定          |
 | 自己位置推定       | AMCL（選択可）                                   |   ○   | 地図、`/scan`、odomからの`map → odom`推定          |
 | 地図配信           | Map Server                                       |   ○   | 保存済み地図のNav2への配信                         |
-| グローバル経路計画 | NavFn Planner（Dijkstra）                        |   ○   | `use_astar: false`。ゴールまでのグローバル経路計画 |
+| グローバル経路計画 | NavFn Planner（A*）                              |   ○   | `use_astar: true`。ゴールまでのグローバル経路計画  |
 | 経路平滑化         | Simple Smoother                                  |   ○   | グローバル経路の平滑化                             |
 | 局所経路追従       | Regulated Pure Pursuit                           |   ○   | 経路・局所コストマップからの速度指令生成           |
 | 障害物回避         | Costmap 2D（Voxel / Obstacle / Inflation Layer） |   ○   | `/scan`による障害物情報の反映                      |
