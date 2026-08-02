@@ -1,7 +1,11 @@
+修正版です。
+
 # Nav2 Waypoint Manager
 
-RViz2のパネルプラグインでWaypointを作成・並べ替え・YAML保存し、Nav2の
-`/navigate_through_poses` (`nav2_msgs/action/NavigateThroughPoses`) に送信します。
+RViz2上でWaypointの作成・並べ替え・保存・読込みを行うパネルプラグイン
+
+作成したWaypointを、Nav2の`/navigate_through_poses`アクション
+（`nav2_msgs/action/NavigateThroughPoses`）へ送信可能
 
 ## Build
 
@@ -11,23 +15,52 @@ colcon build --packages-select nav2_waypoint_manager
 source install/setup.bash
 ```
 
-## RViz2で使う
+## 使い方
 
-1. Nav2（`nav2_waypoint_follower` を含む）を起動します。
-2. RViz2で **Panels → Add New Panel** を選び、
-   `nav2_waypoint_manager/WaypointManagerPanel` を追加します。
-3. RVizのツールバーから **2D Goal Pose** を選び、地図上でクリックして向きたい方向へ
-   ドラッグします。指定した姿勢がWaypointとして自動で追加されます。
-   クリック位置とドラッグ方向がWaypointの位置・向きとして追加されます。
-4. RViz2に `MarkerArray` 表示を追加し、topicを `/waypoint_markers` に設定します。
-5. **Start** で巡回を開始し、必要なら **Cancel** で停止します。
+1. Nav2を起動
+2. RViz2の**Panels → Add New Panel**から
+   `nav2_waypoint_manager/WaypointManagerPanel`を追加
+3. RViz2の**2D Goal Pose**を選択し、地図上でクリック・ドラッグ
 
-YAMLを読込むと、既存リストを置換するか追加するか選べます。追加は同じ
-`frame_id` のファイルに限られます。保存は一時ファイルからの原子的な置換を
-使うため、保存途中で既存のYAMLを壊しません。
+   * クリック位置をWaypointの座標として使用
+   * ドラッグ方向をWaypointの向きとして使用
+4. RViz2に`MarkerArray`表示を追加し、topicを`/waypoint_markers`に設定
+5. **Start**で登録したWaypointへの巡回を開始
+6. **Cancel**で実行中の巡回を停止
 
-`2D Goal Pose` のtopicは `/waypoint_pose` に設定してください。このパネルは同topicを
-購読します。`Publish Point` の標準topic `/clicked_point` も引き続き購読し、その場合は
-パネルのYaw値を向きとして使います。
-RVizのFixed FrameとWaypointの座標系を一致させてください。既にWaypointがある場合、
-異なる `frame_id` のクリックは誤操作防止のため追加されません。
+## Waypointの保存・読込み
+
+WaypointはYAML形式で保存・読込み可能
+
+YAML読込み時は、以下のいずれかを選択
+
+* 現在のWaypointリストを置換
+* 現在のWaypointリストへ追加
+
+追加読込みは、既存Waypointと同一の`frame_id`を持つファイルのみ対象
+
+保存時は一時ファイルへ書き込んだ後に既存ファイルを置換し、保存途中のYAML破損を防止
+
+## RViz2の設定
+
+### 2D Goal Pose
+
+`2D Goal Pose`のtopicを以下に設定
+
+```text
+/waypoint_pose
+```
+
+本パネルは`/waypoint_pose`を購読し、受信したPoseをWaypointとして追加
+
+### Publish Point
+
+RViz2標準の`Publish Point`が送信する`/clicked_point`にも対応
+
+`Publish Point`からWaypointを追加した場合、向きにはパネル上で設定したYaw値を使用
+
+## 注意事項
+
+RViz2のFixed FrameとWaypointの`frame_id`を一致させる必要あり
+
+Waypointがすでに登録されている状態で異なる`frame_id`のPoseを受信した場合、誤操作防止のため追加対象外
