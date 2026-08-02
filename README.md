@@ -60,6 +60,7 @@ pkill -f gzclient
 pkill -f gazebo
 source /usr/share/gazebo/setup.sh
 export TURTLEBOT3_MODEL=burger
+export GAZEBO_MODEL_DATABASE_URI=""
 ros2 launch turtlebot3_gazebo turtlebot3_world.launch.py
 ```
 
@@ -174,19 +175,19 @@ flowchart TD
 
 ### 使用アルゴリズム
 
-| 役割               | コンポーネント／アルゴリズム                     | Nav2  | 入出力・補足                                       |
-| ------------------ | ------------------------------------------------ | :---: | -------------------------------------------------- |
-| 地図作成           | SLAM Toolbox（scan matching、Ceres Solver）      |   ×   | `/scan`とodom/TFからの地図生成                     |
-| 自己位置推定       | EMCL2（既定）                                    |   ×   | 地図、`/scan`、odomからの`map → odom`推定          |
-| 自己位置推定       | AMCL（選択可）                                   |   ○   | 地図、`/scan`、odomからの`map → odom`推定          |
-| 地図配信           | Map Server                                       |   ○   | 保存済み地図のNav2への配信                         |
-| グローバル経路計画 | NavFn Planner（A*）                              |   ○   | `use_astar: true`。ゴールまでのグローバル経路計画  |
-| 経路平滑化         | Simple Smoother                                  |   ○   | グローバル経路の平滑化                             |
-| 局所経路追従       | Regulated Pure Pursuit                           |   ○   | 経路・局所コストマップからの速度指令生成           |
-| 障害物回避         | Costmap 2D（Voxel / Obstacle / Inflation Layer） |   ○   | `/scan`による障害物情報の反映                      |
-| 速度平滑化         | Velocity Smoother                                |   ○   | `/cmd_vel`の急変抑制                               |
-| 行動制御・復帰     | Nav2 Behavior Tree、Spin / BackUp など           |   ○   | 計画・追従・失敗時の復帰制御                       |
-| 複数地点の巡回     | Waypoint Manager + NavigateThroughPoses          |   ○   | RViz登録地点列のNav2への送信                       |
+| 役割               | コンポーネント／アルゴリズム                     | Nav2  | 入出力・補足                                      |
+| ------------------ | ------------------------------------------------ | :---: | ------------------------------------------------- |
+| 地図作成           | SLAM Toolbox（scan matching、Ceres Solver）      |   ×   | `/scan`とodom/TFからの地図生成                    |
+| 自己位置推定       | EMCL2（既定）                                    |   ×   | 地図、`/scan`、odomからの`map → odom`推定         |
+| 自己位置推定       | AMCL（選択可）                                   |   ○   | 地図、`/scan`、odomからの`map → odom`推定         |
+| 地図配信           | Map Server                                       |   ○   | 保存済み地図のNav2への配信                        |
+| グローバル経路計画 | NavFn Planner（A*）                              |   ○   | `use_astar: true`。ゴールまでのグローバル経路計画 |
+| 経路平滑化         | Simple Smoother                                  |   ○   | グローバル経路の平滑化                            |
+| 局所経路追従       | Regulated Pure Pursuit                           |   ○   | 経路・局所コストマップからの速度指令生成          |
+| 障害物回避         | Costmap 2D（Voxel / Obstacle / Inflation Layer） |   ○   | `/scan`による障害物情報の反映                     |
+| 速度平滑化         | Velocity Smoother                                |   ○   | `/cmd_vel`の急変抑制                              |
+| 行動制御・復帰     | Nav2 Behavior Tree、Spin / BackUp など           |   ○   | 計画・追従・失敗時の復帰制御                      |
+| 複数地点の巡回     | Waypoint Manager + NavigateThroughPoses          |   ○   | RViz登録地点列のNav2への送信                      |
 
 SLAM設定ファイル: [`src/autonomous_slam/config/`](src/autonomous_slam/config/)
 
