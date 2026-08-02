@@ -4,8 +4,27 @@ Nav2による自律移動
 
 ## 必要環境
 
+- Ubuntu/Debian系Linux
 - ROS 2のインストール
-- `turtlebot3_gazebo`、`turtlebot3_teleop`、`nav2_bringup`、`slam_toolbox`のインストール
+- `sudo`権限とネットワーク接続
+
+## 環境構築
+
+導入済みROS 2のうち、`/opt/ros`配下で最新のディストリビューションを自動検出し、必要なAPTパッケージ、EMCL2、rosdep依存関係、ワークスペースのビルドを実行
+
+```bash
+make setup
+```
+
+ビルド後のワークスペース読み込み
+
+```bash
+source install/setup.bash
+```
+
+旧版`python3-rosdep2`の削除後に残る無効なrosdepソースは、`make setup`の実行時に自動削除
+
+外部パッケージの移動後は、CMakeキャッシュを自動削除してビルドを再構成
 
 不足時の依存パッケージインストール
 
@@ -18,7 +37,7 @@ rosdep install --from-paths src --ignore-src -r -y
 ソース取得と依存パッケージのインストール
 
 ```bash
-vcs import src < autonomous_bot.repo
+vcs import < autonomous_bot.repos
 rosdep install --from-paths src --ignore-src -r -y
 ```
 
