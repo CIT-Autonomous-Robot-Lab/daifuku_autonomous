@@ -113,7 +113,7 @@ autonomous_bot
 └── src
     ├── autonomous_nav
     │   ├── config
-    │   │   ├── nav2_params.yaml
+    │   │   ├── nav2/
     │   │   ├── emcl2_params.yaml
     │   │   └── slam_toolbox_params.yaml
     │   ├── launch
@@ -141,7 +141,7 @@ autonomous_bot
 
 ### Nav2で使っているもの
 
-`src/autonomous_nav/config/nav2_params.yaml`で、以下のNav2コンポーネントを使っています。
+`src/autonomous_nav/config/nav2/`のコンポーネントごとの設定ファイルで、以下のNav2コンポーネントを使っています。
 
 - 自己位置推定
   - `localization:=emcl2`の場合: `emcl2`パッケージの`emcl2_node`
@@ -244,7 +244,8 @@ SLAMで地図を作るためのlaunchです。
   - 使用する地図YAMLへのフルパス
   - 存在しない場合はlaunch時にエラーになる
 - `params_file`
-  - デフォルト: `config/nav2_params.yaml`
+  - 任意の統合済みNav2パラメータYAMLを指定する場合に使う
+  - 未指定時は`config/nav2/`配下の分割ファイルを起動時に統合する
 - `emcl2_params_file`
   - デフォルト: `config/emcl2_params.yaml`
 - `rviz_config`
@@ -261,9 +262,9 @@ SLAMで地図を作るためのlaunchです。
 
 ### 設定ファイル
 
-- `config/nav2_params.yaml`
-  - Nav2全体のパラメータ
-  - AMCL、BT Navigator、Controller、Costmap、Map Server、Planner、Smoother、Behavior、Waypoint Follower、Velocity Smootherを設定する
+- `config/nav2/`
+  - Nav2のパラメータをコンポーネント単位で管理するディレクトリ
+  - `amcl.yaml`、`bt_navigator.yaml`、`controller_server.yaml`、`costmaps.yaml`、`map_server.yaml`、`planner_server.yaml`、`smoother_server.yaml`、`behavior_server.yaml`、`waypoint_follower.yaml`、`velocity_smoother.yaml`を配置
 - `config/emcl2_params.yaml`
   - `emcl2_node`用のパラメータ
   - フレーム名、初期姿勢、粒子数、オドメトリモデル、センサリセットなどを設定する

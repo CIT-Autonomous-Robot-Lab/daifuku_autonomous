@@ -1,4 +1,7 @@
 import os
+import tempfile
+
+import yaml
 
 from ament_index_python.packages import get_package_share_directory
 from ament_index_python.packages import get_package_prefix
@@ -10,6 +13,7 @@ from launch.actions import (
     IncludeLaunchDescription,
     OpaqueFunction,
     SetEnvironmentVariable,
+    SetLaunchConfiguration,
 )
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -24,7 +28,7 @@ def generate_launch_description():
     pkg_share = get_package_share_directory("autonomous_nav")
     nav2_share = get_package_share_directory("nav2_bringup")
 
-    default_params = os.path.join(pkg_share, "config", "nav2_params.yaml")
+    default_params_dir = os.path.join(pkg_share, "config", "nav2")
     default_emcl2_params = os.path.join(pkg_share, "config", "emcl2_params.yaml")
     default_rviz_config = os.path.join(pkg_share, "rviz", "nav2_default.rviz")
     default_map = os.path.join(pkg_share, "maps", "map.yaml")
@@ -69,6 +73,41 @@ def generate_launch_description():
         ),
         allow_substs=True,
     )
+
+    default_param_files = [
+        "amcl.yaml",
+        "bt_navigator.yaml",
+        "controller_server.yaml",
+        "costmaps.yaml",
+        "map_server.yaml",
+        "planner_server.yaml",
+        "smoother_server.yaml",
+        "behavior_server.yaml",
+        "waypoint_follower.yaml",
+        "velocity_smoother.yaml",
+    ]
+
+    def configure_params_file(context, *args, **kwargs):
+        # Nav2's upstream launch files accept one parameter file. Keep the
+        # repository configuration split by component, then merge it only for
+        # this launch invocation. An explicitly supplied params_file is kept
+        # intact for custom deployments.
+        if params_file.perform(context):
+            return []
+
+        merged_params = {}
+        for filename in default_param_files:
+            path = os.path.join(default_params_dir, filename)
+            with open(path, encoding="utf-8") as param_file:
+                merged_params.update(yaml.safe_load(param_file) or {})
+
+        temporary_file = tempfile.NamedTemporaryFile(
+            mode="w", prefix="autonomous_nav2_", suffix=".yaml", delete=False
+        )
+        with temporary_file:
+            yaml.safe_dump(merged_params, temporary_file, sort_keys=False)
+
+        return [SetLaunchConfiguration("params_file", temporary_file.name)]
 
     configured_nav2_params = ParameterFile(
         RewrittenYaml(
@@ -123,7 +162,14 @@ def generate_launch_description():
             default_value=default_map,
             description="Full path to the map yaml file.",
         ),
-        DeclareLaunchArgument("params_file", default_value=default_params),
+        DeclareLaunchArgument(
+            "params_file",
+            default_value="",
+            description=(
+                "Optional combined Nav2 parameters YAML. When omitted, the "
+                "component files in config/nav2 are merged automatically."
+            ),
+        ),
         DeclareLaunchArgument("emcl2_params_file", default_value=default_emcl2_params),
         DeclareLaunchArgument("rviz_config", default_value=default_rviz_config),
         DeclareLaunchArgument("use_sim_time", default_value="false"),
@@ -141,6 +187,7 @@ def generate_launch_description():
         DeclareLaunchArgument("emcl2_executable", default_value="emcl2_node"),
         DeclareLaunchArgument("emcl2_node_name", default_value="emcl2"),
 
+        OpaqueFunction(function=configure_params_file),
         OpaqueFunction(function=validate_map_file),
         OpaqueFunction(function=validate_localization),
 
