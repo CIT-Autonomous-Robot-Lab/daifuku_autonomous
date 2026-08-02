@@ -9,7 +9,7 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    pkg_share = get_package_share_directory("autonomous_nav")
+    pkg_share = get_package_share_directory("autonomous_slam")
 
     default_slam_params = os.path.join(pkg_share, "config", "slam_toolbox_params.yaml")
     default_rviz_config = os.path.join(pkg_share, "rviz", "mapping.rviz")

@@ -25,7 +25,7 @@ rosdep install --from-paths src --ignore-src -r -y
 ## ビルド
 
 ```bash
-colcon build --packages-select autonomous_nav emcl2 nav2_waypoint_manager
+colcon build --packages-select autonomous_slam autonomous_nav emcl2 nav2_waypoint_manager
 source install/setup.sh
 ```
 
@@ -51,7 +51,7 @@ TurtleBot3、`/scan`、`/odom`、TF、`/clock`などの起動
 #### SLAMを起動
 
 ```bash
-ros2 launch autonomous_nav mapping.launch.py use_sim_time:=true
+ros2 launch autonomous_slam mapping.launch.py use_sim_time:=true
 ```
 
 #### キーボード操作（`/cmd_vel`）
@@ -62,13 +62,13 @@ ros2 run turtlebot3_teleop teleop_keyboard
 #### 地図の保存
 
 ```bash
-ros2 run nav2_map_server map_saver_cli -f src/autonomous_nav/maps/map
+ros2 run nav2_map_server map_saver_cli -f $PWD/src/autonomous_slam/maps/map
 ```
 
 保存後に作成または更新されるファイル
 
-- `src/autonomous_nav/maps/map.yaml`
-- `src/autonomous_nav/maps/map.pgm`
+- `src/autonomous_slam/maps/map.yaml`
+- `src/autonomous_slam/maps/map.pgm`
 
 ### 3. 保存済み地図によるNav2起動
 
@@ -107,7 +107,9 @@ RVizからゴールの2D Poseを指定
 
 ## 現在の構成
 
-地図作成用起動ファイル: `mapping.launch.py`
+地図作成パッケージ: `autonomous_slam`
+
+地図作成用起動ファイル: `autonomous_slam/launch/mapping.launch.py`
 
 自律走行用起動ファイル: `navigation.launch.py`
 
@@ -167,6 +169,10 @@ flowchart TD
 | 行動制御・復帰     | Nav2 Behavior Tree、Spin / BackUp など           |   ○   | 計画・追従・失敗時の復帰制御                       |
 | 複数地点の巡回     | Waypoint Manager + NavigateThroughPoses          |   ○   | RViz登録地点列のNav2への送信                       |
 
-設定ファイル: [`src/autonomous_nav/config/`](src/autonomous_nav/config/)
+SLAM設定ファイル: [`src/autonomous_slam/config/`](src/autonomous_slam/config/)
 
-起動ファイル: [`src/autonomous_nav/launch/`](src/autonomous_nav/launch/)
+Nav2設定ファイル: [`src/autonomous_nav/config/`](src/autonomous_nav/config/)
+
+SLAM起動ファイル: [`src/autonomous_slam/launch/`](src/autonomous_slam/launch/)
+
+Nav2起動ファイル: [`src/autonomous_nav/launch/`](src/autonomous_nav/launch/)

@@ -52,6 +52,7 @@ Visualization Manager:
       Update Topic:
         Depth: 5
         Durability Policy: Volatile
+        Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /map_updates
@@ -86,7 +87,7 @@ Visualization Manager:
       Enabled: true
       Max Color: 255; 255; 255
       Max Intensity: 4096
-      Min Color: 0; 0; 0
+      Min Color: 255; 255; 255
       Min Intensity: 0
       Name: LaserScan
       Position Transformer: XYZ
