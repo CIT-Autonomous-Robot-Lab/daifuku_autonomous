@@ -154,7 +154,7 @@ autonomous_bot
   - `NavigateToPose`、`NavigateThroughPoses`、経路計算、経路追従、リカバリ、キャンセル系BTノードを使用する
 - Controller
   - `nav2_controller`
-  - ローカルプランナは`dwb_core::DWBLocalPlanner`
+  - ローカルコントローラは`nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController`（Regulated Pure Pursuit）
   - 進捗チェックは`nav2_controller::SimpleProgressChecker`
   - ゴール判定は`nav2_controller::SimpleGoalChecker`
 - Planner
