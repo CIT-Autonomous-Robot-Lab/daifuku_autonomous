@@ -1,5 +1,51 @@
 # トラブルシューティング
 
+## EMCL2が`failed to compute odom pose`／`can't get odometry info`と出る
+
+`odom -> base_footprint`が誰も配信していない状態です。EMCL2は`map -> odom`を出す前に
+この区間を引くので、無ければ何も推定できません。まず配信元が生きているか見ます。
+
+```bash
+ros2 topic hz /odom
+ros2 run tf2_ros tf2_echo odom base_footprint
+```
+
+`Invalid frame ID "odom"`が返るなら本体ドライバが死んでいます。ログには何も出ないので
+（ノードは`activated`まで到達してから落ちる）、プロセスの状態を直接見てください。
+
+```bash
+ps -eo pid,stat,comm | grep raspimouse    # Zl+ = ゾンビ
+sudo dmesg -T | tail -40
+```
+
+**`use_light_sensors: true`でrtmouseがカーネルoopsを起こします**（2026-08-03、
+Pi 4 Model B Rev 1.5 / 5.15.0-1098-raspi で確認）。`raspimouse`が`/dev/rtlightsensor0`を
+`light_sensors_hz`（100 Hz）で読み、rtmouse側の`mcp3204_get_value`でページフォルトして
+プロセスごと落ちます。
+
+```
+Unable to handle kernel paging request at virtual address ...
+pc : osq_lock+0x7c/0x1a0
+  mcp3204_get_value+0x98/0x120 [rtmouse]
+  sensor_read+0x98/0x2f4 [rtmouse]
+note: raspimouse[...] exited with preempt_count 1
+```
+
+`config/robot/raspicat.yaml`の`use_light_sensors`は`false`にしてあります。
+`/light_sensors`を使うものはこのワークスペースにありません。
+
+背景として、mainlineの`mcp320x`（IIO）が同じSPIチップセレクトを掴んでいます。
+
+```bash
+ls -l /sys/bus/spi/drivers/mcp320x/    # spi0.0 -> ... があれば競合
+```
+
+rtmouseもMCP3204を自前で叩くので、両者が同じデバイスを取り合う形です。光センサを
+使いたい場合は`mcp320x`をブラックリストに入れてから試してください。
+
+**oopsが出た後はリブートしてください。** ロックを握ったままプロセスが死ぬので
+（`preempt_count`が漏れ、`lsmod`の参照数が戻らない）、`rmmod`も効きません。
+
 ## 機体のトピックが見つからない
 
 1. 機体とPC／コンテナの`ROS_DOMAIN_ID`を一致させる

@@ -7,13 +7,15 @@
 # このファイルは差分ではなく上流の**完全なコピー**。launch_ros はノード自身の
 # parameters= をグローバル (SetParametersFromFile) より後に展開する = ノード側が
 # 勝つので、上流 launch へ差分を重ねる方式では上書きできない (../README.md)。
-# 下の 3 行以外は上流に追従すること。未設定キーは無い (ノードが宣言する 14 個で全部)。
+# 下の 4 行以外は上流に追従すること。未設定キーは無い (ノードが宣言する 14 個で全部)。
 
 raspimouse:
   ros__parameters:
     odometry_scale_left_wheel : 1.0     # 既定 1.0: 左車輪の回転量に掛ける補正係数
     odometry_scale_right_wheel: 1.0     # 既定 1.0: 右車輪の同上
-    use_light_sensors         : true    # 既定 true: 赤外線測距センサを読んで /light_sensors へ出す
+    # 既定 true から変更。true にすると rtmouse の MCP3204 読みでカーネルが oops し、
+    # raspimouse ごと落ちて odom も TF も出なくなる (docs/usage/troubleshooting.md)。
+    use_light_sensors         : false   # 既定 true: 赤外線測距センサを読んで /light_sensors へ出す
 
     # 既定 false のまま: true (エンコーダ) が本来正しいが、この個体の I2C カウンタが
     # 走行中にランダムで固着してリブートが要る。天秤と復旧手順は ../README.md。
