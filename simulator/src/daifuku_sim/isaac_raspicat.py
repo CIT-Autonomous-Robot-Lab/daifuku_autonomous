@@ -42,7 +42,7 @@ TF ツリーは 2 つの区間に分かれ、**それぞれ所有者を 1 つだ
 同じ transform が別ソースから流れ、tf2 がどちらを採るかで自己位置だけが静かに
 壊れる (トピックは全部出ているように見える)。
 
-`simulator/scripts/nav_container.sh` は URDF から robot_state_publisher を起動し、
+`simulator/container/nav_container.sh` は URDF から robot_state_publisher を起動し、
 起動前に `base_footprint -> <lidar frame>` が引けることを確認してから nav2 を
 上げる。ここが無いと laser_filters と emcl2 が「原因の分からない沈黙」で失敗する。
 
@@ -60,7 +60,7 @@ odom のトピック名を lidar モードから推測しないこと。**明示
 
 ## 実時間との関係 (ここがこのハーネスの成立条件)
 
-Pi4 相当への減速は `tools/pi4_sim` と同じく **cgroup の CPU quota** で行う。
+Pi4 相当への減速は pi4_sim ハーネスと同じく **cgroup の CPU quota** で行う。
 quota は**実時間**基準である一方、`--use-sim-time` を付けると nav2 の締め切りは
 **シム時間**基準になる。したがって RTF (real-time factor) が 1.0 を割ると、
 1 シム秒あたりに nav2 が実行できる仕事量が増え、**Pi4 が実際より速く見える**。

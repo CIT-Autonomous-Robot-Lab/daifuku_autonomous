@@ -4,7 +4,7 @@
 
 ## なぜこれが必要か
 
-Pi4 相当への減速は cgroup の CPU quota で行う (tools/pi4_sim と同じ方式)。
+Pi4 相当への減速は cgroup の CPU quota で行う (pi4_sim ハーネスと同じ方式)。
 quota は **実時間 (wall clock)** 基準である。一方 `--use-sim-time` を付けると
 nav2 の締め切り・タイマ・TF の期限は **シム時間** 基準になる。
 

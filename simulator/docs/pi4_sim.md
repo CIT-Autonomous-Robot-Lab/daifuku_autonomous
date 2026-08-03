@@ -3,15 +3,22 @@
 実機 (Raspberry Pi Cat / 192.168.1.50) が落ちている間に、「ゴールを送ると
 Aborted になる (`plan=0`)」を手元の Podman で切り分けるための一式。
 
-- `run_pi4_sim.ps1` — Pi4 相当に絞ったコンテナを作り、1 ケース実行する (Windows 側)
-- `run_case.sh` — コンテナ内で nav2 + 疑似ロボットを起動しゴールを1回投げる
-- `fake_robot.py` — 差動二輪 + 2D LiDAR の疑似ロボット (地図をレイキャスト)
-- `probe.py` — `/plan` `/cmd_vel_nav` `/cmd_vel` の本数、初回 plan までの時間、
-  各ノードの RSS と cgroup メモリを取る診断プローブ
-- `downsample_map.py` — 占有格子地図の整数倍ダウンサンプル (障害物優先)
-- `fastdds_local.xml` — 実機プロファイルのローカル版 (SHM + ループバック UDP)
+パスは `simulator/` からの相対。Isaac 版ハーネス (`README.md`) とコンテナ側の
+置き場・コンテナ内パス (`/opt/sim`)・`probe.py` を共有する。
+
+| ファイル | 役割 |
+|---|---|
+| `scripts/run_pi4_sim.ps1` | Pi4 相当に絞ったコンテナを作り、1 ケース実行する (Windows 側) |
+| `scripts/run_matrix.ps1` | ケース一式を順に回して `PROBE_SUMMARY` を集める |
+| `container/run_case.sh` | コンテナ内で nav2 + 疑似ロボットを起動しゴールを1回投げる |
+| `container/fake_robot.py` | 差動二輪 + 2D LiDAR の疑似ロボット (地図をレイキャスト) |
+| `container/probe.py` | `/plan` `/cmd_vel_nav` `/cmd_vel` の本数、初回 plan までの時間、各ノードの RSS と cgroup メモリを取る診断プローブ。**Isaac 版と共有** |
+| `container/fastdds_local.xml` | 実機プロファイルのローカル版 (SHM + ループバック UDP) |
+| `src/daifuku_sim/downsample_map.py` | 占有格子地図の整数倍ダウンサンプル (障害物優先)。ホストでは `uv run downsample-map`、コンテナ内では `run_case.sh` が `MAP_SCALE` 指定時に直接呼ぶ |
 
 ```powershell
+cd simulator\scripts
+
 # 実機と同じ設定 (地図 free_thresh 0.25 / solver frontier2d_sparse / planner vi)
 .\run_pi4_sim.ps1 -Case baseline
 
@@ -315,7 +322,7 @@ Pi には触れていないので、以下は**提案**であって適用済み�
    削除したので、必要なら `map_19f` から作り直すこと（`free_thresh 0.15` 込み）:
 
    ```bash
-   python3 tools/pi4_sim/downsample_map.py \
+   uv run --project simulator downsample-map \
        src/autonomous_nav/maps/map_19f.yaml /tmp/map_10cm.yaml \
        --scale 2 --free-thresh 0.15
    ```
@@ -440,7 +447,7 @@ CASE=tsuda_vi MAP_NAME=map_tsudanuma PLANNER=vi LOCAL_PLANNER=nav2 \
 OVERRIDES=map_tsudanuma \
 START_X=53.07 START_Y=-21.62 START_YAW_DEG=90 \
 GOAL_X=44.08 GOAL_Y=-5.12 GOAL_YAW_DEG=0 SETTLE=120 TIMEOUT=900 \
-bash /opt/pi4_sim/run_case.sh
+bash /opt/sim/run_case.sh
 ```
 
 `bench_map` 単体 (scale 3 = 0.15m/cell, 1963x1334x60 = 157,118,520 状態):

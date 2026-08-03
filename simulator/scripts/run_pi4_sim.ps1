@@ -58,6 +58,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+$proj = Join-Path $repo "simulator"
 $pkg = Join-Path $repo "src\autonomous_nav"
 $share = "/opt/ros_ws/install/share/autonomous_nav"
 
@@ -95,11 +96,18 @@ if (-not $exists) {
 }
 
 # --- ホストの編集内容をコンテナへ流し込む (bind mount が使えないため) ---
-podman @c exec $Container bash -lc "mkdir -p /opt/pi4_sim /etc/fastdds" | Out-Null
-foreach ($f in Get-ChildItem (Join-Path $PSScriptRoot "*") -Include *.py, *.sh, *.xml) {
-    podman @c cp $f.FullName "${Container}:/opt/pi4_sim/$($f.Name)" | Out-Null
+# コンテナ内で走るものは simulator/container/ にまとまっている (Isaac 版の
+# run_isaac_case.sh も同じディレクトリから同じ /opt/sim へ配る)。
+$container_dir = Join-Path $proj "container"
+podman @c exec $Container bash -lc "mkdir -p /opt/sim /etc/fastdds" | Out-Null
+foreach ($f in Get-ChildItem (Join-Path $container_dir "*") -Include *.py, *.sh, *.xml) {
+    podman @c cp $f.FullName "${Container}:/opt/sim/$($f.Name)" | Out-Null
 }
-podman @c cp (Join-Path $PSScriptRoot "fastdds_local.xml") "${Container}:/etc/fastdds/local.xml" | Out-Null
+# downsample_map.py だけは uv パッケージ側にある (ホストでも uv run downsample-map
+# として使うため)。run_case.sh が MAP_SCALE 指定時にコンテナ内で呼ぶので、
+# 単体スクリプトとしてここへも配る (intra-package import は持たない)。
+podman @c cp (Join-Path $proj "src\daifuku_sim\downsample_map.py") "${Container}:/opt/sim/downsample_map.py" | Out-Null
+podman @c cp (Join-Path $container_dir "fastdds_local.xml") "${Container}:/etc/fastdds/local.xml" | Out-Null
 # podman cp は「足す」だけで消さないので、リネーム・移動したファイルが
 # コンテナ側に残り続ける (config/ を分割したときの旧 nav2_params.yaml など)。
 # 読まれはしないが紛らわしいので、上書き前に消しておく。
@@ -111,10 +119,10 @@ foreach ($d in "behavior_trees", "config", "launch", "maps", "rviz", "scripts") 
 
 # Windows の CRLF がそのまま渡ると bash / python が壊れるので落とす。
 podman @c exec $Container bash -lc @'
-for f in /opt/pi4_sim/*.py /opt/pi4_sim/*.sh; do
+for f in /opt/sim/*.py /opt/sim/*.sh; do
     [ -e "$f" ] && sed -i "s/\r$//" "$f"
 done
-chmod +x /opt/pi4_sim/*.sh
+chmod +x /opt/sim/*.sh
 '@ | Out-Null
 
 if ($SetupOnly) { Write-Host "container ready: $Container"; exit 0 }
@@ -124,5 +132,5 @@ foreach ($k in $CaseEnv.Keys) { $envArgs += @("-e", "$k=$($CaseEnv[$k])") }
 $envArgs += @("-e", "CASE=$Case")
 
 Write-Host "=== running case '$Case' ==="
-podman @c exec @envArgs $Container bash /opt/pi4_sim/run_case.sh
+podman @c exec @envArgs $Container bash /opt/sim/run_case.sh
 exit $LASTEXITCODE

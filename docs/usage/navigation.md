@@ -192,7 +192,7 @@ ros2 launch autonomous_nav navigation.launch.py \
 - ローカルでの実測では、`vi_global_planner`のピークRSSは3.98 GB（内訳: 匿名2.16 GB +
   mmapページキャッシュ1.81 GB）でした。mmapに逃がしても匿名2.16 GBが残るため、
   Raspberry Pi 4 4GBでこの設定が通るかは未確認です。減らすには`map_scale`を上げます
-  （詳細は`tools/pi4_sim/README.md`）。
+  （詳細は`simulator/docs/pi4_sim.md`）。
 - この地図は68.2%が未観測セルで、占有セルは0.4%しかありません。EMCL2やAMCLの
   スキャンマッチングは占有セルの尤度場に依存するため、現状では自己位置推定の
   拠り所がほとんどありません（経路計画とは別の課題です）。

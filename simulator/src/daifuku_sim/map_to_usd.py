@@ -11,7 +11,7 @@ Gazebo 版 (rt-net/raspicat_sim) のワールドは `empty.world` / `iscas_museu
   * 地図とシミュレータ環境が定義上ずれない。実機で起きた emcl2 の alpha 崩壊は
     「有効ビームの 28% が地図の壁を貫通する」= 地図と環境の不一致が原因だった。
     地図から環境を作れば、その不一致を**意図的に入れたときだけ**再現される。
-  * `tools/pi4_sim/fake_robot.py` (地図をレイキャストする疑似 LiDAR) と同じ地図・
+  * `simulator/container/fake_robot.py` (地図をレイキャストする疑似 LiDAR) と同じ地図・
     同じしきい値解釈なので、Isaac 版と既存ハーネスの結果を直接比較できる。
 
 占有セルの判定は fake_robot.py の `load_map()` と**同じ式**にしてある:
@@ -25,7 +25,7 @@ Gazebo 版 (rt-net/raspicat_sim) のワールドは `empty.world` / `iscas_museu
 `SIM_UNKNOWN_AS_OBSTACLE=1` に対応する。既定 (`free`) では未観測セルは素通しに
 なる。map_19f.yaml の `free_thresh: 0.25` では未観測画素 (205, p=0.196) が free 側に
 落ちるため、既定でも「地図の 74.66% が未観測」という事実はワールドに現れない。
-これは意図した挙動で、既存ハーネスの既定と揃えてある (tools/pi4_sim/README.md)。
+これは意図した挙動で、既存ハーネスの既定と揃えてある (simulator/docs/pi4_sim.md)。
 
 出力は `pxr` (usd-core) を使わない**手書きの .usda テキスト**。Isaac Sim の
 Python でしか読めない形式を避けることで、GPU の無い開発機でも生成・検査できる。
@@ -37,9 +37,9 @@ Python でしか読めない形式を避けることで、GPU の無い開発機
     python3 map_to_usd.py .../turtlebot3.yaml -o w.usda --wall-height 1.0
 
 大きな地図 (map_tsudanuma: 5888x4000) はプリム数が数万に達してステージの読み込みが
-重い。先に `tools/pi4_sim/downsample_map.py` で粗くしてから渡すこと:
+重い。先に `uv run downsample-map` で粗くしてから渡すこと:
 
-    python3 tools/pi4_sim/downsample_map.py maps/map_tsudanuma.yaml /tmp/ts.yaml --scale 4
+    uv run --project simulator downsample-map maps/map_tsudanuma.yaml /tmp/ts.yaml --scale 4
     uv run --project simulator map-to-usd /tmp/ts.yaml -o worlds/tsudanuma.usda
 """
 
@@ -295,7 +295,7 @@ def main():
     ap.add_argument(
         "--max-prims", type=int, default=50000,
         help="矩形数がこれを超えたら中断する (既定: 50000)。"
-             "超える場合は tools/pi4_sim/downsample_map.py で地図を粗くしてから渡す",
+             "超える場合は downsample-map で地図を粗くしてから渡す",
     )
     args = ap.parse_args()
 
@@ -315,7 +315,7 @@ def main():
     if len(rects) > args.max_prims:
         raise SystemExit(
             f"矩形数 {len(rects)} が --max-prims {args.max_prims} を超えた。\n"
-            "  python3 tools/pi4_sim/downsample_map.py <in.yaml> <out.yaml> --scale N\n"
+            "  uv run --project simulator downsample-map <in.yaml> <out.yaml> --scale N\n"
             "で地図を粗くしてから渡すか、--max-prims を上げること。"
         )
 

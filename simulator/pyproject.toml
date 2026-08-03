@@ -42,6 +42,10 @@ prerelease = "explicit"
 [project.scripts]
 map-to-usd = "daifuku_sim.map_to_usd:main"
 rtf-gate = "daifuku_sim.rtf_gate:main"
+# downsample_map は**コンテナの中でも単体スクリプトとして走る** (run_case.sh が
+# MAP_SCALE 指定時に呼ぶ)。パッケージ内 import を持たせないこと。持たせると
+# /opt/sim へ 1 ファイル配る現在のやり方が壊れる。
+downsample-map = "daifuku_sim.downsample_map:main"
 # isaac_raspicat は console script にしない。モジュール読み込み時に
 # SimulationApp を起動する (それ以降でしか omni.* を import できない Kit の制約)
 # ので、import 経由で呼ぶ形にすると起動順が見えなくなる。

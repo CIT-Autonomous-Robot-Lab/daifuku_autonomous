@@ -1,10 +1,24 @@
-# simulator — Isaac Sim 上で本リポジトリの nav2 スタックを Pi4 相当の速度で回す
+# simulator — nav2 スタックを Pi4 相当の速度でシミュレータ上で回す
 
-`rt-net/raspicat_sim` (Gazebo) の Isaac Sim 版。ただし**移植ではなく作り直し**で、
-動かすナビゲーションスタックは `rt-net/raspicat_slam_navigation` ではなく
-**本リポジトリの `autonomous_nav`** (emcl2 + value_iteration3)。
+**ハーネスは 2 つあり、nav2 側 (コンテナ・cgroup・キャリブレーション) は共通で、
+ロボットとセンサをどこから供給するかだけが違う。**
 
-Raspberry Pi 4 の遅さは `tools/pi4_sim` と同じく cgroup の CPU quota で再現する。
+| | ロボット / センサ | 入口 | ドキュメント |
+|---|---|---|---|
+| **Isaac 版** | Isaac Sim (RTX GPU、ホスト側プロセス) | `scripts/run_isaac_case.sh` | このファイル |
+| **pi4_sim 版** | `container/fake_robot.py` (地図をレイキャストする疑似ロボット) | `scripts/run_pi4_sim.ps1` | [`docs/pi4_sim.md`](docs/pi4_sim.md) |
+
+pi4_sim 版のほうが先にあり、Pi4 相当の cgroup 値・キャリブレーション
+(navfn 20Hz 設定に対し実機 7.6Hz)・既定のスタート/ゴール座標・`container/probe.py`
+はそこから引き継いでいる。**実機で観測された事象の実測記録は `docs/pi4_sim.md`
+にまとまっている**ので、どちらを使う場合でもあちらを先に読むこと。
+
+以下はこのうち Isaac 版の話。`rt-net/raspicat_sim` (Gazebo) の Isaac Sim 版だが
+**移植ではなく作り直し**で、動かすナビゲーションスタックは
+`rt-net/raspicat_slam_navigation` ではなく **本リポジトリの `autonomous_nav`**
+(emcl2 + value_iteration3)。
+
+Raspberry Pi 4 の遅さは pi4_sim ハーネスと同じく cgroup の CPU quota で再現する。
 Isaac Sim は `fake_robot.py` (地図をレイキャストする疑似ロボット) を置き換えるだけで、
 nav2 側の構成・制約・キャリブレーションはそのまま引き継ぐ。
 
@@ -41,7 +55,7 @@ nav2 側の構成・制約・キャリブレーションはそのまま引き継
 | extra `isaac` (pip 版 Isaac Sim 6.0.1) | **解決のみ検証済み**。`uv lock` が 166 パッケージで解決し、`uv sync --extra isaac --dry-run` が `isaacsim-*` 22 個を含む 144 個を入れると出すことを確認。lock には linux (x86_64 / aarch64) と win_amd64 の wheel が入っている。**実際にインストールして起動したことは無い** (GPU 必須) |
 | `src/daifuku_sim/configs/*.json` | 生成ロジックは検証済みだが、**Isaac の RTX LiDAR プロファイルのスキーマとの適合は未検証**。6.0 でプロファイル探索パスの機構が変わったかは NVIDIA のドキュメントに記載が無く、確認できていない |
 | `src/daifuku_sim/isaac_raspicat.py` | **未検証** (GPU 必須)。5.x 向けに書き、6.0 の変更 2 点 (RTX LiDAR API / TransformTree の分割) への分岐を後から入れた。**分岐の条件は実行時判定だが、6.0 側の分岐が通ることは一度も確かめていない** |
-| `scripts/run_isaac_case.sh` / `scripts/nav_container.sh` | 構文チェックのみ。**未実行** |
+| `scripts/run_isaac_case.sh` / `container/nav_container.sh` | 構文チェックのみ。**未実行** |
 | `lidar_bringup.launch.py` / `navigation.launch.py` の変更 | 構文チェックのみ。既定値は現行のままで実機の挙動は変えていない |
 
 最初に動かすときは、下の「立ち上げ順序」に従って**段階的に**確認すること。
@@ -60,22 +74,48 @@ nav2 側の構成・制約・キャリブレーションはそのまま引き継
 
 ## 構成
 
-`simulator/` は **uv プロジェクト**である。
+`simulator/` は **uv プロジェクト**である。ただし uv パッケージ (`src/daifuku_sim/`)
+に入るのは**ホスト側で走るものだけ**で、コンテナの中で走るものは `container/` に置く。
+両者は Python が違う (下記)。
 
 ```
 simulator/
 ├── pyproject.toml / uv.lock      # 依存を固定 (isaacsim は extra `isaac`)
 ├── .python-version               # 3.12 — isaacsim 6.0.1 が cp312 のみのため
-├── src/daifuku_sim/
+├── src/daifuku_sim/              # ホスト側 (uv / Python 3.12)
 │   ├── map_to_usd.py             # -> uv run map-to-usd
 │   ├── rtf_gate.py               # -> uv run rtf-gate
+│   ├── downsample_map.py         # -> uv run downsample-map (コンテナ内でも走る。後述)
 │   ├── isaac_raspicat.py         # -> python.sh か uv run --extra isaac python
 │   └── configs/*.json            # RTX LiDAR プロファイル
-├── scripts/
-│   ├── run_isaac_case.sh         # ホスト側オーケストレータ
-│   └── nav_container.sh          # コンテナ内で走る側
+├── container/                    # コンテナ内 (ROS 2 Humble / Python 3.10 / rclpy)
+│   ├── nav_container.sh          #   Isaac 版のコンテナ側
+│   ├── run_case.sh               #   pi4_sim 版のコンテナ側 (fake_robot もここが起動)
+│   ├── fake_robot.py             #   疑似ロボット (pi4_sim 版のみ)
+│   ├── probe.py                  #   ゴール投入と計数 (**両版で共有**)
+│   └── fastdds_local.xml         #   実機プロファイルのローカル版
+├── scripts/                      # ホスト側オーケストレータ
+│   ├── run_isaac_case.sh         #   Isaac 版 (Linux / RTX)
+│   ├── run_pi4_sim.ps1           #   pi4_sim 版 (Windows / podman)
+│   └── run_matrix.ps1            #   pi4_sim 版をケース一式まとめて回す
+├── docs/pi4_sim.md               # pi4_sim 版のドキュメントと実測記録
 └── tests/verify_usda.py          # 生成 USD を地図に焼き戻して検算
 ```
+
+> **`container/` を `src/daifuku_sim/` に入れないこと。** ROS 2 Humble は
+> Python 3.10、この venv は 3.12 で、拡張モジュールの ABI が合わない
+> (「どちらの経路でも `rclpy` は使えない」の節を参照)。`probe.py` / `fake_robot.py` を
+> パッケージに入れると、**その venv では絶対に import できないモジュール**が
+> `daifuku_sim` に並ぶことになる。
+>
+> 例外は `downsample_map.py` で、これは numpy / PyYAML しか要らないので両方から
+> 使う。ホストからは `uv run downsample-map`、コンテナ内では `run_case.sh` が
+> `MAP_SCALE` 指定時に `/opt/sim/downsample_map.py` を直接叩く。オーケストレータが
+> **この 1 ファイルだけを別途配っている**ので、**パッケージ内 import を足さないこと**。
+
+コンテナ内での置き場は両版とも `/opt/sim` で共通。`run_isaac_case.sh` と
+`run_pi4_sim.ps1` がそれぞれ `container/` の必要なものをそこへ `podman cp` する
+(bind mount しない理由は「つまずきやすいところ」を参照)。
 
 ```bash
 cd simulator && uv sync          # 初回だけ (uv run は自動で同期するので必須ではない)
@@ -211,7 +251,7 @@ uv run --project simulator map-to-usd \
 津田沼地図は先に粗くする:
 
 ```bash
-python3 tools/pi4_sim/downsample_map.py \
+uv run --project simulator downsample-map \
     src/autonomous_nav/maps/map_tsudanuma.yaml /tmp/ts4.yaml --scale 4
 uv run --project simulator map-to-usd /tmp/ts4.yaml -o /tmp/ts4.usda
 # 1472x1000 @0.2m -> 12,011 矩形 / 5.8 MiB
@@ -221,7 +261,7 @@ uv run --project simulator map-to-usd /tmp/ts4.yaml -o /tmp/ts4.usda
 > `map_19f.yaml` は `free_thresh: 0.25`。map_saver の未観測画素 205 は p=0.196 なので
 > **free 側に落ちて未観測と判定されない**。実測では `--unknown wall` を付けても
 > 占有セルは 9,146 → 9,147 と 1 セルしか増えなかった。`free_thresh` を ROS 既定の
-> 0.196 に直すと 403,307 セル (76.39%) が壁になる。これは `tools/pi4_sim/README.md`
+> 0.196 に直すと 403,307 セル (76.39%) が壁になる。これは `simulator/docs/pi4_sim.md`
 > が指摘している「地図の 74.66% が未観測なのに free に化けている」問題そのもの。
 
 ### 2. ロボット USD を作る
@@ -326,7 +366,7 @@ Pi4 相当への減速は cgroup の CPU quota で行うが、quota は**実時�
 
 - **既定は `USE_SIM_TIME=false`** (Isaac をウォールクロックで自由走行させる)。
   nav2 の時計と cgroup quota が同じ実時間基準になるので、構造的に嘘がつけない。
-  `navigation.launch.py` の `use_sim_time` 既定も `false` で、`tools/pi4_sim` も
+  `navigation.launch.py` の `use_sim_time` 既定も `false` で、pi4_sim ハーネスも
   この経路を使っている。
 - `USE_SIM_TIME=true` は再現性と引き換えに RTF の監視が必須になる。
   `rtf_gate.py` が RTF 不足の実行を **終了コード 3 = 計測無効**として弾く。
@@ -368,7 +408,7 @@ TF ツリーは区間ごとに**所有者を 1 つだけ**にする。二重に�
 だから (`robot_bringup.launch.py` も rsp を上げている)。`isaac_raspicat.py` の
 `--publish-link-tf` は既定 `false` で、Isaac はリンク間 TF を出さない。
 
-`scripts/nav_container.sh` は URDF から `robot_state_publisher` を起動し、**nav2 を上げる前に
+`container/nav_container.sh` は URDF から `robot_state_publisher` を起動し、**nav2 を上げる前に
 `base_footprint → lidar_link` (mid360 なら `livox_frame`) が実際に引けることを確認**
 してから進む (引けなければ終了コード 6)。ここを確認せずに nav2 を上げると
 `laser_filters` と emcl2 が原因の分からない沈黙で失敗する。
@@ -405,7 +445,7 @@ MID360 構成では `robot_localization` の `ekf_node` が `/wheel/odom` と `/
 
 ## 再現できないもの
 
-`tools/pi4_sim/README.md` の限界は Isaac にしても**ほぼそのまま残る**。
+`simulator/docs/pi4_sim.md` の限界は Isaac にしても**ほぼそのまま残る**。
 Isaac が良くするのはセンサの現実感であって、CPU タイミングの忠実性ではない。
 
 - **単一スレッドのレイテンシは実機より速い。** cgroup quota は合計スループットしか
@@ -424,7 +464,7 @@ Isaac が良くするのはセンサの現実感であって、CPU タイミン�
   odom はドリフトしない。`fake_robot.py` は意図的にドリフトさせている
   (`odom_fw_scale 1.02` / `odom_rot_scale 0.99` + 移動量比例ノイズ) ので、
   **emcl2 に補正すべきものが無くなり `map→odom` が育たない**。この 1 点だけは
-  `tools/pi4_sim` のほうが実機に近い。emcl2 の収束や `map→odom` の挙動そのものを
+  pi4_sim ハーネスのほうが実機に近い。emcl2 の収束や `map→odom` の挙動そのものを
   見たい場合は pi4_sim 側で見ること。Isaac 側が優れるのは環境の幾何とセンサの
   現実感であって、オドメトリの誤差モデルではない。
 - **MID360 の非繰り返し走査は近似。** `configs/livox_mid360.json` は公称 FOV
@@ -443,7 +483,7 @@ Isaac が良くするのはセンサの現実感であって、CPU タイミン�
 **`/scan_raw` は出るのに nav2 が繋がらない。** `ROS_DOMAIN_ID` の不一致か、
 コンテナが `--network host --ipc host` で起動していないか。`--ipc host` が無いと
 Fast DDS の共有メモリトランスポートが通らず、**ディスカバリだけ成功してデータが
-流れない**という分かりにくい失敗をする。`scripts/nav_container.sh` は起動前に
+流れない**という分かりにくい失敗をする。`container/nav_container.sh` は起動前に
 `/scan_raw` と `/odom` の存在を 30 秒待って、無ければ見えているトピック一覧を
 出して終了コード 4 で止まる。
 
@@ -456,8 +496,8 @@ PLANNER=navfn PLANNER_EXPECTED_FREQ=20 bash simulator/scripts/run_isaac_case.sh 
 ```
 
 `planner_server` は**達成できない周波数を設定したときだけ**実測値を WARN に出す。
-`PLANNER_EXPECTED_FREQ` はそのための注入で、`scripts/nav_container.sh` が
-`extra_params_file` 経路の overlay に載せる (`tools/pi4_sim/run_case.sh` と同じ方式)。
+`PLANNER_EXPECTED_FREQ` はそのための注入で、`container/nav_container.sh` が
+`extra_params_file` 経路の overlay に載せる (`simulator/container/run_case.sh` と同じ方式)。
 同じ経路で `VI_SOLVER` / `VI_MAP_SCALE` / `VI_COMPACT_SINK_DIR` /
 `VI_PUBLISH_VF` / `BT_SERVER_TIMEOUT` も渡せる。
 
@@ -473,9 +513,16 @@ free の地図で測った値で、しきい値を直すと navfn の問題規�
 |---|---|---|
 | `src/daifuku_sim/map_to_usd.py` | `uv run map-to-usd` | 占有格子地図 → ワールド USD (`pxr` 不要の手書き `.usda`) |
 | `src/daifuku_sim/rtf_gate.py` | `uv run rtf-gate` | RTF レポートを読んで実行の成立/不成立を判定 |
+| `src/daifuku_sim/downsample_map.py` | `uv run downsample-map` / コンテナ内で `python3` | 占有格子地図の整数倍ダウンサンプル (障害物優先)。**両ハーネスとホストで共有** |
 | `src/daifuku_sim/isaac_raspicat.py` | `$ISAACSIM/python.sh <path>` | Isaac Sim standalone。ロボット読込 + OmniGraph ROS 2 ブリッジ + RTF 計測 |
 | `src/daifuku_sim/configs/raspicat_2d_lidar.json` | — | RTX LiDAR プロファイル (360°/0.5°/10Hz/0.1–30 m) |
 | `src/daifuku_sim/configs/livox_mid360.json` | — | 同 (MID360 の近似。40 ライン) |
-| `scripts/run_isaac_case.sh` | `bash` (ホスト) | オーケストレータ (world 生成 → Isaac → nav2 コンテナ → RTF 判定) |
-| `scripts/nav_container.sh` | `bash` (コンテナ内) | nav2 を起動しゴールを 1 回投げる。`run_isaac_case.sh` が送り込む |
+| `scripts/run_isaac_case.sh` | `bash` (ホスト) | Isaac 版オーケストレータ (world 生成 → Isaac → nav2 コンテナ → RTF 判定) |
+| `scripts/run_pi4_sim.ps1` | `powershell` (ホスト) | pi4_sim 版オーケストレータ。詳細は `docs/pi4_sim.md` |
+| `scripts/run_matrix.ps1` | `powershell` (ホスト) | pi4_sim 版をケース一式まとめて回して `PROBE_SUMMARY` を集める |
+| `container/nav_container.sh` | `bash` (コンテナ内) | nav2 を起動しゴールを 1 回投げる。`run_isaac_case.sh` が送り込む |
+| `container/run_case.sh` | `bash` (コンテナ内) | 同上 + `fake_robot.py` の起動。`run_pi4_sim.ps1` が送り込む |
+| `container/fake_robot.py` | `python3` (コンテナ内) | 差動二輪 + 2D LiDAR の疑似ロボット (地図をレイキャスト) |
+| `container/probe.py` | `python3` (コンテナ内) | ゴール投入と `/plan` `/cmd_vel` の計数、RSS / cgroup メモリのサンプリング。**両ハーネスで共有** |
+| `container/fastdds_local.xml` | — | 実機 DDS プロファイルのローカル版 (SHM + ループバック UDP) |
 | `tests/verify_usda.py` | `uv run python tests/...` | 生成 USD を地図グリッドに焼き戻して一致を検算 (主に y 反転の検出) |

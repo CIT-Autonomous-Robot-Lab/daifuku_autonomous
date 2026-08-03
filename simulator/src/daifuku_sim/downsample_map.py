@@ -10,7 +10,11 @@ vi_core の N_THETA とのコンパイル時一致チェックがあるため実
   ブロック内に障害物が1つでもあれば障害物、なければ未観測 > free の順で優先。
   つまり通れる場所が増える方向には決して倒れない。
 
-  python3 downsample_map.py in.yaml out.yaml --scale 2 [--free-thresh 0.15]
+  uv run downsample-map in.yaml out.yaml --scale 2 [--free-thresh 0.15]
+
+ホスト側 (uv) とコンテナ内 (run_case.sh の MAP_SCALE 経路) の両方から呼ばれる。
+後者は `/opt/sim/downsample_map.py` に 1 ファイルだけ配って `python3` で直接叩くので、
+**このモジュールにパッケージ内 import を足さないこと。**
 """
 
 import argparse

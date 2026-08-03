@@ -4,7 +4,7 @@
 
 .DESCRIPTION
   1 ケースあたり bringup + ゴール1回で数分かかる。結果は
-  tools/pi4_sim/results/<timestamp>/ に保存し、最後に要約を表示する。
+  simulator/scripts/results/<timestamp>/ に保存し、最後に要約を表示する。
 
   ケースの意図:
     calib_navfn  CPU quota のキャリブレーション。実機で取れている唯一の

@@ -93,7 +93,7 @@ EMCL2 調整（リセット閾値など）が載ったまま走ります。対�
 地図（`maps/turtlebot3.yaml` など）では `overrides:=none` を明示してください。
 存在しない名前を渡した場合は、選べる名前を並べたエラーで止まります。
 
-`simulator/scripts/nav_container.sh` と `tools/pi4_sim/run_case.sh` は、
+`simulator/container/nav_container.sh` と `simulator/container/run_case.sh` は、
 `MAP_NAME` と同名の override があればそれを、無ければ `none` を**必ず明示的に**
 渡します（`OVERRIDES=` で上書き可）。既定任せにすると同じ取り違えが起きるためです。
 
@@ -265,7 +265,7 @@ load が 10〜19 まで跳ね、bond 形成が間に合わずライフサイク�
 
 nav2 既定は 20ms。Pi4 の CPU 飽和時（`nr_throttled` が 10 万回級）には
 `compute_path_to_pose` / `spin` / `wait` / `backup` が軒並みゴール受理 ack を
-取りこぼし、ゴールが 0.2 秒で ABORTED になりました（`tools/pi4_sim` の Pi4 相当
+取りこぼし、ゴールが 0.2 秒で ABORTED になりました（`simulator/` の pi4_sim ハーネスの Pi4 相当
 環境で再現・切り分け済み）。資源に余裕があれば 20ms でも通るので、これは保険です。
 
 ### `bt_navigator` の `wait_for_service_timeout: 60000`
@@ -327,8 +327,8 @@ nav2 既定は 1000ms。`planner:=vi` では `vi_global_planner` が `/map` を�
 * メモリは `map_scale: 5` + compact で `vi_global_planner` / `vi_planner` とも
   ピーク RSS 約 1.5GB（匿名 0.83GB + sink の mmap 0.66GB）。`map_scale: 3` +
   保守的プーリングだった頃の 3.98GB（匿名 2.16GB + mmap 1.81GB）から下がり、
-  Pi4 4GB の枠には収まります。実測の詳細は `tools/pi4_sim/README.md`。
-* 一方 **`tools/pi4_sim` の枠（0.6 コアを stack 全体で共有）では、solve 中に
+  Pi4 4GB の枠には収まります。実測の詳細は `simulator/docs/pi4_sim.md`。
+* 一方 **`simulator/` の pi4_sim ハーネスの枠（0.6 コアを stack 全体で共有）では、solve 中に
   emcl2 まで巻き込んで 900 秒でも `/plan` が出ません**。実機 Pi4 は 4 コアあるので
   同じにはなりませんが、`vi_threads: 3` を明示して 1 コアを stack に残すのは
   そのためです。実機での通し確認は別途。

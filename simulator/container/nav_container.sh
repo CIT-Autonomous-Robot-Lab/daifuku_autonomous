@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 # Pi4 相当に絞ったコンテナの**中**で、nav2 側だけを 1 ケース走らせる。
 #
-# tools/pi4_sim/run_case.sh の Isaac 版。違いは 1 点だけ:
-#   pi4_sim  : fake_robot.py (地図をレイキャストする疑似ロボット) をこの中で起動
-#   simulator: ロボットとセンサは**コンテナの外** (ホストの Isaac Sim) にいる
+# 同じディレクトリの run_case.sh (pi4_sim ハーネス) の Isaac 版。設計上の違いは
+# 1 点で、
+#   run_case.sh     : fake_robot.py (地図をレイキャストする疑似ロボット) をこの中で起動
+#   nav_container.sh: ロボットとセンサは**コンテナの外** (ホストの Isaac Sim) にいる
+#
+# ただし 2 本は**機械的に同期されていない**。書き出しは共通だったが以降それぞれに
+# 手が入っており、現状 diff は 300 行を超える。片方を直したらもう片方も見ること
+# (共通部の括り出しは未着手)。
 #
 # したがってここは「nav2 を起動してゴールを 1 回投げる」だけを行う。CPU/メモリの
 # 制約はコンテナに掛かっているので、Isaac 側 (GPU を使う) は制約を受けない。
@@ -41,7 +46,7 @@ SETTLE=${SETTLE:-45}
 TIMEOUT=${TIMEOUT:-300}
 CASE=${CASE:-default}
 
-# 前回ケースの残骸を必ず落とす (pi4_sim/run_case.sh と同じ理由: 残ったノードが
+# 前回ケースの残骸を必ず落とす (run_case.sh と同じ理由: 残ったノードが
 # graph を汚して診断を狂わせる。laser_filters のように名前が nav2_ で始まらない
 # ノードが取り残されやすい)。
 cleanup_ros() {
@@ -70,7 +75,7 @@ fi
 
 # パラメータの上書きは launch と同じ経路 (extra_params_file) に載せる。
 # ここで nav2_params 相当を作り直すと config/nav2/*.yaml の合成を素通りするので、
-# 環境変数で触るキーだけの overlay を書く (tools/pi4_sim/run_case.sh と同じ方式)。
+# 環境変数で触るキーだけの overlay を書く (run_case.sh と同じ方式)。
 python3 - "$RUN" <<'PY'
 import os, sys, yaml
 run = sys.argv[1]
@@ -254,8 +259,9 @@ NAV_PID=$!
   done ) >"$RUN/load.log" 2>&1 &
 MON_PID=$!
 
-# probe.py は pi4_sim のものをそのまま使う (ゴール投入と /plan /cmd_vel の計数)。
-python3 /opt/pi4_sim/probe.py \
+# probe.py は 2 つのハーネスで共有する (ゴール投入と /plan /cmd_vel の計数)。
+# 配り先の /opt/sim は run_isaac_case.sh / run_pi4_sim.ps1 の両方で共通。
+python3 /opt/sim/probe.py \
     --goal-x "$GOAL_X" --goal-y "$GOAL_Y" --goal-yaw "$GOAL_YAW_DEG" \
     --settle "$SETTLE" --timeout "$TIMEOUT" 2>&1 | tee "$RUN/probe.log"
 rc=${PIPESTATUS[0]}

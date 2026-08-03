@@ -14,7 +14,7 @@
 #
 # ## 速度をそろえる仕組み
 #
-#   nav2 側 : cgroup の CPU quota で Pi4 相当に絞る (tools/pi4_sim と同じ方式・同じ値)
+#   nav2 側 : cgroup の CPU quota で Pi4 相当に絞る (pi4_sim ハーネスと同じ方式・同じ値)
 #   Isaac側 : 絞らない。実機でも「環境の物理」は Pi4 の外で回っている
 #
 # quota は**実時間**基準なので、RTF が 1.0 を割ると測定が歪む。判定は rtf_gate.py が
@@ -54,7 +54,7 @@ UNKNOWN=${UNKNOWN:-free}            # map_to_usd.py の --unknown
 WALL_HEIGHT=${WALL_HEIGHT:-2.0}
 ROBOT_USD=${ROBOT_USD:-}
 ROBOT_URDF=${ROBOT_URDF:-}
-START_X=${START_X:--1.27}           # pi4_sim と同じ既定 (実機プローブ時の自己位置)
+START_X=${START_X:--1.27}           # pi4_sim ハーネスと同じ既定 (実機プローブ時の自己位置)
 START_Y=${START_Y:--0.63}
 START_YAW=${START_YAW:-0}
 HEADLESS=${HEADLESS:-1}
@@ -62,7 +62,7 @@ USE_SIM_TIME=${USE_SIM_TIME:-false}
 RENDER_DT=${RENDER_DT:-0.0333333}
 PHYSICS_DT=${PHYSICS_DT:-0.005}
 
-# --- nav2 コンテナ側 (値は tools/pi4_sim/run_pi4_sim.ps1 と一致させる) -------
+# --- nav2 コンテナ側 (値は scripts/run_pi4_sim.ps1 と一致させる) -------------
 IMAGE=${IMAGE:-daifuku-autonomous:humble-amd64}
 CONTAINER=${CONTAINER:-isaacsim_pi4}
 QUOTA=${QUOTA:-6000}                # period 10000us に対し 0.6 コア
@@ -85,7 +85,7 @@ echo "=== [1/4] ワールド USD を生成 ==="
 # 「地図と環境が定義上ずれない」ことなので、ここが食い違うと利点が消えるどころか、
 # 「ずれているのに、ずれていないつもりで測る」という最悪の状態になる。
 #
-# 粗い地図で回したい場合は tools/pi4_sim/downsample_map.py の出力を maps/ に置いて
+# 粗い地図で回したい場合は `uv run downsample-map` の出力を maps/ に置いて
 # MAP_NAME で指す (WORLD_MAP_YAML だけ差し替えるのは意図的なずれの注入なので、
 # 明示的に指定したときだけ許す)。
 MAP_YAML=$REPO/src/autonomous_nav/maps/$MAP_NAME.yaml
@@ -224,24 +224,26 @@ if ! $ENGINE ps -a --format '{{.Names}}' | grep -qx "$CONTAINER"; then
 fi
 
 SHARE=/opt/ros_ws/install/share/autonomous_nav
-$ENGINE exec "$CONTAINER" bash -lc "mkdir -p /opt/pi4_sim /opt/simulator"
-# probe.py は pi4_sim のものを流用する (ゴール投入と計数のロジックは同じ)。
-$ENGINE cp "$REPO/tools/pi4_sim/probe.py" "$CONTAINER:/opt/pi4_sim/probe.py"
-$ENGINE cp "$HERE/nav_container.sh" "$CONTAINER:/opt/simulator/nav_container.sh"
+# コンテナ内で走るものは simulator/container/ にまとまっている。probe.py は
+# pi4_sim ハーネスと共有 (ゴール投入と計数のロジックは同じ)。配り先の /opt/sim も
+# run_pi4_sim.ps1 と共通で、nav_container.sh がそこから probe.py を呼ぶ。
+$ENGINE exec "$CONTAINER" bash -lc "mkdir -p /opt/sim"
+$ENGINE cp "$PROJ/container/probe.py" "$CONTAINER:/opt/sim/probe.py"
+$ENGINE cp "$PROJ/container/nav_container.sh" "$CONTAINER:/opt/sim/nav_container.sh"
 # robot_state_publisher には Isaac が読み込んだのと**同じ** URDF を使わせる。
 # 別々に生成すると、リンクのオフセットが食い違っても誰も気づけない。
 if [ -n "$ROBOT_URDF" ]; then
     $ENGINE cp "$ROBOT_URDF" "$CONTAINER:${CONTAINER_URDF:-/tmp/raspicat_plain.urdf}"
 fi
-# 編集中の launch / config をコンテナへ反映する (pi4_sim と同じ理由で bind mount しない)。
+# 編集中の launch / config をコンテナへ反映する (pi4_sim 側と同じ理由で bind mount しない)。
 $ENGINE exec "$CONTAINER" bash -lc "rm -rf $SHARE/config"
 for d in behavior_trees config launch maps rviz scripts; do
     [ -d "$REPO/src/autonomous_nav/$d" ] && \
         $ENGINE cp "$REPO/src/autonomous_nav/$d" "$CONTAINER:$SHARE/"
 done
 $ENGINE exec "$CONTAINER" bash -lc \
-    'for f in /opt/pi4_sim/*.py /opt/simulator/*.sh; do [ -e "$f" ] && sed -i "s/\r$//" "$f"; done
-     chmod +x /opt/simulator/*.sh'
+    'for f in /opt/sim/*.py /opt/sim/*.sh; do [ -e "$f" ] && sed -i "s/\r$//" "$f"; done
+     chmod +x /opt/sim/*.sh'
 
 $ENGINE exec \
     -e CASE="$CASE" \
@@ -264,7 +266,7 @@ $ENGINE exec \
     -e GOAL_X="${GOAL_X:-4.28}" -e GOAL_Y="${GOAL_Y:--2.92}" \
     -e GOAL_YAW_DEG="${GOAL_YAW_DEG:--24}" \
     -e SETTLE="${SETTLE:-45}" -e TIMEOUT="${TIMEOUT:-300}" \
-    "$CONTAINER" bash /opt/simulator/nav_container.sh 2>&1 | tee "$RUN/nav_side.log"
+    "$CONTAINER" bash /opt/sim/nav_container.sh 2>&1 | tee "$RUN/nav_side.log"
 nav_rc=${PIPESTATUS[0]}
 
 echo

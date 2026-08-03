@@ -1,9 +1,13 @@
 .vscode/
+
 build/
 install/
 log/
 
 docker-dev-*.log
+
+# run_matrix.ps1 のケース実行ログ (旧 tools/pi4_sim/results/)
+simulator/scripts/results/
 
 .venv/
 __pycache__/

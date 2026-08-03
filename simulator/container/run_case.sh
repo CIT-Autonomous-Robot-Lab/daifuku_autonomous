@@ -82,16 +82,18 @@ if [ ! -f "$MAP" ]; then
     exit 2
 fi
 
+# 第 3 引数はこのスクリプトのあるディレクトリ (= /opt/sim)。downsample_map.py も
+# fake_robot.py / probe.py と一緒にそこへ配られている。
 python3 - "$MAP" "$RUN" "$(dirname "$0")" <<'PY'
 import os, subprocess, sys, yaml
-map_in, run, tools = sys.argv[1:4]
+map_in, run, here = sys.argv[1:4]
 
 free_thresh = os.environ.get("MAP_FREE_THRESH", "")
 scale = os.environ.get("MAP_SCALE", "")
 if scale and int(scale) > 1:
     # 解像度を落とした地図を作る (状態数 = 面積 x theta なので scale^2 で効く)。
     out = os.path.join(run, "map.yaml")
-    cmd = [sys.executable, os.path.join(tools, "downsample_map.py"),
+    cmd = [sys.executable, os.path.join(here, "downsample_map.py"),
            map_in, out, "--scale", scale]
     if free_thresh:
         cmd += ["--free-thresh", free_thresh]
