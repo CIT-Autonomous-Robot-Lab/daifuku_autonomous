@@ -1,129 +1,68 @@
 # map_tsudanuma.yaml (5888x4000 @0.05m = 294.4m x 200m) 用の上書き。
+# 「断片」= config/nav2/vi_planner.yaml の値 (= ノードの既定)。
 #
 #   ros2 launch autonomous_nav navigation.launch.py \
 #       map:=<share>/maps/map_tsudanuma.yaml \
 #       overrides:=map_tsudanuma planner:=vi local_planner:=vi
 #
-# overrides は**置き換え**なので、既定の overrides:=map_19f はこのとき外れる。
-# つまり emcl2 は上流既定 (alpha_threshold 0.5 / expansion_radius_orientation 0.2 /
-# sensor_reset true) で走る。この地図は 68.2% が未観測で占有セルが 0.4% しかなく、
-# スキャンマッチングの拠り所が乏しいので、19F と同じ alpha 崩壊 (リセットが毎スキャン
-# 発動して推定姿勢が回る) が起きる余地がある。起きたら map_19f.yaml の emcl2 ブロックを
-# ここへ写すこと。**未検証** — この地図で emcl2 のリセット挙動は測っていない。
-#
-# local_planner:=vi は vi_planner 1 ノード構成 (planner_server + controller_server を
-# まとめて置き換える)。local_planner:=nav2 は vi_global_planner + controller_server。
-# どちらも compact (アウトオブコア) 経路が使えるので Pi4 4GB に載る。
-# vi_planner の狭域追従は密な states を要求するが、全域ではなくロボット近傍の
-# パッチ (±1m ウィンドウ + 遷移到達距離 + 余裕、0.25m セルで 27x27x60 = 約 2.5MB) だけを
-# compact の場から起こして回す。ウィンドウの外側は compact の値のまま凍結して境界条件にする。
-#
-# compact 経路の既知の差異 (vi_planner/src/core.rs 冒頭に詳細):
-#   - compute_path_to_pose のロールアウトは sink (静的地図の解) を読む。密経路と違い
-#     追従中に注入されたスキャン由来の local_penalty は経路に乗らない (走行はパッチ側の
-#     方策に従うので、動的障害物を避けること自体はできる)。
-#   - パッチを置き直す (約 1.5m 走行ごと) とその周期のローカル精密化は捨てられる。
-#     スキャンは毎 tick 注入されるので次の tick で復元される。
-#
 # VI はゴールごとに nx*ny*n_theta の状態空間を扱う。この地図を 0.05m のまま解くと
-# 5888*4000*60 = 14.1 億状態、既定の密ソルバでは State 56B/state = 79GB を確保
-# しようとして起動と同時に死ぬ。プランナ内部だけ粗くし (map_scale)、確定出力を
-# ディスクへ逃がす (compact) ことで通す。
+# 14.1 億状態 = 密ソルバで 79GB を確保しようとして起動と同時に死ぬ。プランナ内部
+# だけ粗くし (map_scale)、確定出力をディスクへ逃がす (compact) ことで通す。
+# 実測値・導出・既知の制約は ../README.md を参照。
 #
-# 導出・実測値と既知の制約 (この地図は 68.2% が未観測) は ../README.md を参照。
+# **注意 1**: overrides は置き換えなので、既定の map_19f はこのとき外れる = emcl2 は
+# 断片の値で走る。この地図は 68.2% が未観測で占有セルが 0.4% しかなく、19F と同じ
+# alpha 崩壊が起きる余地がある。起きたら map_19f.yaml の emcl2 ブロックをここへ写す。
+# **未検証** — この地図で emcl2 のリセット挙動は測っていない。
+#
+# **注意 2**: 下の実測は BT を外した最小構成のもの。tools/pi4_sim の枠 (0.6 コアを
+# stack 全体で共有) に BT 込みで通すと、BT が solve を待たず 3 回リカバリして ABORT
+# する。実機での通し確認は別途。
 #
 # 2026-08-01 実測 (Pi4 相当 = 0.6 コア枠 / メモリ 3GB, VI_THREADS=3):
-#   ソルバ単体 (bench_map):
-#     scale 3 保守 (旧設定): 2706 s、anon 2148MB で memory.max イベント 17759 回
-#     scale 5 楽観 (現設定):   51.9 s、memory.max イベント 0 回
-#   vi_planner ノード実測 (map_server 同居、compute_path_to_pose 1 回):
-#     solve + ロールアウト 87〜89 s / 398 姿勢 / SUCCEEDED
-#     ピーク RSS 1.60 GB (solve 後は 0.79 GB)、sink 648MB、oom_kill 0
-#     続けて follow_path を投げるとパッチから方策が出て cmd_vel が配信される
-#     (linear.x 0.3333 / angular.z 20deg = leftfw)
-# 実機 Pi4 4GB は 4 コアあるのでこれより速い見込み。
-#
-# **注意**: tools/pi4_sim の枠は 0.6 コアを stack 全体で共有するので、nav2 の BT 込みで
-# 通すと BT が solve を待たずに 3 回リカバリして ABORT する (vi_global_planner でも同じ)。
-# 上の数字は BT を外した最小構成で取ったもの。実機での通し確認は別途。
+#   ソルバ単体 (bench_map): scale 3 保守 2706s / anon 2148MB、scale 5 楽観 51.9s
+#   vi_planner ノード: solve + ロールアウト 87-89s / 398 姿勢 / SUCCEEDED
+#                      ピーク RSS 1.60GB、sink 648MB、oom_kill 0
 
 vi_global_planner:
   ros__parameters:
-    # states を確保しないアウトオブコア経路。確定出力 12B/state だけを持つ。
-    solver: "frontier2d_sparse_compact"
-    # プランナ内部だけ 0.25m/cell (1178x800 = 5650 万状態) にする。
-    # map_server / costmap / 自己位置は 0.05m のまま。
-    #
-    # 以下 4 つ (map_scale / downsample_policy / action_forward_m / goal_margin_radius) は
-    # セットで効く。1 つでも欠けると波がゴール近傍で止まり、到達列 1 で「収束」する:
-    #   - downsample_policy が保守側だと通路のセル幅が落ち、VI の遷移分布 (約 2 セル幅) が
-    #     収まらなくなる。この地図は 68.2% が未観測なので影響が大きい。
-    #   - action_forward_m が 0.3m のままだとセル境界を跨げない。セルサイズに比例させる
-    #     (0.15m で 0.3m = 2 セル -> 0.25m では 5/3 倍)。vi_core 定数と変わるので
-    #     allow_action_mismatch: true が要る。
-    #   - goal_margin_radius が 0.30m のままだとゴールセルが 7 -> 1 に減って着火しない。
-    # scale 6 (0.30m) は楽観ダウンサンプルでも通路のセル幅が足りず解けない。5 が上限。
-    map_scale: 5
-    # ブロック内に free が 1 つでもあれば free にする。安全余裕はここではなく
-    # safety_radius / safety_radius_penalty (ソフトなペナルティ) が持つ。
-    # 障害物膨張を地図に焼き込むと scale 3 でも波が死ぬので、絶対にやらないこと。
-    downsample_policy: "optimistic"
-    # 歩幅をセルサイズに比例させる (既定の 5/3 倍)。回転量は変えない。
-    action_forward_m: [0.5, -0.3333, 0.0, 0.3333, 0.0, 0.3333]
-    allow_action_mismatch: true
-    # ゴール半径もセルサイズに比例 (0.30m * 5/3)。ゴールセル数を scale 3 と同じ 7 に保つ。
-    goal_margin_radius: 0.5
-    # 確定出力 (0.68GB) の置き場。**tmpfs でないこと**を確認すること
-    # (`findmnt -no FSTYPE /tmp`)。tmpfs だと結局 RAM に載るので、
-    # メモリ退避の意味が無くなる。実ディスク上のパスを指定してもよい。
-    compact_sink_dir: "/tmp/vi_global_planner_sink"
-    # Pi4 は 4 コアだが、solve 中も emcl2 / map_server / bt_navigator が回る。
-    # 既定 (0 = 論理コア数 = 4) だと自己位置推定を巻き込んで共倒れするので 3 に固定する。
-    # 上の実測値も VI_THREADS=3 で取っている。
-    vi_threads: 3
-    # [秒/セル] 既定の 30 はこの地図では使えない。通路が細くほとんどの自由セルが
-    # safety_radius 0.2m 以内に入るため、価値関数が移動時間ではなくペナルティの
-    # 積算で決まり、貪欲ロールアウトが降下できずに LoopDetected になる。
-    # 壁に寄りすぎるなら 5 程度まで上げてから他をいじること。なお計測は全て 1 で
-    # 行っているので、楽観ダウンサンプルで通路が広がったぶん上げられるかは未検証。
-    safety_radius_penalty: 1
-    # 広域なのでゴールから遠い start でもロールアウトが届くように上限を上げる。
-    max_rollout_steps: 100000
-    # 2.6M セル (2.6MB) の OccupancyGrid を繰り返し配信することになるので、
-    # RViz で見ないなら切る。
-    publish_value_function: false
+    solver: "frontier2d_sparse_compact"  # 断片 frontier2d_sparse: states を確保しない
+    # 以下 4 つ (map_scale / downsample_policy / action_forward_m /
+    # goal_margin_radius) はセットで効く。1 つでも欠けると波がゴール近傍で止まり、
+    # 到達列 1 で「収束」する。scale 6 は楽観でも通路のセル幅が足りず解けない。
+    map_scale: 5                         # 断片 1: 内部だけ 0.25m/cell (5650 万状態)
+    downsample_policy: "optimistic"      # 断片 conservative: 保守側だと通路のセル幅が死ぬ
+    action_forward_m: [0.5, -0.3333, 0.0, 0.3333, 0.0, 0.3333]  # 断片の 5/3 倍 (セル比例)
+    allow_action_mismatch: true          # 断片 false: 上行が vi_core 定数と変わるため
+    goal_margin_radius: 0.5              # 断片 0.3: ゴールセル数を 7 に保つ (セル比例)
+    # tmpfs でないこと (`findmnt -no FSTYPE /tmp`)。tmpfs だと RAM に載って無意味。
+    compact_sink_dir: "/tmp/vi_global_planner_sink"   # 断片 "" (= RAM): 0.68GB を退避
+    vi_threads: 3                        # 断片 0 (= 4 コア): 1 コアを stack に残す
+    safety_radius_penalty: 1             # 断片 30: 30 だと貪欲ロールアウトが降下できない
+    max_rollout_steps: 100000            # 断片 10000: 広域では遠い start から届かない
+    publish_value_function: false        # 断片 true: 2.6MB の grid を繰り返し配信するため
 
-# local_planner:=vi (vi_planner 1 ノード構成) 用。
+# local_planner:=vi (vi_planner 1 ノード構成) 用。解像度まわりと
+# safety_radius_penalty は vi_global_planner と同じ値にしてある。片方だけ変えると
+# 同じ地図なのに 2 構成で別の経路が出て比較にならない。理由は上のコメントを参照。
 #
-# 解像度まわり (map_scale / downsample_policy / action_forward_m / goal_margin_radius) と
-# safety_radius_penalty は vi_global_planner と同じ値にしてある。ここを片方だけ変えると、
-# 同じ地図なのに 2 構成で別の経路が出て比較にならなくなる。理由は上の各コメントを参照。
+# vi_planner の狭域追従は密な states を要求するが、全域ではなくロボット近傍のパッチ
+# (±1m 窓 + 遷移到達距離 + 余裕、0.25m セルで 27x27x60 ≒ 2.5MB) だけを compact の場から
+# 起こして回す。外側は compact の値のまま凍結して境界条件にする。compact 経路の既知の
+# 差異 (ロールアウトが静的解を読む / パッチ置き直しで局所精密化が捨てられる) は
+# vi_planner/src/core.rs 冒頭に詳しい。
 vi_planner:
   ros__parameters:
-    # states を確保しないアウトオブコア経路。広域を compact で解き、追従は
-    # ロボット近傍のパッチだけを密に起こして回す (ヘッダの注記を参照)。
-    # 密ソルバ (frontier2d_sparse) にすると 5650 万状態 x 56 B = 3.17 GB を実際に
-    # 確保するので、Pi4 4GB では map_server 290MB + emcl2 181MB と合わせて OOM kill される。
-    solver: "frontier2d_sparse_compact"
-    # プランナ内部だけ 0.25m/cell (1178x800 = 5650 万状態) にする。
-    map_scale: 5
-    downsample_policy: "optimistic"
-    action_forward_m: [0.5, -0.3333, 0.0, 0.3333, 0.0, 0.3333]
-    allow_action_mismatch: true
-    goal_margin_radius: 0.5
-    safety_radius_penalty: 1
-    max_rollout_steps: 100000
-    # 確定出力 (0.68GB) の置き場。**tmpfs でないこと**を確認すること
-    # (`findmnt -no FSTYPE /tmp`)。vi_global_planner とは別ディレクトリにして、
-    # 2 構成を続けて試すときに互いの出力を踏まないようにする。
-    # 追従はパッチを置き直すたびにここを読み直すので、SD カード上に置くと
-    # 約 1.5m 走行ごとに数十 ms のページフォルトが乗る (通常はページキャッシュに残る)。
-    compact_sink_dir: "/tmp/vi_planner_sink"
-    # Pi4 は 4 コアだが、solve 中も emcl2 / map_server / bt_navigator が回る。
-    # 既定 (0 = 論理コア数 = 4) だと自己位置推定を巻き込んで共倒れするので 3 に固定する。
-    # 上の実測値も VI_THREADS=3 で取っている。
-    vi_threads: 3
-    # 全域 (942k セル) の OccupancyGrid を繰り返し配信することになるので、
-    # RViz で見ないなら切る。compact 経路では配信のたびに sink を全走査するので
-    # なおさら重い。狭域の local_window_value は別途出る。
-    publish_value_function: false
+    solver: "frontier2d_sparse_compact"  # 断片 frontier2d_sparse: 密だと 3.17GB で OOM
+    map_scale: 5                         # 断片 1: 内部だけ 0.25m/cell (5650 万状態)
+    downsample_policy: "optimistic"      # 断片 conservative: 保守側だと通路のセル幅が死ぬ
+    action_forward_m: [0.5, -0.3333, 0.0, 0.3333, 0.0, 0.3333]  # 断片の 5/3 倍 (セル比例)
+    allow_action_mismatch: true          # 断片 false: 上行が vi_core 定数と変わるため
+    goal_margin_radius: 0.5              # 断片 0.3: ゴールセル数を 7 に保つ (セル比例)
+    safety_radius_penalty: 1             # 断片 30: 30 だと貪欲ロールアウトが降下できない
+    max_rollout_steps: 100000            # 断片 10000: 広域では遠い start から届かない
+    # vi_global_planner とは別ディレクトリにして、2 構成を続けて試すときに互いの出力を
+    # 踏まないようにする。追従はパッチ置き直しのたびに読むので SD カード上は避けたい。
+    compact_sink_dir: "/tmp/vi_planner_sink"          # 断片 "" (= RAM): 0.68GB を退避
+    vi_threads: 3                        # 断片 0 (= 4 コア): 1 コアを stack に残す
+    publish_value_function: false        # 断片 true: 配信のたび sink を全走査するため

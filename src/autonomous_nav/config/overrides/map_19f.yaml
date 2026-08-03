@@ -1,51 +1,38 @@
 # map_19f.yaml (19F、915x577 @0.05m = 45.8m x 28.9m) 用の上書き。
-# **overrides の既定値**。
+# 「断片」= config/localization/emcl2.yaml と config/nav2/vi_planner.yaml の値。
 #
-#   ros2 launch autonomous_nav navigation.launch.py \
-#       map:=<share>/maps/map_19f.yaml          # 既定
-#       # overrides:=map_19f も既定なので書かなくてよい
+#   ros2 launch autonomous_nav navigation.launch.py    # map も overrides も既定
 #
-# 既定の地図なので `overrides` 引数の default_value に入れてある。別の地図を
-# 使うときは `overrides:=map_tsudanuma` のように**置き換わる** (足されない) ので、
-# 19F 用の調整は自動的に外れる。
+# **overrides の既定値**。別の地図では `overrides:=map_tsudanuma` のように
+# **置き換わる** (足されない) ので、19F 用の調整は自動的に外れる。
 #
 # ここに置くのは「19F の地図だからこの値」というものだけ。機体固有 (base_frame_id
-# など) や Pi4 固有 (default_server_timeout など) の調整は地図が変わっても要るので
-# 断片側 (config/localization/, config/nav2/) に残してある。
+# など) や Pi4 固有 (default_server_timeout など) は地図が変わっても要るので断片側。
 
 # ── emcl2 ──────────────────────────────────────────────────────────────────
-# emcl2 は nav2 のノードではないので、素の launch では config/localization/emcl2.yaml が
-# ノードへ直接渡る。この overrides を効かせるために、navigation.launch.py が
-# emcl2 の params も合成対象にしている (compose_params)。**overrides に emcl2 を
-# 書いても効かない時期があった**ので、値を足すときは起動ログの
-# "params: composed ... emcl2" 行でパスが差し替わっていることを確認すること。
+# 2026-07-24 の実機計測: 有効ビームの 28% が地図の壁を貫通し、非貫通率 (alpha) が
+# 0.0-0.4 に張り付いた。断片側の 0.5 では膨張リセットとセンサリセットが毎スキャン
+# 発動し、推定姿勢がその場で回転する。根因は地図と実環境の不整合なので、これは
+# **地図を取り直すまでの対症療法**。作り直したら 3 つとも消すこと。
 #
-# 以下の 3 つは 2026-07-24 の実機計測に対する対処で、セットで効く。
-# 非貫通率 (alpha) が 0.0-0.4 に張り付き、上流既定の閾値 0.5 では膨張リセット +
-# センサリセットが毎スキャン発動して推定姿勢が回転した。有効ビームの 28% が
-# 地図の壁を貫通しており、地図と環境の不整合が根因。**地図を取り直すまでの
-# 対症療法**であって、19F の地図を作り直したらこの 3 つは消して上流既定
-# (0.5 / 0.2 / true) に戻すこと。
+# emcl2 は params_file を通らない。navigation.launch.py が emcl2 用の合成を別に
+# 行うことで効いている (../README.md)。値を足したら、起動ログの
+# "params: composed emcl2 ..." 行でパスが差し替わったことを確認すること。
 emcl2:
   ros__parameters:
-    alpha_threshold: 0.2              # 上流既定 0.5
-    expansion_radius_orientation: 0.05  # 上流既定 0.2
-    sensor_reset: false               # 上流既定 true
+    alpha_threshold: 0.2                # 断片 0.5: alpha が 0.0-0.4 に張り付くため
+    expansion_radius_orientation: 0.05  # 断片 0.2: リセット時の姿勢の飛びを抑える
+    sensor_reset: false                 # 断片 true: 貫通粒子の引き戻しを止める
 
 # ── 価値反復プランナ (表示のみ) ─────────────────────────────────────────────
-# value_function の色スケール上限 [ステップ数≒秒]。**表示専用**で経路計算には
-# 影響しない。2026-07-29 に 19F の地図 (0.10m/cell に縮めた 458x289) で測った
-# 到達ステップ数の分布 — 中央値 60 / p90 110 / p99 300 / 最大 680 — から、
-# p90 と p99 の間の 180 を選んだ。運用上通る範囲に階調を集中させ、遠い裾だけ
-# 飽和させる選び方。導出は ../README.md を参照。
-#
-# 断片側 (../nav2/vi_planner.yaml) は地図非依存の 60 に戻してある。別の地図では
-# 分布が変わるので測り直すこと (飽和が広ければ小さすぎ、階調が下位に偏っていれば
-# 大きすぎる)。map_tsudanuma の override はこれを設定していないので 60 で動く。
+# cost_drawing_threshold は value_function の色スケール上限 [ステップ数≒秒] で、
+# **表示専用**。180 は 2026-07-29 に 19F で測った到達ステップ数の分布 (中央値 60 /
+# p90 110 / p99 300 / 最大 680) の p90-p99 間。断片の 60 では到達可能セルの 66% が
+# 飽和する。導出は ../README.md。地図ごとに測り直すこと。
 vi_planner:
   ros__parameters:
-    cost_drawing_threshold: 180
+    cost_drawing_threshold: 180         # 断片 60: 19F の到達ステップ分布に合わせた
 
 vi_global_planner:
   ros__parameters:
-    cost_drawing_threshold: 180
+    cost_drawing_threshold: 180         # 断片 60: 同上

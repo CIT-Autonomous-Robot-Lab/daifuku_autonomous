@@ -1,3 +1,8 @@
+# EMCL2 の自己位置推定 (localization:=emcl2、既定)。
+# 「既定」= src/emcl2_ros2 の declare_parameter の値。
+# emcl2 は nav2 のノードではないので params_file を通らず、emcl2_params_file で
+# ノードへ直接渡る。地図ごとの調整はここではなく overrides/ に置く (../README.md)。
+
 emcl2:
   ros__parameters:
     use_sim_time: false
@@ -5,7 +10,7 @@ emcl2:
     num_particles: 500
     odom_frame_id: "odom"
     footprint_frame_id: "base_footprint"
-    base_frame_id: "base_footprint"
+    base_frame_id: "base_footprint"     # 既定 base_link: URDF に base_link が無い
     global_frame_id: "map"
     initial_pose_x: 0.0
     initial_pose_y: 0.0
@@ -16,14 +21,14 @@ emcl2:
     odom_rot_dev_per_rot: 0.2
     laser_likelihood_max_dist: 0.2
     scan_increment: 1
-    # ここから 3 つ (alpha_threshold / expansion_radius_orientation / sensor_reset)
-    # は上流既定のまま = **地図非依存**の値にしてある。19F の地図では地図と環境の
-    # 不整合でリセットが暴発するため、../overrides/map_19f.yaml が保守側へ上書き
-    # する (経緯はそちらのコメント)。地図ごとの調整はこのファイルに書かないこと。
+    # リセット系の 3 つ (alpha_threshold / expansion_radius_orientation /
+    # sensor_reset) は地図と環境の一致度で決まるので、ここは既定のままにして
+    # 地図ごとの値は overrides/<地図名>.yaml に置く。19F の値と経緯は
+    # ../overrides/map_19f.yaml を参照。
     alpha_threshold: 0.5
-    open_space_threshold: 0.05
+    open_space_threshold: 0.05          # 宣言なし: この版の emcl2 は未実装なので効かない
     expansion_radius_position: 0.1
     expansion_radius_orientation: 0.2
     extraction_rate: 0.1
-    range_threshold: 0.3
-    sensor_reset: true
+    range_threshold: 0.3                # 既定 0.1: 上流 config/emcl2.param.yaml に合わせた
+    sensor_reset: true                  # 既定 false: 根拠未記録 (a3f2899、../README.md)

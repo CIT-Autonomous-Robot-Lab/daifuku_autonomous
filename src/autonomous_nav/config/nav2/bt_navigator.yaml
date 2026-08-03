@@ -1,24 +1,16 @@
-# ビヘイビアツリーの実行ノード。
-# config/nav2/*.yaml の断片。合成順序と上書きは ../README.md を参照。
-#
-# planner:=vi のとき、どの木を読むか (default_nav_to_pose_bt_xml など) は
-# navigation.launch.py が behavior_trees/ を指すよう注入する。ここには書かない。
+# ビヘイビアツリーの実行ノード。「既定」= nav2_bringup の nav2_params.yaml。
+# どの木を読むか (default_nav_to_pose_bt_xml など) は navigation.launch.py が
+# 注入するのでここには書かない。合成順序と上書きは ../README.md を参照。
 
 bt_navigator:
   ros__parameters:
     use_sim_time: false
     global_frame: map
-    robot_base_frame: base_footprint
+    robot_base_frame: base_footprint  # 既定 base_link: URDF に base_link が無い
     odom_topic: /odom
     bt_loop_duration: 10
-    # [ms] アクションのゴール受理 ack 待ち。nav2 既定の 20ms は Pi4 の CPU
-    # 飽和時に短すぎ、全アクションが ack を取りこぼしてゴールが即 ABORTED に
-    # なる。余裕があれば 20ms でも通るので純粋な保険 (経緯は ../README.md)。
-    default_server_timeout: 500
-    # [ms] BT 読み込み時のサーバ出現待ち。planner:=vi では
-    # vi_global_planner が /map を受けてから compute_path_to_pose を作るので、
-    # 地図が大きいほど遅れる。起動時にしか効かない待ちなので長めに取る。
-    wait_for_service_timeout: 60000
+    default_server_timeout: 500       # 既定 20 [ms]: Pi4 の CPU 飽和時に ack を取りこぼす
+    wait_for_service_timeout: 60000   # 既定 1000 [ms]: vi は /map を受けてから action を作る
     plugin_lib_names:
       - nav2_compute_path_to_pose_action_bt_node
       - nav2_compute_path_through_poses_action_bt_node

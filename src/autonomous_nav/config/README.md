@@ -15,7 +15,30 @@
 `robot/raspicat.yaml` だけは**上流ファイルの完全なコピー**で、差分ではありません。
 launch_ros はノード自身の `parameters=` をグローバル (`SetParametersFromFile`) より
 **後に**展開する = ノード側が勝つため、上流 `raspicat.launch.py` を include して
-差分を重ねる方式では上書きできないからです。詳細はファイル内のコメント。
+差分を重ねる方式では上書きできないからです。
+
+## コメントの書き方
+
+**既定値から変えたキーにだけ**、1 行で理由を書きます。変えていないキーには
+コメントを付けません（付けると、どれを触ったのか分からなくなります）。
+
+```yaml
+controller_frequency: 10.0   # 既定 20.0: Pi4 が飽和し bond 心拍が途絶えた
+```
+
+「既定」が何を指すかは各ファイルの冒頭に書いてあります。
+
+| ファイル | 「既定」の出どころ |
+| --- | --- |
+| `nav2/*.yaml` | `nav2_bringup` の `nav2_params.yaml` |
+| `nav2/vi_planner.yaml` | 各ノードの `main.rs` の `declare_parameter` |
+| `localization/emcl2.yaml` | `src/emcl2_ros2` の `declare_parameter` |
+| `robot/raspicat.yaml` | 上流 `raspicat_ros` の `config/raspicat.param.yaml` |
+| `overrides/*.yaml` | 重ねる先の断片の値（「断片 60:」のように書きます） |
+
+1 行に収まらない計測や経緯は、ファイルには書かずに下の「値の由来」へ書き、
+コメントからは `../README.md` を指します。地図や環境に固有の話は
+`overrides/<名前>.yaml` 側に置きます。
 
 ## nav2/ の合成
 
@@ -114,6 +137,114 @@ vi_global_planner:
 ## 値の由来
 
 パラメータのコメントに書ききれない計測と経緯。
+
+### `costmaps.yaml` の `footprint`
+
+既定は `robot_radius: 0.22`（nav2 の既定値そのままで、この機体を測った値では
+ありません）。2026-08-03 の実測で車体は 420 (幅) x 450 (奥行) mm、`base_footprint`
+は車軸中心の真下にあり、タイヤ（直径 200mm）の前端が車体前端と一致するので車軸は
+前端から 100mm です。したがって `base_footprint` 基準の張り出しは
+**前 +0.10 / 後 −0.35 / 左右 ±0.21 [m]** で、原点は大きく前寄りになります。
+
+円ではなく多角形にしたのは、外接円 `sqrt(0.35^2 + 0.21^2) = 0.408m` が実面積の
+2.8 倍あり、狭い通路を無駄に塞ぐためです。`inflation_radius` 0.55 はこの外接円より
+大きいので整合しています。0.408 未満に下げると nav2 が警告し、回り込みが破綻します。
+
+`footprint` と `robot_radius` を両方書かないでください（nav2 は `footprint` が
+空でなければそちらを優先するので、`robot_radius` は読まれないまま残ります）。
+`local_costmap` と `global_costmap` で同じ値を 2 度書いているのは、YAML アンカーの
+置き場になる最上位キーを足すと、rcl のパラメータパーサが「ノード名 +
+`ros__parameters`」として解釈できずに読み込みごと落ちるためです。
+
+### `raspicat.yaml` の `use_pulse_counters: false`
+
+上流も既定は `false`（開ループ = 最後に受け取った `cmd_vel` を積分）ですが、本来は
+`true`（`/dev/rtcounter_{l,r}*` のロータリエンコーダ）が正しい設定です。`false` の
+実害は 2026-07-29 の実機で確認済みです。
+
+* nav2 を回転中に止めるとゼロ速度が届かず、`odom` が −45deg/s で回り続ける
+* その幻の回転を emcl2 が打ち消そうとして `map->odom` も振り回される
+* モータ OFF でも `odom` が動くので dry-run が成立しない（静止したまま自己位置が
+  ゴールまで「走る」）
+
+`true` にすると同じ指令で `odom` yaw の peak-to-peak は 0.000 deg、x は 0.0000 m に
+なりました。**それでも `false` にしてあります。** この個体の I2C カウンタが
+不安定だからです。同じセッション中に 2 回、`read` がタイムアウトして復旧不能に
+なりました。
+
+```
+i2c-bcm2835 fe804000.i2c: i2c transfer timed out
+i2c_counter_read: Failed reading from i2c counter device, addr=0x10 / 0x11
+```
+
+一度失敗するとドライバの mutex が握られたままになり、以後 `/dev/rtcounter_*` を
+読む者は全員 D (uninterruptible) 状態に永久固着します。`raspimouse` は単一スレッド
+なのでノードごと沈黙し（`/odom` も TF も lifecycle 応答も停止）、**SIGKILL でも
+殺せず復旧はリブートのみ**です。`cat /dev/rtcounter_l0` でも同じ症状になります。
+
+天秤は「`false` = `odom` の幻回転（ゼロ Twist を投げれば必ず止まる）」対
+「`true` = `odom` は正しいが走行中にランダムでロボットごと固着」で、実験中の突然死の
+ほうが害が大きいと判断しています。カウンタ基板側の I2C が直れば `true` が正解です。
+緩和案（未検証）: `odom_hz` を 100 から下げて I2C トラフィックを減らす。
+
+`false` のあいだの運用として、nav2 を止めた直後に必ずゼロ Twist を投げてください。
+
+```bash
+ros2 topic pub --times 5 /cmd_vel geometry_msgs/msg/Twist \
+  '{linear: {x: 0.0}, angular: {z: 0.0}}'
+```
+
+ノードの自己診断はあてになりません。`raspimouse_component.cpp` の「Testing
+counters」は `ifstream::is_open()` を見るだけで `read` を試さないので、
+"Using pulse counters for odometry" は**フラグが適用された**証拠にはなっても
+**エンコーダが読める**証拠にはなりません。確認は「モータ OFF で回転を指令して
+`odom` が動かないこと」で行ってください。
+
+### `raspicat.yaml` の `wheel_diameter` / `wheel_tread`
+
+上流の既定は 0.1524 / 0.27918 ですが、この個体は車輪も車軸間隔も違います
+（2026-08-03 実測で 200mm / 350mm）。この 2 値は `cmd_vel` → モータ指令の換算と、
+`use_pulse_counters: false` のときの `odom` 積分の両方に使われるため、上流値のままだと
+
+* 直進 `0.200 / 0.1524 = 1.312` 倍
+* 旋回 `1.312 * 0.27918 / 0.350 = 1.047` 倍
+
+で、実機が指令より 31% 速く走り、`odom` はその分だけ過少報告していたことになります
+（ゴールのオーバーシュートや emcl2 の運動モデル破綻の原因になりえます）。
+
+**未検証**: `pulses_per_revolution: 400.0` は上流のままです。車輪と一緒に減速比まで
+替わっていれば上の比は成立しません。確認は「モータ ON で 0.1 m/s を 10 秒指令し、
+巻尺の実移動距離と `/odom` の変位を比べる」。この修正後は両者が一致するはずです。
+ずれるなら残差は `odometry_scale_{left,right}_wheel` ではなく寸法側で詰めてください。
+
+### `lifecycle_bond.yaml` の `bond_timeout: 60.0`
+
+既定は 4.0 秒。Pi4 では非コンポジション起動時に 8 プロセスが同時に spin up して
+load が 10〜19 まで跳ね、bond 形成が間に合わずライフサイクルマネージャが
+"unable to be reached after 4.00s by bond → Aborting bringup" で落ちました
+（2026-07-24 実測）。形成待ちと心拍途絶判定を 60 秒まで許容します。
+
+### `emcl2.yaml` の `sensor_reset` と `open_space_threshold`
+
+どちらも上流の README（`src/emcl2_ros2/README.md`）の表と、実際にビルドされる
+コードが食い違っています。**コードが正**です。
+
+* `sensor_reset`: README の表は既定 `true` ですが、`emcl2_node.cpp` の
+  `declare_parameter("sensor_reset", false)` と上流 `config/emcl2.param.yaml` は
+  ともに `false` です。この断片が `true` にしているのは a3f2899（`emcl2` の導入
+  コミット）以来で、理由は記録されていません。README の表を見て入れたものと
+  思われます。**未検証**: `false` に戻して 19F 以外の地図で挙動が変わるかは
+  測っていません（19F では `overrides/map_19f.yaml` が `false` にするので同じです）。
+* `open_space_threshold`: README の表にはありますが、この版の `emcl2_ros2` は
+  `declare_parameter` していないので**読まれません**。値を書いても効かず、
+  エラーも警告も出ません。
+
+### `vi_planner` / `vi_global_planner` の `safety_radius_penalty: 30`
+
+単位は「秒/セル」で、`safety_radius`（0.2m）以内のセルを通るときの加算コストです。
+1 手のコストが 1 秒なので、30 は「近寄るくらいなら 30 手迂回する」という強い忌避に
+なります。細い通路ばかりの地図では下げる必要があります（`map_tsudanuma` の実例は
+下の節）。
 
 ### `controller_server` の `transform_tolerance: 1.0`
 

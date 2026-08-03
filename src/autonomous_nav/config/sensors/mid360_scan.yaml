@@ -3,10 +3,8 @@ pointcloud_to_laserscan:
     # Transform first so the height slice is expressed from the floor.
     target_frame: base_footprint
     transform_tolerance: 0.05
-    # base_footprint (接地面) 基準。Mid-360 の搭載高さは実測 275 mm なので、
-    # min_height 0.275 = センサ面ちょうど。水平より下に落ちる戻り (床や近くの
-    # 低い反射) を捨て、水平から上だけを 2D スキャンに使う。
-    # ここを下げると床が壁として載るリスクが出る。lidar_z を変えたら合わせること。
+    # Mid-360 の搭載高の実測値 (2026-08-03)。センサ面より下の戻り (床や低い反射) を
+    # 捨てる。下げると床が壁として載る。lidar_z と対なので機体を変えたら両方直す。
     min_height: 0.275
     max_height: 0.50
     angle_min: -3.141592654

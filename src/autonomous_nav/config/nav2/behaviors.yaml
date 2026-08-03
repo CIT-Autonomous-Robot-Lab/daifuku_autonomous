@@ -1,5 +1,5 @@
 # 経路の平滑化・リカバリ行動・ウェイポイント追従・速度平滑化。
-# config/nav2/*.yaml の断片。合成順序と上書きは ../README.md を参照。
+# 「既定」= nav2_bringup の nav2_params.yaml。合成順序と上書きは ../README.md を参照。
 
 smoother_server:
   ros__parameters:
@@ -29,12 +29,12 @@ behavior_server:
     assisted_teleop:
       plugin: "nav2_behaviors/AssistedTeleop"
     global_frame: odom
-    robot_base_frame: base_footprint
+    robot_base_frame: base_footprint  # 既定 base_link: URDF に base_link が無い
     transform_tolerance: 0.1
     use_sim_time: false
     simulate_ahead_time: 2.0
     max_rotational_vel: 1.0
-    min_rotational_vel: 0.5
+    min_rotational_vel: 0.5           # 既定 0.4: 根拠未記録
     rotational_acc_lim: 3.2
 
 
@@ -56,6 +56,8 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: false
     feedback: "OPEN_LOOP"
+    # 既定 ±0.26 [m/s] は TurtleBot3 の最高速。DWB の max_vel_x 0.4 に揃えた
+    # (ここが低いと controller_server の出力が頭打ちになる)。
     max_velocity: [0.4, 0.0, 1.0]
     min_velocity: [-0.4, 0.0, -1.0]
     max_accel: [2.5, 0.0, 3.2]

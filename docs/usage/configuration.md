@@ -78,14 +78,17 @@ ros2 launch autonomous_nav mapping.launch.py --show-args
 ## 自己位置推定の暫定設定
 
 EMCL2のリセット関連は、19Fの地図に合わせた**暫定値**です。地図固有の値なので
-`config/localization/emcl2.yaml`ではなく`config/overrides/map_19f.yaml`にあります
-（断片側は上流既定のままです）。
+`config/localization/emcl2.yaml`ではなく`config/overrides/map_19f.yaml`にあります。
 
-| パラメータ | `overrides/map_19f.yaml` | 上流既定（断片側の値） |
-|---|---|---|
-| `alpha_threshold` | `0.2` | `0.5` |
-| `expansion_radius_orientation` | `0.05` | `0.2` |
-| `sensor_reset` | `false` | `true` |
+| パラメータ | `overrides/map_19f.yaml` | 断片側 | EMCL2の既定 |
+|---|---|---|---|
+| `alpha_threshold` | `0.2` | `0.5` | `0.5` |
+| `expansion_radius_orientation` | `0.05` | `0.2` | `0.2` |
+| `sensor_reset` | `false` | `true` | `false` |
+
+`sensor_reset`だけは断片側もEMCL2の既定と違います（上流READMEの表が`true`と
+書いているのに、コードの`declare_parameter`は`false`。経緯は
+`src/autonomous_nav/config/README.md`の「値の由来」）。
 
 有効ビームの28%が地図上の壁を貫通しており、非貫通率（alpha）が0.0〜0.4に張り付く
 状態でした。閾値0.5のままでは膨張リセットとセンサーリセットが毎スキャン発動し、

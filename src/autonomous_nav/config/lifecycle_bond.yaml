@@ -1,12 +1,9 @@
-# Pi4 では非コンポジション起動時に 8 プロセスが同時に spin up して load が
-# 10〜19 まで跳ね、bond 形成がデフォルトの 4 秒に間に合わず lifecycle manager が
-# 「unable to be reached after 4.00s by bond → Aborting bringup」で落ちる
-# (2026-07-24 実測)。形成待ちと心拍途絶判定を 60 秒まで許容する。
-# このファイルは navigation.launch.py の SetParametersFromFile で
-# include 先 (nav2 navigation_launch.py) のマネージャにも注入される。
+# ライフサイクルマネージャの bond タイムアウト。navigation.launch.py の
+# SetParametersFromFile で、include 先 (nav2 navigation_launch.py) のマネージャにも
+# 注入される。経緯は README.md の「値の由来」を参照。
 lifecycle_manager_navigation:
   ros__parameters:
-    bond_timeout: 60.0
+    bond_timeout: 60.0    # 既定 4.0 [s]: Pi4 の同時起動で bond 形成が間に合わない
 lifecycle_manager_localization:
   ros__parameters:
-    bond_timeout: 60.0
+    bond_timeout: 60.0    # 既定 4.0 [s]: 同上

@@ -1,5 +1,5 @@
 # 地図の配信と保存。yaml_filename は launch の map:= が上書きする。
-# config/nav2/*.yaml の断片。合成順序と上書きは ../README.md を参照。
+# 全キー nav2_bringup の既定のまま。合成順序と上書きは ../README.md を参照。
 
 map_server:
   ros__parameters:
