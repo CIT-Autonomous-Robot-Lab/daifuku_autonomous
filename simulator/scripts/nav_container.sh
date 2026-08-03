@@ -17,7 +17,8 @@
 #   LIDAR=2d|mid360             lidar:= (Isaac 側の --lidar と必ず揃えること)
 #   USE_SIM_TIME=true|false     use_sim_time:= (既定 false。true にすると
 #                               RTF ゲートが厳格になる。run_isaac_case.sh 参照)
-#   MAP_NAME=map|turtlebot3|... share/maps/<name>.yaml
+#   MAP_NAME=map_19f|turtlebot3|... share/maps/<name>.yaml (既定 map_19f)。
+#                               OVERRIDES 未指定なら同名の override を自動で選ぶ
 #   OVERRIDES= / EXTRA_PARAMS=  navigation.launch.py と同じ
 #   GOAL_X/GOAL_Y/GOAL_YAW_DEG  ゴール
 #   SETTLE= / TIMEOUT=          ゴール送信前の待機秒 / 打ち切り秒
@@ -60,7 +61,8 @@ RUN=/tmp/simulator/$CASE
 rm -rf "$RUN"; mkdir -p "$RUN"
 export ROS_LOG_DIR=$RUN/log
 
-MAP=$SHARE/maps/${MAP_NAME:-map}.yaml
+MAP_NAME=${MAP_NAME:-map_19f}       # 既定は 19F の地図
+MAP=$SHARE/maps/$MAP_NAME.yaml
 if [ ! -f "$MAP" ]; then
     echo "map not found: $MAP" >&2
     exit 2
@@ -118,7 +120,17 @@ EXTRA=""
 [ -n "${EXTRA_PARAMS:-}" ] && EXTRA="${EXTRA:+$EXTRA,}${EXTRA_PARAMS}"
 
 params_arg=()
-[ -n "${OVERRIDES:-}" ] && params_arg+=(overrides:="$OVERRIDES")
+# overrides は**必ず明示的に渡す**。launch の既定は map_19f なので、渡さないと
+# MAP_NAME を変えても 19F 用の調整 (emcl2 のリセット閾値など) が載ったままになる。
+# 地図名と同名の override があればそれを、無ければ none (= 何も重ねない)。
+if [ -z "${OVERRIDES:-}" ]; then
+    if [ -f "$SHARE/config/overrides/$MAP_NAME.yaml" ]; then
+        OVERRIDES=$MAP_NAME
+    else
+        OVERRIDES=none
+    fi
+fi
+params_arg+=(overrides:="$OVERRIDES")
 [ -n "$EXTRA" ] && params_arg+=(extra_params_file:="$EXTRA")
 
 echo "=== CASE=$CASE planner=$PLANNER local=$LOCAL_PLANNER loc=$LOCALIZATION"

@@ -52,13 +52,42 @@ launch_ros はノード自身の `parameters=` をグローバル (`SetParameter
 2. `overrides:=<名前>` → `overrides/<名前>.yaml`（カンマ区切りで複数可）
 3. `extra_params_file:=<パス>` → 任意のファイル（リポジトリ外の一時的な上書き用）
 
+`overrides` の既定値は **`map_19f`** です。既定の地図（`maps/map_19f.yaml`）に
+対応する調整を、素の起動でも載せるためです。地図を変えるときは**置き換え**に
+なります（追加ではありません）。
+
 ```bash
 ros2 launch autonomous_nav navigation.launch.py \
     map:=$PWD/src/autonomous_nav/maps/map_tsudanuma.yaml \
     overrides:=map_tsudanuma planner:=vi local_planner:=nav2
 ```
 
-存在しない名前を渡すと、選べる名前を並べたエラーが出ます。
+何も重ねないときは `overrides:=none` です。`ros2 launch` は値が空の
+`overrides:=` を malformed として弾くので、空文字ではなく `none` を使います。
+
+**地図を渡し替えて `overrides` を放置しないでください。** 別の地図に 19F 用の
+EMCL2 調整（リセット閾値など）が載ったまま走ります。対応する override を持たない
+地図（`maps/turtlebot3.yaml` など）では `overrides:=none` を明示してください。
+存在しない名前を渡した場合は、選べる名前を並べたエラーで止まります。
+
+`simulator/scripts/nav_container.sh` と `tools/pi4_sim/run_case.sh` は、
+`MAP_NAME` と同名の override があればそれを、無ければ `none` を**必ず明示的に**
+渡します（`OVERRIDES=` で上書き可）。既定任せにすると同じ取り違えが起きるためです。
+
+### emcl2 は params_file を通らない
+
+emcl2 は nav2 のノードではないので、合成結果（`params_file`）ではなく
+`emcl2_params_file` がノードへ直接渡ります。そのため `navigation.launch.py` は
+**emcl2 用の合成も別に行い**、同じ `overrides` / `extra_params_file` の
+`emcl2:` セクションだけを `localization/emcl2.yaml` の上に重ねて
+`emcl2_params_file` を差し替えます。
+
+この配線が無いと、`overrides/<地図>.yaml` に `emcl2:` を書いても**エラーも警告も
+出さずに無視されます**。起動ログの次の行で差し替えを確認できます。
+
+```
+[INFO] [launch.user]: params: composed emcl2 .../config/localization/emcl2.yaml -> /tmp/emcl2_params_xxxx.yaml (+ overrides:map_19f)
+```
 
 ### 新しい override を足す
 
@@ -118,13 +147,19 @@ nav2 既定は 1000ms。`planner:=vi` では `vi_global_planner` が `/map` を�
 ### `vi_global_planner` の `cost_drawing_threshold`
 
 表示専用（`value_function` の色スケール上限、単位はステップ数≒秒）。
-2026-07-29 実機計測（`map_10cm`, 458x289）では、nav2 既定側の 60 だと到達可能セルの
-66% が 100 に張り付き、グラデーションが出るのはゴールから 60 ステップ以内の 6.83%
-だけでした（未到達 -1 が 80.07% / 飽和 100 が 13.10% / 1..99 が 6.83%）。
-1 ステップ = `action_forward_m` 0.3 m なので 60 ステップ ≒ 18 m 相当で、建物一周の
-廊下長に足りていません。同じ計測で到達可能セルの最大は 680 ステップ（≒204 m）、
-中央値 60 / p90 110 / p99 300 でした。現在値と選び方は `nav2/vi_planner.yaml` に
-書いてあります（地図とゴールで変わるので別の地図では測り直すこと）。
+**地図ごとに測り直す値**なので、断片（`nav2/vi_planner.yaml`）は地図非依存の 60 に
+置き、19F 用の 180 は `overrides/map_19f.yaml` にあります。
+
+2026-07-29 実機計測（19F の地図を 0.10 m/cell に縮めた 458x289）では、60 だと
+到達可能セルの 66% が 100 に張り付き、グラデーションが出るのはゴールから 60
+ステップ以内の 6.83% だけでした（未到達 -1 が 80.07% / 飽和 100 が 13.10% /
+1..99 が 6.83%）。1 ステップ = `action_forward_m` 0.3 m なので 60 ステップ ≒ 18 m
+相当で、建物一周の廊下長に足りていません。同じ計測で到達可能セルの最大は
+680 ステップ（≒204 m）、中央値 60 / p90 110 / p99 300。180 は p90 と p99 の間で、
+運用上通る範囲に階調を集中させ、遠い裾だけ飽和させる選び方です。
+
+別の地図では分布が変わります（飽和が広ければ小さすぎ、階調が下位に偏っていれば
+大きすぎ）。`overrides/map_tsudanuma.yaml` はこれを設定していないので 60 で動きます。
 
 ### `overrides/map_tsudanuma.yaml` の `safety_radius_penalty: 1`
 

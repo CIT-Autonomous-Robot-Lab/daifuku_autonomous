@@ -23,7 +23,7 @@ Gazebo 版 (rt-net/raspicat_sim) のワールドは `empty.world` / `iscas_museu
 
 `--unknown wall` は fake_robot.py の `unknown_as_obstacle` / run_case.sh の
 `SIM_UNKNOWN_AS_OBSTACLE=1` に対応する。既定 (`free`) では未観測セルは素通しに
-なる。map.yaml の `free_thresh: 0.25` では未観測画素 (205, p=0.196) が free 側に
+なる。map_19f.yaml の `free_thresh: 0.25` では未観測画素 (205, p=0.196) が free 側に
 落ちるため、既定でも「地図の 74.66% が未観測」という事実はワールドに現れない。
 これは意図した挙動で、既存ハーネスの既定と揃えてある (tools/pi4_sim/README.md)。
 
@@ -32,7 +32,7 @@ Python でしか読めない形式を避けることで、GPU の無い開発機
 
 使い方:
 
-    python3 map_to_usd.py src/autonomous_nav/maps/map.yaml -o worlds/map.usda
+    python3 map_to_usd.py src/autonomous_nav/maps/map_19f.yaml -o worlds/map.usda
     python3 map_to_usd.py .../map.yaml -o w.usda --unknown wall   # 未観測も壁
     python3 map_to_usd.py .../turtlebot3.yaml -o w.usda --wall-height 1.0
 
@@ -103,7 +103,7 @@ def load_occupancy(map_yaml, unknown):
 def merge_rectangles(occ):
     """占有セルを軸平行な矩形に貪欲にまとめる。
 
-    そのまま 1 セル 1 プリムにすると map.pgm だけで 9146 プリムになり、
+    そのまま 1 セル 1 プリムにすると map_19f.pgm だけで 9146 プリムになり、
     map_tsudanuma では 17 万を超えてステージが開かなくなる。矩形にまとめると
     壁は細長い 1 枚に潰れるので、実測で 1 桁減る。
 

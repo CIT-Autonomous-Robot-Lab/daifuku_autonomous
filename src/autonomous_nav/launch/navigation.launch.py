@@ -43,7 +43,7 @@ def generate_launch_description():
     bond_params = os.path.join(pkg_share, "config", "lifecycle_bond.yaml")
     default_emcl2_params = os.path.join(pkg_share, "config", "localization", "emcl2.yaml")
     default_rviz_config = os.path.join(pkg_share, "rviz", "navigation.rviz")
-    default_map = os.path.join(pkg_share, "maps", "map.yaml")
+    default_map = os.path.join(pkg_share, "maps", "map_19f.yaml")
     bringup_launch = os.path.join(nav2_share, "launch", "bringup_launch.py")
     navigation_launch = os.path.join(nav2_share, "launch", "navigation_launch.py")
     localization_launch = os.path.join(nav2_share, "launch", "localization_launch.py")
@@ -178,6 +178,14 @@ def generate_launch_description():
         SetParameter / SetParametersFromFile では params_file に既にあるキーを
         上書きできない (上のコメント参照) ため、YAML の段階で深くマージした
         一時ファイルを作る。マージは「ノード名 -> ros__parameters -> キー」の 3 段。
+
+        emcl2 も同じ overrides / extra_params_file を受ける。emcl2 は nav2 の
+        ノードではないので params_file (nav2 の合成結果) を読まず、
+        emcl2_params_file がノードへ直接渡る。両者を別扱いにすると
+        `overrides/<地図>.yaml` に emcl2: を書いても**エラーも警告も出さずに
+        無視される**ので、ここで emcl2 用の合成結果も作って
+        emcl2_params_file を差し替える。土台は emcl2_params_file:= で
+        渡されたファイル (既定は config/localization/emcl2.yaml)。
         """
         import glob
         import tempfile
@@ -228,8 +236,15 @@ def generate_launch_description():
                 merged.update(body)
             origin = f"{len(fragments)} fragments from {params_dir}"
 
-        applied = []
+        # 重ねる順に (表示名, パス) を 1 度だけ解決する。nav2 側と emcl2 側で
+        # 別々に解決すると、片方だけ順序や欠落チェックがずれる余地ができる。
+        layers = []
         for name in [n.strip() for n in overrides.perform(context).split(",") if n.strip()]:
+            # ros2 launch は `overrides:=` (値が空) を malformed として弾くので、
+            # 「何も重ねない」を渡す手段として none を受ける。既定が map_19f に
+            # なっている以上、明示的に外す口が無いと別の地図で 19F の調整が載る。
+            if name.lower() == "none":
+                continue
             path = os.path.join(overrides_dir, f"{name}.yaml")
             if not os.path.isfile(path):
                 available = sorted(
@@ -243,14 +258,22 @@ def generate_launch_description():
                     "Use extra_params_file:=<path> for a file outside "
                     "config/overrides/."
                 )
-            overlay(merged, load(path))
-            applied.append(f"overrides:{name}")
+            layers.append((f"overrides:{name}", path))
 
         for extra in [p.strip() for p in extra_params_file.perform(context).split(",") if p.strip()]:
             if not os.path.isfile(extra):
                 raise RuntimeError(f"extra_params_file does not exist: {extra}")
-            overlay(merged, load(extra))
-            applied.append(extra)
+            layers.append((extra, extra))
+
+        applied = []
+        for label, path in layers:
+            body = load(path)
+            # emcl2 セクションは nav2 側の合成結果に混ぜない。読む者が居ないので
+            # 害は無いが、/tmp/nav2_params_*.yaml に emcl2 が現れると
+            # 「どちらが効いているのか」を追うときに紛れる。emcl2 の分は下で
+            # 別に合成する。
+            overlay(merged, {k: v for k, v in body.items() if k != "emcl2"})
+            applied.append(label)
 
         out = tempfile.NamedTemporaryFile(
             mode="w", prefix="nav2_params_", suffix=".yaml", delete=False,
@@ -258,11 +281,43 @@ def generate_launch_description():
         )
         yaml.safe_dump(merged, out, default_flow_style=False, allow_unicode=True)
         out.close()
-        return [
+
+        # emcl2 側。土台は emcl2_params_file (既定 config/localization/emcl2.yaml)、
+        # 上に載せるのは同じ layers の emcl2 セクションだけ。overrides に emcl2 が
+        # 一切書かれていなければ土台をそのまま使う (一時ファイルを作らない)。
+        emcl2_base = emcl2_params_file.perform(context)
+        emcl2_applied = []
+        if os.path.isfile(emcl2_base):
+            emcl2_merged = load(emcl2_base)
+            for label, path in layers:
+                body = load(path)
+                if "emcl2" in body:
+                    overlay(emcl2_merged, {"emcl2": body["emcl2"]})
+                    emcl2_applied.append(label)
+        else:
+            # localization:=amcl では emcl2 を起動しないので、存在しなくても
+            # ここでは止めない (emcl2 を選んだ場合は validate_localization が見る)。
+            emcl2_merged = None
+
+        actions = [
             LogInfo(msg=f"params: composed {origin} -> {out.name}"
                         + (f" (+ {', '.join(applied)})" if applied else "")),
             SetLaunchConfiguration("params_file", out.name),
         ]
+        if emcl2_merged is not None and emcl2_applied:
+            emcl2_out = tempfile.NamedTemporaryFile(
+                mode="w", prefix="emcl2_params_", suffix=".yaml", delete=False,
+                encoding="utf-8",
+            )
+            yaml.safe_dump(emcl2_merged, emcl2_out, default_flow_style=False,
+                           allow_unicode=True)
+            emcl2_out.close()
+            actions += [
+                LogInfo(msg=f"params: composed emcl2 {emcl2_base} -> {emcl2_out.name}"
+                            f" (+ {', '.join(emcl2_applied)})"),
+                SetLaunchConfiguration("emcl2_params_file", emcl2_out.name),
+            ]
+        return actions
 
     def validate_map_file(context, *args, **kwargs):
         map_path = map_yaml.perform(context)
@@ -270,7 +325,7 @@ def generate_launch_description():
             raise RuntimeError(
                 f"Map YAML file does not exist: {map_path}\n"
                 "Pass a real map path, for example: "
-                "map:=$PWD/src/autonomous_nav/maps/map.yaml"
+                "map:=$PWD/src/autonomous_nav/maps/map_19f.yaml"
             )
         return []
 
@@ -394,9 +449,16 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             "overrides",
-            default_value="",
+            # 既定の地図 (map_19f) に対応する override を既定で載せる。地図を
+            # 変えるときは overrides:=map_tsudanuma のように**置き換える** —
+            # 追加ではないので、19F 用の調整は自動的に外れる。
+            # 地図を渡し替えて overrides を放置すると別の地図の調整が載るので注意。
+            default_value="map_19f",
             description="config/overrides/<名前>.yaml を上に重ねる (カンマ区切りで複数可)。"
-                        "例: overrides:=map_tsudanuma",
+                        "既定は map_19f (既定の地図に対応)。別の地図では"
+                        "overrides:=map_tsudanuma のように置き換える。"
+                        "何も重ねないなら overrides:=none "
+                        "(ros2 launch は値が空の overrides:= を受け付けない)。",
         ),
         DeclareLaunchArgument(
             "extra_params_file",

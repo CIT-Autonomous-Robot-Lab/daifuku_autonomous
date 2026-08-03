@@ -53,9 +53,9 @@ nav2 側の構成・制約・キャリブレーションはそのまま引き継
 > `map_to_usd` の出力を見ても分からない**。上の「実測検証済み」を維持する条件は:
 >
 > ```bash
-> uv run --no-sync map-to-usd ../src/autonomous_nav/maps/map.yaml -o /tmp/w.usda
+> uv run --no-sync map-to-usd ../src/autonomous_nav/maps/map_19f.yaml -o /tmp/w.usda
 > uv run --no-sync python tests/verify_usda.py \
->     ../src/autonomous_nav/maps/map.yaml /tmp/w.usda free    # -> MATCH
+>     ../src/autonomous_nav/maps/map_19f.yaml /tmp/w.usda free    # -> MATCH
 > ```
 
 ## 構成
@@ -83,8 +83,8 @@ uv run map-to-usd --help
 uv run rtf-gate --help
 
 # 生成した world.usda が元の地図と一致しているか検算する
-uv run map-to-usd ../src/autonomous_nav/maps/map.yaml -o /tmp/world.usda
-uv run python tests/verify_usda.py ../src/autonomous_nav/maps/map.yaml /tmp/world.usda free
+uv run map-to-usd ../src/autonomous_nav/maps/map_19f.yaml -o /tmp/world.usda
+uv run python tests/verify_usda.py ../src/autonomous_nav/maps/map_19f.yaml /tmp/world.usda free
 # -> walls parsed: 3373 / missing 0 / extra 0 / MATCH
 ```
 
@@ -184,7 +184,7 @@ Gazebo 版のワールド (`empty.world` / `iscas_museum.world` / `turtlebot3_ho
 
 ```bash
 uv run --project simulator map-to-usd \
-    src/autonomous_nav/maps/map.yaml -o /tmp/world.usda
+    src/autonomous_nav/maps/map_19f.yaml -o /tmp/world.usda
 ```
 
 利点は依存が無いことだけではない。地図とシミュレータ環境が**定義上ずれない**。
@@ -218,7 +218,7 @@ uv run --project simulator map-to-usd /tmp/ts4.yaml -o /tmp/ts4.usda
 ```
 
 > **`--unknown wall` が効かないように見えたら、それは地図側の問題**
-> `map.yaml` は `free_thresh: 0.25`。map_saver の未観測画素 205 は p=0.196 なので
+> `map_19f.yaml` は `free_thresh: 0.25`。map_saver の未観測画素 205 は p=0.196 なので
 > **free 側に落ちて未観測と判定されない**。実測では `--unknown wall` を付けても
 > 占有セルは 9,146 → 9,147 と 1 セルしか増えなかった。`free_thresh` を ROS 既定の
 > 0.196 に直すと 403,307 セル (76.39%) が壁になる。これは `tools/pi4_sim/README.md`

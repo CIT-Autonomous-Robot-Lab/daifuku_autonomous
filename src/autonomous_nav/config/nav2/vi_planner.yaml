@@ -49,8 +49,10 @@ vi_planner:
     publish_value_function: true
     value_publish_interval_ms: 500  # [ms] solve 途中経過の配信間隔 (0 で完了時のみ)
     # value_function の色スケール上限 [ステップ数≒秒]。表示専用で経路計算には影響
-    # しない。値の根拠と選び方は下の vi_global_planner の同名キー (../README.md)。
-    cost_drawing_threshold: 180
+    # しない。**地図ごとに測り直す値**なので、断片側は地図非依存の 60 に置き、
+    # 19F 用の 180 は ../overrides/map_19f.yaml が上書きする。
+    # 値の根拠と選び方は下の vi_global_planner の同名キー (../README.md)。
+    cost_drawing_threshold: 60
     # local_window_value (±1m 窓) のスケール上限。窓は近傍 1m だけを描くので、
     # 全域用の値ではほぼ一様に潰れる。旧 vi_local_planner と同じ 60。
     window_cost_drawing_threshold: 60
@@ -88,19 +90,16 @@ vi_global_planner:
     goal_tolerance_xy: 0.25       # [m] 価値関数キャッシュを再利用するゴール一致判定
     goal_tolerance_deg: 10.0      # [deg]
     # value_function 可視化のスケール上限 [ステップ数≒秒]。表示専用で経路計算には
-    # 影響しない。小さすぎると遠方が一様に飽和して「途中で途切れた」ように見える
-    # (実機計測は ../README.md)。
-    # 実測 (map_10cm, 458x289) の分布は
-    #   中央値 60 / p90 110 / p99 300 / 最大 680 ステップ (≒204 m)。
-    # 既定の 60 は「中央値」でしかなく、ゴールから遠い側の半分が丸ごと 100 に
-    # 潰れて「途中で途切れた」ように見えていた。
-    # 逆に最大値 680 に合わせるのも誤り。680 ステップ地点は実運用ではまず
-    # 到達しない隅で、そこを画面に収めるために実際に通る範囲の階調を捨てることになる。
-    # 180 は p90 (110) と p99 (300) の間で、運用上通る範囲に階調を集中させ、
-    # 遠い裾だけ飽和させる選び方。
-    # 別の地図では分布が変わるので測り直すこと (飽和が広ければ小さすぎ、
-    # 階調が下位に偏っていれば大きすぎる)。
-    cost_drawing_threshold: 180
+    # 影響しない。小さすぎると遠方が一様に飽和して「途中で途切れた」ように見える。
+    #
+    # **これは地図ごとに測り直す値**なので、ここは地図非依存の 60 (上流既定) に
+    # しておき、地図固有の値は ../overrides/<地図名>.yaml に置く。19F の 180 は
+    # ../overrides/map_19f.yaml にあり、その導出 (到達ステップ数の分布から p90 と
+    # p99 の間を取る) と実測値は ../README.md に書いてある。
+    #
+    # 60 のままだと 19F ではゴールから遠い側の半分が 100 に潰れて見える。それが
+    # 起きたら「小さすぎる」の兆候で、その地図で測り直して override を足すこと。
+    cost_drawing_threshold: 60
     publish_value_function: true
     value_publish_interval_ms: 500  # [ms] solve 途中経過の配信間隔 (0 で完了時のみ)
     unknown_as_obstacle: true

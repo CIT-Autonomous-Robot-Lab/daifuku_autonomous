@@ -49,7 +49,7 @@ CASE=${1:-${CASE:-baseline}}
 ISAAC_RUNTIME=${ISAAC_RUNTIME:-binary}   # binary = $ISAACSIM/python.sh / pip = uv --extra isaac
 ISAACSIM=${ISAACSIM:-$HOME/isaacsim}
 LIDAR=${LIDAR:-2d}
-MAP_NAME=${MAP_NAME:-map}
+MAP_NAME=${MAP_NAME:-map_19f}       # nav_container.sh / launch の既定と揃えること
 UNKNOWN=${UNKNOWN:-free}            # map_to_usd.py の --unknown
 WALL_HEIGHT=${WALL_HEIGHT:-2.0}
 ROBOT_USD=${ROBOT_USD:-}

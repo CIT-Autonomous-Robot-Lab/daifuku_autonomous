@@ -64,7 +64,7 @@ CPU quota のキャリブレーションは、実機で取れている数少な�
 
 ### 1. 地図の 74.66% は「未観測」だが、free として扱われている
 
-`map.pgm` の画素分布:
+`map_19f.pgm` の画素分布:
 
 | 画素値 | 割合 | 意味 |
 |---|---|---|
@@ -72,7 +72,7 @@ CPU quota のキャリブレーションは、実機で取れている数少な�
 | 254 | 23.11% | 観測済み free |
 | 0 | 1.73% | 障害物 |
 
-`map.yaml` の `free_thresh: 0.25` に対し 205 は p=(255-205)/255=**0.196** なので
+`map_19f.yaml` の `free_thresh: 0.25` に対し 205 は p=(255-205)/255=**0.196** なので
 `p < free_thresh` が成立し、**未観測セルが全部 free に化けている**
 (ROS の既定は 0.196 で、この値なら未観測のまま)。結果:
 
@@ -311,7 +311,17 @@ Pi には触れていないので、以下は**提案**であって適用済み�
 シムで走破した構成 (`map10cm_dwb` / `verify_repo`) は次の 5 点をすべて
 満たしている。1 つでも欠けると上の表のどれかの失敗になる。
 
-1. 地図 0.10 m/cell (`maps/map_10cm.yaml`) — 欠けると OOM
+1. 地図 0.10 m/cell — 欠けると OOM。`maps/map_10cm.*` として同梱していたが
+   削除したので、必要なら `map_19f` から作り直すこと（`free_thresh 0.15` 込み）:
+
+   ```bash
+   python3 tools/pi4_sim/downsample_map.py \
+       src/autonomous_nav/maps/map_19f.yaml /tmp/map_10cm.yaml \
+       --scale 2 --free-thresh 0.15
+   ```
+
+   `run_case.sh` は `MAP_SCALE=2 MAP_FREE_THRESH=0.15` を渡せば実行時に
+   同じものを生成するので、ハーネス経由なら手で作る必要はない。
 2. その地図の `free_thresh: 0.15` — (1) に同梱。下の「注意」参照
 3. `local_planner:=nav2` — 欠けるとリカバリが `Costmap is not available` で全滅
 4. `bt_navigator.default_server_timeout: 500` — 欠けると 0.2 秒で ABORTED
@@ -334,7 +344,7 @@ BT XML はファイルを追加しただけで launch からは参照してい�
 |---|---|---|
 | `bt_navigator.default_server_timeout: 20 → 500` | CPU 飢餓時に全アクションが 0.2 秒で失敗するのを防ぐ。VI/navfn どちらでも効く | ゴール受理待ちが最大 0.5 秒。**これだけリポジトリに適用済み** |
 | `local_planner:=nav2` | VI プロセスが 1 つになりメモリ半減。behavior_server のリカバリが機能する | 狭域が DWB に戻る |
-| 地図を 0.10 m/cell に作り直す (`downsample_map.py --scale 2 --free-thresh 0.15`) | 状態数 1/4 = メモリ 1/4。VI の OOM が止まる | **`free_thresh 0.15` が同梱されている** (未観測 205 を unknown 扱いにしないと縮めた意味が薄い)。つまりこの地図を選ぶことは下の「注意」を受け入れること。`maps/map_10cm.yaml` として追加済みで既定は変えていない |
+| 地図を 0.10 m/cell に作り直す (`downsample_map.py --scale 2 --free-thresh 0.15`) | 状態数 1/4 = メモリ 1/4。VI の OOM が止まる | **`free_thresh 0.15` が同梱されている** (未観測 205 を unknown 扱いにしないと縮めた意味が薄い)。つまりこの地図を選ぶことは下の「注意」を受け入れること。以前は `maps/map_10cm.*` として同梱していたが削除した。`run_case.sh` に `MAP_SCALE=2 MAP_FREE_THRESH=0.15` を渡すか、上の 1. のコマンドで作り直す |
 | VI 用 BT XML (`behavior_trees/navigate_to_pose_vi.xml` / `nav_through_poses_stub.xml`) | `planner:=vi` で bt_navigator が configure できるようになる | リカバリからコストマップクリアが消える。**`navigation.launch.py` が `planner:=vi` のとき自動で選ぶようにした** |
 | `vi_global_planner` を `solve_compact_mapped` 経路に | `states` (56B/state) を確保しなくなる | **2026-07-29 に実装** (下の「広域地図対応」節)。ただし常駐ブロックは残る |
 | VI をやめて `planner:=navfn` | 実機の地図のまま Pi4 相当で走破する (実測 24 秒 / 557 MB)。必要なのは timeout 変更だけ | VI 研究の目的から外れる |

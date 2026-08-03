@@ -50,7 +50,7 @@ TELEOP_LINEAR_SPEED=0.1 bash docker/raspberrypi/tools/control.sh teleop keyboard
 ```bash
 docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
   /ros_entrypoint.sh ros2 run nav2_map_server map_saver_cli \
-  -f /opt/ros_ws/install/share/autonomous_nav/maps/map
+  -f /opt/ros_ws/install/share/autonomous_nav/maps/map_19f
 ```
 
 保存を確認してから片付けます。`kill-session`はセッション内のノードもまとめて止めるため、
@@ -163,7 +163,7 @@ RVizを使える環境では、次を確認しながら走行します。
 
 ```bash
 ros2 run nav2_map_server map_saver_cli \
-  -f src/autonomous_nav/maps/map
+  -f src/autonomous_nav/maps/map_19f
 ```
 
 軽量Docker環境:
@@ -171,13 +171,19 @@ ros2 run nav2_map_server map_saver_cli \
 ```bash
 docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
   /ros_entrypoint.sh ros2 run nav2_map_server map_saver_cli \
-  -f /opt/ros_ws/install/share/autonomous_nav/maps/map
+  -f /opt/ros_ws/install/share/autonomous_nav/maps/map_19f
 ```
 
 `src/autonomous_nav`はコンテナへマウントされているため、次のファイルがホスト側にも残ります。
 
-- `src/autonomous_nav/maps/map.yaml`
-- `src/autonomous_nav/maps/map.pgm`
+- `src/autonomous_nav/maps/map_19f.yaml`
+- `src/autonomous_nav/maps/map_19f.pgm`
+
+`map_19f`は19Fの地図の名前で、`navigation.launch.py`の`map`の既定値です。別の場所の
+地図を作るときは名前を変えてください。その場合、自律移動では`map:=`と一緒に
+`overrides:=`も指定し直します（既定の`overrides:=map_19f`が載ったままになると、
+19F向けのEMCL2調整が別の地図に適用されます）。詳細は
+[設定](configuration.md)と`src/autonomous_nav/config/README.md`を参照してください。
 
 保存が終わったらモーター電源を切ります。
 

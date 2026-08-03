@@ -20,7 +20,7 @@ docker compose -f docker/raspberrypi/compose.yaml up -d
 ```bash
 cd ~/daifuku_autonomous
 tmux new-session -d -s nav -c "$PWD" -n nav
-tmux send-keys -t nav:nav 'docker compose -f docker/raspberrypi/compose.yaml exec ros2 /ros_entrypoint.sh ros2 launch autonomous_nav navigation.launch.py map:=/opt/ros_ws/install/share/autonomous_nav/maps/map.yaml use_sim_time:=false localization:=emcl2 planner:=vi lidar:=mid360 use_mid360_imu:=false use_rviz:=false publish_lidar_tf:=true lidar_z:=0.275' Enter
+tmux send-keys -t nav:nav 'docker compose -f docker/raspberrypi/compose.yaml exec ros2 /ros_entrypoint.sh ros2 launch autonomous_nav navigation.launch.py map:=/opt/ros_ws/install/share/autonomous_nav/maps/map_19f.yaml use_sim_time:=false localization:=emcl2 planner:=vi lidar:=mid360 use_mid360_imu:=false use_rviz:=false publish_lidar_tf:=true lidar_z:=0.275' Enter
 
 tmux new-window -t nav -c "$PWD" -n motor
 tmux send-keys -t nav:motor 'bash docker/raspberrypi/tools/control.sh motor on'
@@ -72,11 +72,16 @@ launchの既定値と同じです。機体を変えたら実測し直してく�
 
 ## 基本起動
 
-EMCL2、価値反復グローバル／ローカルプランナ、2D LiDARが既定構成です。
+EMCL2、価値反復グローバル／ローカルプランナ、2D LiDARが既定構成です。地図は
+`maps/map_19f.yaml`（19F）が既定で、その地図向けの調整をまとめた
+`config/overrides/map_19f.yaml`も`overrides`の既定値として一緒に載ります。
+`overrides`は**置き換え**なので、別の地図では`overrides:=map_tsudanuma`のように
+指定し直してください。何も重ねないなら`overrides:=none`です（`ros2 launch`は値が
+空の`overrides:=`を受け付けません）。
 
 ```bash
 ros2 launch autonomous_nav navigation.launch.py \
-  map:=$PWD/src/autonomous_nav/maps/map.yaml \
+  map:=$PWD/src/autonomous_nav/maps/map_19f.yaml \
   use_sim_time:=false localization:=emcl2 lidar:=2d
 ```
 
@@ -84,7 +89,7 @@ Mid-360 + IMU:
 
 ```bash
 ros2 launch autonomous_nav navigation.launch.py \
-  map:=$PWD/src/autonomous_nav/maps/map.yaml \
+  map:=$PWD/src/autonomous_nav/maps/map_19f.yaml \
   use_sim_time:=false localization:=emcl2 lidar:=mid360 \
   publish_lidar_tf:=true lidar_z:=0.275
 ```
@@ -98,7 +103,7 @@ ros2 launch autonomous_nav navigation.launch.py \
 ```bash
 docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
   /ros_entrypoint.sh ros2 launch autonomous_nav navigation.launch.py \
-  map:=/opt/ros_ws/install/share/autonomous_nav/maps/map.yaml \
+  map:=/opt/ros_ws/install/share/autonomous_nav/maps/map_19f.yaml \
   use_sim_time:=false localization:=emcl2 lidar:=2d use_rviz:=false
 ```
 
@@ -108,7 +113,7 @@ Nav2標準AMCLへ変更する場合:
 
 ```bash
 ros2 launch autonomous_nav navigation.launch.py \
-  map:=$PWD/src/autonomous_nav/maps/map.yaml \
+  map:=$PWD/src/autonomous_nav/maps/map_19f.yaml \
   localization:=amcl
 ```
 
@@ -122,7 +127,7 @@ NavFnとNav2 DWBへ切り替える場合:
 
 ```bash
 ros2 launch autonomous_nav navigation.launch.py \
-  map:=$PWD/src/autonomous_nav/maps/map.yaml \
+  map:=$PWD/src/autonomous_nav/maps/map_19f.yaml \
   planner:=navfn
 ```
 
@@ -130,7 +135,7 @@ ros2 launch autonomous_nav navigation.launch.py \
 
 ```bash
 ros2 launch autonomous_nav navigation.launch.py \
-  map:=$PWD/src/autonomous_nav/maps/map.yaml \
+  map:=$PWD/src/autonomous_nav/maps/map_19f.yaml \
   planner:=vi local_planner:=nav2
 ```
 
@@ -156,11 +161,14 @@ ros2 launch autonomous_nav navigation.launch.py \
   planner:=vi local_planner:=nav2
 ```
 
-NavFnとDWBで動かす場合、`overrides`は不要です。
+NavFnとDWBで動かす場合、`map_tsudanuma`の価値反復向け設定は要りませんが、
+`overrides:=none`を渡してください。省略すると既定の`map_19f`が載り、この地図には
+合わない19F用のEMCL2調整が適用されます。
 
 ```bash
 ros2 launch autonomous_nav navigation.launch.py \
   map:=$PWD/src/autonomous_nav/maps/map_tsudanuma.yaml \
+  overrides:=none \
   planner:=navfn
 ```
 

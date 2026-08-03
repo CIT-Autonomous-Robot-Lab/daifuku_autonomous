@@ -26,10 +26,10 @@
 
 | 引数 | 既定値 | 説明 |
 |---|---|---|
-| `map` | パッケージ内`maps/map.yaml` | 使用する地図YAMLのフルパス |
+| `map` | パッケージ内`maps/map_19f.yaml` | 使用する地図YAMLのフルパス |
 | `params_dir` | `config/nav2` | 合成するNav2パラメータ断片のディレクトリ |
 | `params_file` | 空（`params_dir`を合成） | Nav2パラメータを1ファイルで与える。指定すると`params_dir`は無視 |
-| `overrides` | 空（無効） | `config/overrides/<名前>.yaml`を重ねる。カンマ区切りで複数可（例`overrides:=map_tsudanuma`） |
+| `overrides` | `map_19f`（既定の地図に対応） | `config/overrides/<名前>.yaml`を重ねる。カンマ区切りで複数可。**置き換え**なので`overrides:=map_tsudanuma`とすると19F用の調整は外れる。何も重ねないなら`overrides:=none` |
 | `extra_params_file` | 空（無効） | `overrides`の後に重ねる任意パスのファイル。カンマ区切りで複数可 |
 | `emcl2_params_file` | `config/localization/emcl2.yaml` | EMCL2パラメータ |
 | `localization` | `emcl2` | `emcl2` / `emcl` / `amcl` |
@@ -74,9 +74,11 @@ ros2 launch autonomous_nav mapping.launch.py --show-args
 
 ## 自己位置推定の暫定設定
 
-`config/localization/emcl2.yaml`のリセット関連は、現在の地図に合わせた**暫定値**です。
+EMCL2のリセット関連は、19Fの地図に合わせた**暫定値**です。地図固有の値なので
+`config/localization/emcl2.yaml`ではなく`config/overrides/map_19f.yaml`にあります
+（断片側は上流既定のままです）。
 
-| パラメータ | 値 | 従来値 |
+| パラメータ | `overrides/map_19f.yaml` | 上流既定（断片側の値） |
 |---|---|---|
 | `alpha_threshold` | `0.2` | `0.5` |
 | `expansion_radius_orientation` | `0.05` | `0.2` |
@@ -85,7 +87,12 @@ ros2 launch autonomous_nav mapping.launch.py --show-args
 有効ビームの28%が地図上の壁を貫通しており、非貫通率（alpha）が0.0〜0.4に張り付く
 状態でした。閾値0.5のままでは膨張リセットとセンサーリセットが毎スキャン発動し、
 推定姿勢がその場で回転してしまいます。根本原因は地図と実環境の不整合にあります。
-地図を取り直したあとは、既定寄りの値へ戻してください。
+地図を取り直したあとは、この3つを`overrides/map_19f.yaml`から削除してください。
+
+EMCL2はNav2のノードではないため、合成後の`params_file`ではなく
+`emcl2_params_file`がノードへ直接渡ります。`overrides`をEMCL2にも効かせるために、
+`navigation.launch.py`はEMCL2用の合成を別に行っています。詳しくは
+`src/autonomous_nav/config/README.md`を参照してください。
 
 ## 機体固有の調整
 

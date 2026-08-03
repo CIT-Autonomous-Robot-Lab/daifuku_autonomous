@@ -4,6 +4,13 @@
 #       map:=<share>/maps/map_tsudanuma.yaml \
 #       overrides:=map_tsudanuma planner:=vi local_planner:=vi
 #
+# overrides は**置き換え**なので、既定の overrides:=map_19f はこのとき外れる。
+# つまり emcl2 は上流既定 (alpha_threshold 0.5 / expansion_radius_orientation 0.2 /
+# sensor_reset true) で走る。この地図は 68.2% が未観測で占有セルが 0.4% しかなく、
+# スキャンマッチングの拠り所が乏しいので、19F と同じ alpha 崩壊 (リセットが毎スキャン
+# 発動して推定姿勢が回る) が起きる余地がある。起きたら map_19f.yaml の emcl2 ブロックを
+# ここへ写すこと。**未検証** — この地図で emcl2 のリセット挙動は測っていない。
+#
 # local_planner:=vi は vi_planner 1 ノード構成 (planner_server + controller_server を
 # まとめて置き換える)。local_planner:=nav2 は vi_global_planner + controller_server。
 # どちらも compact (アウトオブコア) 経路が使えるので Pi4 4GB に載る。

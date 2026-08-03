@@ -7,7 +7,8 @@
 #   PLANNER=vi|navfn            planner:=
 #   LOCAL_PLANNER=auto|nav2|vi  local_planner:=
 #   LOCALIZATION=emcl2|amcl     localization:=
-#   MAP_NAME=map|map_tsudanuma|... share/maps/<name>.yaml を使う (既定 map)
+#   MAP_NAME=map_19f|map_tsudanuma|... share/maps/<name>.yaml を使う (既定 map_19f)。
+#                               OVERRIDES 未指定なら同名の override を自動で選ぶ
 #   VI_MAP_SCALE=               vi_global_planner の map_scale (地図をプランナ内部で
 #                               粗くする倍率。津田沼 (5888x4000@0.05m) は 3 で
 #                               1963x1334@0.15m = 1.57 億状態)
@@ -74,7 +75,8 @@ RUN=/tmp/pi4_sim/$CASE
 rm -rf "$RUN"; mkdir -p "$RUN"
 export ROS_LOG_DIR=$RUN/log
 
-MAP=$SHARE/maps/${MAP_NAME:-map}.yaml
+MAP_NAME=${MAP_NAME:-map_19f}       # 既定は 19F の地図
+MAP=$SHARE/maps/$MAP_NAME.yaml
 if [ ! -f "$MAP" ]; then
     echo "map not found: $MAP" >&2
     exit 2
@@ -155,7 +157,17 @@ EXTRA=""
 [ -f "$RUN/overlay.yaml" ] && EXTRA=$RUN/overlay.yaml
 [ -n "${EXTRA_PARAMS:-}" ] && EXTRA="${EXTRA:+$EXTRA,}${EXTRA_PARAMS}"
 params_arg=()
-[ -n "${OVERRIDES:-}" ] && params_arg+=(overrides:="$OVERRIDES")
+# overrides は**必ず明示的に渡す**。launch の既定は map_19f なので、渡さないと
+# MAP_NAME を変えても 19F 用の調整 (emcl2 のリセット閾値など) が載ったままになる。
+# 地図名と同名の override があればそれを、無ければ none (= 何も重ねない)。
+if [ -z "${OVERRIDES:-}" ]; then
+    if [ -f "$SHARE/config/overrides/$MAP_NAME.yaml" ]; then
+        OVERRIDES=$MAP_NAME
+    else
+        OVERRIDES=none
+    fi
+fi
+params_arg+=(overrides:="$OVERRIDES")
 [ -n "$EXTRA" ] && params_arg+=(extra_params_file:="$EXTRA")
 
 obs_arg=()
@@ -188,8 +200,10 @@ python3 "$(dirname "$0")/fake_robot.py" --ros-args \
 SIM_PID=$!
 sleep 3
 
+# lidar_driver:=false: /scan_raw は fake_robot.py が出すので、lidar:=2d の
+# 実機ドライバ (urg_node) は立てない。
 ros2 launch autonomous_nav navigation.launch.py \
-    lidar:=2d use_rviz:=false \
+    lidar:=2d lidar_driver:=false use_rviz:=false \
     map:="$MAP" "${params_arg[@]}" \
     planner:="$PLANNER" local_planner:="$LOCAL_PLANNER" \
     localization:="$LOCALIZATION" >"$RUN/nav.log" 2>&1 &

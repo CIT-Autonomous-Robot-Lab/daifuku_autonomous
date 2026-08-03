@@ -16,14 +16,14 @@ emcl2:
     odom_rot_dev_per_rot: 0.2
     laser_likelihood_max_dist: 0.2
     scan_increment: 1
-    # 2026-07-24: 実測で非貫通率(alpha)が0.0-0.4に張り付き、閾値0.5では
-    # 膨張リセット+センサリセットが毎スキャン発動して推定姿勢が回転した。
-    # 地図と環境の不整合(有効ビームの28%が地図の壁を貫通)が根因のため、
-    # 地図を取り直すまでリセットを保守的にする。
-    alpha_threshold: 0.2
+    # ここから 3 つ (alpha_threshold / expansion_radius_orientation / sensor_reset)
+    # は上流既定のまま = **地図非依存**の値にしてある。19F の地図では地図と環境の
+    # 不整合でリセットが暴発するため、../overrides/map_19f.yaml が保守側へ上書き
+    # する (経緯はそちらのコメント)。地図ごとの調整はこのファイルに書かないこと。
+    alpha_threshold: 0.5
     open_space_threshold: 0.05
     expansion_radius_position: 0.1
-    expansion_radius_orientation: 0.05
+    expansion_radius_orientation: 0.2
     extraction_rate: 0.1
     range_threshold: 0.3
-    sensor_reset: false
+    sensor_reset: true
