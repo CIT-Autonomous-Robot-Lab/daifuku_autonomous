@@ -10,49 +10,27 @@ Nav2による自律移動
 
 ## 環境構築
 
-導入済みROS 2のうち、`/opt/ros`配下で最新のディストリビューションを自動検出し、必要なAPTパッケージ、EMCL2、rosdep依存関係、ワークスペースのビルドを実行
+以下のコマンドで環境を構築
 
 ```bash
 make setup
 ```
 
-ビルド後のワークスペース読み込み
-
-```bash
-source install/setup.bash
-```
-
-旧版`python3-rosdep2`の削除後に残る無効なrosdepソースは、`make setup`の実行時に自動削除
-
-外部パッケージの移動後は、CMakeキャッシュを自動削除してビルドを再構成
-
-不足時の依存パッケージインストール
-
-```bash
-rosdep install --from-paths src --ignore-src -r -y
-```
-
-## EMCL2
-
-ソース取得と依存パッケージのインストール
-
-```bash
-vcs import < autonomous_bot.repos
-rosdep install --from-paths src --ignore-src -r -y
-```
-
 ## ビルド
 
 ```bash
-colcon build --packages-select autonomous_slam autonomous_nav emcl2 nav2_waypoint_manager
-source install/setup.sh
+make build
 ```
 
 ## 起動
 
 ### 1. GazeboでTurtleBot3 Worldを起動
 
-ターミナル1でのGazebo起動
+```bash
+make sim
+```
+
+または
 
 ```bash
 pkill -f gzserver
@@ -64,17 +42,28 @@ export GAZEBO_MODEL_DATABASE_URI=""
 ros2 launch turtlebot3_gazebo turtlebot3_world.launch.py
 ```
 
-TurtleBot3、`/scan`、`/odom`、TF、`/clock`などの起動
-
 ### 2. SLAMによる地図作成
 
 #### SLAMを起動
+
+```bash
+make slam
+```
+
+または
 
 ```bash
 ros2 launch autonomous_slam mapping.launch.py use_sim_time:=true
 ```
 
 #### キーボード操作（`/cmd_vel`）
+
+```bash
+make teleop
+```
+
+または
+
 ```bash
 ros2 run turtlebot3_teleop teleop_keyboard
 ```
@@ -85,55 +74,67 @@ ros2 run turtlebot3_teleop teleop_keyboard
 ros2 run nav2_map_server map_saver_cli -f $PWD/src/autonomous_slam/maps/map
 ```
 
-保存後に作成または更新されるファイル
-
-- `src/autonomous_slam/maps/map.yaml`
-- `src/autonomous_slam/maps/map.pgm`
-
 ### 3. 保存済み地図によるNav2起動
-
-自己位置推定アルゴリズムの切替
-
-- `localization:=emcl2`（デフォルト）
-- `localization:=amcl`
 
 #### シミュレータ
 
+ターミナル1でGazebo起動
+
 ```bash
-ros2 launch autonomous_nav navigation.launch.py map:=$PWD/src/autonomous_nav/maps/turtlebot3.yaml use_sim_time:=true localization:=emcl2
+make sim
 ```
+
+ターミナル2でNav2起動
+
+```bash
+make dev-sim
+```
+
+<!-- ```bash
+ros2 launch autonomous_nav navigation.launch.py map:=$PWD/src/autonomous_nav/maps/map_turtlebot3
+.yaml use_sim_time:=true localization:=emcl2
+``` -->
 
 #### 実機
-
-事前作成済み地図のパス指定
-
 ```bash
-ros2 launch autonomous_nav navigation.launch.py map:=$PWD/src/autonomous_nav/maps/map.yaml use_sim_time:=false localization:=emcl2
+make dev
 ```
 
+<!-- ```bash
+ros2 launch autonomous_nav navigation.launch.py map:=$PWD/src/autonomous_nav/maps/map_tsudanuma.yaml use_sim_time:=false localization:=emcl2
+``` -->
 
-RVizの**2D Pose Estimate**による地図上のロボット初期姿勢の設定
+
+RVizの**2D Pose Estimate**で初期位置を指定→Nav2 Goal Poseでゴールを指定可能
 
 ### Waypoint Managerパネル
 
-Nav2起動後、RViz2の**Panels → Add New Panel**から
-`nav2_waypoint_manager/WaypointManagerPanel`を追加。登録したWaypointは
-`/waypoint_markers`に表示され、**Start**の選択時に`/navigate_through_poses`アクションへ送信される。
-詳細は[`nav2_waypoint_manager/README.md`](src/nav2_waypoint_manager/README.md)を参照
+- Nav2起動後、RViz2の**Panels → Add New Panel**から`nav2_waypoint_manager/WaypointManagerPanel`を追加する
+- yaml形式でwaypointの保存と読み込みが可能
 
 ### 4. RVizからゴールを送信
 
 RVizからゴールの2D Poseを指定
 
+## Makeコマンド
+### 
+
+| コマンド       | 説明                                    |
+| -------------- | --------------------------------------- |
+| `make help`    | 利用可能なコマンドの表示                |
+| `make build`   | ワークスペースの通常ビルド              |
+| `make rebuild` | CMakeキャッシュを削除して再構成・ビルド |
+| `make deps`    | パッケージ依存関係の導入                |
+| `make test`    | テストの実行                            |
+| `make clean`   | ビルド生成物の削除                      |
+
+### 引数
+`MAP`、`USE_SIM_TIME`、`LOCALIZATION`、`USE_RVIZ`
+
+
 ## 現在の構成
 
-地図作成パッケージ: `autonomous_slam`
-
-地図作成用起動ファイル: `autonomous_slam/launch/mapping.launch.py`
-
-自律走行用起動ファイル: `navigation.launch.py`
-
-### 地図作成
+### 地図作成フロー
 ```mermaid
 flowchart TD
   scan[LiDAR /scan]
@@ -146,6 +147,7 @@ flowchart TD
   slam --> map
 ```
 
+### ナビゲーションフロー
 ```mermaid
 flowchart TD
   map[地図]
@@ -188,11 +190,3 @@ flowchart TD
 | 速度平滑化         | Velocity Smoother                                |   ○   | `/cmd_vel`の急変抑制                              |
 | 行動制御・復帰     | Nav2 Behavior Tree、Spin / BackUp など           |   ○   | 計画・追従・失敗時の復帰制御                      |
 | 複数地点の巡回     | Waypoint Manager + NavigateThroughPoses          |   ○   | RViz登録地点列のNav2への送信                      |
-
-SLAM設定ファイル: [`src/autonomous_slam/config/`](src/autonomous_slam/config/)
-
-Nav2設定ファイル: [`src/autonomous_nav/config/`](src/autonomous_nav/config/)
-
-SLAM起動ファイル: [`src/autonomous_slam/launch/`](src/autonomous_slam/launch/)
-
-Nav2起動ファイル: [`src/autonomous_nav/launch/`](src/autonomous_nav/launch/)
