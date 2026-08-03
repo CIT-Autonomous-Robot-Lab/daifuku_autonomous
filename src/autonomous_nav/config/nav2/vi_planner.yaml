@@ -25,7 +25,7 @@ vi_planner:
     solver: "frontier2d_sparse"
     dense_limit_mb: 2048          # 既定 1500 [MB]: 密の価値関数 (states + sweep_orders) の上限。超えたら起動を止める。19F は map_scale 2 で実測 655MB
     compact_ram_limit_mb: 2048    # 既定 512 [MB]: **上の solver が密の間は効かない** (sink を作らないため)。compact に戻したときのための値。sink を RAM に置ける上限 (超過分は /tmp/vi_planner_sink へ mmap 退避)
-    theta_cell_num: 60            # 既定 60: 姿勢の離散数。vi_rs のコンパイル時定数 N_THETA と一致必須
+    theta_cell_num: 60            # 既定 60: 姿勢の離散数。360 を割り切ること (t_resolution = 360/この値 が整数除算)
     safety_radius: 0.2            # 既定 0.2 [m]: 障害物近傍ペナルティの半径 (VI 内部の膨張)
     safety_radius_penalty: 30     # 既定 30 [秒/セル]: 障害物に近寄る代わりに払う迂回コスト
     goal_margin_radius: 0.3       # 既定 0.3 [m]: ゴール圏 (final_state) 判定半径 = ゴール許容差
@@ -64,7 +64,7 @@ vi_planner:
     cost_drawing_threshold: 60    # 既定 60: /value_function の色スケール上限
     window_cost_drawing_threshold: 60  # 既定 60: /local_window_value (±1m 窓) の色スケール上限
     # ── 行動集合 (前進量と回転量の組。要素数は 3 つの配列で揃えること) ──
-    allow_action_mismatch: false  # 既定 false: 下の値が vi_core の定数と違うとき起動を止める
+    # ここで決めた値がそのまま遷移表になる (起動時に作られる)。数も 6 でなくてよい。
     action_names: ["forward", "back", "right", "rightfw", "left", "leftfw"]  # 既定 同左
     action_forward_m: [0.3, -0.2, 0.0, 0.2, 0.0, 0.2]      # 既定 同左 [m]: 各行動の前進量
     action_rotation_deg: [0.0, 0.0, -20.0, -20.0, 20.0, 20.0]  # 既定 同左 [deg]: 各行動の回転量
@@ -91,7 +91,7 @@ vi_global_planner:
     map_scale: 1                  # 既定 1: プランナ内部で地図を粗くする倍率 (1 = /map のまま)。19F は ../overrides/ で 2
     compact_sink_dir: ""          # 既定 "": compact の確定出力先 ("" = RAM)
     compact_ram_limit_mb: 2048    # 既定 512 [MB]: sink を RAM に置ける上限 (超過分は /tmp/vi_global_planner_sink へ mmap 退避)。vi_planner と揃える。compact_sink_dir 無しの広域地図では 2GiB を RAM に抱えたまま OOM し得る
-    theta_cell_num: 60            # 既定 60: 姿勢の離散数
+    theta_cell_num: 60            # 既定 60: 姿勢の離散数。360 を割り切ること
     safety_radius: 0.2            # 既定 0.2 [m]: 障害物近傍ペナルティの半径
     safety_radius_penalty: 30     # 既定 30 [秒/セル]: 障害物に近寄る代わりに払う迂回コスト
     goal_margin_radius: 0.3       # 既定 0.3 [m]: ゴール圏 (final_state) 判定半径
@@ -109,7 +109,6 @@ vi_global_planner:
     publish_value_function: true  # 既定 true: /value_function を配信するか
     value_publish_interval_ms: 500  # 既定 500 [ms]: solve 途中経過の配信間隔 (0 で完了時のみ)
     unknown_as_obstacle: true     # 既定 true: 未観測セルを障害物として扱う
-    allow_action_mismatch: false  # 既定 false: 下の値が vi_core の定数と違うとき起動を止める
     action_names: ["forward", "back", "right", "rightfw", "left", "leftfw"]  # 既定 同左
     action_forward_m: [0.3, -0.2, 0.0, 0.2, 0.0, 0.2]      # 既定 同左 [m]
     action_rotation_deg: [0.0, 0.0, -20.0, -20.0, 20.0, 20.0]  # 既定 同左 [deg]

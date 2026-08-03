@@ -189,7 +189,7 @@ ros2 launch autonomous_nav navigation.launch.py \
 注意点:
 
 - `map_scale: 5`は単独では効きません。`downsample_policy: optimistic`（ブロック内にfreeが
-  1つでもあればfree）、`action_forward_m`、`goal_margin_radius`、`allow_action_mismatch`が
+  1つでもあればfree）、`action_forward_m`、`goal_margin_radius`が
   セットで、1つでも欠けると波がゴール近傍で止まります。値は
   `config/overrides/map_tsudanuma.yaml`のコメントにそろえてあります。
 - 保守的プーリング（障害物優先。`downsample_policy`の既定）だと通路のセル幅が価値反復の

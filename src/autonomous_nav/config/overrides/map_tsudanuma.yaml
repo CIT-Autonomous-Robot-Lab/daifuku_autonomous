@@ -33,7 +33,6 @@ vi_global_planner:
     map_scale: 5                         # 断片 1: 内部だけ 0.25m/cell (5650 万状態)
     downsample_policy: "optimistic"      # 既定 conservative (断片は未設定): 保守側だと通路のセル幅が死ぬ
     action_forward_m: [0.5, -0.3333, 0.0, 0.3333, 0.0, 0.3333]  # 断片の 5/3 倍 (セル比例)
-    allow_action_mismatch: true          # 断片 false: 上行が vi_core 定数と変わるため
     goal_margin_radius: 0.5              # 断片 0.3: ゴールセル数を 7 に保つ (セル比例)
     # tmpfs でないこと (`findmnt -no FSTYPE /tmp`)。tmpfs だと RAM に載って無意味。
     compact_sink_dir: "/tmp/vi_global_planner_sink"   # 断片 "" (= RAM): 0.68GB を退避
@@ -56,7 +55,6 @@ vi_planner:
     map_scale: 5                         # 既定 1 (断片は未設定): 内部だけ 0.25m/cell (5650 万状態)
     downsample_policy: "optimistic"      # 既定 conservative (断片は未設定): 保守側だと通路のセル幅が死ぬ
     action_forward_m: [0.5, -0.3333, 0.0, 0.3333, 0.0, 0.3333]  # 断片の 5/3 倍 (セル比例)
-    allow_action_mismatch: true          # 断片 false: 上行が vi_core 定数と変わるため
     goal_margin_radius: 0.5              # 断片 0.3: ゴールセル数を 7 に保つ (セル比例)
     safety_radius_penalty: 1             # 断片 30: 30 だと貪欲ロールアウトが降下できない
     max_rollout_steps: 100000            # 断片 10000: 広域では遠い start から届かない
