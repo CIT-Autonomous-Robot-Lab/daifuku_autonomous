@@ -15,7 +15,10 @@
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>laser_filters</exec_depend>
   <exec_depend>diagnostic_updater</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>lifecycle_msgs</exec_depend>
   <exec_depend>livox_ros_driver2</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
   <exec_depend>nav2_amcl</exec_depend>
   <exec_depend>nav2_behaviors</exec_depend>
   <exec_depend>nav2_bringup</exec_depend>
@@ -36,6 +39,7 @@
   <exec_depend>rviz2</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>slam_toolbox</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
   <exec_depend>topic_tools</exec_depend>
   <!-- lidar:=2d のときだけ使う。既定パラメータは raspicat_bringup の

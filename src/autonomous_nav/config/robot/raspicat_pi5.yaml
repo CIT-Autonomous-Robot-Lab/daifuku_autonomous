@@ -1,0 +1,52 @@
+# raspicat_pi5_driver (Raspberry Pi 5 用の自前モータドライバ) のパラメータ。
+# 「既定」= scripts/raspicat_pi5_driver.py の declare_parameter の値。
+# robot_bringup.launch.py が driver:=pi5 のとき LifecycleNode の parameters= に直接渡す。
+#
+# Pi 4 (driver:=raspimouse) 用は raspicat.yaml。あちらは上流 raspicat_ros の完全な
+# コピーだが、こちらは自前ノードなのでノード側の既定値をこの機体に合わせてあり、
+# このファイルは全キーを既定値のまま並べたものになっている (未設定キーは無い)。
+# 値の由来は ../README.md。I2C アドレスは 10 進で書く (YAML の 0x10 は文字列になる)。
+#
+# 「モータードライバ基板は正常」という前提で書いてある。use_pulse_counters は
+# true (エンコーダ) が既定。この個体の I2C カウンタが不安定なときは false にすると
+# cmd_vel の積分に落ちるが、ノードは I2C 失敗を自分で拾って自動で落ちるので、
+# rtmouse のように固着することはない (../README.md)。
+
+raspicat_pi5_driver:
+  ros__parameters:
+    use_pulse_counters        : true    # 既定 true: /dev/i2c-1 のパルスカウンタで odom を積む。false = cmd_vel を積分
+    odometry_scale_left_wheel : 1.0     # 既定 1.0: 左車輪の回転量に掛ける補正係数
+    odometry_scale_right_wheel: 1.0     # 既定 1.0: 右車輪の同上
+    wheel_diameter            : 0.2     # 既定 同左 [m]: 車輪の直径 (実測 200 mm)
+    wheel_tread               : 0.35    # 既定 同左 [m]: 左右車輪の間隔 (実測 350 mm)
+    pulses_per_revolution     : 400.0   # 既定 400.0: 車輪 1 回転あたりのパルス数。cmd_vel → 周波数の換算にも使う
+    odom_hz                   : 50.0    # 既定 50.0 [Hz]: odom と TF を出す周期。raspimouse の 100 から半減 (I2C の占有率を下げる)
+    initial_motor_power       : false   # 既定 false: 起動時にモータ電源を入れるか
+    cmd_vel_timeout           : 60.0    # 既定 60.0 [s]: cmd_vel が途切れたらモータを止めるまでの猶予
+    publish_tf                : true    # 既定 true: odom -> base_footprint TF を出すか。EKF に出させるなら false
+    odom_frame_id             : "odom"  # 既定 odom: odom の親フレーム
+    odom_child_frame_id       : "base_footprint"  # 既定 base_footprint: odom の子フレーム
+    odom_frame_prefix         : ""      # 既定 "": 上 2 つに付ける接頭辞 (複数台運用向け)
+
+    min_step_frequency        : 5.0     # 既定 5.0 [Hz]: これ未満は 0 に丸める (rtmouse の MOTOR_UNCONTROLLABLE_FREQ と同値)
+    max_step_frequency        : 10000.0 # 既定 10000.0 [Hz]: ステップ周波数の上限 (rtmouse と同値)
+
+    # ── 配線 (実機で確認するまでは既定のまま) ──
+    gpiochip_label            : "pinctrl-rp1"  # 既定 同左: RP1 の gpiochip のラベル。番号はカーネル版で動くのでラベルで探す
+    gpiochip_device           : ""      # 既定 "": /dev/gpiochipN を直接指定する (空ならラベルで探す)
+    gpio_direction_left       : 16      # 既定 16: 左モータの方向 (rtmouse の MOTDIR_L_BASE)
+    gpio_direction_right      : 6       # 既定 6: 右モータの方向 (同 MOTDIR_R_BASE)
+    gpio_motor_enable         : 5       # 既定 5: モータ電源 (同 MOTEN_BASE)
+    direction_left_forward_level : 0    # 既定 0: 前進時に左方向ピンへ出す論理 (rtmouse は正周波数で clear)
+    direction_right_forward_level: 1    # 既定 1: 同右 (rtmouse は正周波数で set)
+
+    pwmchip_match             : "98000.pwm"  # 既定 同左: /sys/class/pwm から選ぶ手がかり。rp1.dtsi の rp1_pwm0 は offset 0x98000
+    pwmchip_path              : ""      # 既定 "": /sys/class/pwm/pwmchipN を直接指定する (空なら上で探す)
+    pwm_channel_left          : 0       # 既定 0: GPIO12 に出る RP1 pwm0 のチャネル
+    pwm_channel_right         : 1       # 既定 1: GPIO13 に出る同上
+
+    i2c_bus                   : "/dev/i2c-1"  # 既定 同左: パルスカウンタの載っている I2C バス
+    i2c_address_left          : 16      # 既定 16 (0x10): 左パルスカウンタのアドレス
+    i2c_address_right         : 17      # 既定 17 (0x11): 右パルスカウンタのアドレス
+    counter_error_limit       : 5       # 既定 5: I2C 読み出しが連続でこの回数失敗したら cmd_vel 積分へ落ちる
+    counter_retry_period      : 1.0     # 既定 1.0 [s]: 落ちたあと再試行するまでの間隔

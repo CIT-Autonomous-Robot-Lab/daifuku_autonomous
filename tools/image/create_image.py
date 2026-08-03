@@ -907,8 +907,26 @@ def render_config_txt_block(model: str) -> str:
         ]
     else:
         lines += [
-            "# Raspberry Pi 5 では rtmouse (Raspberry Pi Cat 本体ドライバ) を導入しない。",
-            "# rt-net/RaspberryPiMouse は Pi 5 を公式サポートしていない。",
+            # rtmouseはBCM2711のGPIO/PWM/CLKレジスタをioremapするので、
+            # それらがRP1側にあるPi 5では動かない。代わりにautonomous_navの
+            # raspicat_pi5_driver.pyがRP1のPWMとgpiochipとI2Cを直接叩く。
+            "# Raspberry Pi 5 では rtmouse を導入しない (rt-net/RaspberryPiMouse は非対応)。",
+            "# 本体ドライバは autonomous_nav の raspicat_pi5_driver.py",
+            "# (robot_bringup.launch.py の driver:=pi5)。",
+            # 左右モータのステップクロックをRP1のハードウェアPWMから出す。
+            # pwm-2chanはbcm2835向けのオーバレイだが、bcm2712-rpi.dtsiが
+            # `pwm: &pwm0` -> `pwm0: &rp1_pwm0` と付け替えているのでPi 5でも
+            # RP1のPWMに当たる。func=4はpwm-2chan-overlay.dtsが挙げる正当な
+            # 組み合わせ（PWM0: 12,4(Alt0) / PWM1: 13,4(Alt0)）で、RP1では
+            # GPIO12 -> pwm0 ch0、GPIO13 -> pwm0 ch1。
+            # ネット上にある`dtoverlay=pwm-pi5`はrpi-6.12.yのoverlays/Makefileに
+            # 存在しない（pwm / pwm-2chan / pwm-gpio / pwm-gpio-fan / pwm-ir-tx /
+            # pwm-pio / pwm1 だけ）。
+            "dtoverlay=pwm-2chan,pin=12,func=4,pin2=13,func2=4",
+            # パルスカウンタ(0x10/0x11)はPi 4と同じくI2Cのタイムアウトに弱い。
+            # RP1のI2CはDesignWare系でタイミング生成が違うので、この値が効くかは
+            # 実機で確認する（docs/setup/raspberry-pi-5.md）。
+            "dtparam=i2c_baudrate=62500",
         ]
     lines.append(END_MARK)
     return "\n".join(lines) + "\n"

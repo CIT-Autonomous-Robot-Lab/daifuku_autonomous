@@ -1,0 +1,22 @@
+# Raspberry Pi 5 で本体ドライバをコンテナから動かすための権限。
+#
+# docker/raspberrypi/compose.yaml の raspicat サービスは user: "1000:1000" で走る。
+# コンテナには補助グループが引き継がれないので、ホストで gpio や i2c グループへ
+# chgrp しても届かない。所有者そのものを 1000:1000 にするのが確実。
+#
+# 入るのは tools/image/provision.sh 経由 (--model pi5 のときだけ)。反映は
+#   sudo udevadm control --reload && sudo udevadm trigger
+# または再起動。
+
+# ステップクロック。/sys/class/pwm/pwmchipN/export を書くと pwmN/ が新しい
+# デバイスとして生えるので、同じ ACTION=="add" がもう一度飛ぶ。そのたびに属性
+# ファイルの所有権を直す。%p は devpath で、/sys%p が実体のディレクトリ
+# (/sys/class/pwm/ の下はシンボリックリンクなので chown -R では辿らない)。
+SUBSYSTEM=="pwm", ACTION=="add", RUN+="/bin/sh -c 'chown -R 1000:1000 /sys%p'"
+
+# モータの方向線と電源線。RP1 のバンクだけでなく全 gpiochip を対象にする
+# (番号はカーネル版で動くうえ、ドライバはラベルで選ぶため)。
+SUBSYSTEM=="gpio", KERNEL=="gpiochip[0-9]*", OWNER="1000", GROUP="1000", MODE="0660"
+
+# パルスカウンタ (0x10 / 0x11)。
+SUBSYSTEM=="i2c-dev", OWNER="1000", GROUP="1000", MODE="0660"

@@ -376,6 +376,28 @@ if [[ "${DAIFUKU_WITH_RTMOUSE}" == "1" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
+# Raspberry Pi 5 の本体ドライバ用の権限
+# ---------------------------------------------------------------------------
+# Pi 5 では rtmouse が動かないので、autonomous_nav の raspicat_pi5_driver.py が
+# RP1 の PWM (sysfs) と gpiochip と I2C をユーザ空間から直接叩く。コンテナは
+# uid/gid 1000 で走り補助グループを持たないため、所有権をホスト側で渡しておく。
+# 詳細は docs/setup/raspberry-pi-5.md。
+
+if [[ "${DAIFUKU_MODEL}" == "pi5" ]]; then
+  step "Pi 5 本体ドライバ用のudevルールを導入"
+  RULES_SRC="${WORKSPACE}/tools/image/udev/99-daifuku-pi5.rules"
+  if [[ -f "${RULES_SRC}" ]]; then
+    install -m 0644 "${RULES_SRC}" /etc/udev/rules.d/99-daifuku-pi5.rules &&
+      udevadm control --reload &&
+      udevadm trigger --subsystem-match=pwm --subsystem-match=gpio \
+        --subsystem-match=i2c-dev ||
+      soft_fail "udevルールの導入"
+  else
+    soft_fail "${RULES_SRC} が見つかりません（リポジトリの取得に失敗している）"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 # Dockerイメージ
 # ---------------------------------------------------------------------------
 

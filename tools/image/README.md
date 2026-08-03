@@ -72,6 +72,9 @@ python scripts\image\create_image.py all --model pi4 --device 2 --ssh-key $HOME\
 3. `configure` — ブートパーティションへ`user-data`、`network-config`、`meta-data`を
    書き、`config.txt`と`cmdline.txt`を更新する
 
+機種ごとの前提と起動後の確認手順は[Raspberry Pi 4で動かす](../../docs/setup/raspberry-pi-4.md)と
+[Raspberry Pi 5で動かす](../../docs/setup/raspberry-pi-5.md)にあります。
+
 > 初回起動のプロビジョニングはapt、git、Dockerの取得でインターネットへ出ます。
 > 固定IPだけを書いてデフォルトルートが無いと、起動はするのに中身が空のPiが
 > できあがります。`--gateway`を省略した場合は`--ip`と同じサブネットの`.1`を
@@ -190,9 +193,12 @@ SDカードリーダーによっては内蔵ディスク扱いになります。
   予定していません。`--model pi5`の既定はUbuntu 24.04です。`--model pi5
   --release 22.04`はエラーにします。
 - **rtmouseカーネルモジュールはPi 5に対応していません。** rt-net/RaspberryPiMouse
-  が公式にサポートするのはPi 4 Bまでです。`--model pi5`では既定で導入を行いません。
-  つまりPi 5ではRaspberry Pi Cat本体（モーター、エンコーダ）を動かせません。
-  ナビゲーション側はコンテナなのでPi 5でも動きます。
+  が公式にサポートするのはPi 4 Bまでです（BCM2711のレジスタを`ioremap`しますが、
+  Pi 5ではGPIO/PWMがRP1側にあります）。`--model pi5`では既定で導入を行いません。
+  代わりに`autonomous_nav`の`raspicat_pi5_driver.py`がモーターとエンコーダを
+  ユーザー空間から直接扱います。`--model pi5`では`config.txt`にRP1のPWMオーバレイを
+  書き、`udev/99-daifuku-pi5.rules`を導入します。手順は
+  [Raspberry Pi 5で動かす](../../docs/setup/raspberry-pi-5.md)。
 
 ROS 2 Humbleのネイティブ環境（[`tools/setup/`](../setup/)）はUbuntu 22.04が
 前提なので、Pi 5では使えません。Pi 5ではDockerを使ってください。
@@ -223,7 +229,7 @@ sudo DAIFUKU_SWAP_MB=4096 DAIFUKU_WITH_RTMOUSE=0 bash tools/image/provision.sh
 | `user-data` | cloud-config。ユーザー、SSH鍵、`provision.sh`本体（base64）、`runcmd` |
 | `network-config` | netplan形式のネットワーク設定 |
 | `meta-data` | `instance-id`と`local-hostname` |
-| `config.txt` | `dtparam=i2c_arm` / `spi`、pi4ではA/D用の`anyspi`オーバレイと`i2c_baudrate=62500` |
+| `config.txt` | `dtparam=i2c_arm` / `spi` と`i2c_baudrate=62500`。pi4はA/D用の`anyspi`オーバレイ、pi5はRP1のPWM用に`dtoverlay=pwm-pi5` |
 | `cmdline.txt` | `cgroup_enable=memory cgroup_memory=1` |
 | `daifuku-repo.tar.gz` | 手元のリポジトリのスナップショット（`--no-repo-archive`で省略） |
 

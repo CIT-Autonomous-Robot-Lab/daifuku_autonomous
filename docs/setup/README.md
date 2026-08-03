@@ -17,9 +17,17 @@ Raspberry Pi 4 / 5のSDカードを一から用意する場合は、[`tools/imag
 モジュール、DDS向けのカーネルパラメータなど、コンテナの外に置くしかないものは、ここで
 まとめて設定します。
 
+機種ごとの手順と注意点は次にまとめています。Pi 5では本体ドライバの構成が変わります
+（rtmouseが動かないため）。
+
+- [Raspberry Pi 4で動かす](raspberry-pi-4.md)（既定の構成。rtmouseと`raspimouse`ノード）
+- [Raspberry Pi 5で動かす](raspberry-pi-5.md)（`raspicat_pi5_driver.py`へ差し替え）
+
 ## 2. 機体側を準備する
 
-モータードライバと車輪オドメトリはこのリポジトリに含まれません。Raspberry Pi Cat側で次のインターフェースを用意してください。
+モータードライバと車輪オドメトリはこのリポジトリに含まれません（Raspberry Pi 5は例外で、
+モーター経路だけ[こちら](raspberry-pi-5.md)が持ちます）。Raspberry Pi Cat側で次の
+インターフェースを用意してください。
 
 | インターフェース | 型 / TF | 用途 |
 |---|---|---|

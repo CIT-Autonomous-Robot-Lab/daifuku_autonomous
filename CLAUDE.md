@@ -13,7 +13,7 @@ Raspberry Pi Cat を ROS 2 Humble / Nav2 で自律移動させる colcon ワー�
 
 | ディレクトリ | 出どころ |
 | --- | --- |
-| `src/autonomous_nav` | 本リポジトリ（launch・config・地図・RViz・Python ノード 2 本。C++ ノードは無い） |
+| `src/autonomous_nav` | 本リポジトリ（launch・config・地図・RViz・Python ノード 3 本。C++ ノードは無い） |
 | `src/value_iteration3` | `autonomous_bot.repos` からの `vcs import`（`.gitignore` 済み） |
 | `src/emcl2_ros2` | 同上 |
 | `src/livox_ros_driver2` | 同上 |
@@ -94,6 +94,10 @@ ros2 launch autonomous_nav mapping.launch.py      # 地図作成（SLAM Toolbox�
   `emcl2_params_file` を作る。この経路が無いと `emcl2:` は**警告も出ずに無視される**。
 - `vi_planner`（`local_planner:=auto|vi`）と `vi_global_planner`（`local_planner:=nav2`）は
   **排他**。両方立てると `compute_path_to_pose` にサーバが 2 つ載る。
+- 本体ドライバは `robot_bringup.launch.py` の `driver:=` で選ぶ。既定 `raspimouse` は
+  Pi 4（rtmouse の `/dev/rt*` が要る）、`pi5` は `scripts/raspicat_pi5_driver.py`
+  （RP1 の PWM・gpiochip・I2C を直接叩く）。**Pi 5 では rtmouse が動かない**ので
+  `driver:=raspimouse` のままだと configure で落ちる（[`docs/setup/raspberry-pi-5.md`](docs/setup/raspberry-pi-5.md)）。
 - `use_composition` の既定 `False` は意図的（Pi4 でディスカバリ不能 + bond 心拍途絶）。
   `config/lifecycle_bond.yaml` の `bond_timeout: 60.0` も同じ事情。
 - TF は区間ごとに所有者を 1 つだけにする（`map→odom` は emcl2/amcl、
@@ -118,6 +122,7 @@ ros2 launch autonomous_nav mapping.launch.py      # 地図作成（SLAM Toolbox�
 | `launch/` | [`docs/usage/architecture.md`](docs/usage/architecture.md#launchファイルの構成) |
 | `simulator/`（Isaac 版 / pi4_sim 版） | [`simulator/docs/pi4_sim.md`](simulator/docs/pi4_sim.md) を先に、次に [`simulator/README.md`](simulator/README.md) |
 | `docker/` | [`docker/README.md`](docker/README.md)（実機用と開発用の 2 環境） |
+| `scripts/raspicat_pi5_driver.py` / `tools/image/udev/` | [`docs/setup/raspberry-pi-5.md`](docs/setup/raspberry-pi-5.md)（Pi 5 の本体ドライバ。未検証の項目付き） |
 | `src/value_iteration3/` | 同ディレクトリの `CLAUDE.md` |
 | 実機の症状を追う | [`docs/usage/troubleshooting.md`](docs/usage/troubleshooting.md) |
 

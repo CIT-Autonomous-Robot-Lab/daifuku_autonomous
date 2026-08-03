@@ -9,7 +9,7 @@
 - キーボードとジョイスティックによる遠隔操作
 - Docker（ヘッドレス）またはUbuntu 22.04 / ROS 2 Humbleで実行可能
 
-> Raspberry Pi Catのモータードライバと車輪オドメトリは含まれません。`/cmd_vel`、`/odom`、TF、センサーデータは機体側で用意してください。
+> Raspberry Pi 4ではモータードライバと車輪オドメトリは含まれません。`/cmd_vel`、`/odom`、TF、センサーデータは機体側（rtmouse + raspimouse）で用意してください。Raspberry Pi 5はrtmouseが動かないため、モーター経路だけこのリポジトリが持ちます（[Raspberry Pi 5で動かす](docs/setup/raspberry-pi-5.md)）。
 
 ## はじめる
 

@@ -10,7 +10,8 @@
 | `lifecycle_bond.yaml` | `navigation.launch.py` | `SetParametersFromFile` でグループ内の全ノードへ注入 |
 | `sensors/*` | `lidar_bringup.launch.py` | 各ノードへ直接（`scan_filter_params_file` など） |
 | `mapping/slam_toolbox.yaml` | `mapping.launch.py` | `slam_params_file` でノードへ直接 |
-| `robot/raspicat.yaml` | `robot_bringup.launch.py` | `raspimouse` (LifecycleNode) へ直接 |
+| `robot/raspicat.yaml` | `robot_bringup.launch.py` | `raspimouse` (LifecycleNode) へ直接。`driver:=raspimouse` (既定 / Pi 4) |
+| `robot/raspicat_pi5.yaml` | `robot_bringup.launch.py` | `raspicat_pi5_driver` (LifecycleNode) へ直接。`driver:=pi5` |
 
 `robot/raspicat.yaml` だけは**上流ファイルの完全なコピー**で、差分ではありません。
 launch_ros はノード自身の `parameters=` をグローバル (`SetParametersFromFile`) より
@@ -256,6 +257,31 @@ counters」は `ifstream::is_open()` を見るだけで `read` を試さない�
 替わっていれば上の比は成立しません。確認は「モータ ON で 0.1 m/s を 10 秒指令し、
 巻尺の実移動距離と `/odom` の変位を比べる」。この修正後は両者が一致するはずです。
 ずれるなら残差は `odometry_scale_{left,right}_wheel` ではなく寸法側で詰めてください。
+
+### `raspicat_pi5.yaml`（Raspberry Pi 5 用）
+
+`raspicat.yaml` は Pi 4 用で、rtmouse カーネルモジュールが出す `/dev/rt*` を
+`raspimouse` ノードが読む構成が前提です。Pi 5 では rtmouse が動かない（BCM2711 の
+レジスタを `ioremap` するが、GPIO/PWM は RP1 側にある）ので、`autonomous_nav` の
+`raspicat_pi5_driver.py` がモータ経路をユーザ空間から直接扱います。そのパラメータが
+`raspicat_pi5.yaml` です。`robot_bringup.launch.py` の `driver:=pi5` で切り替わり、
+`driver:` の既定は `raspimouse`（Pi 4）なので既存の運用は変わりません。
+
+寸法と補正係数は上の 2 節と同じ値です。違うのは次の 3 点で、理由は
+[`docs/setup/raspberry-pi-5.md`](../../../docs/setup/raspberry-pi-5.md)。
+
+* `use_pulse_counters` の既定が `true`。ユーザ空間の `ioctl` は失敗を返して戻って
+  くるので、rtmouse のような D 状態固着が起きません。連続失敗が
+  `counter_error_limit` に達すると `cmd_vel` 積分へ落ち、応答が戻れば自動で復帰
+  します。
+* `odom_hz` の既定が 50.0（`raspicat.yaml` は 100.0）。1 周期あたり I2C を
+  4 トランザクション使うので、62.5 kHz のバス占有を半分に落としてあります。
+* `publish_tf` があります。EKF に `odom -> base_footprint` を出させる構成では
+  `false` にしてください。
+
+配線に関わるキー（`gpio_*` / `pwm*` / `i2c_*` / `direction_*_forward_level`）は
+すべて rtmouse の `rtmouse.h` から写した値で、**実機で確認していません**。
+確認項目と直しかたは同じドキュメントの表にあります。
 
 ### `lifecycle_bond.yaml` の `bond_timeout: 60.0`
 
