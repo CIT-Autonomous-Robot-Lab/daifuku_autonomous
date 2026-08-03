@@ -561,20 +561,100 @@ def _write_raw(image: Path, target: str) -> None:
     progress.close()
 
 
+def _windows_drive_letters(number: int) -> list[str]:
+    """ディスク上のマウント済みボリュームのドライブレターを返す。"""
+    out = powershell(
+        f"$ErrorActionPreference='SilentlyContinue';"
+        f"Get-Partition -DiskNumber {number} | "
+        f"Where-Object DriveLetter | ForEach-Object {{ $_.DriveLetter }}",
+        check=False,
+    )
+    return [line.strip() for line in (out or "").splitlines() if line.strip()]
+
+
+def _windows_dismount_volumes(letters: list[str]) -> list[int]:
+    """ボリュームをロックして外し、ハンドルを開いたまま返す。
+
+    Windowsはマウント中のボリュームに属するセクタへの生書きを拒否するので、
+    書く前にボリュームを外す必要がある。`Set-Disk -IsOffline` は
+    リムーバブルメディアには使えず（"Removable media cannot be set to
+    offline"）、SDカードリーダー越しのカードはまさにこれに当たる
+    （check_device_safetyがリムーバブルであることを要求しているので、
+    既定の経路では必ずこちらに来る）。
+
+    ハンドルを閉じると再マウントされ、書き込みの途中から弾かれる。
+    そのため書き終わるまで開いたままにする。
+    """
+    GENERIC_READ, GENERIC_WRITE = 0x80000000, 0x40000000
+    FILE_SHARE_READ, FILE_SHARE_WRITE = 0x00000001, 0x00000002
+    OPEN_EXISTING = 3
+    FSCTL_LOCK_VOLUME = 0x00090018
+    FSCTL_DISMOUNT_VOLUME = 0x00090020
+    INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+
+    kernel32 = ctypes.windll.kernel32
+    kernel32.CreateFileW.restype = ctypes.c_void_p
+    kernel32.CreateFileW.argtypes = [
+        ctypes.c_wchar_p, ctypes.c_uint32, ctypes.c_uint32,
+        ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p,
+    ]
+    kernel32.DeviceIoControl.argtypes = [
+        ctypes.c_void_p, ctypes.c_uint32, ctypes.c_void_p, ctypes.c_uint32,
+        ctypes.c_void_p, ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint32), ctypes.c_void_p,
+    ]
+    kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+
+    handles: list[int] = []
+    for letter in letters:
+        handle = kernel32.CreateFileW(
+            f"\\\\.\\{letter}:",
+            GENERIC_READ | GENERIC_WRITE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            None,
+            OPEN_EXISTING,
+            0,
+            None,
+        )
+        if not handle or handle == INVALID_HANDLE_VALUE:
+            _windows_close_handles(handles)
+            die(f"ボリューム {letter}: を開けません: {ctypes.WinError()}")
+        handles.append(handle)
+        returned = ctypes.c_uint32(0)
+        # ロックは他のプロセス（エクスプローラ、ウイルス対策）がハンドルを
+        # 持っていると失敗する。ディスマウントだけでも書けるので警告に留める。
+        if not kernel32.DeviceIoControl(
+            handle, FSCTL_LOCK_VOLUME, None, 0, None, 0, ctypes.byref(returned), None
+        ):
+            warn(f"ボリューム {letter}: をロックできません（続行します）: {ctypes.WinError()}")
+        if not kernel32.DeviceIoControl(
+            handle, FSCTL_DISMOUNT_VOLUME, None, 0, None, 0, ctypes.byref(returned), None
+        ):
+            error = ctypes.WinError()
+            _windows_close_handles(handles)
+            die(
+                f"ボリューム {letter}: を外せません: {error}\n"
+                f"エクスプローラなどでカードを開いていないか確認してください。"
+            )
+        log(f"ボリューム {letter}: を外しました")
+    return handles
+
+
+def _windows_close_handles(handles: list[int]) -> None:
+    for handle in handles:
+        ctypes.windll.kernel32.CloseHandle(ctypes.c_void_p(handle))
+
+
 def _flash_windows(image: Path, device: Device) -> None:
     number = device.id
-    log(f"ディスク {number} をオフラインにします")
-    powershell(
-        f"$ErrorActionPreference='Stop';"
-        f"Set-Disk -Number {number} -IsReadOnly $false;"
-        f"Set-Disk -Number {number} -IsOffline $true"
-    )
+    powershell(f"Set-Disk -Number {number} -IsReadOnly $false", check=False)
+    handles = _windows_dismount_volumes(_windows_drive_letters(number))
     try:
         _write_raw(image, device.path)
     finally:
-        log(f"ディスク {number} をオンラインへ戻します")
-        powershell(f"Set-Disk -Number {number} -IsOffline $false", check=False)
-    # パーティションテーブルの再読み込みが終わるまで少し待つ。
+        _windows_close_handles(handles)
+    # 書いたパーティションテーブルをOSに読み直させる（configureが
+    # ブートパーティションを探せるようにする）。
+    powershell(f"Update-Disk -Number {number}", check=False)
     time.sleep(3)
 
 
