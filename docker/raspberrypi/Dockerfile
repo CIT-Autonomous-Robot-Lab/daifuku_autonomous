@@ -4,7 +4,7 @@ ARG ROS_IMAGE=ros:humble-ros-base-jammy
 # amd64 and arm64, unlike osrf/ros:humble-desktop-full (amd64 only).
 FROM ${ROS_IMAGE} AS builder
 
-ARG BUILD_JOBS=2
+ARG BUILD_JOBS=4
 ARG LIVOX_SDK2_REF=v1.3.1
 ENV DEBIAN_FRONTEND=noninteractive \
     ROS_DISTRO=humble \

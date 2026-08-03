@@ -15,9 +15,10 @@
 set -eo pipefail
 
 WS="${ROS_WS:-/opt/ros_ws}"
-# Pi4 は 4 コアだがメモリが 4GB しかない。cargo の release ビルドと並ぶと
-# 効くので既定は控えめにしておく (compose の BUILD_JOBS で上書きできる)。
-BUILD_JOBS="${BUILD_JOBS:-2}"
+# Pi4 の 4 コアを使い切る。メモリは 4GB しかないが、実測では release の rustc
+# 2 本で RSS 750MB・available 2.5GB と余っていた (低メモリ時は BUILD_JOBS で
+# 絞る)。cargo 側の並列数は既定 (nproc) のままにしてある。
+BUILD_JOBS="${BUILD_JOBS:-4}"
 
 cd "${WS}"
 mkdir -p src

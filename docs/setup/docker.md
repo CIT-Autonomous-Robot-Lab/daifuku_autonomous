@@ -58,8 +58,8 @@ docker compose -f docker/raspberrypi/compose.yaml ps
 1〜2時間、大半は価値反復プランナのRustのreleaseビルド）。2回目以降は変更のあった
 パッケージだけが建て直されます。成果物は名前付きボリュームに残ります。
 
-Raspberry Pi 4などでメモリが不足する場合はビルド並列数を減らします。`BUILD_JOBS`は
-イメージのビルドと`up`のときの`colcon build`の両方に効きます（既定は2）。
+`BUILD_JOBS`はイメージのビルドと`up`のときの`colcon build`の両方に効きます
+（既定は4＝Pi 4の全コア）。メモリが不足してOOMで落ちるときだけ減らします。
 
 ```bash
 BUILD_JOBS=1 docker compose -f docker/raspberrypi/compose.yaml up -d

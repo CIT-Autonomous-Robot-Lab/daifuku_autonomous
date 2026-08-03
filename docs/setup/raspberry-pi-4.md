@@ -88,9 +88,12 @@ rtmouse は out-of-tree モジュールで、キャラクタデバイスのメ�
 
 Pi 4 のメモリとコア数に由来するもので、Pi 5 では緩みます。
 
-- **ビルド並列数。** `compose.yaml` の `BUILD_JOBS` の既定は 2 ですが、Pi 4 では 1 に
-  してください。`provision.sh` が書く `docker/raspberrypi/.env` には 1 が入るので、
-  そのまま使う分は変更不要です。手で環境変数を渡すときだけ意識します。
+- **ビルド並列数。** `compose.yaml` の `BUILD_JOBS` の既定は 4（Pi 4 の全コア）です。
+  `up` のワークスペースビルドはこれで足ります。release の rustc 2 本を走らせた実測で
+  RSS 750 MB・available 2.5 GB と余っていました。**イメージそのものを Pi 上で焼く
+  ときだけ別**で、`provision.sh` が書く `docker/raspberrypi/.env` には 1 が入ります
+  （rclrs のビルドまで含むので桁が違う）。メモリが足りずに OOM で落ちるときは
+  `BUILD_JOBS=1` を手で渡してください。
 - **`use_composition` の既定 `False` は意図的です。** `True` にすると参加者あたりの
   エンドポイントが増えすぎて新規参加者からディスカバリできなくなり、CPU 飢餓で bond の
   心拍も途絶えます。`config/lifecycle_bond.yaml` の `bond_timeout: 60.0` も同じ事情

@@ -22,7 +22,7 @@ services:
       context: ../..
       dockerfile: docker/raspberrypi/Dockerfile
       args:
-        BUILD_JOBS: ${BUILD_JOBS:-2}
+        BUILD_JOBS: ${BUILD_JOBS:-4}
     image: daifuku-autonomous:humble
     container_name: daifuku-autonomous-build
     command: ["build-workspace"]
@@ -32,9 +32,9 @@ services:
       HOME: /tmp
       ROS_HOME: /tmp/ros
       ROS_LOG_DIR: /tmp/ros/log
-      # colcon の並列数。Pi4 は 4 コアだがメモリが 4GB しかなく、cargo の
-      # release ビルドと並ぶと効くので既定は控えめにしてある。
-      BUILD_JOBS: ${BUILD_JOBS:-2}
+      # colcon の並列数。Pi4 の 4 コアを使い切る。メモリ 4GB でも release の
+      # rustc 2 本で available 2.5GB 残っていたので足りる。低メモリ時は絞る。
+      BUILD_JOBS: ${BUILD_JOBS:-4}
     volumes:
       - ../../src:/opt/ros_ws/src
       - ../../autonomous_bot.repos:/opt/ros_ws/autonomous_bot.repos:ro
