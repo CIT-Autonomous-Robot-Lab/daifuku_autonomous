@@ -22,6 +22,12 @@ BUILD_JOBS="${BUILD_JOBS:-2}"
 cd "${WS}"
 mkdir -p src
 
+# クレートのレジストリはビルド用ボリュームに置く。イメージ側の /opt/cargo には
+# ツールチェーンしか入っていない (レジストリを焼き込むとイメージが太るだけで、
+# ワークスペースが要るクレートとは限らない)。ここに置けば up をまたいで残る。
+export CARGO_HOME="${WS}/build/.cargo"
+mkdir -p "${CARGO_HOME}"
+
 # 外部パッケージの取得。既にあるものは触らないので、揃っていればネットワークは
 # 要らない。ホスト側で vcs import 済みならそれをそのまま使う。
 if [[ -f "${WS}/autonomous_bot.repos" ]]; then

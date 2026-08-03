@@ -50,13 +50,20 @@ RUN git clone --depth 1 --branch "${LIVOX_SDK2_REF}" \
     && cmake --install /tmp/Livox-SDK2/build \
     && rm -rf /tmp/Livox-SDK2
 
-# vi_planner and vi_global_planner use rclrs.  Rust and all build tools
-# stay in the builder stage; only their installed runtime artifacts are copied.
+# vi_planner と vi_global_planner は rclrs を使う。compose は user: "1000:1000"
+# で回すので、/root (0700) ではなく誰でも読める /opt にツールチェーンを置く。
+# クレートのレジストリはここには残さない。ワークスペースのビルド時に
+# build-workspace.sh が CARGO_HOME をビルド用ボリュームへ向けるので、
+# キャッシュはそちらに溜まる。
+ENV CARGO_HOME=/opt/cargo \
+    RUSTUP_HOME=/opt/rustup \
+    PATH=/opt/cargo/bin:${PATH}
 RUN pip3 install --no-cache-dir colcon-cargo colcon-ros-cargo \
     && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-       | sh -s -- -y --profile minimal \
-    && /root/.cargo/bin/cargo install --locked cargo-ament-build
-ENV PATH=/root/.cargo/bin:${PATH}
+       | sh -s -- -y --profile minimal --no-modify-path \
+    && cargo install --locked cargo-ament-build \
+    && rm -rf /opt/cargo/registry /opt/rustup/toolchains/*/share/doc \
+    && chmod -R a+rX /opt/cargo /opt/rustup
 
 WORKDIR /opt/ros2_rust_ws/src
 RUN git clone https://github.com/ros2-rust/ros2_rust.git \
@@ -65,10 +72,13 @@ RUN git clone https://github.com/ros2-rust/ros2_rust.git \
     && rm -rf ros2
 
 WORKDIR /opt/ros2_rust_ws
+# 中間生成物は同じ層の中で消す。層を分けて消しても、実体は前の層に残ったまま
+# イメージのサイズに乗る (Pi の SD カードには効く差)。
 RUN source /opt/ros/${ROS_DISTRO}/setup.bash \
     && colcon build --merge-install \
          --parallel-workers "${BUILD_JOBS}" \
-         --packages-up-to rclrs
+         --packages-up-to rclrs \
+    && rm -rf build log
 
 # Some Humble installations do not ship nav2_msgs Rust bindings.  Build the
 # source fallback only on those installations.
@@ -84,45 +94,31 @@ RUN if [[ ! -d "/opt/ros/${ROS_DISTRO}/share/nav2_msgs/rust" ]]; then \
       colcon build --merge-install \
         --parallel-workers "${BUILD_JOBS}" \
         --packages-select nav2_msgs; \
-    fi
-
-# Rust一式は上の段で /root 配下に入るが、compose は user: "1000:1000" で回すので
-# /root (0700) の中は読めない。ツールチェーンだけ /opt へ移して誰でも読める場所に
-# 置き直す。ここより上の命令は触らないこと (buildah はRUNのキャッシュキーに
-# build-arg を含めるため、上を1行でも動かすと apt/Livox/ros2_rust を焼き直す)。
-RUN mv /root/.cargo /opt/cargo \
-    && mv /root/.rustup /opt/rustup \
-    && chmod -R a+rX /opt/rustup /opt/cargo \
-    && chown -R 1000:1000 /opt/cargo
-ENV CARGO_HOME=/opt/cargo \
-    RUSTUP_HOME=/opt/rustup \
-    PATH=/opt/cargo/bin:${PATH}
+    fi \
+    && rm -rf /opt/ros2_rust_ws/build /opt/ros2_rust_ws/log
 
 # ここから下のソースツリーは **rosdep に apt 依存を解決させるためだけ** に置く。
 # ワークスペースのビルドは compose の up 時にコンテナ内で行うので
-# (docker/raspberrypi/scripts/build-workspace.sh)、解決が済んだら src/ ごと捨てる。
+# (docker/raspberrypi/scripts/build-workspace.sh)、解決が済んだら捨てる。
 #
 # 狙いは「aptパッケージが変わったときだけイメージを焼き直す」こと。rosdep を
 # 起動時に回すとネットワークが要るうえ apt の状態が毎回変わるので、ここに残す。
-WORKDIR ${ROS_WS}
-COPY autonomous_bot.repos /tmp/autonomous_bot.repos
-RUN mkdir -p src \
-    && vcs import . < /tmp/autonomous_bot.repos
-
-COPY src/autonomous_nav src/autonomous_nav
-
-RUN cp src/livox_ros_driver2/package_ROS2.xml \
-       src/livox_ros_driver2/package.xml \
-    && rm -rf src/livox_ros_driver2/launch \
-    && cp -a src/livox_ros_driver2/launch_ROS2 \
-       src/livox_ros_driver2/launch
-
+#
+# vcs import から rosdep までを1つの RUN にまとめてあるのは、途中の層に
+# ソースを残さないため。層を分けると、あとで rm -rf しても実体は残る。
+COPY autonomous_bot.repos /tmp/rosdep_ws/autonomous_bot.repos
+COPY src/autonomous_nav /tmp/rosdep_ws/src/autonomous_nav
 RUN source /opt/ros/${ROS_DISTRO}/setup.bash \
+    && cd /tmp/rosdep_ws \
+    && vcs import . < autonomous_bot.repos \
+    && cp src/livox_ros_driver2/package_ROS2.xml \
+          src/livox_ros_driver2/package.xml \
     && rosdep update --rosdistro=${ROS_DISTRO} \
     && apt-get update \
     && rosdep install --from-paths src --ignore-src -r -y \
          --rosdistro=${ROS_DISTRO} \
-    && rm -rf /var/lib/apt/lists/*
+    && cd / \
+    && rm -rf /var/lib/apt/lists/* /tmp/rosdep_ws
 
 # arm64 の CMake が、生成された相対探索で ROS の共有ライブラリを見失うこと
 # (QEMU 下で顕著) への当て木。エクスポートの探索先を、実在を確認した ROS の
@@ -163,19 +159,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV ROS_LOCALHOST_ONLY=0 \
     RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 
-RUN ldconfig
-
-# rosdep に読ませたあとの src/ は捨てる。実体は compose が ../../src を
-# ここへマウントする。ros2_rust の build/ も同様に成果物 (install/) だけ残す。
-RUN rm -rf ${ROS_WS}/src ${ROS_WS}/build ${ROS_WS}/log \
-           /tmp/autonomous_bot.repos \
-           /opt/ros2_rust_ws/build /opt/ros2_rust_ws/log \
-           /opt/rustup/toolchains/*/share/doc
-
+# ワークスペースは空で用意する。src/ は compose が ../../src をここへマウントし、
+# build/install/log は名前付きボリュームが受け持つ。
+#
 # 名前付きボリュームは「イメージ側の同じパスの中身と所有者」で初期化される。
 # compose は user: "1000:1000" で回すので、ここで作って chown しておかないと
 # 空のボリュームが root 所有で作られ、colcon が build/install へ書けない。
-RUN mkdir -p ${ROS_WS}/src ${ROS_WS}/build ${ROS_WS}/install ${ROS_WS}/log \
+RUN ldconfig \
+    && mkdir -p ${ROS_WS}/src ${ROS_WS}/build ${ROS_WS}/install ${ROS_WS}/log \
     && chown -R 1000:1000 ${ROS_WS}
 
 COPY docker/common/entrypoint.sh /ros_entrypoint.sh
