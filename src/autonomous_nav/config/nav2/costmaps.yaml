@@ -1,6 +1,27 @@
 # ローカル / グローバルコストマップ。planner:=vi は自前で /map を解くので
 # global_costmap を使わないが、bt_navigator のクリア系サービスが参照する。
 # config/nav2/*.yaml の断片。合成順序と上書きは ../README.md を参照。
+#
+# ── footprint (2026-08-03 実測) ────────────────────────────────────────────
+# 車体は 420 (幅) x 450 (奥行) mm。base_footprint は車軸中心の真下にあり、
+# タイヤ (直径 200mm) の前端が車体前端と一致するので、車軸は前端から 100mm。
+# したがって base_footprint 基準の張り出しは
+#   前 +0.10 / 後 -0.35 / 左右 ±0.21 [m]
+# で、原点は**大きく前寄り**である。外接円は sqrt(0.35^2+0.21^2)=0.408m。
+#
+# 円 (robot_radius) ではなく多角形にしてあるのは、外接円 0.408m が実面積の
+# 2.8 倍あり、狭い通路を無駄に塞ぐため。以前の robot_radius 0.22 は nav2 の
+# 既定値をそのまま使っていたもので、この機体を測った値ではなかった。
+# **robot_radius は書かないこと** — footprint と両方あると紛らわしい
+# (nav2 は footprint が空でなければそちらを優先する)。
+#
+# inflation_radius 0.55 は外接円 0.408m より大きいので整合している。
+# ここを 0.408 未満に下げると nav2 が警告し、回り込みが破綻する。
+#
+# local と global で同じ値を 2 度書いている。YAML アンカーで共有したくなるが、
+# rcl のパラメータパーサは最上位キーを「ノード名 + ros__parameters」としか
+# 解釈しないので、アンカー置き場の最上位キーを足すと読み込みごと落ちる。
+# 片方だけ直さないこと。
 
 local_costmap:
   local_costmap:
@@ -14,7 +35,8 @@ local_costmap:
       width: 3
       height: 3
       resolution: 0.05
-      robot_radius: 0.22
+      # 実測 420x450mm、原点は前端から 100mm (冒頭のコメント参照)。
+      footprint: "[[0.10, 0.21], [0.10, -0.21], [-0.35, -0.21], [-0.35, 0.21]]"
       plugins: ["voxel_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
@@ -51,7 +73,8 @@ global_costmap:
       global_frame: map
       robot_base_frame: base_footprint
       use_sim_time: false
-      robot_radius: 0.22
+      # 実測 420x450mm、原点は前端から 100mm (冒頭のコメント参照)。local と同値。
+      footprint: "[[0.10, 0.21], [0.10, -0.21], [-0.35, -0.21], [-0.35, 0.21]]"
       resolution: 0.05
       track_unknown_space: true
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
