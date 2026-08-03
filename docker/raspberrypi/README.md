@@ -66,6 +66,16 @@ BUILD_JOBS=1 docker compose -f docker/raspberrypi/compose.yaml up -d
 `autonomous_bot.repos`にしたがって`vcs import`します。したがって特定の
 リビジョンに固定したい場合は、ホスト側の`src/`のチェックアウトを合わせてください。
 
+**`vcs import`は`--skip-existing`付きで、既にあるリポジトリは更新しません。**
+一度cloneしたあとに`autonomous_bot.repos`のリビジョンを変えても、古いままの
+チェックアウトがそのままビルドされます（起動時に「そんなパラメータは知らない」
+という顔をして出るので、設定の問題と取り違えやすい）。更新するときは各リポジトリで
+明示的に合わせてください。
+
+```bash
+git -C src/value_iteration3 fetch origin && git -C src/value_iteration3 merge --ff-only origin/main
+```
+
 ビルド成果物は名前付きボリューム`autonomous-build` / `autonomous-install` /
 `autonomous-log`に入ります。作り直したいときは次のようにします。
 
