@@ -28,6 +28,35 @@ Mid-360は時刻同期がないためスタンプが実時計からずれてい�
 - launchファイル
 - 地図とRViz設定
 
+## launchファイルの構成
+
+`src/autonomous_nav/launch/`の中身です。
+
+| ファイル | 役割 |
+| --- | --- |
+| `navigation.launch.py` | 自律移動。地図と自己位置推定、その上のNav2／価値反復スタック |
+| `mapping.launch.py` | 地図作成。SLAM Toolboxとその入力 |
+| `lidar_bringup.launch.py` | LiDARの前処理一式。上の2つから`include`される |
+| `robot_bringup.launch.py` | 機体ドライバ（`raspimouse`とURDF） |
+
+引数の合成やチェックといった補助的な処理は、launchファイル本体から
+`launch/autonomous_nav_launch/`へ切り出しています。
+
+| モジュール | 内容 |
+| --- | --- |
+| `params.py` | nav2とEMCL2のパラメータ合成（`params_dir` → `overrides` → `extra_params_file`） |
+| `backends.py` | `localization`／`planner`／`local_planner`の解決と起動前チェック |
+| `lidar.py` | LiDAR構成の共通引数と`lidar_bringup`の`include` |
+
+`lidar`や`lidar_z`のようなLiDAR構成の引数は、`navigation`・`mapping`・
+`lidar_bringup`の3ファイルが同じものを宣言します。既定値の出どころは
+`lidar.py`の1箇所だけです。
+
+これらのモジュールは`launch/`の下にあるので、launchやconfigと同じく、編集だけなら
+再ビルドは要りません（`colcon build --symlink-install`）。ただし`install/`のsymlinkは
+ビルド時に張られるため、ファイルを新しく足したときは一度`colcon build`
+（`docker/raspberrypi/`では`docker compose up`）が必要です。
+
 ## 自己位置推定
 
 - `localization:=emcl2`: 外部パッケージ`emcl2`が`map -> odom`を推定
