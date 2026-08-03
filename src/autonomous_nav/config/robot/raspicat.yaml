@@ -15,7 +15,9 @@
 #  bond_timeout が nav2 の断片に一切書かれていない = 競合しないからで、
 #  「グローバルが勝つ」わけではない。)
 #
-# 上流との差分は use_pulse_counters の 1 点のみ。他は追従すること。
+# 上流との差分は use_pulse_counters と車輪寸法 (wheel_diameter / wheel_tread) の
+# 2 点のみ。他は追従すること。車輪寸法はこの機体の実測値であって上流の値ではない
+# ので、上流に追従して上書きしないこと (下の ★★ を参照)。
 raspimouse:
   ros__parameters:
     odometry_scale_left_wheel : 1.0
@@ -69,8 +71,24 @@ raspimouse:
     #     '{linear: {x: 0.0}, angular: {z: 0.0}}'
     use_pulse_counters        : false
 
-    wheel_diameter            : 0.1524  # meters
-    wheel_tread               : 0.27918 # meters
+    # ★★ この機体の実測値 (2026-08-03)。上流のデフォルトは
+    #    wheel_diameter 0.1524 / wheel_tread 0.27918 だが、この個体は車輪も
+    #    車軸間隔も違う。上流に合わせ直さないこと。
+    #
+    #    この 2 値は cmd_vel -> モータ指令の換算と、use_pulse_counters:=false
+    #    のときの odom 積分の両方に使われる。上流値のままだと比率は
+    #      直進  0.200 / 0.1524           = 1.312 倍
+    #      旋回  1.312 * 0.27918 / 0.350  = 1.047 倍
+    #    で、実機が指令より 31% 速く走り、odom はその分だけ過少報告していた
+    #    (ゴールのオーバーシュート、emcl2 の運動モデル破綻の原因になりうる)。
+    #
+    #    ▲ 未検証: pulses_per_revolution 400.0 は上流のまま。車輪と一緒に
+    #      減速比まで替わっていれば上の比は成立しない。確認は「モータ ON で
+    #      0.1 m/s を 10 秒指令し、巻尺の実移動距離と /odom の変位を比べる」。
+    #      この修正後は両者が一致するはず。ずれるなら残差を
+    #      odometry_scale_{left,right}_wheel ではなく寸法側で詰めること。
+    wheel_diameter            : 0.2     # meters (実測 200 mm)
+    wheel_tread               : 0.35    # meters (実測 350 mm)
     pulses_per_revolution     : 400.0
     light_sensors_hz          : 100.0
     odom_hz                   : 100.0

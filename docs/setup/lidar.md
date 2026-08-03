@@ -71,9 +71,11 @@ Nav2コストマップのメッセージフィルタが、起動から数分で�
 
 ```bash
 publish_lidar_tf:=true \
-lidar_x:=0.0 lidar_y:=0.0 lidar_z:=0.30 \
+lidar_x:=0.0 lidar_y:=0.0 lidar_z:=0.275 \
 lidar_roll:=0.0 lidar_pitch:=0.0 lidar_yaw:=0.0
 ```
+
+`lidar_z`の既定値は0.275で、この機体の実測値（接地面からMid-360まで275mm、2026-08-03実測）です。上の例は既定と同じ値を明示しているだけなので、この機体では省略できます。
 
 同じTFをURDFとlaunchの両方から配信しないでください。
 

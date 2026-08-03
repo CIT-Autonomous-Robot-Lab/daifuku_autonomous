@@ -135,10 +135,21 @@ def parse_args():
                     help="LiDAR の frame_id。既定は lidar:=2d なら lidar_link、"
                          "mid360 なら livox_frame")
 
+    # ▲ この 2 値は**実機ではなく、読み込んだ URDF の車輪**に合わせること。
+    #   DifferentialController は (v, w) を車輪の角速度に換算するだけで、実際に
+    #   地面を蹴るのは URDF が定義した物理の車輪である。両者がずれると sim の
+    #   移動量が指令とずれる。既定は raspicat_description の素の URDF の値。
+    #
+    #   実機 (config/robot/raspicat.yaml) は 2026-08-03 の実測で
+    #   wheel_diameter 0.2 / wheel_tread 0.35、つまり半径 0.1 / トレッド 0.35 で
+    #   あって、この既定とは違う。**sim は寸法的に実機ではない**。合わせたい
+    #   なら URDF 側の車輪も直したうえで、この 2 値を 0.1 / 0.35 にすること。
     ap.add_argument("--wheel-radius", type=float, default=0.0762,
-                    help="車輪半径 [m] (raspicat: wheel_diameter 0.1524 の半分)")
+                    help="車輪半径 [m]。**URDF の車輪に合わせる値**で、実機の値では"
+                         "ない (既定は raspicat_description の 0.1524 の半分)")
     ap.add_argument("--wheel-base", type=float, default=0.27918,
-                    help="トレッド [m] (raspicat: wheel_tread)")
+                    help="トレッド [m]。同じく URDF 基準 "
+                         "(既定は raspicat_description の wheel_tread)")
     ap.add_argument("--left-wheel-joint", default="left_wheel_joint")
     ap.add_argument("--right-wheel-joint", default="right_wheel_joint")
     ap.add_argument("--max-linear", type=float, default=0.5, help="[m/s]")

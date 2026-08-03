@@ -117,7 +117,9 @@ def generate_launch_description():
         DeclareLaunchArgument("publish_lidar_tf", default_value="false"),
         DeclareLaunchArgument("lidar_x", default_value="0.0"),
         DeclareLaunchArgument("lidar_y", default_value="0.0"),
-        DeclareLaunchArgument("lidar_z", default_value="0.0"),
+        # 実測 275 mm (2026-08-03)。base_footprint (接地面) から MID360 までの
+        # 高さ。publish_lidar_tf:=true のときだけ使う。
+        DeclareLaunchArgument("lidar_z", default_value="0.275"),
         DeclareLaunchArgument("lidar_roll", default_value="0.0"),
         DeclareLaunchArgument("lidar_pitch", default_value="0.0"),
         DeclareLaunchArgument("lidar_yaw", default_value="0.0"),

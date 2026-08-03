@@ -61,7 +61,7 @@ NavFn構成のデバッグ起動例:
 ```bash
 ros2 launch autonomous_nav navigation.launch.py \
   planner:=navfn lidar:=mid360 use_mid360_imu:=false \
-  publish_lidar_tf:=true lidar_z:=0.30 use_rviz:=true
+  publish_lidar_tf:=true lidar_z:=0.275 use_rviz:=true
 ```
 
 > `docker/dev/`では`autonomous_nav`をcolconでビルドするため、

@@ -20,7 +20,7 @@ docker compose -f docker/raspberrypi/compose.yaml up -d
 ```bash
 cd ~/daifuku_autonomous
 tmux new-session -d -s nav -c "$PWD" -n nav
-tmux send-keys -t nav:nav 'docker compose -f docker/raspberrypi/compose.yaml exec ros2 /ros_entrypoint.sh ros2 launch autonomous_nav navigation.launch.py map:=/opt/ros_ws/install/share/autonomous_nav/maps/map.yaml use_sim_time:=false localization:=emcl2 planner:=vi lidar:=mid360 use_mid360_imu:=false use_rviz:=false publish_lidar_tf:=true lidar_z:=0.30' Enter
+tmux send-keys -t nav:nav 'docker compose -f docker/raspberrypi/compose.yaml exec ros2 /ros_entrypoint.sh ros2 launch autonomous_nav navigation.launch.py map:=/opt/ros_ws/install/share/autonomous_nav/maps/map.yaml use_sim_time:=false localization:=emcl2 planner:=vi lidar:=mid360 use_mid360_imu:=false use_rviz:=false publish_lidar_tf:=true lidar_z:=0.275' Enter
 
 tmux new-window -t nav -c "$PWD" -n motor
 tmux send-keys -t nav:motor 'bash docker/raspberrypi/tools/control.sh motor on'
@@ -64,7 +64,8 @@ tmux kill-session -t nav
 `odom -> base_footprint`を自分で配信し、`/wheel/odom`は出しません。既定の`true`のままだと
 EKFが入力を受け取れないうえ、`/odom`とTFの配信元が二重になります。
 
-`lidar_z:=0.30`は搭載高さの例です。実測値に合わせてください。2D LiDAR構成では
+`lidar_z:=0.275`はこの機体のMid-360の搭載高さ（接地面から275mm、2026-08-03実測）で、
+launchの既定値と同じです。機体を変えたら実測し直してください。2D LiDAR構成では
 `lidar:=2d`に置き換え、`publish_lidar_tf`と`lidar_z`を外します。広域地図
 `map_tsudanuma`を使う場合は、`map:`と`overrides:`を[広域地図（map_tsudanuma）で動かす](#広域地図map_tsudanumaで動かす)の
 とおりに差し替えてください。
@@ -85,7 +86,7 @@ Mid-360 + IMU:
 ros2 launch autonomous_nav navigation.launch.py \
   map:=$PWD/src/autonomous_nav/maps/map.yaml \
   use_sim_time:=false localization:=emcl2 lidar:=mid360 \
-  publish_lidar_tf:=true lidar_z:=0.30
+  publish_lidar_tf:=true lidar_z:=0.275
 ```
 
 > ネイティブ環境と`docker/dev/`で`lidar:=mid360`を使う場合は、事前に
