@@ -1,7 +1,7 @@
 # 価値反復プランナ (value_iteration3, Rust)。「既定」= 各ノードの main.rs が
 # declare_parameter で持つ値。ここはほぼ既定の書き出しで、変えてあるのは
-# map_wait_sec だけ。地図ごとの調整は ../overrides/<地図名>.yaml に置く。
-# 合成順序と上書きは ../README.md を参照。
+# solver と map_wait_sec の 2 つだけ。地図ごとの調整は ../overrides/<地図名>.yaml
+# に置く。合成順序と上書きは ../README.md を参照。
 #
 # ノードは 2 つあり、**同時には起動されない**。local_planner でどちらかが選ばれる:
 #   local_planner:=vi   (auto + planner:=vi の既定) … vi_planner 1 ノード。
@@ -14,7 +14,7 @@
 vi_planner:
   ros__parameters:
     use_sim_time: false
-    solver: "frontier2d_sparse"   # 既定 同左: 密ソルバ。広域地図では compact 系へ (map_scale>1 で密のままだと launch が弾く)
+    solver: "frontier2d_sparse_compact"  # 既定 frontier2d_sparse (密 56B/state): 確定出力 12B/state だけ持つ。19F で 1.77GB → 0.38GB
     theta_cell_num: 60            # 既定 60: 姿勢の離散数。vi_rs のコンパイル時定数 N_THETA と一致必須
     safety_radius: 0.2            # 既定 0.2 [m]: 障害物近傍ペナルティの半径 (VI 内部の膨張)
     safety_radius_penalty: 30     # 既定 30 [秒/セル]: 障害物に近寄る代わりに払う迂回コスト
@@ -53,7 +53,7 @@ vi_planner:
     # map_scale: 1                # プランナ内部で地図を粗くする倍率 (1 = /map のまま)
     # downsample_policy: "conservative"  # map_scale > 1 のときの縮小方針。conservative = 障害物優先、
     #                             # optimistic = ブロック内に free が 1 つでもあれば free
-    # compact_sink_dir: ""        # アウトオブコア (compact) 解の置き場 ("" = RAM)
+    # compact_sink_dir: ""        # compact 解の置き場 ("" = RAM)。compact_ram_limit_mb が無いので退避もしない
     #     ▲ 上 3 つの実例は ../overrides/map_tsudanuma.yaml
     # pose_topic: "mcl_pose"      # 自己位置を読むトピック。launch が上書きする
     # scan_topic: "scan"          # スキャンを読むトピック。launch が上書きする
@@ -63,13 +63,10 @@ vi_planner:
 vi_global_planner:
   ros__parameters:
     use_sim_time: false
-    solver: "frontier2d_sparse"   # 既定 同左: U64Solver::from_name が受ける任意のソルバ名
-    # 以下 3 つは広域地図用のアウトオブコア経路 (frontier2d_sparse_compact) の設定。
-    # 既定は「使わない」= 全状態を RAM に置く密ソルバのまま。実例は
-    # ../overrides/map_tsudanuma.yaml。
+    solver: "frontier2d_sparse_compact"  # 既定 frontier2d_sparse (密): vi_planner と揃える。実例は ../overrides/map_tsudanuma.yaml
     map_scale: 1                  # 既定 1: プランナ内部で地図を粗くする倍率 (1 = /map のまま)
     compact_sink_dir: ""          # 既定 "": compact の確定出力先 ("" = RAM)
-    compact_ram_limit_mb: 512     # 既定 512 [MB]: RAM 出力がこれを超えると自動でディスクへ退避
+    compact_ram_limit_mb: 512     # 既定 512 [MB]: RAM 出力がこれを超えると自動でディスクへ退避 (19F は 0.38GB で収まる)
     theta_cell_num: 60            # 既定 60: 姿勢の離散数
     safety_radius: 0.2            # 既定 0.2 [m]: 障害物近傍ペナルティの半径
     safety_radius_penalty: 30     # 既定 30 [秒/セル]: 障害物に近寄る代わりに払う迂回コスト
