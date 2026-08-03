@@ -134,11 +134,11 @@ if ((SKIP_BUILD == 1)); then
   exit 0
 fi
 
-echo "[4/4] Building autonomous_nav and emcl2"
+echo "[4/4] Building autonomous_nav, raspicat_driver and emcl2"
 cd "${WORKSPACE}"
 colcon build --symlink-install \
   --parallel-workers "${BUILD_JOBS}" \
-  --packages-select autonomous_nav emcl2 \
+  --packages-select autonomous_nav emcl2 raspicat_driver \
   --cmake-args -DCMAKE_BUILD_TYPE=Release
 
 cat <<EOF

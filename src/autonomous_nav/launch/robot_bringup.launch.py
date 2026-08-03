@@ -11,17 +11,22 @@
 # lidar_bringup.launch.py が扱う)。robot_state_publisher / joint_state_publisher は
 # パラメータ競合が無いので上流の launch をそのまま include する。
 #
-# driver:= でドライバを選ぶ。どちらも同じ契約 (cmd_vel を購読し、odom と
-# odom -> base_footprint TF を出し、motor_power サービスを持つ lifecycle ノード) を
-# 満たすので、この launch から下だけが入れ替わる。
+# driver:= で公式実装と自前実装のどちらを立てるか選ぶ。どちらも同じ契約 (cmd_vel を
+# 購読し、odom と odom -> base_footprint TF を出し、motor_power サービスを持つ
+# lifecycle ノード) を満たすので、この launch から下だけが入れ替わる。
 #
-#   raspimouse (既定) … Pi 4 用。rtmouse カーネルモジュールがホストで insmod されて
-#                       いる前提 (/dev/rt* が必要)。
-#   pi5               … Pi 5 用。rtmouse は Pi 5 で動かない (BCM2711 のレジスタを
-#                       ioremap するが、Pi 5 では GPIO/PWM が RP1 側にある) ので、
-#                       scripts/raspicat_pi5_driver.py が RP1 の PWM と gpiochip と
-#                       I2C をユーザ空間から直接叩く。詳細は
-#                       docs/setup/raspberry-pi-5.md。
+#   raspimouse (既定) … 公式実装。raspimouse2 の raspimouse ノードで、rtmouse
+#                       カーネルモジュールがホストで insmod されている前提
+#                       (/dev/rt* が必要)。Pi 4 のみ。
+#   original          … 自前実装。raspicat_driver パッケージが PWM (sysfs)・gpiochip・
+#                       I2C をユーザ空間から直接叩く。Pi 4 / Pi 5 の両方に対応し、
+#                       機種は model:=auto がハード側で判定する。Pi 5 は rtmouse が
+#                       動かない (BCM2711 のレジスタを ioremap するが GPIO/PWM は RP1
+#                       側にある) ので、こちらしか選べない。
+#
+# Pi 4 で original を選ぶときは rtmouse を載せないこと。両方が GPIO 16/6/5 と PWM を
+# 奪い合い、カーネルは止めてくれない (ノード側が起動時に拒否する)。詳細は
+# docs/setup/raspberry-pi-4.md と raspberry-pi-5.md。
 
 import os
 
@@ -48,11 +53,11 @@ from lifecycle_msgs.msg import Transition
 # driver:= の値ごとの (ノード名, パッケージ, 実行ファイル, 既定パラメータファイル)。
 DRIVERS = {
     "raspimouse": ("raspimouse", "raspimouse", "raspimouse", "raspicat.yaml"),
-    "pi5": (
-        "raspicat_pi5_driver",
-        "autonomous_nav",
-        "raspicat_pi5_driver.py",
-        "raspicat_pi5.yaml",
+    "original": (
+        "raspicat_driver",
+        "raspicat_driver",
+        "raspicat_driver",
+        "raspicat_driver.yaml",
     ),
 }
 
@@ -77,13 +82,21 @@ def launch_setup(context, *args, **kwargs):
     if not params_file:
         params_file = os.path.join(pkg_share, "config", "robot", default_params_name)
 
+    parameters = [params_file]
+    # model:= は自前実装にしか無いパラメータ。raspimouse に渡すと未宣言で落ちる。
+    model = LaunchConfiguration("model").perform(context)
+    if model:
+        if driver != "original":
+            raise RuntimeError("model:= は driver:=original のときだけ指定できます。")
+        parameters.append({"model": model})
+
     driver_node = LifecycleNode(
         namespace="",
         name=node_name,
         package=package,
         executable=executable,
         output="screen",
-        parameters=[params_file],
+        parameters=parameters,
     )
 
     # 起動 -> configure -> (inactive になったら) activate。
@@ -147,13 +160,20 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "driver",
             default_value="raspimouse",
-            description="本体ドライバ: raspimouse (Pi 4 / rtmouse) または pi5 (Pi 5 / RP1)。",
+            description="本体ドライバ: raspimouse (公式実装 / rtmouse / Pi 4 のみ) または "
+                        "original (自前実装 / Pi 4・Pi 5)。",
+        ),
+        DeclareLaunchArgument(
+            "model",
+            default_value="",
+            description="driver:=original のときの機種: pi4 / pi5 / auto。空なら "
+                        "raspicat_driver.yaml の model (既定 auto) に従う。",
         ),
         DeclareLaunchArgument(
             "params_file",
             default_value="",
             description="ドライバのパラメータファイル。空なら driver:= に応じて "
-                        "config/robot/raspicat.yaml か raspicat_pi5.yaml を使う。",
+                        "config/robot/raspicat.yaml か raspicat_driver.yaml を使う。",
         ),
         DeclareLaunchArgument("lidar_frame", default_value="lidar_link"),
         DeclareLaunchArgument("use_joint_state_publisher", default_value="True"),

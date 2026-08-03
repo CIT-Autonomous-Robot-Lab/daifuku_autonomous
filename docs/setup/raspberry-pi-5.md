@@ -1,8 +1,9 @@
 # Raspberry Pi 5 で動かす
 
-Raspberry Pi 5 では rtmouse カーネルモジュールが動かないので、本体ドライバを
-`autonomous_nav` の `raspicat_pi5_driver.py` に差し替えます。ナビゲーション側は
-Pi 4 と同じです。
+Raspberry Pi 5 では rtmouse カーネルモジュールが動かないので、本体ドライバは
+自前実装（[`src/raspicat_driver`](../../src/raspicat_driver/README.md)、
+`robot_bringup.launch.py` の `driver:=original`）だけが選べます。ナビゲーション側は
+Pi 4 と同じです。Pi 4 でも同じドライバを選べます（[Raspberry Pi 4 で動かす](raspberry-pi-4.md)）。
 
 ## なぜ差し替えが要るのか
 
@@ -22,12 +23,13 @@ GPIO / PWM / SPI / I2C はすべて PCIe の先の RP1 側にあります。こ�
 
 ## 何が置き換わるか
 
-| | Pi 4 (`driver:=raspimouse`) | Pi 5 (`driver:=pi5`) |
+| | 公式実装 (`driver:=raspimouse`) | 自前実装 (`driver:=original`) |
 | --- | --- | --- |
 | ステップクロック | rtmouse が BCM PWM の RNG/DAT を直書き | RP1 の PWM を `/sys/class/pwm` 経由（GPIO12 → ch0、GPIO13 → ch1） |
 | 方向・モータ電源 | rtmouse が GPSET/GPCLR を直書き | `/dev/gpiochip*` のキャラクタデバイス（GPIO16 / 6 / 5） |
 | パルスカウンタ | rtmouse が `/dev/rtcounter_*` を出す | `/dev/i2c-1` の 0x10 / 0x11 を直読み |
-| ROS ノード | `raspimouse`（raspimouse2） | `raspicat_pi5_driver`（`autonomous_nav`） |
+| ROS ノード | `raspimouse`（raspimouse2） | `raspicat_driver`（同名パッケージ） |
+| Pi 5 で | 動かない | これを使う |
 
 上に見せる契約は同じです。`cmd_vel` を購読し、`odom` と `odom -> base_footprint`
 TF を出し、`motor_power` サービスを持つ lifecycle ノードなので、Nav2・EKF・emcl2 の
@@ -36,7 +38,7 @@ TF を出し、`motor_power` サービスを持つ lifecycle ノードなので�
 LED・ブザー・スイッチ・測距センサは**用意しません**。このワークスペースの中に
 `/leds`・`/buzzer`・`/switches`・`/light_sensors` を使うものが無いためです。
 
-## Pi 4 との意図的な違い
+## 公式実装との意図的な違い
 
 - `cmd_vel` → ステップ周波数の換算に `pulses_per_revolution` を使います。上流の
   `raspimouse_component.cpp` はここだけ 400.0 を直書きしていて、パラメータは
@@ -100,7 +102,7 @@ dtparam=i2c_baudrate=62500
 `overlays/Makefile` に無く（あるのは `pwm` / `pwm-2chan` / `pwm-gpio` /
 `pwm-gpio-fan` / `pwm-ir-tx` / `pwm-pio` / `pwm1`）、書いても無視されます。
 
-`provision.sh` は `tools/image/udev/99-daifuku-pi5.rules` を
+`provision.sh` は `tools/image/udev/99-daifuku-raspicat.rules` を
 `/etc/udev/rules.d/` へ入れます。コンテナは `user: "1000:1000"` で走り、補助
 グループを引き継がないので、`/sys/class/pwm` 配下と `/dev/gpiochip*` と
 `/dev/i2c-1` の所有者を 1000:1000 にしています。
@@ -109,10 +111,10 @@ dtparam=i2c_baudrate=62500
 
 ```bash
 docker compose -f docker/raspberrypi/compose.yaml \
-               -f docker/raspberrypi/compose.pi5.yaml up -d
+               -f docker/raspberrypi/compose.original.yaml up -d
 ```
 
-`compose.pi5.yaml` が raspicat サービスに `driver:=pi5` を渡し、`/sys/class/pwm` と
+`compose.original.yaml` が raspicat サービスに `driver:=original` を渡し、`/sys/class/pwm` と
 `/sys/devices` を rw で足します（カーネルの PWM サブシステムにキャラクタデバイスの
 API が無いので sysfs を通すしかなく、Docker は既定で `/sys` を read-only で見せる
 ため）。
@@ -123,7 +125,7 @@ Ubuntu 22.04 前提で Pi 5 では使えないので、その場合も ROS 側�
 ### 3. 確認する
 
 ```bash
-ros2 lifecycle get /raspicat_pi5_driver          # active になっていること
+ros2 lifecycle get /raspicat_driver              # active になっていること
 ros2 topic hz /odom
 ros2 service call /motor_power std_srvs/srv/SetBool '{data: true}'
 ros2 topic pub --times 20 /cmd_vel geometry_msgs/msg/Twist \
@@ -137,7 +139,7 @@ ros2 topic pub --times 20 /cmd_vel geometry_msgs/msg/Twist \
 
 ハードウェアで走らせた実績はまだありません。以下は机上の値なので、最初のベンチで
 確認してください。ピン・チャネル・アドレス・デバイスパスはすべてパラメータに
-出してあるので、`config/robot/raspicat_pi5.yaml` を直せばコードは触らずに済みます。
+出してあるので、`config/robot/raspicat_driver.yaml` を直せばコードは触らずに済みます。
 
 まず `ls /boot/firmware/overlays | grep pwm` で、`config.txt` に書いたオーバレイが
 実在することを確かめてください。無いオーバレイは黙って無視され、症状は

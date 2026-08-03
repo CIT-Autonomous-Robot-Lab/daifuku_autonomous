@@ -1,10 +1,12 @@
-# Raspberry Pi 5 で本体ドライバをコンテナから動かすための権限。
+# 自前の本体ドライバ (raspicat_driver) をコンテナから動かすための権限。
+# Pi 4 でも Pi 5 でも同じで、必要な資源も同じ (PWM / gpiochip / i2c-dev)。
 #
 # docker/raspberrypi/compose.yaml の raspicat サービスは user: "1000:1000" で走る。
 # コンテナには補助グループが引き継がれないので、ホストで gpio や i2c グループへ
 # chgrp しても届かない。所有者そのものを 1000:1000 にするのが確実。
 #
-# 入るのは tools/image/provision.sh 経由 (--model pi5 のときだけ)。反映は
+# 入るのは tools/image/provision.sh 経由 (機種によらず入る。公式実装 +
+# rtmouse で動かす場合は使われないだけで、害は無い)。反映は
 #   sudo udevadm control --reload && sudo udevadm trigger
 # または再起動。
 
@@ -14,8 +16,9 @@
 # (/sys/class/pwm/ の下はシンボリックリンクなので chown -R では辿らない)。
 SUBSYSTEM=="pwm", ACTION=="add", RUN+="/bin/sh -c 'chown -R 1000:1000 /sys%p'"
 
-# モータの方向線と電源線。RP1 のバンクだけでなく全 gpiochip を対象にする
-# (番号はカーネル版で動くうえ、ドライバはラベルで選ぶため)。
+# モータの方向線と電源線。Pi 4 の pinctrl-bcm2835 と Pi 5 の pinctrl-rp1 の
+# どちらも拾えるよう全 gpiochip を対象にする (番号はカーネル版で動くうえ、
+# ドライバはラベルで選ぶため)。
 SUBSYSTEM=="gpio", KERNEL=="gpiochip[0-9]*", OWNER="1000", GROUP="1000", MODE="0660"
 
 # パルスカウンタ (0x10 / 0x11)。

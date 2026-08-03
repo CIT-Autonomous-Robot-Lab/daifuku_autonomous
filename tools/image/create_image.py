@@ -25,6 +25,13 @@ Windows / Linux / macOSで動きます。標準ライブラリのみを使用し
   configure  ブートパーティションへcloud-initとconfig.txtを書く
   all        fetch → flash → configure
 
+本体ドライバとconfig.txtの関係:
+  rtmouseを入れるか（既定・Pi 4のみ）で、config.txtに入るオーバレイが変わります。
+  入れる場合は公式実装（driver:=raspimouse）でPWMはrtmouseの直書き、入れない
+  場合（--no-rtmouse、およびPi 5）は自前実装（driver:=original）が
+  ハードウェアPWMを使うのでpwm-2chanオーバレイが入ります。両方を同時に動かす
+  ことはできません。
+
 Raspberry Pi 5について:
   Ubuntu 22.04はPi 5に対応しません（--model pi5 は既定でUbuntu 24.04）。
   またRaspberry Pi Catのrtmouseカーネルモジュールも公式にはPi 5非対応です。
@@ -889,44 +896,57 @@ def _indent(text: str, spaces: int) -> str:
     return "\n".join(pad + line if line else pad for line in text.rstrip("\n").splitlines())
 
 
-def render_config_txt_block(model: str) -> str:
+def render_config_txt_block(model: str, with_rtmouse: bool) -> str:
+    """config.txtへ書くブロック。何が要るかは機種ではなく本体ドライバで決まる。
+
+    rtmouseを入れるなら（Pi 4の既定、robot_bringup.launch.pyのdriver:=raspimouse）
+    PWMはrtmouseがレジスタ直書きで出すので、カーネルのPWMドライバを同じピンに
+    当ててはいけない。入れないなら（--no-rtmouse、またはPi 5）自前ドライバ
+    (driver:=original)がステップクロックをハードウェアPWMから出すので、
+    pwm-2chanオーバレイが要る。
+    """
     lines = [
         BEGIN_MARK,
         "# daifuku_autonomous: tools/image/create_image.py が管理するブロック。",
         "# マーカーの間は configure のたびに置き換わる。",
         "dtparam=i2c_arm=on",
         "dtparam=spi=on",
+        # パルスカウンタ(0x10/0x11)はI2Cのタイムアウトに弱い。標準の100kHzより
+        # 落として取りこぼしを減らす（rt-netの推奨値）。Pi 5のI2CはRP1の
+        # DesignWare系でタイミング生成が違うため、効くかは実機で確認する
+        # （docs/setup/raspberry-pi-5.md）。
+        "dtparam=i2c_baudrate=62500",
     ]
-    if model == "pi4":
-        lines += [
-            # rtmouseのパルスカウンタ(0x10/0x11)はI2Cのタイムアウトに弱い。
-            # 標準の100kHzより落として取りこぼしを減らす（rt-netの推奨値）。
-            "dtparam=i2c_baudrate=62500",
-            # kernel 5.16以降のrtmouseはA/D(MCP3204)をanyspiオーバレイで取る。
-            'dtoverlay=anyspi:spi0-0,dev="microchip,mcp3204",speed=1000000',
-        ]
-    else:
-        lines += [
+    if with_rtmouse:
+        if model != "pi5":
+            lines += [
+                "# 本体ドライバは rtmouse + raspimouse (driver:=raspimouse)。",
+                "# PWM は rtmouse がレジスタ直書きで出すので pwm オーバレイは入れない。",
+            ]
+        # kernel 5.16以降のrtmouseはA/D(MCP3204)をanyspiオーバレイで取る。
+        lines.append('dtoverlay=anyspi:spi0-0,dev="microchip,mcp3204",speed=1000000')
+    # Pi 5では--with-rtmouseを指定できてしまうが、rtmouseはRP1に届かないので
+    # 本体ドライバは結局driver:=originalしかない。PWMオーバレイは必ず入れる。
+    if not with_rtmouse or model == "pi5":
+        if model == "pi5":
             # rtmouseはBCM2711のGPIO/PWM/CLKレジスタをioremapするので、
-            # それらがRP1側にあるPi 5では動かない。代わりにautonomous_navの
-            # raspicat_pi5_driver.pyがRP1のPWMとgpiochipとI2Cを直接叩く。
-            "# Raspberry Pi 5 では rtmouse を導入しない (rt-net/RaspberryPiMouse は非対応)。",
-            "# 本体ドライバは autonomous_nav の raspicat_pi5_driver.py",
-            "# (robot_bringup.launch.py の driver:=pi5)。",
-            # 左右モータのステップクロックをRP1のハードウェアPWMから出す。
-            # pwm-2chanはbcm2835向けのオーバレイだが、bcm2712-rpi.dtsiが
-            # `pwm: &pwm0` -> `pwm0: &rp1_pwm0` と付け替えているのでPi 5でも
-            # RP1のPWMに当たる。func=4はpwm-2chan-overlay.dtsが挙げる正当な
-            # 組み合わせ（PWM0: 12,4(Alt0) / PWM1: 13,4(Alt0)）で、RP1では
-            # GPIO12 -> pwm0 ch0、GPIO13 -> pwm0 ch1。
+            # それらがRP1側にあるPi 5では動かない。
+            lines.append(
+                "# Raspberry Pi 5 では rtmouse は動かない"
+                " (rt-net/RaspberryPiMouse は非対応)。"
+            )
+        lines += [
+            "# 本体ドライバは raspicat_driver (driver:=original)。",
+            # 左右モータのステップクロックをハードウェアPWMから出す。
+            # func=4はpwm-2chan-overlay.dtsが挙げる正当な組み合わせ
+            # （PWM0: 12,4(Alt0) / PWM1: 13,4(Alt0)）。Pi 4ではbcm2835のPWM、
+            # Pi 5ではbcm2712-rpi.dtsiが`pwm: &pwm0` -> `pwm0: &rp1_pwm0`と
+            # 付け替えているのでRP1のPWMに当たる。どちらもGPIO12 -> ch0、
+            # GPIO13 -> ch1。
             # ネット上にある`dtoverlay=pwm-pi5`はrpi-6.12.yのoverlays/Makefileに
             # 存在しない（pwm / pwm-2chan / pwm-gpio / pwm-gpio-fan / pwm-ir-tx /
             # pwm-pio / pwm1 だけ）。
             "dtoverlay=pwm-2chan,pin=12,func=4,pin2=13,func2=4",
-            # パルスカウンタ(0x10/0x11)はPi 4と同じくI2Cのタイムアウトに弱い。
-            # RP1のI2CはDesignWare系でタイミング生成が違うので、この値が効くかは
-            # 実機で確認する（docs/setup/raspberry-pi-5.md）。
-            "dtparam=i2c_baudrate=62500",
         ]
     lines.append(END_MARK)
     return "\n".join(lines) + "\n"
@@ -993,7 +1013,10 @@ def configure(boot_dir: Path, args) -> None:
 
     log(f"更新: {boot_dir / 'config.txt'}")
     if not args.dry_run:
-        patch_marked_block(boot_dir / "config.txt", render_config_txt_block(args.model))
+        patch_marked_block(
+            boot_dir / "config.txt",
+            render_config_txt_block(args.model, args.with_rtmouse),
+        )
     log(f"更新: {boot_dir / 'cmdline.txt'}")
     if not args.dry_run:
         patch_cmdline(boot_dir / "cmdline.txt")
@@ -1088,7 +1111,8 @@ def add_configure_arguments(parser: argparse.ArgumentParser) -> None:
         dest="with_rtmouse",
         action="store_false",
         default=None,
-        help="rtmouseカーネルモジュールを導入しない",
+        help="rtmouseカーネルモジュールを導入しない"
+        "（自前ドライバ driver:=original で動かす場合。config.txtにはpwmオーバレイが入る）",
     )
     parser.add_argument(
         "--with-rtmouse",

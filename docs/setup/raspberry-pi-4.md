@@ -1,13 +1,32 @@
 # Raspberry Pi 4 で動かす
 
-Pi 4 は既定の構成です。本体ドライバは上流 raspimouse2 の `raspimouse` ノード
-（`robot_bringup.launch.py` の `driver:=raspimouse`、既定）で、rtmouse カーネル
-モジュールが出す `/dev/rt*` を読みます。Pi 5 では rtmouse が動かないので構成が
-変わります（[Raspberry Pi 5 で動かす](raspberry-pi-5.md)）。
-
-ここには Pi 4 に固有のことだけを書きます。Docker の使い方は
+Pi 4 は既定の構成です。ここには Pi 4 に固有のことだけを書きます。Docker の使い方は
 [Docker 環境](docker.md)、SD カード作成のオプション一覧は
 [`tools/image/README.md`](../../tools/image/README.md) にあります。
+
+## 本体ドライバを選ぶ
+
+Pi 4 では 2 つから選べます（Pi 5 では自前実装しか選べません。
+[Raspberry Pi 5 で動かす](raspberry-pi-5.md)）。
+
+| | 公式実装（既定） | 自前実装 |
+| --- | --- | --- |
+| 起動 | `driver:=raspimouse` | `driver:=original` |
+| ノード | `raspimouse`（raspimouse2） | `raspicat_driver`（[`src/raspicat_driver`](../../src/raspicat_driver/README.md)） |
+| モータ経路 | rtmouse がレジスタを直書き | `/sys/class/pwm`・`/dev/gpiochip*`・`/dev/i2c-1` |
+| rtmouse | **要る** | **載っていてはいけない** |
+| パルスカウンタ | 使わない設定にしてある（下記） | 使う（`use_pulse_counters: true`） |
+| LED・ブザー・スイッチ・測距センサ | あり | なし |
+| SD カード | `create_image.py --model pi4`（既定） | `create_image.py --model pi4 --no-rtmouse` |
+
+**同時には動かせません。** rtmouse は GPIO と PWM のレジスタを `ioremap()` して直接
+書くので、カーネルの pinctrl からは何も見えず、衝突は検出されません。両方が
+GPIO 16/6/5 を持てば、モータ電源が入ったまま車輪が逆に回り得ます。自前ドライバは
+rtmouse が載っていると configure を拒否します（`/proc/modules` と `/dev/rtmotor*` を
+見る）。
+
+以下は既定（公式実装）の話です。自前実装は[自前ドライバで動かす](#自前ドライバで動かす)に
+まとめてあります。
 
 ## ホスト側に置くもの
 
@@ -16,8 +35,9 @@ Pi 4 は既定の構成です。本体ドライバは上流 raspimouse2 の `ras
 
 | もの | 何のため | 入れるところ |
 | --- | --- | --- |
-| rtmouse カーネルモジュール | `/dev/rt*`。コンテナからは `insmod` できない | `provision.sh`（`--model pi4` では既定で有効。`create_image.py --no-rtmouse` で省略） |
-| `config.txt` の i2c / spi / anyspi | rtmouse が使う I2C・SPI と A/D | `create_image.py --model pi4` |
+| rtmouse カーネルモジュール | `/dev/rt*`。コンテナからは `insmod` できない。**公式実装のときだけ** | `provision.sh`（`--model pi4` では既定で有効。`create_image.py --no-rtmouse` で省略） |
+| `config.txt` の i2c / spi / anyspi | rtmouse が使う I2C・SPI と A/D（`--no-rtmouse` では anyspi の代わりに `pwm-2chan`） | `create_image.py --model pi4` |
+| udev ルール | 自前実装が使う PWM・gpiochip・i2c の所有権 | `provision.sh`（機種によらず入る） |
 | スワップ 2048 MB | 価値反復プランナが 4 GB に収まらないことがある | `provision.sh`（`vm.swappiness=10` も同時に） |
 | Fast DDS プロファイルの指定 | ホストとコンテナで食い違うと片側だけが SHM を使い、通信が静かに止まる | `provision.sh` が `~/.bashrc` へ |
 
@@ -38,11 +58,14 @@ rtmouse は out-of-tree モジュールで、キャラクタデバイスのメ�
 「`odom` がまったく動かない」という別のバグの顔をして出ます。
 
 狭めるなら rtmouse 側でメジャー番号を固定し、ここに列挙する必要があります。
+自前実装が使う `/dev/gpiochip*` と `/dev/i2c-*` はメジャー番号が固定なので、この
+制約は公式実装（rtmouse）に固有のものです。
 
-## パルスカウンタは切ってある
+## パルスカウンタは切ってある（公式実装）
 
 `config/robot/raspicat.yaml` の `use_pulse_counters` は `false`（`cmd_vel` の積分）
-です。本来は `true`（`/dev/rtcounter_{l,r}*` のロータリエンコーダ）が正しい設定
+です。これは rtmouse を経由する公式実装の話で、自前実装（`raspicat_driver.yaml`）は
+`true` が既定です。本来は `true`（`/dev/rtcounter_{l,r}*` のロータリエンコーダ）が正しい設定
 ですが、この個体の I2C カウンタが走行中にランダムで固着します。
 
 一度 I2C がタイムアウトするとドライバの mutex が握られたままになり、以後
@@ -55,7 +78,7 @@ rtmouse は out-of-tree モジュールで、キャラクタデバイスのメ�
 [`config/README.md`](../../src/autonomous_nav/config/README.md) にあります。
 
 - **モータ OFF の dry-run が成立しません。** `odom` は指令値の積分なので、モータ
-  電源を切ったまま指令を出しても自己位置だけがゴールまで「走り」ます（Pi 5 は
+  電源を切ったまま指令を出しても自己位置だけがゴールまで「走り」ます（自前実装は
   エンコーダが生きているので、この確認ができます）。
 - Nav2 を回転中に止めるとゼロ速度が届かず、`odom` が回り続けます。その幻の回転を
   emcl2 が打ち消そうとして `map->odom` まで振り回されます。止めるときは
@@ -83,9 +106,9 @@ Pi 4 のメモリとコア数に由来するもので、Pi 5 では緩みます�
 
 ## LED・ブザー・スイッチ・測距センサ
 
-rtmouse があるので Pi 4 では出ます（`use_light_sensors: true` で `/light_sensors`）。
-ただし、このワークスペースの中にこれらを使うものはありません。Pi 5 の
-ドライバがこれらを持たないのはそのためです。
+rtmouse があるので公式実装では出ます（`use_light_sensors: true` で
+`/light_sensors`）。ただし、このワークスペースの中にこれらを使うものはありません。
+自前ドライバがこれらを持たないのはそのためです。
 
 ## 手順
 
@@ -142,6 +165,86 @@ ros2 topic pub --times 20 /cmd_vel geometry_msgs/msg/Twist \
 
 `odom` は指令値の積分なので、この出力は「ノードが指令を受け取った」ことしか
 示しません。実際に動いたかは巻尺で見てください。
+
+## 自前ドライバで動かす
+
+rtmouse を使わず、`raspicat_driver` がモータ経路をユーザ空間から直接扱う構成です。
+Pi 5 と同じコード・同じパラメータファイルで、違うのはチップの同定だけです
+（`pinctrl-bcm2835` / `fe20c000.pwm`。Pi 5 は `pinctrl-rp1` / `98000.pwm`）。
+
+### 1. rtmouse の無い SD カードを作る
+
+```bash
+sudo python3 tools/image/create_image.py all --model pi4 --no-rtmouse --device /dev/sdX \
+  --ssh-key ~/.ssh/id_ed25519.pub
+```
+
+`--no-rtmouse` で `config.txt` の中身が変わります。rtmouse の A/D 用 `anyspi` が
+落ち、代わりにステップクロック用の PWM オーバレイが入ります。
+
+```
+dtparam=i2c_arm=on
+dtparam=spi=on
+dtparam=i2c_baudrate=62500
+dtoverlay=pwm-2chan,pin=12,func=4,pin2=13,func2=4
+```
+
+`provision.sh` は機種によらず `tools/image/udev/99-daifuku-raspicat.rules` を入れ、
+`/sys/class/pwm` 配下・`/dev/gpiochip*`・`/dev/i2c-*` の所有者を 1000:1000 にします
+（コンテナは `user: "1000:1000"` で走り、補助グループを引き継がないため）。
+
+既に rtmouse 入りで運用している機体を移す場合は、SD を焼き直さずに次でも足ります。
+
+```bash
+sudo rmmod rtmouse
+sudo rm -f /etc/modules-load.d/rtmouse.conf
+# config.txt の anyspi を消し、dtoverlay=pwm-2chan,... を足して再起動
+```
+
+### 2. 起動する
+
+```bash
+docker compose -f docker/raspberrypi/compose.yaml \
+               -f docker/raspberrypi/compose.original.yaml up -d
+```
+
+`compose.original.yaml` が `driver:=original` を渡し、`/sys/class/pwm` と
+`/sys/devices` を rw で足します（カーネルの PWM サブシステムにキャラクタデバイスの
+API が無く、Docker は既定で `/sys` を read-only で見せるため）。
+
+### 3. 確認する
+
+```bash
+ros2 lifecycle get /raspicat_driver              # active になっていること
+ros2 topic hz /odom
+ros2 service call /motor_power std_srvs/srv/SetBool '{data: true}'
+```
+
+起動ログの `configured: model=pi4 (BCM2711) gpiochip=... pwmchip=...` が、機種判定と
+チップの解決結果です。ここが違っていれば `model` / `gpiochip_device` /
+`pwmchip_path` で名指しできます。
+
+エンコーダが効いているかは、**モータ OFF のまま回転を指令して `odom` が動かない
+こと**で見ます（公式実装ではこれができません）。
+
+### 実機で確かめること
+
+Pi 4 でも Pi 5 でも走らせた実績はまだありません。見る順に:
+
+| 項目 | 見かた | 直す場所 |
+| --- | --- | --- |
+| PWM のオーバレイ | `ls /boot/firmware/overlays \| grep pwm` に `pwm-2chan.dtbo` があること。無いオーバレイは黙って無視される | `config.txt` |
+| PWM の出どころ | `ls /sys/class/pwm` と `readlink -f /sys/class/pwm/pwmchipN`（`fe20c000.pwm` が出るはず） | `pwmchip_match` / `pwmchip_path` |
+| オンボード音声との競合 | オーバレイがあるのに `/sys/class/pwm` が空なら `config.txt` の `dtparam=audio=on` を疑う。Pi 4 のヘッドフォン出力は GPIO12/13 と同じ PWM ブロックを使う | `config.txt`（`dtparam=audio=off`） |
+| gpiochip | ノードの `configured: ...` ログ（`pinctrl-bcm2835` のはず） | `gpiochip_label` / `gpiochip_device` |
+| 方向の極性 | 前進を指令して両輪が同じ向きに回るか | `direction_*_forward_level` |
+| ステップ周波数と実速度 | 0.1 m/s を指令して巻尺で実測 | `pulses_per_revolution` |
+| パルスカウンタ | モータ OFF で回転指令 → `odom` が動かないこと | `use_pulse_counters` |
+| I2C の安定性 | `pulse counters failed ...` が出ないか。出るなら `counter_error_limit` を 1〜2 へ | `counter_error_limit` |
+
+この個体の I2C カウンタは公式実装で固着の実績があります（上記）。自前ドライバでは
+リブートが要る固着にはなりませんが、1 回のタイムアウトでその周期の `odom` と TF が
+1 秒前後遅れます。`controller_server` の `transform_tolerance` は 1.0 で余裕がありません。
 
 ## 実機で分かっていること
 

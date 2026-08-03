@@ -15,7 +15,6 @@ install(DIRECTORY behavior_trees config launch maps rviz scripts
 
 install(PROGRAMS
   scripts/prepare_mid360_imu.py
-  scripts/raspicat_pi5_driver.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

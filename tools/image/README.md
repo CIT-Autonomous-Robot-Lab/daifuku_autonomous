@@ -195,10 +195,21 @@ SDカードリーダーによっては内蔵ディスク扱いになります。
 - **rtmouseカーネルモジュールはPi 5に対応していません。** rt-net/RaspberryPiMouse
   が公式にサポートするのはPi 4 Bまでです（BCM2711のレジスタを`ioremap`しますが、
   Pi 5ではGPIO/PWMがRP1側にあります）。`--model pi5`では既定で導入を行いません。
-  代わりに`autonomous_nav`の`raspicat_pi5_driver.py`がモーターとエンコーダを
-  ユーザー空間から直接扱います。`--model pi5`では`config.txt`にRP1のPWMオーバレイを
-  書き、`udev/99-daifuku-pi5.rules`を導入します。手順は
-  [Raspberry Pi 5で動かす](../../docs/setup/raspberry-pi-5.md)。
+  代わりに`raspicat_driver`パッケージがモーターとエンコーダをユーザー空間から
+  直接扱います（`driver:=original`）。`--model pi5`では`config.txt`にPWMオーバレイを
+  書きます。手順は[Raspberry Pi 5で動かす](../../docs/setup/raspberry-pi-5.md)。
+
+## 本体ドライバとconfig.txt
+
+`config.txt`に入るオーバレイは、機種ではなく**rtmouseを入れるか**で決まります。
+
+| | rtmouseあり（`--model pi4`の既定） | rtmouseなし（`--no-rtmouse` / `--model pi5`） |
+| --- | --- | --- |
+| 本体ドライバ | 公式実装 `driver:=raspimouse` | 自前実装 `driver:=original` |
+| `config.txt` | `anyspi`（A/D用）。PWMはrtmouseが直書き | `dtoverlay=pwm-2chan,pin=12,func=4,pin2=13,func2=4` |
+
+`udev/99-daifuku-raspicat.rules`（PWM・gpiochip・i2c-devの所有者を1000:1000にする）は
+`provision.sh`が機種によらず導入します。公式実装では使われないだけで害はありません。
 
 ROS 2 Humbleのネイティブ環境（[`tools/setup/`](../setup/)）はUbuntu 22.04が
 前提なので、Pi 5では使えません。Pi 5ではDockerを使ってください。

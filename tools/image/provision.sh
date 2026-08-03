@@ -376,25 +376,28 @@ if [[ "${DAIFUKU_WITH_RTMOUSE}" == "1" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Raspberry Pi 5 の本体ドライバ用の権限
+# 自前の本体ドライバ用の権限
 # ---------------------------------------------------------------------------
-# Pi 5 では rtmouse が動かないので、autonomous_nav の raspicat_pi5_driver.py が
-# RP1 の PWM (sysfs) と gpiochip と I2C をユーザ空間から直接叩く。コンテナは
-# uid/gid 1000 で走り補助グループを持たないため、所有権をホスト側で渡しておく。
-# 詳細は docs/setup/raspberry-pi-5.md。
+# raspicat_driver (robot_bringup.launch.py の driver:=original) は PWM (sysfs) と
+# gpiochip と I2C をユーザ空間から直接叩く。コンテナは uid/gid 1000 で走り補助
+# グループを持たないため、所有権をホスト側で渡しておく。
+#
+# 機種によらず入れる。Pi 5 では必須（rtmouse が動かないので公式実装を選べない）、
+# Pi 4 では driver:=original を選んだときだけ効く（選ばなければ使われないだけ）。
+# 詳細は docs/setup/raspberry-pi-4.md と raspberry-pi-5.md。
 
-if [[ "${DAIFUKU_MODEL}" == "pi5" ]]; then
-  step "Pi 5 本体ドライバ用のudevルールを導入"
-  RULES_SRC="${WORKSPACE}/tools/image/udev/99-daifuku-pi5.rules"
-  if [[ -f "${RULES_SRC}" ]]; then
-    install -m 0644 "${RULES_SRC}" /etc/udev/rules.d/99-daifuku-pi5.rules &&
-      udevadm control --reload &&
-      udevadm trigger --subsystem-match=pwm --subsystem-match=gpio \
-        --subsystem-match=i2c-dev ||
-      soft_fail "udevルールの導入"
-  else
-    soft_fail "${RULES_SRC} が見つかりません（リポジトリの取得に失敗している）"
-  fi
+step "自前ドライバ用のudevルールを導入"
+RULES_SRC="${WORKSPACE}/tools/image/udev/99-daifuku-raspicat.rules"
+if [[ -f "${RULES_SRC}" ]]; then
+  install -m 0644 "${RULES_SRC}" /etc/udev/rules.d/99-daifuku-raspicat.rules &&
+    udevadm control --reload &&
+    udevadm trigger --subsystem-match=pwm --subsystem-match=gpio \
+      --subsystem-match=i2c-dev ||
+    soft_fail "udevルールの導入"
+  # 旧名。残っていると同じ内容が二重に効く。
+  rm -f /etc/udev/rules.d/99-daifuku-pi5.rules
+else
+  soft_fail "${RULES_SRC} が見つかりません（リポジトリの取得に失敗している）"
 fi
 
 # ---------------------------------------------------------------------------

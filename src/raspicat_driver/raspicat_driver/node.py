@@ -1,25 +1,18 @@
 #!/usr/bin/env python3
 
-"""Userspace Raspberry Pi Cat motor driver for the Raspberry Pi 5 (RP1).
+"""The ROS-facing lifecycle node of the userspace Raspberry Pi Cat driver.
 
-The rtmouse kernel module cannot work on a Pi 5: it ioremap()s the BCM2711
-GPIO, PWM and clock-manager registers at 0xfe000000, and on a Pi 5 those
-peripherals live in the RP1 southbridge behind PCIe.  This node replaces
-rtmouse *and* the raspimouse node for the motor path, entirely from userspace:
-
-  step clock   RP1 hardware PWM via /sys/class/pwm  (GPIO12 -> ch0, GPIO13 -> ch1)
-  direction    GPIO character device, v1 uAPI       (GPIO16 left, GPIO6 right)
-  motor enable same                                  (GPIO5)
-  odometry     I2C pulse counters at 0x10 / 0x11 on /dev/i2c-1
-
-The contract above this node is identical to raspimouse, so robot_bringup,
-the EKF and Nav2 are unchanged:
+The contract is the one raspimouse (raspimouse2) offers, so robot_bringup,
+the EKF and Nav2 do not care which driver is running:
 
   subscribe  cmd_vel        geometry_msgs/Twist
   publish    odom           nav_msgs/Odometry
   publish    odom -> base_footprint TF   (publish_tf, unlike raspimouse)
   service    motor_power    std_srvs/SetBool
   lifecycle  configure -> activate, driven by robot_bringup.launch.py
+
+Everything below the node is a Backend (backend.py, pi4.py, pi5.py); this file
+never mentions a register, a chip label or a kernel module.
 
 Deliberately not provided: LEDs, buzzer, switches and light sensors.  Nothing
 in this workspace subscribes to /leds or /buzzer or reads /switches or
@@ -33,31 +26,21 @@ Two deliberate differences from raspimouse:
     commanded.  mid360_ekf.yaml takes vx and vyaw (and nothing else) from this
     message, so feeding it the command would close a loop on our own output.
 
-An I2C stall here cannot wedge the robot the way rtmouse does.  rtmouse holds
-a kernel mutex across the transfer, so one timeout leaves every reader of
-/dev/rtcounter_* in permanent D state and only a reboot recovers (see
-config/README.md).  Here the ioctl returns ETIMEDOUT to us, the counter timer
-runs in its own callback group, and repeated failures fall back to integrating
-cmd_vel until the bus answers again.
-
-None of this has been run on hardware -- there is no Pi 5 Raspberry Pi Cat.
-Every pin, channel, address and device path is a parameter so the first bench
-session can correct them without touching the logic.
+An I2C stall cannot wedge the robot the way rtmouse does: the ioctl returns
+ETIMEDOUT to us, the counters are read in their own callback group, and
+repeated failures fall back to integrating cmd_vel until the bus answers
+again.  It is not free either -- see docs/setup/raspberry-pi-5.md.
 """
 
-import ctypes
-import fcntl
 import math
-import os
-import struct
 import sys
 import threading
 import time
 
-import rclpy
 from geometry_msgs.msg import TransformStamped
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
+import rclpy
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.lifecycle import LifecycleNode
@@ -66,301 +49,24 @@ from rclpy.lifecycle import TransitionCallbackReturn
 from std_srvs.srv import SetBool
 from tf2_ros import TransformBroadcaster
 
-CONSUMER = "raspicat_pi5_driver"
+from .backend import Hardware
+from .backend import LEFT
+from .backend import RIGHT
+from .backend import Wiring
+from .backend import create_backend
 
-
-# --------------------------------------------------------------------------
-# ioctl plumbing
-# --------------------------------------------------------------------------
-# _IOC() from asm-generic/ioctl.h.  fcntl.ioctl() wants a value that fits in a
-# signed int, and every direction we use here sets bit 31, so fold it round.
-
-_IOC_WRITE = 1
-_IOC_READ = 2
-
-
-def _ioc(direction, type_, nr, size):
-    value = (direction << 30) | (size << 16) | (type_ << 8) | nr
-    if value >= 0x80000000:
-        value -= 0x100000000
-    return value
-
-
-# --------------------------------------------------------------------------
-# GPIO character device (v1 uAPI)
-# --------------------------------------------------------------------------
-# v1 is deprecated in libgpiod terms but the kernel still supports it, and its
-# request struct is one fixed layout with no pointers, which keeps this file
-# dependency-free.  The Humble container image has neither python3-libgpiod nor
-# python3-gpiod, and adding one would force a `docker compose build`.
-
-_GPIO_MAGIC = 0xB4
-
-# struct gpiochip_info { char name[32]; char label[32]; __u32 lines; }
-_CHIPINFO_FMT = "=32s32sI"
-_CHIPINFO_SIZE = struct.calcsize(_CHIPINFO_FMT)
-
-# struct gpiohandle_request { __u32 lineoffsets[64]; __u32 flags;
-#                             __u8 default_values[64]; char consumer_label[32];
-#                             __u32 lines; int fd; }
-_HANDLE_REQ_FMT = "=64I I 64B 32s I i"
-_HANDLE_REQ_SIZE = struct.calcsize(_HANDLE_REQ_FMT)
-
-# struct gpiohandle_data { __u8 values[64]; }
-_HANDLE_DATA_FMT = "=64B"
-_HANDLE_DATA_SIZE = struct.calcsize(_HANDLE_DATA_FMT)
-
-_GPIO_GET_CHIPINFO = _ioc(_IOC_READ, _GPIO_MAGIC, 0x01, _CHIPINFO_SIZE)
-_GPIO_GET_LINEHANDLE = _ioc(_IOC_READ | _IOC_WRITE, _GPIO_MAGIC, 0x03, _HANDLE_REQ_SIZE)
-_GPIO_SET_LINE_VALUES = _ioc(_IOC_READ | _IOC_WRITE, _GPIO_MAGIC, 0x09, _HANDLE_DATA_SIZE)
-
-_GPIOHANDLE_REQUEST_OUTPUT = 1 << 1
-
-
-def find_gpiochip(label):
-    """Return the /dev/gpiochipN whose driver label matches, or None.
-
-    On a Pi 5 the RP1 bank is labelled "pinctrl-rp1", but its chip number has
-    moved between kernel releases, so match on the label rather than the digit.
-    """
-    for name in sorted(os.listdir("/dev")):
-        if not name.startswith("gpiochip"):
-            continue
-        path = os.path.join("/dev", name)
-        try:
-            fd = os.open(path, os.O_RDWR | os.O_CLOEXEC)
-        except OSError:
-            continue
-        try:
-            info = fcntl.ioctl(fd, _GPIO_GET_CHIPINFO, bytes(_CHIPINFO_SIZE))
-        except OSError:
-            continue
-        finally:
-            os.close(fd)
-        found = struct.unpack(_CHIPINFO_FMT, info)[1].split(b"\0")[0].decode()
-        if found == label:
-            return path
-    return None
-
-
-class GpioOutputs:
-    """Output lines on one gpiochip, requested together and set together."""
-
-    def __init__(self, chip_path, offsets):
-        self._offsets = list(offsets)
-        self._values = [0] * len(self._offsets)
-        self._chip_fd = os.open(chip_path, os.O_RDWR | os.O_CLOEXEC)
-        try:
-            fields = self._offsets + [0] * (64 - len(self._offsets))
-            fields.append(_GPIOHANDLE_REQUEST_OUTPUT)
-            fields.extend([0] * 64)
-            fields.append(CONSUMER.encode("ascii")[:31])
-            fields.append(len(self._offsets))
-            fields.append(0)
-            reply = fcntl.ioctl(
-                self._chip_fd,
-                _GPIO_GET_LINEHANDLE,
-                struct.pack(_HANDLE_REQ_FMT, *fields),
-            )
-        except OSError:
-            os.close(self._chip_fd)
-            raise
-        self._line_fd = struct.unpack(_HANDLE_REQ_FMT, reply)[-1]
-
-    def set(self, index, value):
-        self._values[index] = 1 if value else 0
-        self.flush()
-
-    def flush(self):
-        padded = self._values + [0] * (64 - len(self._values))
-        fcntl.ioctl(
-            self._line_fd, _GPIO_SET_LINE_VALUES, struct.pack(_HANDLE_DATA_FMT, *padded)
-        )
-
-    def close(self):
-        for fd in (self._line_fd, self._chip_fd):
-            try:
-                os.close(fd)
-            except OSError:
-                pass
-
-
-# --------------------------------------------------------------------------
-# RP1 hardware PWM through sysfs
-# --------------------------------------------------------------------------
-
-
-def find_pwmchip(match):
-    """Return the /sys/class/pwm/pwmchipN backing the given device, or None.
-
-    `match` is matched against the resolved device path.  rp1.dtsi puts
-    rp1_pwm0 at offset 0x98000, so the default "98000.pwm" picks the block that
-    owns GPIO12/13/18/19.  The pwmchip number itself moves between kernel
-    releases and must not be hardcoded.
-    """
-    base = "/sys/class/pwm"
-    if not os.path.isdir(base):
-        return None
-    for name in sorted(os.listdir(base)):
-        path = os.path.join(base, name)
-        candidates = (
-            os.path.realpath(path),
-            os.path.realpath(os.path.join(path, "device")),
-        )
-        if any(match in candidate for candidate in candidates):
-            return path
-    return None
-
-
-class PwmStepClock:
-    """One RP1 PWM channel driving a stepper step clock at 50% duty.
-
-    rtmouse writes RNG/DAT on the BCM PWM block for exactly this; pwm-rp1.c
-    writes PWM_RANGE/PWM_DUTY plus a SET_UPDATE bit, so a frequency change here
-    is the same two register writes, reached through the kernel PWM subsystem.
-    """
-
-    def __init__(self, chip_dir, channel, settle_timeout=2.0):
-        self._dir = os.path.join(chip_dir, "pwm%d" % channel)
-        self._chip_dir = chip_dir
-        self._channel = channel
-        self._period_ns = 0
-        self._enabled = False
-        if not os.path.isdir(self._dir):
-            _sysfs_write(os.path.join(chip_dir, "export"), channel)
-            deadline = time.monotonic() + settle_timeout
-            while not os.path.isdir(self._dir):
-                if time.monotonic() > deadline:
-                    raise OSError("%s did not appear after export" % self._dir)
-                time.sleep(0.01)
-        # udev has to chown the attributes that export just created, and it may
-        # not have run yet, so the first write tolerates EACCES for a moment.
-        self._write("duty_cycle", 0, tolerate_eacces=settle_timeout)
-
-    def set_frequency(self, freq_hz):
-        """Set the step frequency.  0 or less stops the clock (duty 0)."""
-        if freq_hz <= 0:
-            self._write("duty_cycle", 0)
-            return
-        period_ns = int(round(1e9 / freq_hz))
-        if period_ns != self._period_ns:
-            # duty must never exceed period, so collapse it before shrinking
-            # the period and restore it afterwards.
-            self._write("duty_cycle", 0)
-            self._write("period", period_ns)
-            self._period_ns = period_ns
-        self._write("duty_cycle", period_ns // 2)
-        if not self._enabled:
-            self._write("enable", 1)
-            self._enabled = True
-
-    def stop(self):
-        """Hold the clock low without disabling the channel (no re-arm glitch)."""
-        self._write("duty_cycle", 0)
-
-    def close(self):
-        try:
-            self.stop()
-            if self._enabled:
-                self._write("enable", 0)
-                self._enabled = False
-            _sysfs_write(os.path.join(self._chip_dir, "unexport"), self._channel)
-        except OSError:
-            pass
-
-    def _write(self, attribute, value, tolerate_eacces=0.0):
-        _sysfs_write(os.path.join(self._dir, attribute), value, tolerate_eacces)
-
-
-def _sysfs_write(path, value, tolerate_eacces=0.0):
-    deadline = time.monotonic() + tolerate_eacces
-    while True:
-        try:
-            with open(path, "w") as handle:
-                handle.write("%d" % value)
-            return
-        except PermissionError:
-            if time.monotonic() >= deadline:
-                raise
-            time.sleep(0.05)
-
-
-# --------------------------------------------------------------------------
-# I2C pulse counters
-# --------------------------------------------------------------------------
-
-_I2C_RDWR = 0x0707
-_I2C_M_RD = 0x0001
-
-
-class _I2cMsg(ctypes.Structure):
-    _fields_ = [
-        ("addr", ctypes.c_uint16),
-        ("flags", ctypes.c_uint16),
-        ("len", ctypes.c_uint16),
-        ("buf", ctypes.POINTER(ctypes.c_uint8)),
-    ]
-
-
-class _I2cRdwrData(ctypes.Structure):
-    _fields_ = [("msgs", ctypes.POINTER(_I2cMsg)), ("nmsgs", ctypes.c_uint32)]
-
-
-class PulseCounter:
-    """One of the two 16-bit pulse counters on the control board.
-
-    Register-addressed reads, done as one combined write+read transaction so
-    the repeated START matches what i2c_smbus_read_byte_data() issues in
-    rtmouse.  Every failure surfaces as OSError -- that is the whole point of
-    doing this from userspace.
-    """
-
-    REG_MSB = 0x10
-    REG_LSB = 0x11
-
-    def __init__(self, bus_path, address):
-        self._fd = os.open(bus_path, os.O_RDWR | os.O_CLOEXEC)
-        self._address = address
-
-    def read(self):
-        """Return the raw 16-bit count.  Raises OSError if the bus does not answer."""
-        lsb = self._read_register(self.REG_LSB)
-        msb = self._read_register(self.REG_MSB)
-        return ((msb << 8) | lsb) & 0xFFFF
-
-    def close(self):
-        try:
-            os.close(self._fd)
-        except OSError:
-            pass
-
-    def _read_register(self, register):
-        out = (ctypes.c_uint8 * 1)(register)
-        into = (ctypes.c_uint8 * 1)()
-        pointer = ctypes.POINTER(ctypes.c_uint8)
-        messages = (_I2cMsg * 2)(
-            _I2cMsg(self._address, 0, 1, ctypes.cast(out, pointer)),
-            _I2cMsg(self._address, _I2C_M_RD, 1, ctypes.cast(into, pointer)),
-        )
-        fcntl.ioctl(self._fd, _I2C_RDWR, _I2cRdwrData(messages, 2))
-        return into[0]
-
-
-# --------------------------------------------------------------------------
-# Node
-# --------------------------------------------------------------------------
-
-LEFT = 0
-RIGHT = 1
-# Index into the GPIO line bundle requested in _open_hardware(); the first two
-# are the direction lines, so LEFT/RIGHT double as their indices.
+# Index into the GPIO line bundle opened by the backend; the first two are the
+# direction lines, so LEFT/RIGHT double as their indices.
 MOTOR_ENABLE = 2
 
 
-class RaspicatPi5Driver(LifecycleNode):
+class RaspicatDriver(LifecycleNode):
+    """cmd_vel in, odom out, with the hardware hidden behind a backend."""
 
     def __init__(self):
-        super().__init__("raspicat_pi5_driver")
+        super().__init__("raspicat_driver")
+
+        self.declare_parameter("model", "auto")
 
         self.declare_parameter("use_pulse_counters", True)
         self.declare_parameter("odometry_scale_left_wheel", 1.0)
@@ -379,7 +85,7 @@ class RaspicatPi5Driver(LifecycleNode):
         self.declare_parameter("min_step_frequency", 5.0)
         self.declare_parameter("max_step_frequency", 10000.0)
 
-        self.declare_parameter("gpiochip_label", "pinctrl-rp1")
+        self.declare_parameter("gpiochip_label", "")
         self.declare_parameter("gpiochip_device", "")
         self.declare_parameter("gpio_direction_left", 16)
         self.declare_parameter("gpio_direction_right", 6)
@@ -387,7 +93,7 @@ class RaspicatPi5Driver(LifecycleNode):
         self.declare_parameter("direction_left_forward_level", 0)
         self.declare_parameter("direction_right_forward_level", 1)
 
-        self.declare_parameter("pwmchip_match", "98000.pwm")
+        self.declare_parameter("pwmchip_match", "")
         self.declare_parameter("pwmchip_path", "")
         self.declare_parameter("pwm_channel_left", 0)
         self.declare_parameter("pwm_channel_right", 1)
@@ -398,13 +104,14 @@ class RaspicatPi5Driver(LifecycleNode):
         self.declare_parameter("counter_error_limit", 5)
         self.declare_parameter("counter_retry_period", 1.0)
 
+        self.declare_parameter("allow_rtmouse", False)
+
         self._motor_group = MutuallyExclusiveCallbackGroup()
         self._odom_group = MutuallyExclusiveCallbackGroup()
 
         self._state_lock = threading.Lock()
-        self._gpio = None
-        self._pwm = [None, None]
-        self._counters = [None, None]
+        self._backend = None
+        self._hardware = Hardware()
         self._odom_pub = None
         self._tf_broadcaster = None
         self._odom_timer = None
@@ -418,17 +125,21 @@ class RaspicatPi5Driver(LifecycleNode):
     # -- lifecycle ---------------------------------------------------------
 
     def on_configure(self, state: LifecycleState) -> TransitionCallbackReturn:
+        """Pick the backend, claim the hardware and create every entity."""
         try:
-            self._load_parameters()
-            self._open_hardware()
+            wiring = self._load_parameters()
+            self._backend = create_backend(self.get_parameter("model").value)
+            self._backend.preflight(wiring, self.get_logger())
+            self._hardware = self._backend.open(wiring, self.get_logger())
         except Exception as exc:
             # rclpy swallows an exception here and reports ERROR with no
             # message, so catch it while we still know what happened.
             self.get_logger().error("configure failed: %s" % exc)
-            self._close_hardware()
+            self._hardware.close()
             return TransitionCallbackReturn.FAILURE
 
         self._reset_state()
+        self._arm_directions()
 
         self._odom_pub = self.create_lifecycle_publisher(Odometry, "odom", 10)
         self._tf_broadcaster = TransformBroadcaster(self)
@@ -454,13 +165,14 @@ class RaspicatPi5Driver(LifecycleNode):
 
         self._set_motor_power(False)
         self.get_logger().info(
-            "configured: gpiochip=%s pwmchip=%s counters=%s"
-            % (self._gpiochip_path, self._pwmchip_path,
-               "on" if self._use_pulse_counters else "off")
+            "configured: model=%s (%s) gpiochip=%s pwmchip=%s counters=%s"
+            % (self._backend.name, self._backend.soc, self._hardware.gpiochip_path,
+               self._hardware.pwmchip_path, "on" if self._use_pulse_counters else "off")
         )
         return TransitionCallbackReturn.SUCCESS
 
     def on_activate(self, state: LifecycleState) -> TransitionCallbackReturn:
+        """Start the timers.  The pose survives from before deactivate."""
         super().on_activate(state)
         self._reset_runtime()
         self._arm_directions()
@@ -472,6 +184,7 @@ class RaspicatPi5Driver(LifecycleNode):
         return TransitionCallbackReturn.SUCCESS
 
     def on_deactivate(self, state: LifecycleState) -> TransitionCallbackReturn:
+        """Stop the wheels but keep the hardware claimed."""
         self._active = False
         self._stop_motors()
         self._set_motor_power(False)
@@ -483,14 +196,17 @@ class RaspicatPi5Driver(LifecycleNode):
         return TransitionCallbackReturn.SUCCESS
 
     def on_cleanup(self, state: LifecycleState) -> TransitionCallbackReturn:
+        """Release everything; on_configure builds it again."""
         self.teardown()
         return TransitionCallbackReturn.SUCCESS
 
     def on_shutdown(self, state: LifecycleState) -> TransitionCallbackReturn:
+        """Release everything."""
         self.teardown()
         return TransitionCallbackReturn.SUCCESS
 
     def on_error(self, state: LifecycleState) -> TransitionCallbackReturn:
+        """Never leave the wheels turning because a transition failed."""
         self.get_logger().error("error processing; stopping motors")
         self.teardown()
         return TransitionCallbackReturn.SUCCESS
@@ -500,7 +216,7 @@ class RaspicatPi5Driver(LifecycleNode):
         self._active = False
         self._stop_motors()
         self._set_motor_power(False)
-        self._close_hardware()
+        self._hardware.close()
         # Entities are recreated by on_configure, so drop them here rather than
         # leaving a second subscription/timer behind after a cleanup+configure.
         for timer in (self._odom_timer, self._watchdog_timer):
@@ -523,6 +239,7 @@ class RaspicatPi5Driver(LifecycleNode):
     # -- setup -------------------------------------------------------------
 
     def _load_parameters(self):
+        """Read every parameter into attributes and return the Wiring."""
         get = self.get_parameter
         self._use_pulse_counters = get("use_pulse_counters").value
         self._scale = (
@@ -562,56 +279,28 @@ class RaspicatPi5Driver(LifecycleNode):
             get("direction_right_forward_level").value,
         )
 
-    def _open_hardware(self):
-        get = self.get_parameter
-
-        chip = get("gpiochip_device").value
-        if not chip:
-            chip = find_gpiochip(get("gpiochip_label").value)
-        if not chip:
-            raise OSError(
-                "no gpiochip labelled %r; set gpiochip_device explicitly"
-                % get("gpiochip_label").value
-            )
-        self._gpiochip_path = chip
-        self._gpio = GpioOutputs(
-            chip,
-            [
+        return Wiring(
+            gpiochip_label=get("gpiochip_label").value,
+            gpiochip_device=get("gpiochip_device").value,
+            gpio_direction=(
                 get("gpio_direction_left").value,
                 get("gpio_direction_right").value,
-                get("gpio_motor_enable").value,
-            ],
+            ),
+            gpio_motor_enable=get("gpio_motor_enable").value,
+            pwmchip_match=get("pwmchip_match").value,
+            pwmchip_path=get("pwmchip_path").value,
+            pwm_channel=(
+                get("pwm_channel_left").value,
+                get("pwm_channel_right").value,
+            ),
+            i2c_bus=get("i2c_bus").value,
+            i2c_address=(
+                get("i2c_address_left").value,
+                get("i2c_address_right").value,
+            ),
+            use_pulse_counters=self._use_pulse_counters,
+            allow_rtmouse=get("allow_rtmouse").value,
         )
-        self._arm_directions()
-
-        pwmchip = get("pwmchip_path").value
-        if not pwmchip:
-            pwmchip = find_pwmchip(get("pwmchip_match").value)
-        if not pwmchip:
-            raise OSError(
-                "no pwmchip matching %r under /sys/class/pwm; is the RP1 PWM "
-                "overlay enabled and is /sys/class/pwm writable in this "
-                "container?" % get("pwmchip_match").value
-            )
-        self._pwmchip_path = pwmchip
-        self._pwm[LEFT] = PwmStepClock(pwmchip, get("pwm_channel_left").value)
-        self._pwm[RIGHT] = PwmStepClock(pwmchip, get("pwm_channel_right").value)
-
-        if self._use_pulse_counters:
-            bus = get("i2c_bus").value
-            self._counters[LEFT] = PulseCounter(bus, get("i2c_address_left").value)
-            self._counters[RIGHT] = PulseCounter(bus, get("i2c_address_right").value)
-
-    def _close_hardware(self):
-        for index in (LEFT, RIGHT):
-            for device in (self._pwm[index], self._counters[index]):
-                if device is not None:
-                    device.close()
-            self._pwm[index] = None
-            self._counters[index] = None
-        if self._gpio is not None:
-            self._gpio.close()
-            self._gpio = None
 
     def _reset_state(self):
         """Full reset, for configure time only."""
@@ -645,10 +334,10 @@ class RaspicatPi5Driver(LifecycleNode):
         claim both wheels are pointing forward.
         """
         self._forward = [True, True]
-        if self._gpio is None:
+        if self._hardware.gpio is None:
             return
-        self._gpio.set(LEFT, self._forward_level[LEFT])
-        self._gpio.set(RIGHT, self._forward_level[RIGHT])
+        self._hardware.gpio.set(LEFT, self._forward_level[LEFT])
+        self._hardware.gpio.set(RIGHT, self._forward_level[RIGHT])
 
     # -- motor path (motor callback group) ---------------------------------
 
@@ -674,13 +363,14 @@ class RaspicatPi5Driver(LifecycleNode):
             frequency = 0.0
         frequency = max(-self._max_step, min(self._max_step, frequency))
 
+        clock = self._hardware.clocks[side]
         if frequency == 0.0:
             # Stop the clock but leave the direction line alone: pulses already
             # counted and not yet read must keep the sign of the motion that
             # produced them.
-            if self._pwm[side] is not None:
+            if clock is not None:
                 try:
-                    self._pwm[side].stop()
+                    clock.stop()
                 except OSError as exc:
                     self.get_logger().error("step clock stop failed: %s" % exc)
             return
@@ -688,10 +378,11 @@ class RaspicatPi5Driver(LifecycleNode):
 
         # Direction before clock: a stepper already running must not meet the
         # next edge with the direction line still on the old level.
-        if self._gpio is not None and forward != self._forward[side]:
+        gpio = self._hardware.gpio
+        if gpio is not None and forward != self._forward[side]:
             level = self._forward_level[side] if forward else 1 - self._forward_level[side]
             try:
-                self._gpio.set(side, level)
+                gpio.set(side, level)
             except OSError as exc:
                 self.get_logger().error("direction line write failed: %s" % exc)
                 return
@@ -699,10 +390,10 @@ class RaspicatPi5Driver(LifecycleNode):
         with self._state_lock:
             self._forward[side] = forward
 
-        if self._pwm[side] is None:
+        if clock is None:
             return
         try:
-            self._pwm[side].set_frequency(abs(frequency))
+            clock.set_frequency(abs(frequency))
         except OSError as exc:
             self.get_logger().error("step clock write failed: %s" % exc)
 
@@ -710,17 +401,18 @@ class RaspicatPi5Driver(LifecycleNode):
         with self._state_lock:
             self._commanded = (0.0, 0.0)
         for side in (LEFT, RIGHT):
-            if self._pwm[side] is not None:
+            clock = self._hardware.clocks[side]
+            if clock is not None:
                 try:
-                    self._pwm[side].stop()
+                    clock.stop()
                 except OSError as exc:
                     self.get_logger().error("step clock stop failed: %s" % exc)
 
     def _set_motor_power(self, enabled):
-        if self._gpio is None:
+        if self._hardware.gpio is None:
             return
         try:
-            self._gpio.set(MOTOR_ENABLE, 1 if enabled else 0)
+            self._hardware.gpio.set(MOTOR_ENABLE, 1 if enabled else 0)
         except OSError as exc:
             self.get_logger().error("motor enable write failed: %s" % exc)
             return
@@ -827,14 +519,15 @@ class RaspicatPi5Driver(LifecycleNode):
         Returns None when the counters are unavailable, which tells the caller
         to fall back to integrating cmd_vel for this tick.
         """
-        if self._counters[LEFT] is None or self._counters[RIGHT] is None:
+        counters = self._hardware.counters
+        if counters[LEFT] is None or counters[RIGHT] is None:
             return None
 
         if not self._counters_ready:
             if time.monotonic() < self._counter_retry_at:
                 return None
             try:
-                self._last_raw = [self._counters[LEFT].read(), self._counters[RIGHT].read()]
+                self._last_raw = [counters[LEFT].read(), counters[RIGHT].read()]
             except OSError:
                 self._counter_retry_at = time.monotonic() + self._counter_retry_period
                 return None
@@ -842,11 +535,13 @@ class RaspicatPi5Driver(LifecycleNode):
             self._counter_errors = 0
             if self._counter_degraded:
                 self._counter_degraded = False
-                self.get_logger().info("pulse counters answered again; odometry back on encoders")
+                self.get_logger().info(
+                    "pulse counters answered again; odometry back on encoders"
+                )
             return None
 
         try:
-            raw = [self._counters[LEFT].read(), self._counters[RIGHT].read()]
+            raw = [counters[LEFT].read(), counters[RIGHT].read()]
         except OSError as exc:
             self._counter_errors += 1
             if self._counter_errors >= self._counter_error_limit:
@@ -881,8 +576,9 @@ class RaspicatPi5Driver(LifecycleNode):
 
 
 def main():
+    """Spin the node until it is shut down, then stop the wheels."""
     rclpy.init(args=sys.argv)
-    node = RaspicatPi5Driver()
+    node = RaspicatDriver()
     # One thread for the motor group, one for the counters, and the rest for
     # the lifecycle services -- an I2C stall must not delay cmd_vel.
     executor = MultiThreadedExecutor(num_threads=4)

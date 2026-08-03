@@ -10,8 +10,8 @@
 | `lifecycle_bond.yaml` | `navigation.launch.py` | `SetParametersFromFile` でグループ内の全ノードへ注入 |
 | `sensors/*` | `lidar_bringup.launch.py` | 各ノードへ直接（`scan_filter_params_file` など） |
 | `mapping/slam_toolbox.yaml` | `mapping.launch.py` | `slam_params_file` でノードへ直接 |
-| `robot/raspicat.yaml` | `robot_bringup.launch.py` | `raspimouse` (LifecycleNode) へ直接。`driver:=raspimouse` (既定 / Pi 4) |
-| `robot/raspicat_pi5.yaml` | `robot_bringup.launch.py` | `raspicat_pi5_driver` (LifecycleNode) へ直接。`driver:=pi5` |
+| `robot/raspicat.yaml` | `robot_bringup.launch.py` | `raspimouse` (LifecycleNode) へ直接。`driver:=raspimouse` (既定 / 公式実装 / Pi 4) |
+| `robot/raspicat_driver.yaml` | `robot_bringup.launch.py` | `raspicat_driver` (LifecycleNode) へ直接。`driver:=original` (自前実装 / Pi 4・Pi 5) |
 
 `robot/raspicat.yaml` だけは**上流ファイルの完全なコピー**で、差分ではありません。
 launch_ros はノード自身の `parameters=` をグローバル (`SetParametersFromFile`) より
@@ -55,6 +55,7 @@ resample_interval: 1         # 既定 1: 何回の更新ごとにリサンプル
 | `sensors/mid360_scan.yaml` | `pointcloud_to_laserscan` の `pointcloud_to_laserscan_node.cpp` |
 | `sensors/scan_filter.yaml` | `laser_filters` の `sector_filter.h`（既定なし＝全項目必須） |
 | `robot/raspicat.yaml` | 上流 `raspicat_ros` の `raspicat/config/raspicat.param.yaml` |
+| `robot/raspicat_driver.yaml` | `src/raspicat_driver` の `raspicat_driver/node.py` |
 | `overrides/*.yaml` | 重ねる先の断片の値（「断片 60:」のように書きます） |
 
 見ているブランチは、`robot_localization` が `humble-devel`、`laser_filters` が
@@ -258,17 +259,27 @@ counters」は `ifstream::is_open()` を見るだけで `read` を試さない�
 巻尺の実移動距離と `/odom` の変位を比べる」。この修正後は両者が一致するはずです。
 ずれるなら残差は `odometry_scale_{left,right}_wheel` ではなく寸法側で詰めてください。
 
-### `raspicat_pi5.yaml`（Raspberry Pi 5 用）
+### `raspicat_driver.yaml`（自前ドライバ / Pi 4・Pi 5）
 
-`raspicat.yaml` は Pi 4 用で、rtmouse カーネルモジュールが出す `/dev/rt*` を
-`raspimouse` ノードが読む構成が前提です。Pi 5 では rtmouse が動かない（BCM2711 の
-レジスタを `ioremap` するが、GPIO/PWM は RP1 側にある）ので、`autonomous_nav` の
-`raspicat_pi5_driver.py` がモータ経路をユーザ空間から直接扱います。そのパラメータが
-`raspicat_pi5.yaml` です。`robot_bringup.launch.py` の `driver:=pi5` で切り替わり、
-`driver:` の既定は `raspimouse`（Pi 4）なので既存の運用は変わりません。
+`raspicat.yaml` は公式実装（`driver:=raspimouse`）用で、rtmouse カーネルモジュールが
+出す `/dev/rt*` を `raspimouse` ノードが読む構成が前提です。自前実装
+（`driver:=original`、[`src/raspicat_driver`](../../raspicat_driver/README.md)）は
+モータ経路をユーザ空間から直接扱い、そのパラメータがこのファイルです。`driver:` の
+既定は `raspimouse` なので、既存の運用は変わりません。
 
-寸法と補正係数は上の 2 節と同じ値です。違うのは次の 3 点で、理由は
-[`docs/setup/raspberry-pi-5.md`](../../../docs/setup/raspberry-pi-5.md)。
+Pi 4 と Pi 5 で 1 ファイルです。機種差は `model: auto` が device-tree から判定して
+チップの同定（`gpiochip` のラベルと `pwmchip`）だけを切り替えます。ピン番号・PWM
+チャネル・I2C アドレスは制御基板側の性質なので両機種で同じです。
+
+* **Pi 5 ではこちらしか選べません。** rtmouse は BCM2711 のレジスタを `ioremap` する
+  ので、GPIO/PWM が RP1 側にある Pi 5 では動きません。
+* **Pi 4 では公式実装と排他です。** rtmouse が載っていると `configure` を拒否します
+  （`allow_rtmouse` で上書き可）。両方が GPIO 16/6/5 と PWM を持つと、カーネルは
+  衝突を検出しないまま車輪が逆に回り得ます。
+
+寸法と補正係数は上の 2 節と同じ値です。`raspicat.yaml` と違うのは次の 3 点で、理由は
+[`docs/setup/raspberry-pi-4.md`](../../../docs/setup/raspberry-pi-4.md) と
+[`raspberry-pi-5.md`](../../../docs/setup/raspberry-pi-5.md)。
 
 * `use_pulse_counters` の既定が `true`。ユーザ空間の `ioctl` は失敗を返して戻って
   くるので、rtmouse のような D 状態固着が起きません。連続失敗が
@@ -281,7 +292,7 @@ counters」は `ifstream::is_open()` を見るだけで `read` を試さない�
 
 配線に関わるキー（`gpio_*` / `pwm*` / `i2c_*` / `direction_*_forward_level`）は
 すべて rtmouse の `rtmouse.h` から写した値で、**実機で確認していません**。
-確認項目と直しかたは同じドキュメントの表にあります。
+確認項目と直しかたは上の 2 つのドキュメントの表にあります。
 
 ### `lifecycle_bond.yaml` の `bond_timeout: 60.0`
 

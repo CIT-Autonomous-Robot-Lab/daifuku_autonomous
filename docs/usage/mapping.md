@@ -61,9 +61,10 @@ bash docker/raspberrypi/tools/control.sh motor off
 tmux kill-session -t mapping
 ```
 
-`use_mid360_imu:=false`は`raspicat`サービスに合わせた指定です。`raspimouse`は`/odom`と
-`odom -> base_footprint`を自分で配信し、`/wheel/odom`は出しません。既定の`true`のままだと
-EKFが入力を受け取れないうえ、`/odom`とTFの配信元が二重になります。
+`use_mid360_imu:=false`は`raspicat`サービスに合わせた指定です。本体ドライバ
+（`raspimouse`でも`raspicat_driver`でも）は`/odom`と`odom -> base_footprint`を自分で
+配信し、`/wheel/odom`は出しません。既定の`true`のままだとEKFが入力を受け取れないうえ、
+`/odom`とTFの配信元が二重になります。
 
 `lidar:=mid360`、`use_rviz:=false`、`publish_lidar_tf:=true`、`lidar_z:=0.275`は
 すべてlaunchの既定値になったため、上のコマンドでは省いています。`lidar_z`の既定
@@ -78,7 +79,9 @@ EKFが入力を受け取れないうえ、`/odom`とTFの配信元が二重に�
 ## 1. 機体側ドライバを起動する
 
 `docker/raspberrypi/`環境では、Composeの`raspicat`サービスが`robot_bringup.launch.py`
-（`raspimouse`と`robot_state_publisher`）を起動します。
+（本体ドライバと`robot_state_publisher`）を起動します。本体ドライバの既定は公式実装の
+`raspimouse`です（自前実装に替えるには`compose.original.yaml`を重ねる。
+[Pi 4](../setup/raspberry-pi-4.md) / [Pi 5](../setup/raspberry-pi-5.md)）。
 
 ```bash
 docker compose -f docker/raspberrypi/compose.yaml up -d

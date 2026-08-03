@@ -52,7 +52,7 @@ MULTIARCH="$(dpkg-architecture -qDEB_HOST_MULTIARCH)"
 colcon build --merge-install --symlink-install \
     --parallel-workers "${BUILD_JOBS}" \
     --packages-select autonomous_nav emcl2 livox_ros_driver2 \
-                     raspicat_bringup raspicat_description \
+                     raspicat_bringup raspicat_description raspicat_driver \
                      raspimouse raspimouse_msgs \
     --cmake-args -DROS_EDITION=ROS2 \
                  -DDISTRO_ROS="${ROS_DISTRO}" \

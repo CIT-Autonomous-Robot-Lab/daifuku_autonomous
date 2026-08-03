@@ -43,7 +43,7 @@ Pythonノードはどちらも`lidar:=mid360`のときだけ立ちます。`rest
 | `navigation.launch.py` | 自律移動。地図と自己位置推定、その上のNav2／価値反復スタック |
 | `mapping.launch.py` | 地図作成。SLAM Toolboxとその入力 |
 | `lidar_bringup.launch.py` | LiDARの前処理一式。上の2つから`include`される |
-| `robot_bringup.launch.py` | 機体ドライバとURDF。`driver:=raspimouse`（既定 / Pi 4）または`driver:=pi5`（[Raspberry Pi 5](../setup/raspberry-pi-5.md)） |
+| `robot_bringup.launch.py` | 機体ドライバとURDF。`driver:=raspimouse`（既定 / 公式実装 / Pi 4のみ）または`driver:=original`（自前実装 / [Pi 4](../setup/raspberry-pi-4.md)・[Pi 5](../setup/raspberry-pi-5.md)） |
 
 引数の合成やチェックといった補助的な処理は、launchファイル本体から
 `launch/autonomous_nav_launch/`へ切り出しています。

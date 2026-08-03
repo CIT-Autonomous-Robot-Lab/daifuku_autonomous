@@ -24,6 +24,7 @@ Livox関連ノード、teleopノードを含みます。RVizは含みません�
 | ファイル | 用途 |
 |---|---|
 | `compose.yaml` | サービス`workspace-build` / `ros2` / `raspicat`の定義。`network_mode: host`、`ipc: host`で起動する |
+| `compose.original.yaml` | 自前の本体ドライバ（`driver:=original`）で走らせるときの上書き。`compose.yaml`に重ねる。Pi 5では必須 |
 | `Dockerfile` | apt依存とツールチェーンだけを持つイメージ。ワークスペースはビルドしない |
 | `fastdds_udp_whitelist.xml` | Fast DDSのトランスポート設定（後述） |
 | `scripts/build-workspace.sh` | `up`のときにコンテナ内で走る`colcon build`（`/usr/local/bin/build-workspace`） |
@@ -44,6 +45,15 @@ entrypointとホスト側スクリプトの共通部分は[`docker/common/`](../
 ```bash
 docker compose -f docker/raspberrypi/compose.yaml build
 docker compose -f docker/raspberrypi/compose.yaml up -d
+```
+
+本体ドライバに自前実装を使う場合（Raspberry Pi 5では必須）は`compose.original.yaml`を
+重ねます。詳細は[Raspberry Pi 4](../../docs/setup/raspberry-pi-4.md)と
+[Raspberry Pi 5](../../docs/setup/raspberry-pi-5.md)。
+
+```bash
+docker compose -f docker/raspberrypi/compose.yaml \
+               -f docker/raspberrypi/compose.original.yaml up -d
 ```
 
 `up`はまず`workspace-build`サービスを走らせ、その正常終了を待ってから`ros2`と

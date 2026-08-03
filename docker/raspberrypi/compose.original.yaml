@@ -1,15 +1,16 @@
-# Raspberry Pi 5 で走らせるときの上書き。compose.yaml に重ねて使う。
+# 自前の本体ドライバ (driver:=original) で走らせるときの上書き。compose.yaml に
+# 重ねて使う。
 #
 #   docker compose -f docker/raspberrypi/compose.yaml \
-#                  -f docker/raspberrypi/compose.pi5.yaml up -d
+#                  -f docker/raspberrypi/compose.original.yaml up -d
 #
-# 変えるのは raspicat サービスだけ。ナビゲーション側 (ros2 サービス) は
-# Pi 4 と同じで、機種に依存しない。
+# Pi 5 では**必須**（rtmouse が動かないので公式実装を選べない）。Pi 4 では任意で、
+# 重ねなければ既定の driver:=raspimouse（公式実装 + rtmouse）になる。Pi 4 で
+# こちらを使うときは rtmouse を載せないこと（ノードが起動時に拒否する）。経緯と
+# 検証項目は docs/setup/raspberry-pi-4.md と raspberry-pi-5.md。
 #
-# Pi 5 では rtmouse カーネルモジュールが動かない (BCM2711 のレジスタを ioremap
-# するが、GPIO/PWM は RP1 側にある)。そのため /dev/rt* は存在せず、代わりに
-# autonomous_nav の raspicat_pi5_driver.py が RP1 のハードウェア PWM・gpiochip・
-# I2C をユーザ空間から直接叩く。経緯と検証項目は docs/setup/raspberry-pi-5.md。
+# 変えるのは raspicat サービスだけ。ナビゲーション側 (ros2 サービス) は機種にも
+# ドライバにも依存しない。
 #
 # ステップクロックは /sys/class/pwm から出す。カーネルの PWM サブシステムには
 # キャラクタデバイスの API が無いので、sysfs を通すしかない。Docker は既定で
@@ -23,10 +24,10 @@
 # ために /dev を丸ごと渡し `device_cgroup_rules: c *:* rwm` を付けており、キャラクタ
 # デバイスについてはほぼ privileged 相当になっている (compose.yaml のコメント)。
 # ここもその延長で、狭めるなら pwmchip の実体パスだけを名指しでマウントする
-# (PCIe のアドレスがパスに入るので機種ごとに書き換えが要る)。
+# (機種ごとにアドレスが変わるので書き換えが要る)。
 #
-# コンテナは user: "1000:1000" で動くので、ホスト側で sysfs の所有権を渡しておく
-# 必要がある。tools/image/udev/99-daifuku-pwm.rules を参照。
+# コンテナは user: "1000:1000" で動くので、ホスト側で sysfs と /dev の所有権を
+# 渡しておく必要がある。tools/image/udev/99-daifuku-raspicat.rules を参照。
 
 services:
   raspicat:
@@ -36,7 +37,7 @@ services:
       - launch
       - autonomous_nav
       - robot_bringup.launch.py
-      - driver:=pi5
+      - driver:=original
     # Compose はマウント先をキーにして重ねるので、ここは追加分だけでよい
     # (compose.yaml 側の /dev などはそのまま残る)。
     volumes:

@@ -1,0 +1,67 @@
+"""The two 16-bit pulse counters on the Raspberry Pi Cat control board.
+
+Register-addressed reads, done as one combined write+read transaction so the
+repeated START matches what i2c_smbus_read_byte_data() issues in rtmouse.
+Every failure surfaces as OSError -- that is the whole point of doing this from
+userspace.  rtmouse holds a kernel mutex across the transfer, so one timeout
+leaves every reader of /dev/rtcounter_* in permanent D state and only a reboot
+recovers it (see src/autonomous_nav/config/README.md).
+
+The counters hang off the control board, not off the SoC, so this module is
+the same on both models; only the I2C controller behind /dev/i2c-1 differs.
+"""
+
+import ctypes
+import fcntl
+import os
+
+_I2C_RDWR = 0x0707
+_I2C_M_RD = 0x0001
+
+
+class _I2cMsg(ctypes.Structure):
+    _fields_ = [
+        ("addr", ctypes.c_uint16),
+        ("flags", ctypes.c_uint16),
+        ("len", ctypes.c_uint16),
+        ("buf", ctypes.POINTER(ctypes.c_uint8)),
+    ]
+
+
+class _I2cRdwrData(ctypes.Structure):
+    _fields_ = [("msgs", ctypes.POINTER(_I2cMsg)), ("nmsgs", ctypes.c_uint32)]
+
+
+class PulseCounter:
+    """One wheel's pulse counter, addressed on an I2C bus."""
+
+    REG_MSB = 0x10
+    REG_LSB = 0x11
+
+    def __init__(self, bus_path, address):
+        self._fd = os.open(bus_path, os.O_RDWR | os.O_CLOEXEC)
+        self._address = address
+
+    def read(self):
+        """Return the raw 16-bit count.  Raises OSError if the bus does not answer."""
+        lsb = self._read_register(self.REG_LSB)
+        msb = self._read_register(self.REG_MSB)
+        return ((msb << 8) | lsb) & 0xFFFF
+
+    def close(self):
+        """Close the bus handle.  Safe to call twice."""
+        try:
+            os.close(self._fd)
+        except OSError:
+            pass
+
+    def _read_register(self, register):
+        out = (ctypes.c_uint8 * 1)(register)
+        into = (ctypes.c_uint8 * 1)()
+        pointer = ctypes.POINTER(ctypes.c_uint8)
+        messages = (_I2cMsg * 2)(
+            _I2cMsg(self._address, 0, 1, ctypes.cast(out, pointer)),
+            _I2cMsg(self._address, _I2C_M_RD, 1, ctypes.cast(into, pointer)),
+        )
+        fcntl.ioctl(self._fd, _I2C_RDWR, _I2cRdwrData(messages, 2))
+        return into[0]
