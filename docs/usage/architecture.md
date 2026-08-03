@@ -7,7 +7,7 @@ Raspberry Pi Cat                         Docker / ネイティブPC
 ────────────────────                    ──────────────────────
 モータードライバ  ←── /cmd_vel ─────── 経路追従 / 遠隔操作
 車輪オドメトリ    ─── /odom ─────────→ Nav2 / SLAM / 自己位置推定
-2D LiDAR          ─── /scan_raw ───────────────────┐
+2D LiDAR ─ urg_node ─ /scan_raw ───────────────────┐
 Mid-360 ─ /livox/lidar ─ 3D→2D ─ スタンプ打ち直し ─┴→ 角度フィルタ → /scan
 TF                ─── odom → base_footprint → センサーフレーム
 ```

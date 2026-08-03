@@ -255,12 +255,13 @@ Windows側でDDSを起動せず、固定IP`192.168.1.50`へSSHして`ros2`を実
 
 ```bash
 ros2 launch autonomous_nav navigation.launch.py \
-  planner:=navfn lidar:=mid360 use_mid360_imu:=false \
-  publish_lidar_tf:=true lidar_z:=0.275 use_rviz:=true
+  planner:=navfn use_mid360_imu:=false use_rviz:=true
 ```
 
-`lidar_z:=0.275`はこの機体の実測の取付高さで、launchの既定値と同じです。機体を
-変えたら実測し直してください。モーター電源は、この起動確認だけでは有効にしません。
+`lidar:=mid360`と`publish_lidar_tf:=true`、`lidar_z:=0.275`はlaunchの既定値なので
+省略しています。`lidar_z`の既定0.275はこの機体の実測の取付高さです。機体を変えたら
+実測し直してください。`use_rviz`の既定は`false`なので、表示するここでは明示します。
+モーター電源は、この起動確認だけでは有効にしません。
 
 `docker/dev/`は`autonomous_nav`をcolconでビルドするため、
 `share/autonomous_nav/scripts/`がインストールされず、Mid-360のスタンプ打ち直しが

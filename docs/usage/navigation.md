@@ -20,7 +20,7 @@ docker compose -f docker/raspberrypi/compose.yaml up -d
 ```bash
 cd ~/daifuku_autonomous
 tmux new-session -d -s nav -c "$PWD" -n nav
-tmux send-keys -t nav:nav 'docker compose -f docker/raspberrypi/compose.yaml exec ros2 /ros_entrypoint.sh ros2 launch autonomous_nav navigation.launch.py map:=/opt/ros_ws/install/share/autonomous_nav/maps/map_19f.yaml use_sim_time:=false localization:=emcl2 planner:=vi lidar:=mid360 use_mid360_imu:=false use_rviz:=false publish_lidar_tf:=true lidar_z:=0.275' Enter
+tmux send-keys -t nav:nav 'docker compose -f docker/raspberrypi/compose.yaml exec ros2 /ros_entrypoint.sh ros2 launch autonomous_nav navigation.launch.py map:=/opt/ros_ws/install/share/autonomous_nav/maps/map_19f.yaml use_sim_time:=false localization:=emcl2 planner:=vi use_mid360_imu:=false' Enter
 
 tmux new-window -t nav -c "$PWD" -n motor
 tmux send-keys -t nav:motor 'bash docker/raspberrypi/tools/control.sh motor on'
@@ -64,20 +64,33 @@ tmux kill-session -t nav
 `odom -> base_footprint`を自分で配信し、`/wheel/odom`は出しません。既定の`true`のままだと
 EKFが入力を受け取れないうえ、`/odom`とTFの配信元が二重になります。
 
-`lidar_z:=0.275`はこの機体のMid-360の搭載高さ（接地面から275mm、2026-08-03実測）で、
-launchの既定値と同じです。機体を変えたら実測し直してください。2D LiDAR構成では
-`lidar:=2d`に置き換え、`publish_lidar_tf`と`lidar_z`を外します。広域地図
+`lidar:=mid360`、`use_rviz:=false`、`publish_lidar_tf:=true`、`lidar_z:=0.275`は
+すべてlaunchの既定値になったため、上のコマンドでは省いています。`lidar_z`の既定
+0.275はこの機体のMid-360の搭載高さ（接地面から275mm、2026-08-03実測）です。機体を
+変えたら実測し直してください。2D LiDAR構成では`lidar:=2d`を渡します（`urg_node`が
+起動します）。広域地図
 `map_tsudanuma`を使う場合は、`map:`と`overrides:`を[広域地図（map_tsudanuma）で動かす](#広域地図map_tsudanumaで動かす)の
 とおりに差し替えてください。
 
 ## 基本起動
 
-EMCL2、価値反復グローバル／ローカルプランナ、2D LiDARが既定構成です。地図は
+EMCL2、価値反復グローバル／ローカルプランナ、Mid-360が既定構成です。RVizは既定では
+起動しません（実機がheadlessのため。PC側から開きます）。地図は
 `maps/map_19f.yaml`（19F）が既定で、その地図向けの調整をまとめた
 `config/overrides/map_19f.yaml`も`overrides`の既定値として一緒に載ります。
 `overrides`は**置き換え**なので、別の地図では`overrides:=map_tsudanuma`のように
 指定し直してください。何も重ねないなら`overrides:=none`です（`ros2 launch`は値が
 空の`overrides:=`を受け付けません）。
+
+Mid-360 + IMU（既定）:
+
+```bash
+ros2 launch autonomous_nav navigation.launch.py \
+  map:=$PWD/src/autonomous_nav/maps/map_19f.yaml \
+  use_sim_time:=false localization:=emcl2
+```
+
+2D LiDAR（raspicatのURGが起動します）:
 
 ```bash
 ros2 launch autonomous_nav navigation.launch.py \
@@ -85,14 +98,7 @@ ros2 launch autonomous_nav navigation.launch.py \
   use_sim_time:=false localization:=emcl2 lidar:=2d
 ```
 
-Mid-360 + IMU:
-
-```bash
-ros2 launch autonomous_nav navigation.launch.py \
-  map:=$PWD/src/autonomous_nav/maps/map_19f.yaml \
-  use_sim_time:=false localization:=emcl2 lidar:=mid360 \
-  publish_lidar_tf:=true lidar_z:=0.275
-```
+RVizを同じ端末から開く場合は`use_rviz:=true`を渡します。
 
 > ネイティブ環境と`docker/dev/`で`lidar:=mid360`を使う場合は、事前に
 > [スタンプ打ち直しの既知の制限](../setup/lidar.md#タイムスタンプの打ち直し)を
@@ -104,7 +110,7 @@ ros2 launch autonomous_nav navigation.launch.py \
 docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
   /ros_entrypoint.sh ros2 launch autonomous_nav navigation.launch.py \
   map:=/opt/ros_ws/install/share/autonomous_nav/maps/map_19f.yaml \
-  use_sim_time:=false localization:=emcl2 lidar:=2d use_rviz:=false
+  use_sim_time:=false localization:=emcl2
 ```
 
 ## 自己位置推定を選ぶ

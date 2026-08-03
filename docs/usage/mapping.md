@@ -21,7 +21,7 @@ docker compose -f docker/raspberrypi/compose.yaml up -d
 ```bash
 cd ~/daifuku_autonomous
 tmux new-session -d -s mapping -c "$PWD" -n slam
-tmux send-keys -t mapping:slam 'docker compose -f docker/raspberrypi/compose.yaml exec ros2 /ros_entrypoint.sh ros2 launch autonomous_nav mapping.launch.py lidar:=mid360 use_mid360_imu:=false use_sim_time:=false use_rviz:=false publish_lidar_tf:=true lidar_z:=0.275' Enter
+tmux send-keys -t mapping:slam 'docker compose -f docker/raspberrypi/compose.yaml exec ros2 /ros_entrypoint.sh ros2 launch autonomous_nav mapping.launch.py use_mid360_imu:=false use_sim_time:=false' Enter
 
 tmux new-window -t mapping -c "$PWD" -n teleop
 tmux send-keys -t mapping:teleop 'bash docker/raspberrypi/tools/control.sh motor on'
@@ -65,11 +65,13 @@ tmux kill-session -t mapping
 `odom -> base_footprint`を自分で配信し、`/wheel/odom`は出しません。既定の`true`のままだと
 EKFが入力を受け取れないうえ、`/odom`とTFの配信元が二重になります。
 
-`lidar_z:=0.275`はこの機体のMid-360の搭載高さ（接地面から275mm、2026-08-03実測）で、
-launchの既定値と同じです。機体を変えたら実測し直してください。2D LiDAR構成では
-`lidar:=2d`に置き換え、`publish_lidar_tf`と`lidar_z`を外します。ネイティブ環境では
-[コマンドの読み替え](README.md#コマンドの読み替え)に従って前置きの`docker compose`部分を
-外し、`use_rviz:=false`も外してください。
+`lidar:=mid360`、`use_rviz:=false`、`publish_lidar_tf:=true`、`lidar_z:=0.275`は
+すべてlaunchの既定値になったため、上のコマンドでは省いています。`lidar_z`の既定
+0.275はこの機体のMid-360の搭載高さ（接地面から275mm、2026-08-03実測）です。機体を
+変えたら実測し直してください。2D LiDAR構成では`lidar:=2d`を渡します（`urg_node`が
+起動します）。ネイティブ環境では[コマンドの読み替え](README.md#コマンドの読み替え)に
+従って前置きの`docker compose`部分を外し、地図の様子を見るなら`use_rviz:=true`を
+足してください。
 
 以降の節では、各手順の内容と選べる引数を説明します。
 
@@ -103,20 +105,21 @@ Mid-360 + IMUの場合:
 
 ## 2. SLAMを起動する
 
-2D LiDAR:
+Mid-360（既定。`lidar_z`は実測値へ変更）:
+
+```bash
+ros2 launch autonomous_nav mapping.launch.py \
+  use_sim_time:=false lidar_z:=0.275
+```
+
+2D LiDAR（raspicatのURGが起動します）:
 
 ```bash
 ros2 launch autonomous_nav mapping.launch.py \
   lidar:=2d use_sim_time:=false
 ```
 
-Mid-360（搭載値は例。実測値へ変更）:
-
-```bash
-ros2 launch autonomous_nav mapping.launch.py \
-  lidar:=mid360 use_sim_time:=false \
-  publish_lidar_tf:=true lidar_z:=0.275
-```
+地図の様子をその場で見るなら`use_rviz:=true`を足します（既定は`false`）。
 
 > ネイティブ環境と`docker/dev/`で`lidar:=mid360`を使う場合は、事前に
 > [スタンプ打ち直しの既知の制限](../setup/lidar.md#タイムスタンプの打ち直し)を
@@ -127,7 +130,7 @@ ros2 launch autonomous_nav mapping.launch.py \
 ```bash
 docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
   /ros_entrypoint.sh ros2 launch autonomous_nav mapping.launch.py \
-  lidar:=2d use_sim_time:=false use_rviz:=false
+  lidar:=2d use_sim_time:=false
 ```
 
 ## 3. 地図を作る

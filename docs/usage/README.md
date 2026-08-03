@@ -23,7 +23,7 @@
 
 ## コマンドの読み替え
 
-各ページはネイティブ環境の`ros2 ...`を基本形として記載します。軽量Docker環境では先頭に次を付け、RVizを起動しないよう`use_rviz:=false`を追加します。
+各ページはネイティブ環境の`ros2 ...`を基本形として記載します。軽量Docker環境では先頭に次を付けます。RVizは既定で起動しないため（`use_rviz`の既定は`false`）、追加の指定は要りません。
 
 ```bash
 docker compose -f docker/raspberrypi/compose.yaml exec ros2 \

@@ -60,9 +60,11 @@ NavFn構成のデバッグ起動例:
 
 ```bash
 ros2 launch autonomous_nav navigation.launch.py \
-  planner:=navfn lidar:=mid360 use_mid360_imu:=false \
-  publish_lidar_tf:=true lidar_z:=0.275 use_rviz:=true
+  planner:=navfn use_mid360_imu:=false use_rviz:=true
 ```
+
+`lidar:=mid360`と`publish_lidar_tf:=true`、`lidar_z:=0.275`は既定値なので省略できます。
+`use_rviz`の既定は`false`なので、この環境で表示するなら明示します。
 
 > `docker/dev/`では`autonomous_nav`をcolconでビルドするため、
 > `share/autonomous_nav/scripts/`がインストールされず、Mid-360のスタンプ打ち直しが

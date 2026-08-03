@@ -1,13 +1,13 @@
 # LiDARとオドメトリ
 
-`mapping.launch.py`と`navigation.launch.py`は`lidar:=2d|mid360`でセンサー構成を切り替えます。どちらも入力を`/scan_raw`へ集約し、角度フィルタ後の`/scan`をSLAMとNav2へ渡します。
+`mapping.launch.py`と`navigation.launch.py`は`lidar:=2d|mid360`でセンサー構成を切り替えます。既定は本機の構成に合わせて`mid360`です。どちらも入力を`/scan_raw`へ集約し、角度フィルタ後の`/scan`をSLAMとNav2へ渡します。
 
 既定の`config/sensors/scan_filter.yaml`は、コネクタがある後方60度（+150度から-150度まで、±180度をまたぐ範囲）を除外します。
 
 センサーごとのトピックの流れは次のとおりです。
 
 ```text
-2D LiDAR      : ドライバ → /scan_raw → 角度フィルタ → /scan
+2D LiDAR      : urg_node → /scan_raw → 角度フィルタ → /scan
 Mid-360       : /livox/lidar → pointcloud_to_laserscan
                 → /scan_mid360_prestamp → restamp_scan.py
                 → /scan_raw → 角度フィルタ → /scan
@@ -15,7 +15,33 @@ Mid-360       : /livox/lidar → pointcloud_to_laserscan
 
 ## 2D LiDAR
 
-LiDARドライバの出力を`/scan_raw`へremapします。
+`lidar:=2d`を指定すると、raspicatのURG（`urg_node`の`urg_node_driver`）が起動します。
+パラメータは`raspicat_bringup`の`config/urg_<urg_interface>.param.yaml`（既定は
+`urg_serial.param.yaml`。`/dev/ttyACM0`、`laser_frame_id: lidar_link`）で、出力は
+`/scan_raw`へremapされます。
+
+```bash
+ros2 launch autonomous_nav navigation.launch.py lidar:=2d
+```
+
+Ethernet接続のURGでは`urg_interface:=ethernet`を指定します。別のパラメータファイルを
+使う場合は`urg_params_file:=/path/to/urg.param.yaml`を渡します。
+
+`docker/raspberrypi/`環境では、既定がMid-360（Ethernet）のため`/dev/ttyACM0`を
+コンテナへ渡していません。シリアル接続のURGを使うときは`compose.yaml`の`ros2`
+サービスへ次を足してください。存在しないデバイスを書くと`compose up`自体が
+失敗するので、URGを挿したときだけ有効にします。
+
+```yaml
+    devices:
+      - /dev/ttyACM0:/dev/ttyACM0
+```
+
+イメージには`ros-humble-urg-node`が要ります。入っていない場合は
+`docker compose build`からやり直してください。
+
+別の2D LiDARを使う場合は`lidar_driver:=false`でドライバの起動を止め、そのLiDARの出力を
+`/scan_raw`へremapして自分で起動してください。
 
 ```bash
 ros2 run <2d_lidar_package> <2d_lidar_node> \

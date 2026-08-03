@@ -35,13 +35,16 @@
 | `localization` | `emcl2` | `emcl2` / `emcl` / `amcl` |
 | `planner` | `vi` | `vi` / `navfn` |
 | `local_planner` | `auto` | `auto` / `vi` / `nav2` |
-| `lidar` | `2d` | `2d` / `mid360` |
-| `use_rviz` | `true` | RVizを起動するか |
+| `lidar` | `mid360` | `mid360` / `2d`（`2d`ではraspicatのURG（`urg_node`）を起動する） |
+| `use_rviz` | `false` | RVizを起動するか。実機はheadlessのため既定は`false`で、表示はPC側から開く |
 | `use_sim_time` | `false` | シミュレーション時刻を使うか |
 | `use_composition` | `False` | Nav2ノードを1プロセスへ合成するか（Pi 4では既定の分離を推奨） |
 | `scan_filter_enabled` | `true` | 角度フィルタを使うか |
 | `use_mid360_imu` | `true` | Mid-360のIMU融合を使うか |
-| `publish_lidar_tf` | `false` | 暫定的なセンサーTFを配信するか |
+| `publish_lidar_tf` | `true` | センサーTFを配信するか。配信されるのは`lidar:=mid360`のときだけ（URDFは`lidar_link`しか出さず、`livox_frame`は誰も出さない） |
+| `lidar_driver` | `true` | LiDARの実機ドライバ（`mid360`: livox_ros_driver2 + restamp / `2d`: `urg_node`）を起動するか。シミュレータでは`false` |
+| `urg_interface` | `serial` | `lidar:=2d`のときのURGの接続方式（`serial` / `ethernet`）。`raspicat_bringup`の`config/urg_<方式>.param.yaml`を選ぶ |
+| `urg_params_file` | 空（上記から決める） | URGのパラメータファイルを直接指定する |
 | `wheel_odom_topic` | `/wheel/odom` | EKFへ渡す車輪オドメトリ |
 
 このほかに`namespace`、`use_namespace`、`autostart`、`use_respawn`、`log_level`と、LiDARの搭載姿勢を指定する各種引数があります。全件は次のコマンドで確認できます。

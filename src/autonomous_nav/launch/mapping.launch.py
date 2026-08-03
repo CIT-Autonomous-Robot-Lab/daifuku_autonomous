@@ -32,8 +32,15 @@ def generate_launch_description():
         DeclareLaunchArgument("slam_params_file", default_value=default_slam_params),
         DeclareLaunchArgument("rviz_config", default_value=default_rviz_config),
         DeclareLaunchArgument("use_sim_time", default_value="false"),
-        DeclareLaunchArgument("use_rviz", default_value="true"),
-        DeclareLaunchArgument("lidar", default_value="2d"),
+        # 実機 (Raspberry Pi) は headless。表示は同じ ROS_DOMAIN_ID の PC 側から
+        # 開く (navigation.launch.py と同じ既定)。
+        DeclareLaunchArgument("use_rviz", default_value="false"),
+        DeclareLaunchArgument(
+            "lidar",
+            default_value="mid360",
+            description="LiDAR backend: mid360 (既定。本機の構成) または "
+                        "2d (raspicat の URG を起動する)。",
+        ),
         DeclareLaunchArgument("scan_filter_enabled", default_value="true"),
         DeclareLaunchArgument(
             "scan_filter_params_file",
@@ -44,7 +51,9 @@ def generate_launch_description():
             default_value=os.path.join(pkg_share, "config", "sensors", "MID360_config.json"),
         ),
         DeclareLaunchArgument("use_mid360_imu", default_value="true"),
-        DeclareLaunchArgument("publish_lidar_tf", default_value="false"),
+        # 既定 true。TF が出るのは lidar:=mid360 のときだけで、URDF が配信して
+        # いない base_footprint -> livox_frame を補う (詳細は lidar_bringup 側)。
+        DeclareLaunchArgument("publish_lidar_tf", default_value="true"),
         DeclareLaunchArgument("lidar_x", default_value="0.0"),
         DeclareLaunchArgument("lidar_y", default_value="0.0"),
         DeclareLaunchArgument("lidar_z", default_value="0.275"),  # 実測 275 mm
@@ -52,11 +61,21 @@ def generate_launch_description():
         DeclareLaunchArgument("lidar_pitch", default_value="0.0"),
         DeclareLaunchArgument("lidar_yaw", default_value="0.0"),
         DeclareLaunchArgument("wheel_odom_topic", default_value="/wheel/odom"),
+        DeclareLaunchArgument(
+            "lidar_driver",
+            default_value="true",
+            description="LiDAR の実機ドライバ (mid360: livox_ros_driver2 + "
+                        "restamp_scan.py / 2d: urg_node) を起動するか。"
+                        "シミュレータやバッグから地図を作るときは false にする。",
+        ),
+        DeclareLaunchArgument("urg_interface", default_value="serial"),
+        DeclareLaunchArgument("urg_params_file", default_value=""),
 
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(lidar_bringup_launch),
             launch_arguments={
                 "lidar": lidar,
+                "lidar_driver": LaunchConfiguration("lidar_driver"),
                 "use_sim_time": use_sim_time,
                 "scan_filter_enabled": scan_filter_enabled,
                 "scan_filter_params_file": scan_filter_params_file,
@@ -70,6 +89,8 @@ def generate_launch_description():
                 "lidar_pitch": LaunchConfiguration("lidar_pitch"),
                 "lidar_yaw": LaunchConfiguration("lidar_yaw"),
                 "wheel_odom_topic": LaunchConfiguration("wheel_odom_topic"),
+                "urg_interface": LaunchConfiguration("urg_interface"),
+                "urg_params_file": LaunchConfiguration("urg_params_file"),
             }.items(),
         ),
 

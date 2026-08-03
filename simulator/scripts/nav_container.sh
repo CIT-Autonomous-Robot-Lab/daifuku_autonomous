@@ -231,10 +231,15 @@ if [ "$tf_ok" != "1" ]; then
     exit 6
 fi
 
-# lidar_driver:=false が要点。実機ドライバ (livox_ros_driver2) と restamp_scan.py を
-# 起動せず、Isaac が出す /livox/lidar と /livox/imu をそのまま使う。
+# lidar_driver:=false が要点。実機ドライバ (livox_ros_driver2 / urg_node) と
+# restamp_scan.py を起動せず、Isaac が出す /livox/lidar と /livox/imu (または
+# /scan_raw) をそのまま使う。
+#
+# publish_lidar_tf:=false も必須。launch の既定は true (実機の URDF は
+# livox_frame を出さないため) だが、こちらは上で robot_state_publisher が
+# base_footprint -> $lidar_frame を出しており、二重配信になる。
 ros2 launch autonomous_nav navigation.launch.py \
-    lidar:="$LIDAR" lidar_driver:=false use_rviz:=false \
+    lidar:="$LIDAR" lidar_driver:=false publish_lidar_tf:=false use_rviz:=false \
     use_sim_time:="$USE_SIM_TIME" \
     map:="$MAP" "${params_arg[@]}" \
     planner:="$PLANNER" local_planner:="$LOCAL_PLANNER" \

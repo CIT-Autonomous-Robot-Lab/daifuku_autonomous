@@ -348,6 +348,8 @@ RTF が足りないときの対処: `RENDER_DT` を大きくする / `HEADLESS=1
     `use_sim_time:=true` では「受信時刻で押し直す」動作がシム時間と噛み合わず有害になる
   - `pointcloud_to_laserscan` の出力を `/scan_mid360_prestamp` ではなく直接
     `/scan_raw` に出す
+  - `lidar:=2d` では `urg_node` (raspicat の URG) を起動しない。`/scan_raw` は
+    Isaac が LaserScan で直接出す
   - `MID360_config.json` の存在チェックを飛ばす (driver 専用のファイルなので)
 
 ## TF の所有者

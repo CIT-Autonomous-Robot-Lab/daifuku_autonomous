@@ -117,8 +117,8 @@ RESETのログが毎スキャン出て、推定姿勢が回り続ける場合で
 
 ## `/scan`が配信されない
 
-- 2D LiDARドライバが`/scan_raw`へ出しているか確認する
-- `lidar:=2d`または`lidar:=mid360`が構成と一致しているか確認する
+- 2D LiDARドライバ（`lidar:=2d`では`urg_node`）が`/scan_raw`へ出しているか確認する
+- `lidar:=2d`または`lidar:=mid360`が構成と一致しているか確認する（既定は`mid360`）
 - 上流から順に確認する。2D LiDARは`/scan_raw` → `/scan`、Mid-360は`/livox/lidar` →
   `/scan_mid360_prestamp` → `/scan_raw` → `/scan`
 - フィルタを切り分けるため`scan_filter_enabled:=false`を試す
