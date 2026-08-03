@@ -100,10 +100,6 @@ ros2 launch autonomous_nav navigation.launch.py \
 
 RVizを同じ端末から開く場合は`use_rviz:=true`を渡します。
 
-> ネイティブ環境と`docker/dev/`で`lidar:=mid360`を使う場合は、事前に
-> [スタンプ打ち直しの既知の制限](../setup/lidar.md#タイムスタンプの打ち直し)を
-> 確認してください。対応しないと`/scan_raw`が配信されません。
-
 軽量Docker環境:
 
 ```bash
@@ -155,17 +151,26 @@ ros2 launch autonomous_nav navigation.launch.py \
 するため、起動と同時に落ちます。
 
 `config/overrides/map_tsudanuma.yaml`を`overrides:=map_tsudanuma`で重ねると、プランナ内部だけが
-0.15 m/セル（`map_scale: 3`、1963×1334＝1.57億状態）に粗くなり、状態配列を確保しない
+0.25 m/セル（`map_scale: 5`、1178×800×60＝5650万状態）に粗くなり、状態配列を確保しない
 アウトオブコアソルバ（`frontier2d_sparse_compact`）へ切り替わります。確定した価値関数と方策は
-`compact_sink_dir`のmmapファイル（約1.9 GB）に置かれます。地図サーバ、コストマップ、
+`compact_sink_dir`のmmapファイル（約0.66 GB）に置かれます。地図サーバ、コストマップ、
 自己位置推定は0.05 mのままです。
 
 ```bash
 ros2 launch autonomous_nav navigation.launch.py \
   map:=$PWD/src/autonomous_nav/maps/map_tsudanuma.yaml \
   overrides:=map_tsudanuma \
-  planner:=vi local_planner:=nav2
+  planner:=vi
 ```
+
+`local_planner`は既定の`auto`（`planner:=vi`なので`vi`）でも`nav2`でも動きます。`vi_planner`と
+`vi_global_planner`のどちらも`map_scale`とアウトオブコア経路を持つためです。`vi_planner`の
+狭域追従だけは密な状態配列を必要とします。ただし全域ではなく、ロボット近傍のパッチだけを
+`compact_sink_dir`のmmapファイルから起こして回します（±1 mウィンドウ＋遷移到達距離＋余裕。
+0.25 mセルで27×27×60≒2.5 MB）。
+
+`local_planner:=vi`で`map_scale > 1`のまま密ソルバを指定すると、全域の状態配列を確保して
+しまいます。この組み合わせはlaunchが起動前に弾きます。
 
 NavFnとDWBで動かす場合、`map_tsudanuma`の価値反復向け設定は要りませんが、
 `overrides:=none`を渡してください。省略すると既定の`map_19f`が載り、この地図には
@@ -180,22 +185,39 @@ ros2 launch autonomous_nav navigation.launch.py \
 
 注意点:
 
-- `local_planner:=vi`は使えません。`vi_planner`はアウトオブコア経路も`map_scale`も
-  持たず、地図全体を密に解くためです。`local_planner:=nav2`を指定してください
-  （`vi_global_planner`＋`controller_server`の構成になります）。
-- 初回のゴールでは地図全体を解くため時間がかかります（ローカル16コアの実測で約25秒）。
-  同じゴールへの再計画はキャッシュヒットで即座に返ります。
+- `map_scale: 5`は単独では効きません。`downsample_policy: optimistic`（ブロック内にfreeが
+  1つでもあればfree）、`action_forward_m`、`goal_margin_radius`、`allow_action_mismatch`が
+  セットで、1つでも欠けると波がゴール近傍で止まります。値は
+  `config/overrides/map_tsudanuma.yaml`のコメントにそろえてあります。
+- 保守的プーリング（障害物優先。`downsample_policy`の既定）だと通路のセル幅が価値反復の
+  遷移分布（約2セル幅）を下回り、`map_scale`が4以上で波がゴール近傍から広がりません。
+  楽観側は通路を細らせない代わりに、自由セルの境界が壁へ寄ります。
+- 実測のfootprint（420×450 mm、外接円0.408 m）と`inflation_radius` 0.55 mで実際に通れるかは、
+  経路ごとに確認してください。`map_scale: 5`で解けることを確かめた当時のコストマップは
+  `robot_radius: 0.22`（`nav2_bringup`のyamlのまま）だったため、実機の条件はこれより
+  厳しくなります。
+- ピークRSSは`vi_planner`と`vi_global_planner`のどちらも約1.5 GB（匿名0.83 GB＋mmap
+  0.66 GB）です。`map_scale: 3`＋保守的プーリングだった頃の3.98 GBから下がり、
+  Raspberry Pi 4の4 GBに収まります。
+- 新しいゴールを与えると、まず地図全体を解きます。BTを外した最小構成をPi 4相当の枠
+  （0.6コア、`vi_threads: 3`）で回した実測では、solveとロールアウトに87〜89秒かかりました。
+  返した経路は398姿勢で、結果はSUCCEEDEDです。同じゴールへの再計画はキャッシュヒットで
+  即座に返ります。
+- 同じ0.6コアの枠にBT込みで通すと、solveがCPUを占めてEMCL2まで道連れにし、900秒経っても
+  `/plan`が出ませんでした（BTはsolveを待たずリカバリを繰り返してABORTします）。実機のPi 4は
+  4コアあるので同じにはならないはずですが、**実機での通し確認はまだ取れていません**。
+
 - `bt_navigator`の`wait_for_service_timeout`は60秒にしてあります。`planner:=vi`では
-  `vi_global_planner`が`/map`を受け取ってから`compute_path_to_pose`を作るため、
-  Nav2既定の1秒では間に合わずbringupが失敗します。
-- `map_scale`の3×3プーリングは障害物優先のため、通路は片側最大0.10 m細くなります。
-- ローカルでの実測では、`vi_global_planner`のピークRSSは3.98 GB（内訳: 匿名2.16 GB +
-  mmapページキャッシュ1.81 GB）でした。mmapに逃がしても匿名2.16 GBが残るため、
-  Raspberry Pi 4 4GBでこの設定が通るかは未確認です。減らすには`map_scale`を上げます
-  （詳細は`simulator/docs/pi4_sim.md`）。
+  プランナが`/map`を受け取ってから`compute_path_to_pose`を作るため、Nav2既定の1秒では
+  間に合わずbringupが失敗します。
 - この地図は68.2%が未観測セルで、占有セルは0.4%しかありません。EMCL2やAMCLの
   スキャンマッチングは占有セルの尤度場に依存するため、現状では自己位置推定の
   拠り所がほとんどありません（経路計画とは別の課題です）。
+
+実測値の出どころは`config/overrides/map_tsudanuma.yaml`のヘッダ（2026-08-01）と
+`src/autonomous_nav/config/README.md`です。`simulator/docs/pi4_sim.md`にもPi 4相当での
+走行記録がありますが、そちらは`map_scale: 3`＋保守的プーリングだった頃のものなので、
+所要時間もメモリもここの値とは一致しません。
 
 ## ゴールを指定する
 

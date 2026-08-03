@@ -118,21 +118,36 @@ TELEOP_LINEAR_SPEED=0.1 bash docker/raspberrypi/tools/control.sh teleop keyboard
 
 ## 設定変更を反映する
 
-`src/autonomous_nav`配下のlaunch、config、maps、rvizはDockerコンテナへマウントされるため、通常はイメージの再ビルドが不要です。起動中のノードを再起動して反映します。
+`docker/raspberrypi/`のイメージが持つのはaptの依存とツールチェーンだけです。ワークスペースの
+ソースはイメージに含めず、composeが`src/`をマウントして渡します。ビルドは`up`のたびに
+コンテナの中の`colcon build`が行います。変更したものによって、どこからやり直すかが3通りに
+分かれます。
 
-次を変更した場合はイメージを再ビルドします。
+| 変更したもの | やること |
+|---|---|
+| `src/autonomous_nav`配下のlaunch、config、behavior_trees、maps、rviz | 何もしない。`--symlink-install`なのでノードを再起動するだけで反映される |
+| C++やRustのコード、`CMakeLists.txt`、外部パッケージのソース | `docker compose up`で差分ビルドする |
+| aptの依存、`Dockerfile`、`package.xml`の依存、`docker/`配下のスクリプト | `docker compose build`からやり直す |
 
-- `docker/raspberrypi/Dockerfile`
-- 依存パッケージ
-- `autonomous_bot.repos`
-- CMakeやビルド対象
-- 外部パッケージのソース
+aptパッケージを足したときにイメージを焼き直すのは、`rosdep`をイメージのビルド時にしか
+回さないからです（`build-workspace.sh`が`up`のたびに`rosdep`を回すと、ネットワークが要る
+うえにaptの状態が毎回変わり、この切り分け自体が崩れます）。表の3行目のコマンドは次のとおりです。
 
 ```bash
 docker compose -f docker/raspberrypi/compose.yaml down
 docker compose -f docker/raspberrypi/compose.yaml build
 docker compose -f docker/raspberrypi/compose.yaml up -d
 ```
+
+`autonomous_bot.repos`だけは、この3通りのどれにもきれいには収まりません。外部パッケージの取得は`up`のときの
+`vcs import --skip-existing`なので、リポジトリを新しく足しただけなら`up`で入ります。
+ただしそれが新しいapt依存を連れてくる場合や、`build-workspace.sh`の`--packages-select`へ
+追加が要る場合は`build`からやり直してください。既にある`src/`のリビジョン変更は
+`--skip-existing`で素通りするので、`src/`側で直接チェックアウトを合わせます
+（[`docker/raspberrypi/README.md`](../../docker/raspberrypi/README.md)に詳しくあります）。
+
+launchやconfigでも、ファイルを新しく足したときは表の2行目に当たります。`install/`のsymlinkは
+ビルド時に張られるため、一度`docker compose up`を通してください。
 
 ## ログを見る
 

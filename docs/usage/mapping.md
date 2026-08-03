@@ -105,12 +105,13 @@ Mid-360 + IMUの場合:
 
 ## 2. SLAMを起動する
 
-Mid-360（既定。`lidar_z`は実測値へ変更）:
+Mid-360（既定）:
 
 ```bash
-ros2 launch autonomous_nav mapping.launch.py \
-  use_sim_time:=false lidar_z:=0.275
+ros2 launch autonomous_nav mapping.launch.py use_sim_time:=false
 ```
+
+`lidar_z`の既定0.275はこの機体の実測値です。別の機体では`lidar_z:=<実測値>`を渡します。
 
 2D LiDAR（raspicatのURGが起動します）:
 
@@ -120,10 +121,6 @@ ros2 launch autonomous_nav mapping.launch.py \
 ```
 
 地図の様子をその場で見るなら`use_rviz:=true`を足します（既定は`false`）。
-
-> ネイティブ環境と`docker/dev/`で`lidar:=mid360`を使う場合は、事前に
-> [スタンプ打ち直しの既知の制限](../setup/lidar.md#タイムスタンプの打ち直し)を
-> 確認してください。対応しないと`/scan_raw`が配信されません。
 
 軽量Docker環境:
 

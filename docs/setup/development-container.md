@@ -66,12 +66,6 @@ ros2 launch autonomous_nav navigation.launch.py \
 `lidar:=mid360`と`publish_lidar_tf:=true`、`lidar_z:=0.275`は既定値なので省略できます。
 `use_rviz`の既定は`false`なので、この環境で表示するなら明示します。
 
-> `docker/dev/`では`autonomous_nav`をcolconでビルドするため、
-> `share/autonomous_nav/scripts/`がインストールされず、Mid-360のスタンプ打ち直しが
-> 起動しません。`lidar:=mid360`を使う前に
-> [スタンプ打ち直しの既知の制限](lidar.md#タイムスタンプの打ち直し)を確認して
-> ください。
-
 キーボード操作の例:
 
 ```bash

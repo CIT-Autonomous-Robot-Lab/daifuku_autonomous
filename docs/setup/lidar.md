@@ -71,25 +71,21 @@ ros2 run <2d_lidar_package> <2d_lidar_node> \
 Nav2コストマップのメッセージフィルタが、起動から数分でデータを「古すぎる」
 「未来の時刻」として破棄します。
 
-対策として、`lidar:=mid360`のときだけ`scripts/restamp_scan.py`が
+対策として、`lidar:=mid360`で実機ドライバを立てるときだけ`scripts/restamp_scan.py`が
 `/scan_mid360_prestamp`を購読し、受信時刻でスタンプを打ち直して`/scan_raw`へ再配信
 します。こうするとスキャンのスタンプが、車輪オドメトリ・TF・Nav2と同じ時計に
-そろいます。センサー側をPTP同期できるようになれば、この中継は不要になります。
+そろいます。ドリフトのないシミュレータやバッグ再生（`lidar_driver:=false`）では中継を
+挟まず、`pointcloud_to_laserscan`が`/scan_raw`へ直接出します。センサー側をPTP同期
+できるようになれば、この中継は不要になります。
 
-> **既知の制限**: `restamp_scan.py`は`share/autonomous_nav/scripts/`から起動され
-> ますが、`CMakeLists.txt`はこのディレクトリをインストールしません。`docker/raspberrypi/`の
-> Compose環境では`src/autonomous_nav`が`share/autonomous_nav`へまるごとマウント
-> されるため動作しますが、ネイティブビルドと`docker/dev/`ではファイルが存在せず、
-> 中継が起動しません。しかも`ExecuteProcess`は失敗しても他のノードを止めないため、
-> エラーが出ないまま`/scan_raw`だけが配信されない状態になります。
->
-> `docker/raspberrypi/`以外で`lidar:=mid360`を使う場合は、先に`CMakeLists.txt`へ次を追加して
-> ください。launch側が`share`配下を参照するため、宛先は`lib/`ではなく`share/`です。
->
-> ```cmake
-> install(PROGRAMS scripts/restamp_scan.py
->   DESTINATION share/${PROJECT_NAME}/scripts)
-> ```
+中継は`share/autonomous_nav/scripts/restamp_scan.py`を`ExecuteProcess`で直接起動する形
+なので、`CMakeLists.txt`が`scripts`ディレクトリを`share`へインストールしています
+（通常のノードとして起動する`prepare_mid360_imu.py`のほうは、これに加えて`lib`へも
+入ります）。`ExecuteProcess`は失敗しても他のノードを止めません。そのため、古い`install/`が
+残っているなどで`restamp_scan.py`が置かれていない環境では、エラーが出ないまま
+`/scan_raw`だけが配信されない状態になります。切り分けは
+[トラブルシューティング](../usage/troubleshooting.md#mid-360のスキャンが古すぎると拒否される)を
+参照してください。
 
 ### センサーTF
 

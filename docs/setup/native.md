@@ -75,11 +75,6 @@ export PATH="${HOME}/.local/bin:${HOME}/.cargo/bin:${PATH}"
 
 2D LiDARだけを使う場合、Livoxの手順は不要です。代わりに、利用する2D LiDARのドライバを別途導入してください。
 
-> ネイティブ環境で`lidar:=mid360`を使う場合は、`autonomous_nav`をビルドする前に
-> [スタンプ打ち直しの既知の制限](lidar.md#タイムスタンプの打ち直し)を確認して
-> ください。`CMakeLists.txt`へインストール規則を追加しないと`/scan_raw`が配信
-> されません。
-
 ## 環境を読み込む
 
 新しいターミナルを開くたびに実行します。

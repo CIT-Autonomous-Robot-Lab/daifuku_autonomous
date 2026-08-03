@@ -37,6 +37,11 @@
 [`docker/raspberrypi/README.md`](docker/raspberrypi/README.md)と
 [`docker/dev/README.md`](docker/dev/README.md)にまとめています。
 
+実機に載せる前にRaspberry Pi 4相当の速度で試すハーネスが[`simulator/`](simulator/README.md)に
+あります。Isaac Sim版と疑似ロボット版の2つです。実機で観測した事象の実測記録は
+[`simulator/docs/pi4_sim.md`](simulator/docs/pi4_sim.md)にまとまっているので、どちらを使う
+場合でも先に読んでください。
+
 ## ライセンス
 
 [Apache License 2.0](LICENSE)

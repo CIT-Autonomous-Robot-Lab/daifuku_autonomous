@@ -63,13 +63,13 @@ ros2 launch autonomous_nav mapping.launch.py --show-args
 
 ## Raspberry Pi 4向けの調整値
 
-実機での負荷試験を受けて、既定値を次のように下げています。PCなど余裕のある環境で
-動かす場合は戻して構いません。
+実機での負荷試験を受けて、次の値を調整しています。いずれもPi 4の制約に合わせたものなので、
+PCなど余裕のある環境では`nav2_bringup`が配る値へ戻して構いません。
 
 | 項目 | 値 | 理由 |
 |---|---|---|
 | `controller_server.controller_frequency` | `10.0` | 20 HzではPi 4のCPUが飽和し、bond心拍の途絶を招いた。最高速0.2 m/s級の車体には10 Hzで十分 |
-| `planner_server.expected_planner_frequency` | `1.0` | 実測で7.6 Hzしか出ずWARNが続いた。BTの再計画周期が1 Hzのため、これに合わせた |
+| `planner_server.expected_planner_frequency` | `1.0` | `nav2_bringup`が配る`nav2_params.yaml`の20.0に対し、実測は7.6 Hzしか出ずWARNが続いた。ノード既定の1.0へ戻した |
 | `lifecycle_manager_*.bond_timeout` | `60.0` | 非合成起動では8プロセスが同時に立ち上がりloadが10〜19まで上がるため、既定の4秒ではbond形成が間に合わない |
 | `use_composition` | `False` | 合成起動時のディスカバリ不能とbond途絶を回避する |
 

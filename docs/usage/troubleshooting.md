@@ -90,14 +90,22 @@ ros2 topic hz /scan_raw
 ```
 
 `/scan_mid360_prestamp`だけが流れて`/scan_raw`が止まっている場合は、中継ノードが
-起動していません。原因は、`CMakeLists.txt`が`scripts/`をインストールしないことです。
-`docker/raspberrypi/`のCompose環境では`src/autonomous_nav`がまるごとマウントされるため
-動きますが、それ以外の環境では`share/autonomous_nav/scripts/restamp_scan.py`が存在
-しません。`ExecuteProcess`の失敗は他のノードを止めないので、エラーが出ないまま
-`/scan_raw`だけが欠けた状態になります。
+起動していません。中継は`share/autonomous_nav/scripts/restamp_scan.py`を
+`ExecuteProcess`で直接起動します。`ExecuteProcess`は失敗しても他のノードを止めないため、
+エラーが出ないまま`/scan_raw`だけが欠けた状態になります。まずファイルの有無を
+確認してください。
 
-対処方法は、[LiDARとオドメトリ](../setup/lidar.md#タイムスタンプの打ち直し)に載せた
-インストール規則を`CMakeLists.txt`へ追加することです。
+```bash
+ros2 pkg prefix autonomous_nav
+ls $(ros2 pkg prefix autonomous_nav)/share/autonomous_nav/scripts/
+```
+
+見つからなければ、`scripts`をインストールする前の`install/`が残っています。`colcon build`を
+やり直してください（`docker/raspberrypi/`では`docker compose up`）。
+
+なお`lidar_driver:=false`（シミュレータやバッグ再生）では中継そのものを挟まず、
+`pointcloud_to_laserscan`が`/scan_raw`へ直接出します。この構成では
+`/scan_mid360_prestamp`は流れないので、上の切り分けは当てはまりません。
 
 ## EMCL2の推定姿勢がその場で回転する
 
@@ -109,8 +117,10 @@ RESETのログが毎スキャン出て、推定姿勢が回り続ける場合で
 
 1. RVizでスキャンと地図の壁が重なるか確認する
 2. ずれている場合は[地図作成](mapping.md)からやり直す
-3. 地図を取り直すまでの暫定処置として、`config/localization/emcl2.yaml`の
-   `alpha_threshold`を下げ、`sensor_reset: false`にしてリセットを抑制する
+3. 地図を取り直すまでの暫定処置として、`alpha_threshold`を下げ、
+   `expansion_radius_orientation`を狭め、`sensor_reset: false`にしてリセットを抑制する。
+   この3つは地図固有の値なので、断片の`config/localization/emcl2.yaml`ではなく
+   `config/overrides/map_19f.yaml`に置く（19Fの地図では設定済み）
 
 現在の設定値と背景は[設定リファレンス](configuration.md#自己位置推定の暫定設定)を
 参照してください。地図を取り直したあとは既定寄りの値へ戻してください。

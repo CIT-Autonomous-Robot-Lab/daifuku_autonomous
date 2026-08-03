@@ -13,7 +13,7 @@ Livox関連ノード、teleopノードを含みます。RVizは含みません�
 |---|---|
 | launch / config / YAML | なし（`--symlink-install`で`install/`が`src/`を指しているため、ノードの再起動だけ） |
 | C++ / Rustのコード | `docker compose up`（変わったパッケージだけ再ビルド） |
-| aptパッケージ（`Dockerfile`、`package.xml`の依存） | `docker compose build`からやり直す |
+| aptパッケージ（`Dockerfile`、`package.xml`の依存）、`entrypoint.sh`と`build-workspace.sh` | `docker compose build`からやり直す |
 
 セットアップ手順の全体は[Docker環境](../../docs/setup/docker.md)を、日常操作は
 [日常操作と確認](../../docs/usage/operations.md)を参照してください。ここでは

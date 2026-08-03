@@ -113,7 +113,7 @@ bash docker/raspberrypi/tools/control.sh teleop keyboard
 
 サブコマンドと環境変数の一覧は[日常操作と確認](../usage/operations.md#controlshで操作する)を参照してください。
 
-`src/`はまるごとコンテナへマウントされ、`colcon build --symlink-install`が`install/`から`src/`へsymlinkを張ります。したがってホストで変更したlaunch、config、maps、rvizはビルドすら要らずノードの再起動だけで反映され、コンテナで保存した地図もホストに残ります。C++やRustのコードを変更した場合は`docker compose up`で差分ビルドされます。aptの依存、`Dockerfile`、`package.xml`の依存を変更した場合だけ`docker compose build`からやり直してください。
+`src/`はまるごとコンテナへマウントされ、`colcon build --symlink-install`が`install/`から`src/`へsymlinkを張ります。したがってホストで変更したlaunch、config、maps、rvizはビルドすら要らずノードの再起動だけで反映され、コンテナで保存した地図もホストに残ります。C++やRustのコードを変更した場合は`docker compose up`で差分ビルドされます。`docker compose build`からやり直すのは、aptの依存、`Dockerfile`、`package.xml`の依存を変更したときと、`docker/common/entrypoint.sh`または`docker/raspberrypi/scripts/build-workspace.sh`を変更したときです（後者2つはイメージへコピーされます）。
 
 ## 動作確認
 

@@ -21,12 +21,18 @@ Mid-360は時刻同期がないためスタンプが実時計からずれてい�
 
 ## autonomous_nav
 
-このリポジトリの設定パッケージです。独自のC++ノードやPythonノードは持たず、次のものをまとめています。
+このリポジトリの設定パッケージです。独自のC++ノードは持たず、次のものをまとめています。
 
 - Nav2、SLAM Toolbox、EMCL2の設定
 - LiDAR前処理とEKF
 - launchファイル
 - 地図とRViz設定
+- `scripts/`のPythonノード2本
+
+Pythonノードはどちらも`lidar:=mid360`のときだけ立ちます。`restamp_scan.py`がスキャンの
+スタンプを打ち直し（実機ドライバを立てる`lidar_driver:=true`のときのみ）、
+`prepare_mid360_imu.py`が生のIMUメッセージに共分散を付けてEKFへ渡します
+（`use_mid360_imu:=true`のときのみ）。どちらの追加条件も既定は`true`です。
 
 ## launchファイルの構成
 
@@ -73,7 +79,9 @@ Mid-360は時刻同期がないためスタンプが実時計からずれてい�
 - ウィンドウへ`/scan`由来のペナルティを加え、貪欲行動を`cmd_vel`として出力する
 - 同一ゴールへの再計画ではキャッシュを使う（ロールアウトのみ実行する）
 - `local_planner:=nav2`では`vi_global_planner`（広域のみ）とNav2標準`controller_server`
-  の組み合わせになる。`map_scale`とアウトオブコアソルバが要る広域地図ではこちらを使う
+  の組み合わせになる。`map_scale`とアウトオブコアソルバが要る広域地図は、どちらの構成
+  でも扱える（`vi_planner`はロボット近傍のパッチだけを密に起こす）。詳細は
+  [自律移動](navigation.md#広域地図map_tsudanumaで動かす)を参照
 
 `planner:=navfn`:
 
