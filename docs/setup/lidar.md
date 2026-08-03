@@ -105,7 +105,10 @@ lidar_roll:=0.0 lidar_pitch:=0.0 lidar_yaw:=0.0
 
 Mid-360ではIMU融合が既定で有効です。機体側の車輪オドメトリを`/wheel/odom`へremapし、車輪ノード自身による`odom -> base_footprint` TF配信を止めてください。ナビゲーション側のEKFが車輪速度とMid-360のZ軸角速度を融合し、最終的な`/odom`とTFを配信します。
 
-車輪ドライバにTF無効化機能がない場合は、そのノードの`/tf`を未使用トピックへremapします。実際のパッケージ名とノード名に置き換えてください。
+自前実装（`driver:=original`）にはこのための`publish_tf`パラメータがあり、
+`config/robot/raspicat_driver.yaml`で`false`にすると`odom -> base_footprint`の配信だけを
+止められます。TF無効化機能を持たない車輪ドライバでは、そのノードの`/tf`を未使用トピックへ
+remapします。実際のパッケージ名とノード名に置き換えてください。
 
 ```bash
 ros2 run <wheel_package> <wheel_odom_node> --ros-args \

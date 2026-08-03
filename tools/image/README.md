@@ -240,7 +240,7 @@ sudo DAIFUKU_SWAP_MB=4096 DAIFUKU_WITH_RTMOUSE=0 bash tools/image/provision.sh
 | `user-data` | cloud-config。ユーザー、SSH鍵、`provision.sh`本体（base64）、`runcmd` |
 | `network-config` | netplan形式のネットワーク設定 |
 | `meta-data` | `instance-id`と`local-hostname` |
-| `config.txt` | `dtparam=i2c_arm` / `spi` と`i2c_baudrate=62500`。pi4はA/D用の`anyspi`オーバレイ、pi5はRP1のPWM用に`dtoverlay=pwm-pi5` |
+| `config.txt` | `dtparam=i2c_arm` / `spi` と`i2c_baudrate=62500`。rtmouseありはA/D用の`anyspi`オーバレイ、rtmouseなし（`--no-rtmouse` / `--model pi5`）は`dtoverlay=pwm-2chan,pin=12,func=4,pin2=13,func2=4` |
 | `cmdline.txt` | `cgroup_enable=memory cgroup_memory=1` |
 | `daifuku-repo.tar.gz` | 手元のリポジトリのスナップショット（`--no-repo-archive`で省略） |
 

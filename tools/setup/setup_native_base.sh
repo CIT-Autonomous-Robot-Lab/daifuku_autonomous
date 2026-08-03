@@ -13,7 +13,7 @@ SKIP_BUILD=0
 usage() {
   cat <<'EOF'
 Ubuntu 22.04 / ROS 2 HumbleへNav2などの共通依存を導入し、autonomous_navと
-emcl2をビルドします。他のsetup_native_*.shより先に実行してください。
+raspicat_driver、emcl2をビルドします。他のsetup_native_*.shより先に実行してください。
 
 Usage:
   bash tools/setup/setup_native_base.sh [options]

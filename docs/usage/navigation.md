@@ -8,7 +8,9 @@ Raspberry Pi本体にSSHでつなぎ、保存済み地図で自律移動を始�
 貼り付けて実行できます。tmuxの基本操作は[日常操作と確認](operations.md#tmuxで作業する)を
 参照してください。
 
-まずコンテナを起動します。`raspicat`サービスが機体ドライバを立ち上げます。
+まずコンテナを起動します。`raspicat`サービスが機体ドライバを立ち上げます。既定は公式実装の
+`raspimouse`で、自前実装に替えるには`compose.original.yaml`を重ねます（Raspberry Pi 5では
+必須。[Docker環境](../setup/docker.md#本体ドライバを自前実装に替える)）。
 
 ```bash
 cd ~/daifuku_autonomous   # リポジトリを置いた場所

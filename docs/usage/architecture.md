@@ -34,6 +34,22 @@ Pythonノードはどちらも`lidar:=mid360`のときだけ立ちます。`rest
 `prepare_mid360_imu.py`が生のIMUメッセージに共分散を付けてEKFへ渡します
 （`use_mid360_imu:=true`のときのみ）。どちらの追加条件も既定は`true`です。
 
+## raspicat_driver
+
+本体ドライバの自前実装です（`ament_python`）。`robot_bringup.launch.py`の
+`driver:=original`で立ち、ステップクロックを`/sys/class/pwm`、方向とモーター電源を
+`/dev/gpiochip*`、パルスカウンタを`/dev/i2c-1`から、いずれもユーザ空間で直接扱います。
+rtmouseカーネルモジュールは使いません。
+
+ROSに見える契約は既定の`driver:=raspimouse`（公式実装）と同じです。`/cmd_vel`を購読し、
+`/odom`と`odom -> base_footprint` TFを配信し、`motor_power`サービスを持つlifecycleノード
+なので、Nav2・EKF・EMCL2の設定は変わりません。LED、ブザー、スイッチ、測距センサは
+持ちません。
+
+Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。パラメータは
+`config/robot/raspicat_driver.yaml`、実装と機種ごとの前提は
+[`src/raspicat_driver/README.md`](../../src/raspicat_driver/README.md)にまとめています。
+
 ## launchファイルの構成
 
 `src/autonomous_nav/launch/`の中身です。
@@ -121,5 +137,11 @@ PCなど余裕のある環境では`use_composition:=True`も利用できます�
 - `livox_ros_driver2`: Mid-360ドライバ
 - `pointcloud_to_laserscan`: Mid-360点群の2D化
 - `robot_localization`: IMUと車輪オドメトリの融合
+- `raspimouse2`: 公式実装の本体ドライバ（`driver:=raspimouse`の`raspimouse`ノード）
+- `raspicat_description`: 機体のURDF
+- `raspicat_ros`: `raspicat_bringup`。`robot_state_publisher`のlaunch、`lidar:=2d`のURGパラメータ、公式のteleop
 
 外部ソースはDockerビルド時または`vcs import`時に`autonomous_bot.repos`から取得します。
+`raspimouse2`が要るのは`driver:=raspimouse`のときだけです。`raspicat_ros`は`driver:=`に
+よらず要ります。`robot_bringup.launch.py`が`robot_state_publisher`の起動を
+`raspicat_bringup`のlaunchへ任せているためです。

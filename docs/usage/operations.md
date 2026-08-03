@@ -126,12 +126,13 @@ TELEOP_LINEAR_SPEED=0.1 bash docker/raspberrypi/tools/control.sh teleop keyboard
 | 変更したもの | やること |
 |---|---|
 | `src/autonomous_nav`配下のlaunch、config、behavior_trees、maps、rviz、src | 何もしない。`--symlink-install`なのでノードを再起動するだけで反映される |
+| `src/raspicat_driver`のPython | 同上。ただし`setup.py`の`entry_points`を増やしたときはビルドが要る |
 | C++やRustのコード、`CMakeLists.txt`、外部パッケージのソース | `docker compose up`で差分ビルドする |
 | aptの依存、`Dockerfile`、`package.xml`の依存、`docker/`配下のスクリプト | `docker compose build`からやり直す |
 
 aptパッケージを足したときにイメージを焼き直すのは、`rosdep`をイメージのビルド時にしか
 回さないからです（`build-workspace.sh`が`up`のたびに`rosdep`を回すと、ネットワークが要る
-うえにaptの状態が毎回変わり、この切り分け自体が崩れます）。表の3行目のコマンドは次のとおりです。
+うえにaptの状態が毎回変わり、この切り分け自体が崩れます）。最後の行のコマンドは次のとおりです。
 
 ```bash
 docker compose -f docker/raspberrypi/compose.yaml down
@@ -146,8 +147,21 @@ docker compose -f docker/raspberrypi/compose.yaml up -d
 `--skip-existing`で素通りするので、`src/`側で直接チェックアウトを合わせます
 （[`docker/raspberrypi/README.md`](../../docker/raspberrypi/README.md)に詳しくあります）。
 
-launchやconfigでも、ファイルを新しく足したときは表の2行目に当たります。`install/`のsymlinkは
-ビルド時に張られるため、一度`docker compose up`を通してください。
+1行目が効くのは既にあるファイルを直したときだけです。launchやconfigでも、ファイルを
+新しく足したときは`docker compose up`が要ります。`install/`のsymlinkはビルド時に
+張られるためです。
+
+名前を変えたり別のディレクトリへ移したりしたときは、それに加えて**古いsymlinkが
+`install/`に残ります**。両方あるように見えて新しいほうしか更新されないので、紛らわしければ
+`install/`のボリュームごと捨ててから建て直してください。ボリューム名は`docker volume ls`で
+確認します（`build`と`log`は残して構いません）。
+
+```bash
+docker compose -f docker/raspberrypi/compose.yaml down
+docker volume ls | grep autonomous-install
+docker volume rm <上で出た名前>
+docker compose -f docker/raspberrypi/compose.yaml up -d
+```
 
 ## ログを見る
 

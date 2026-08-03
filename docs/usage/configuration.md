@@ -8,6 +8,8 @@
 | `config/overrides/*.yaml` | 地図・環境ごとの上書き（`overrides:=`で重ねる） |
 | `behavior_trees/*.xml` | `planner:=vi`用のビヘイビアツリー（起動時に自動で選択） |
 | `config/localization/emcl2.yaml` | EMCL2のフレーム、初期姿勢、粒子数、オドメトリモデル |
+| `config/robot/raspicat.yaml` | 公式実装（`driver:=raspimouse`）のパラメータ。車輪径、トレッド、オドメトリ源 |
+| `config/robot/raspicat_driver.yaml` | 自前実装（`driver:=original`）のパラメータ。上に加えてGPIO・PWM・I2Cの配線 |
 | `config/lifecycle_bond.yaml` | ライフサイクルマネージャのbondタイムアウト |
 | `config/mapping/slam_toolbox.yaml` | SLAM Toolboxのmapping設定 |
 | `config/sensors/scan_filter.yaml` | LiDARの角度フィルタ |
@@ -60,6 +62,24 @@ ros2 launch autonomous_nav navigation.launch.py --show-args
 ```bash
 ros2 launch autonomous_nav mapping.launch.py --show-args
 ```
+
+## robot_bringup.launch.py
+
+本体ドライバとURDFを起動します。`docker/raspberrypi/`環境では`raspicat`サービスがこれを
+立てるため、通常は直接叩きません。
+
+| 引数 | 既定値 | 説明 |
+|---|---|---|
+| `driver` | `raspimouse` | 本体ドライバ。`raspimouse`（公式実装。rtmouseが要る。Pi 4のみ）または`original`（自前実装。Pi 4 / Pi 5） |
+| `model` | 空（`raspicat_driver.yaml`の`model`に従う。既定は`auto`） | `driver:=original`のときの機種。`pi4` / `pi5` / `auto`。`driver:=raspimouse`に渡すとエラーになる |
+| `params_file` | 空（`driver:=`に応じて`config/robot/`から選ぶ） | ドライバのパラメータファイル |
+| `lidar_frame` | `lidar_link` | URDFへ渡すLiDARのフレーム名 |
+| `use_joint_state_publisher` | `True` | `joint_state_publisher`を起動するか |
+
+どちらのドライバも、`/cmd_vel`を購読し`/odom`と`odom -> base_footprint` TFを配信する
+lifecycleノードという同じ契約です。切り替えの前提と確認手順は
+[Raspberry Pi 4](../setup/raspberry-pi-4.md)と[Raspberry Pi 5](../setup/raspberry-pi-5.md)を
+参照してください。
 
 ## Raspberry Pi 4向けの調整値
 

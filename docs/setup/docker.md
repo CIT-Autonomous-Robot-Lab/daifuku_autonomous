@@ -72,6 +72,24 @@ $env:BUILD_JOBS = "1"
 docker compose -f docker/raspberrypi/compose.yaml up -d
 ```
 
+## 本体ドライバを自前実装に替える
+
+`raspicat`サービスが立てる本体ドライバは、既定が公式実装（`driver:=raspimouse`）です。
+これはrtmouseカーネルモジュールをホスト側で読み込んである前提なので、rtmouseが動かない
+Raspberry Pi 5では自前実装（`driver:=original`）に替えます。`compose.original.yaml`を
+重ねると、`raspicat`サービスの引数と`/sys/class/pwm`まわりのマウントが差し替わります。
+
+```bash
+docker compose -f docker/raspberrypi/compose.yaml \
+               -f docker/raspberrypi/compose.original.yaml up -d
+```
+
+Pi 5では必須、Pi 4では任意です。Pi 4で自前実装を選ぶときはrtmouseを載せないでください。
+両方がGPIO 16/6/5とPWMを奪い合いますが、rtmouseはレジスタを直書きするためカーネルは
+衝突を検出しません（ノード側が起動時に拒否します）。機種ごとの前提と確認手順は
+[Raspberry Pi 4で動かす](raspberry-pi-4.md)と[Raspberry Pi 5で動かす](raspberry-pi-5.md)に
+まとめています。
+
 ## ROS_DOMAIN_ID
 
 Composeの既定値は`90`です。機体側が別の値なら、起動前に合わせます。

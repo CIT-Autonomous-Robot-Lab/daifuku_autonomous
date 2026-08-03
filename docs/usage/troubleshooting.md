@@ -141,7 +141,7 @@ RESETのログが毎スキャン出て、推定姿勢が回り続ける場合で
 
 ## TFが競合または不安定になる
 
-Mid-360 + IMUでは、EKFと車輪ノードが同時に`odom -> base_footprint`を配信していないか確認します。車輪側TFを停止するか、`/tf`を未使用トピックへremapしてください。
+Mid-360 + IMUでは、EKFと車輪ノードが同時に`odom -> base_footprint`を配信していないか確認します。車輪側TFを停止するか、`/tf`を未使用トピックへremapしてください。自前実装（`driver:=original`）なら`config/robot/raspicat_driver.yaml`の`publish_tf: false`で止まります。
 
 センサーTFもURDFと`publish_lidar_tf:=true`の両方から配信しないでください。
 
