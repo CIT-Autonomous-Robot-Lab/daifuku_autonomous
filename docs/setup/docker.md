@@ -41,6 +41,11 @@ SHMを使うため、`compose.yaml`は`ipc: host`で`/dev/shm`をホストと共
 
 ## ビルドと起動
 
+イメージが持つのはaptの依存とツールチェーンだけです。ワークスペースのソースは
+composeが`src/`をマウントし、`up`のたびにコンテナの中で`colcon build`します。
+`up`はまず`workspace-build`サービスを走らせ、その正常終了を待ってから`ros2`と
+`raspicat`を起動します。
+
 リポジトリルートで実行します。
 
 ```bash
@@ -49,17 +54,22 @@ docker compose -f docker/raspberrypi/compose.yaml up -d
 docker compose -f docker/raspberrypi/compose.yaml ps
 ```
 
-Raspberry Pi 4などでメモリが不足する場合はビルド並列数を減らします。
+初回の`up`はワークスペース全体を建てるので時間がかかります（Raspberry Pi 4で
+1〜2時間、大半は価値反復プランナのRustのreleaseビルド）。2回目以降は変更のあった
+パッケージだけが建て直されます。成果物は名前付きボリュームに残ります。
+
+Raspberry Pi 4などでメモリが不足する場合はビルド並列数を減らします。`BUILD_JOBS`は
+イメージのビルドと`up`のときの`colcon build`の両方に効きます（既定は2）。
 
 ```bash
-BUILD_JOBS=1 docker compose -f docker/raspberrypi/compose.yaml build
+BUILD_JOBS=1 docker compose -f docker/raspberrypi/compose.yaml up -d
 ```
 
 PowerShellでは次のように指定します。
 
 ```powershell
 $env:BUILD_JOBS = "1"
-docker compose -f docker/raspberrypi/compose.yaml build
+docker compose -f docker/raspberrypi/compose.yaml up -d
 ```
 
 ## ROS_DOMAIN_ID
@@ -103,7 +113,7 @@ bash docker/raspberrypi/tools/control.sh teleop keyboard
 
 サブコマンドと環境変数の一覧は[日常操作と確認](../usage/operations.md#controlshで操作する)を参照してください。
 
-`src/autonomous_nav`はコンテナのインストール先へマウントされます。ホストで変更したlaunch、config、maps、rvizは再ビルドなしで反映され、コンテナで保存した地図もホストに残ります。依存関係、Dockerfile、CMake設定、外部パッケージを変更した場合は再ビルドしてください。
+`src/`はまるごとコンテナへマウントされ、`colcon build --symlink-install`が`install/`から`src/`へsymlinkを張ります。したがってホストで変更したlaunch、config、maps、rvizはビルドすら要らずノードの再起動だけで反映され、コンテナで保存した地図もホストに残ります。C++やRustのコードを変更した場合は`docker compose up`で差分ビルドされます。aptの依存、`Dockerfile`、`package.xml`の依存を変更した場合だけ`docker compose build`からやり直してください。
 
 ## 動作確認
 
@@ -129,4 +139,4 @@ docker compose -f docker/raspberrypi/compose.yaml down
 docker compose -f docker/raspberrypi/compose.yaml build --no-cache
 ```
 
-次は[LiDARとオドメトリ](lidar.md)を設定し、[地図作成](../usage/mapping.md)または[自律移動](../usage/navigation.md)へ進みます。Dockerでlaunchする際は`use_rviz:=false`を指定してください。
+次は[LiDARとオドメトリ](lidar.md)を設定し、[地図作成](../usage/mapping.md)または[自律移動](../usage/navigation.md)へ進みます。`use_rviz`の既定は`false`なので、Dockerでlaunchする際に指定するものはありません。

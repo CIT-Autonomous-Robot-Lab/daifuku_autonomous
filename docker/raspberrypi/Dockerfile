@@ -86,6 +86,24 @@ RUN if [[ ! -d "/opt/ros/${ROS_DISTRO}/share/nav2_msgs/rust" ]]; then \
         --packages-select nav2_msgs; \
     fi
 
+# Rust一式は上の段で /root 配下に入るが、compose は user: "1000:1000" で回すので
+# /root (0700) の中は読めない。ツールチェーンだけ /opt へ移して誰でも読める場所に
+# 置き直す。ここより上の命令は触らないこと (buildah はRUNのキャッシュキーに
+# build-arg を含めるため、上を1行でも動かすと apt/Livox/ros2_rust を焼き直す)。
+RUN mv /root/.cargo /opt/cargo \
+    && mv /root/.rustup /opt/rustup \
+    && chmod -R a+rX /opt/rustup /opt/cargo \
+    && chown -R 1000:1000 /opt/cargo
+ENV CARGO_HOME=/opt/cargo \
+    RUSTUP_HOME=/opt/rustup \
+    PATH=/opt/cargo/bin:${PATH}
+
+# ここから下のソースツリーは **rosdep に apt 依存を解決させるためだけ** に置く。
+# ワークスペースのビルドは compose の up 時にコンテナ内で行うので
+# (docker/raspberrypi/scripts/build-workspace.sh)、解決が済んだら src/ ごと捨てる。
+#
+# 狙いは「aptパッケージが変わったときだけイメージを焼き直す」こと。rosdep を
+# 起動時に回すとネットワークが要るうえ apt の状態が毎回変わるので、ここに残す。
 WORKDIR ${ROS_WS}
 COPY autonomous_bot.repos /tmp/autonomous_bot.repos
 RUN mkdir -p src \
@@ -106,10 +124,10 @@ RUN source /opt/ros/${ROS_DISTRO}/setup.bash \
          --rosdistro=${ROS_DISTRO} \
     && rm -rf /var/lib/apt/lists/*
 
-# Build CMake packages without the ros2_rust overlay.  Under BuildKit/QEMU,
-# arm64 CMake can reject ROS shared libraries during the generated relative
-# lookup under QEMU.  Pin builder-only export lookups to the same verified ROS
-# lib directory.  The runtime image receives none of these modified CMake files.
+# arm64 の CMake が、生成された相対探索で ROS の共有ライブラリを見失うこと
+# (QEMU 下で顕著) への当て木。エクスポートの探索先を、実在を確認した ROS の
+# lib ディレクトリに固定する。ワークスペースのビルドは up 時にこのイメージの
+# 中で走るので、この修正は実行イメージにもそのまま残る。
 RUN if [[ "$(dpkg --print-architecture)" == "arm64" ]]; then \
       test -f /opt/ros/${ROS_DISTRO}/lib/librcutils.so; \
       find /opt/ros/${ROS_DISTRO}/share -type f \
@@ -119,85 +137,50 @@ RUN if [[ "$(dpkg --print-architecture)" == "arm64" ]]; then \
           '{}' +; \
     fi
 
-RUN source /opt/ros/${ROS_DISTRO}/setup.bash \
-    && MULTIARCH="$(dpkg-architecture -qDEB_HOST_MULTIARCH)" \
-    && colcon build --merge-install \
-         --parallel-workers "${BUILD_JOBS}" \
-         --packages-select autonomous_nav emcl2 livox_ros_driver2 \
-                          raspicat_bringup raspicat_description \
-                          raspimouse raspimouse_msgs \
-         --cmake-args -DROS_EDITION=ROS2 \
-                      -DDISTRO_ROS=${ROS_DISTRO} \
-                      "-DCMAKE_LIBRARY_PATH=/opt/ros/${ROS_DISTRO}/lib;/usr/lib/${MULTIARCH};/lib/${MULTIARCH}" \
-                      "-DCMAKE_INCLUDE_PATH=/usr/include;/usr/include/eigen3;/usr/include/pcl-1.12" \
-                      "-DCMAKE_CXX_FLAGS=-O2 -I/usr/include/eigen3" \
-                      -DEigen3_DIR=/usr/share/eigen3/cmake \
-                      -DOPENSSL_ROOT_DIR=/usr \
-                      -DOPENSSL_INCLUDE_DIR=/usr/include \
-                      -DOPENSSL_CRYPTO_LIBRARY=/usr/lib/${MULTIARCH}/libcrypto.so \
-                      -DOPENSSL_SSL_LIBRARY=/usr/lib/${MULTIARCH}/libssl.so
-
-RUN source /opt/ros/${ROS_DISTRO}/setup.bash \
-    && source /opt/ros2_rust_ws/install/local_setup.bash \
-    && source ${ROS_WS}/install/local_setup.bash \
-    && colcon build --merge-install \
-         --parallel-workers "${BUILD_JOBS}" \
-         --packages-select vi_global_planner vi_planner \
-         --cargo-args --release \
-    && install -D -m 0644 \
-         src/value_iteration3/vi_ros2/vi_global_planner/launch/navigation_launch.py \
-         ${ROS_WS}/install/share/vi_global_planner/launch/navigation_launch.py
-
-
-# Headless runtime: no compiler, source tree, Rust toolchain, or RViz.
-FROM ${ROS_IMAGE} AS runtime
-
-ENV DEBIAN_FRONTEND=noninteractive \
-    ROS_DISTRO=humble \
-    ROS_WS=/opt/ros_ws \
-    ROS_LOCALHOST_ONLY=0 \
-    RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-
+# 実行時にだけ要るノード。rosdep が見るのはビルド依存なので、launch から起動する
+# だけのものはここで明示的に入れる。
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      libapr1 \
-      ros-humble-diagnostic-updater \
       ros-humble-grid-map-msgs \
       ros-humble-joint-state-publisher \
-      ros-humble-laser-filters \
-      ros-humble-nav2-bringup \
-      ros-humble-navigation2 \
-      ros-humble-pcl-conversions \
-      ros-humble-pointcloud-to-laserscan \
-      ros-humble-robot-localization \
       ros-humble-robot-state-publisher \
-      ros-humble-rosbag2 \
-      ros-humble-slam-toolbox \
       ros-humble-teleop-twist-joy \
       ros-humble-teleop-twist-keyboard \
-      ros-humble-topic-tools \
       ros-humble-urdf \
+      ros-humble-urg-node \
       ros-humble-xacro \
     && rm -rf /var/lib/apt/lists/*
 
+# urg_node は lidar:=2d のときだけ使う。本機の既定は MID360 なので通常は動かない
+# が、2D LiDAR に差し替えたときにイメージを焼き直さず起動できるよう入れてある
+# (lidar_bringup.launch.py が raspicat_bringup の URG パラメータで立てる)。
+#
 # raspicat_bringup / raspicat_description が package.xml で宣言している依存のうち、
-# 次のものは意図的に runtime へ入れていない。build 段では rosdep が入れるので
-# ビルドは通り、抜いているのは実行イメージだけ。
-#   * urg_node   — 本機の LiDAR は MID360。robot_bringup.launch.py は上流の
-#                  raspicat.launch.py と違って urg 系を一切起動しないので到達不能。
+# 次のものは意図的に入れていない。rosdep はビルドのために入れるが、実行には要らない。
 #   * rviz2 / joint_state_publisher_gui
-#                — raspicat_description の表示用 launch 専用。runtime は headless。
+#                — raspicat_description の表示用 launch 専用。この機はheadless。
 #   * joy_linux  — ジョイスティック teleop 用 (teleop_twist_joy は入っている)。
 #                  使うならここに足すこと。
+ENV ROS_LOCALHOST_ONLY=0 \
+    RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 
-COPY --from=builder /usr/local/lib/liblivox_lidar_sdk_shared.so /usr/local/lib/
-COPY --from=builder /opt/ros2_rust_ws/install /opt/ros2_rust_ws/install
-COPY --from=builder /opt/ros_ws/install /opt/ros_ws/install
 RUN ldconfig
 
+# rosdep に読ませたあとの src/ は捨てる。実体は compose が ../../src を
+# ここへマウントする。ros2_rust の build/ も同様に成果物 (install/) だけ残す。
+RUN rm -rf ${ROS_WS}/src ${ROS_WS}/build ${ROS_WS}/log \
+           /tmp/autonomous_bot.repos \
+           /opt/ros2_rust_ws/build /opt/ros2_rust_ws/log \
+           /opt/rustup/toolchains/*/share/doc
+
+# 名前付きボリュームは「イメージ側の同じパスの中身と所有者」で初期化される。
+# compose は user: "1000:1000" で回すので、ここで作って chown しておかないと
+# 空のボリュームが root 所有で作られ、colcon が build/install へ書けない。
+RUN mkdir -p ${ROS_WS}/src ${ROS_WS}/build ${ROS_WS}/install ${ROS_WS}/log \
+    && chown -R 1000:1000 ${ROS_WS}
+
 COPY docker/common/entrypoint.sh /ros_entrypoint.sh
-RUN chmod +x /ros_entrypoint.sh
+COPY docker/raspberrypi/scripts/build-workspace.sh /usr/local/bin/build-workspace
+RUN chmod +x /ros_entrypoint.sh /usr/local/bin/build-workspace
 
 WORKDIR ${ROS_WS}
 ENTRYPOINT ["/ros_entrypoint.sh"]

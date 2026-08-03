@@ -1,8 +1,19 @@
-# 軽量ヘッドレス実行環境
+# ヘッドレス実行環境
 
-`docker/raspberrypi/`はRaspberry Pi本体（`arm64`）とPC（`amd64`）で共通に使える、実行専用の
+`docker/raspberrypi/`はRaspberry Pi本体（`arm64`）とPC（`amd64`）で共通に使える
 Docker環境です。ROS 2 Humble、Nav2、SLAM Toolbox、EMCL2、価値反復プランナ、
 Livox関連ノード、teleopノードを含みます。RVizは含みません。
+
+イメージが持つのはaptの依存とツールチェーン（ROS、Livox SDK、Rust、ros2_rust）だけです。
+ワークスペースのソースはイメージに焼かず、composeが`src/`をマウントし、
+`up`のたびにコンテナの中で`colcon build`します。差分ビルドなので、変えていない
+パッケージは建て直されません。
+
+| 変更した対象 | 必要な操作 |
+|---|---|
+| launch / config / YAML | なし（`--symlink-install`で`install/`が`src/`を指しているため、ノードの再起動だけ） |
+| C++ / Rustのコード | `docker compose up`（変わったパッケージだけ再ビルド） |
+| aptパッケージ（`Dockerfile`、`package.xml`の依存） | `docker compose build`からやり直す |
 
 セットアップ手順の全体は[Docker環境](../../docs/setup/docker.md)を、日常操作は
 [日常操作と確認](../../docs/usage/operations.md)を参照してください。ここでは
@@ -12,11 +23,15 @@ Livox関連ノード、teleopノードを含みます。RVizは含みません�
 
 | ファイル | 用途 |
 |---|---|
-| `compose.yaml` | サービス`ros2`の定義。`network_mode: host`、`ipc: host`で起動する |
-| `Dockerfile` | マルチステージビルド。外部パッケージはビルド中に`vcs import`で取得する |
+| `compose.yaml` | サービス`workspace-build` / `ros2` / `raspicat`の定義。`network_mode: host`、`ipc: host`で起動する |
+| `Dockerfile` | apt依存とツールチェーンだけを持つイメージ。ワークスペースはビルドしない |
 | `fastdds_udp_whitelist.xml` | Fast DDSのトランスポート設定（後述） |
+| `scripts/build-workspace.sh` | `up`のときにコンテナ内で走る`colcon build`（`/usr/local/bin/build-workspace`） |
 | `tools/control.sh` | モーター電源、遠隔操作、状態確認をまとめた操作スクリプト |
 | `tools/shell.sh` | 起動済みコンテナで対話シェルを開く |
+
+`scripts/`はイメージへ入れてコンテナの中で走らせるもの、`tools/`はホスト側から
+叩くものです。
 
 entrypointとホスト側スクリプトの共通部分は[`docker/common/`](../common)にあります。
 イメージには`docker/common/entrypoint.sh`が`/ros_entrypoint.sh`として入り、
@@ -31,15 +46,32 @@ docker compose -f docker/raspberrypi/compose.yaml build
 docker compose -f docker/raspberrypi/compose.yaml up -d
 ```
 
+`up`はまず`workspace-build`サービスを走らせ、その正常終了を待ってから`ros2`と
+`raspicat`を起動します。初回はワークスペース全体を建てるので時間がかかります
+（Raspberry Pi 4で1〜2時間、大半は価値反復プランナのRustのreleaseビルド）。
+2回目以降は変更のあったパッケージだけです。
+
 Raspberry Pi 4などメモリの少ない環境では、ビルド並列数を下げてください。
+`BUILD_JOBS`はイメージのビルドと`up`のときの`colcon build`の両方に効きます
+（既定は2）。
 
 ```bash
-BUILD_JOBS=1 docker compose -f docker/raspberrypi/compose.yaml build
+BUILD_JOBS=1 docker compose -f docker/raspberrypi/compose.yaml up -d
 ```
 
-`emcl2_ros2`、`livox_ros_driver2`、`value_iteration3`は`.dockerignore`で
-ビルドコンテキストから除外しています。ホスト側の作業用チェックアウトの状態に
-関わらず、イメージには`autonomous_bot.repos`で固定したリビジョンが入ります。
+外部パッケージ（`emcl2_ros2`、`livox_ros_driver2`、`value_iteration3`など）は
+`.dockerignore`でビルドコンテキストから除外してあり、イメージのビルド中に
+`vcs import`したものはrosdepにapt依存を解決させたあと捨てられます。
+実行時に使うのはホスト側の`src/`で、無ければ`build-workspace.sh`が
+`autonomous_bot.repos`にしたがって`vcs import`します。したがって特定の
+リビジョンに固定したい場合は、ホスト側の`src/`のチェックアウトを合わせてください。
+
+ビルド成果物は名前付きボリューム`autonomous-build` / `autonomous-install` /
+`autonomous-log`に入ります。作り直したいときは次のようにします。
+
+```bash
+docker compose -f docker/raspberrypi/compose.yaml down -v
+```
 
 ## tools/control.sh
 
