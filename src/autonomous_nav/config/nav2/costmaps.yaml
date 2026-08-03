@@ -1,6 +1,7 @@
-# ローカル / グローバルコストマップ。「既定」= nav2_bringup の nav2_params.yaml。
-# planner:=vi は自前で /map を解くので global_costmap を使わないが、bt_navigator の
-# クリア系サービスが参照する。合成順序と上書きは ../README.md を参照。
+# ローカル / グローバルコストマップ。
+# 「既定」= nav2_costmap_2d (humble) の costmap_2d_ros.cpp と各レイヤプラグインの
+# declareParameter。planner:=vi は自前で /map を解くので global_costmap を使わないが、
+# bt_navigator のクリア系サービスが参照する。合成順序と上書きは ../README.md を参照。
 #
 # footprint は local と global に同じ値を 2 度書いている。YAML アンカーで共有すると
 # rcl のパーサが最上位キーをノード名として読めずに落ちるため。片方だけ直さないこと。
@@ -8,78 +9,116 @@
 local_costmap:
   local_costmap:
     ros__parameters:
-      update_frequency: 5.0
-      publish_frequency: 2.0
-      global_frame: odom
-      robot_base_frame: base_footprint   # 既定 base_link: URDF に base_link が無い
+      update_frequency: 5.0            # 既定 5.0 [Hz]: コストマップを更新する周期
+      publish_frequency: 2.0           # 既定 1.0 [Hz]: costmap トピックへ出す周期
+      global_frame: odom               # 既定 map: 局所地図は odom 基準 (連続性優先)
+      robot_base_frame: base_footprint # 既定 base_link: 機体フレーム。URDF に base_link が無い
       use_sim_time: false
-      rolling_window: true
-      width: 3
-      height: 3
-      resolution: 0.05
-      # 既定 robot_radius 0.22: 実測 420x450mm の多角形にした (../README.md)。
-      # robot_radius は書かないこと (両方あると footprint が勝って紛らわしい)。
+      rolling_window: true             # 既定 false: 機体を中心に窓を動かす
+      width: 3                         # 既定 5 [m]: 窓の幅
+      height: 3                        # 既定 5 [m]: 窓の高さ
+      resolution: 0.05                 # 既定 0.1 [m/cell]: セルサイズ。地図と揃えている
+      # 既定 "[]" (空 = robot_radius 0.1 の円)。実測 420x450mm の多角形にした
+      # (../README.md)。robot_radius は書かないこと (両方あると footprint が勝つ)。
       footprint: "[[0.10, 0.21], [0.10, -0.21], [-0.35, -0.21], [-0.35, 0.21]]"
-      plugins: ["voxel_layer", "inflation_layer"]
+      plugins: ["voxel_layer", "inflation_layer"]  # 既定 ["static_layer","obstacle_layer","inflation_layer"]
       inflation_layer:
-        plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.55           # 外接円 0.408m 以上にすること
+        plugin: "nav2_costmap_2d::InflationLayer"  # 既定 同左
+        cost_scaling_factor: 3.0       # 既定 10.0: 障害物から離れるときのコスト減衰率 (小さいほど緩やか)
+        inflation_radius: 0.55         # 既定 0.55 [m]: コストを膨らませる半径。外接円 0.408m 以上にすること
       voxel_layer:
-        plugin: "nav2_costmap_2d::VoxelLayer"
-        enabled: true
-        publish_voxel_map: true
-        origin_z: 0.0
-        z_resolution: 0.05
-        z_voxels: 16
-        max_obstacle_height: 2.0
-        mark_threshold: 0
-        observation_sources: scan
+        plugin: "nav2_costmap_2d::VoxelLayer"      # 既定なし (宣言必須): voxel_layer は既定の plugins に
+                                                   # 無いので .plugin に既定が無い
+        enabled: true                  # 既定 true: このレイヤを使うか
+        publish_voxel_map: true        # 既定 false: ボクセル可視化を配信する (RViz 用)
+        origin_z: 0.0                  # 既定 0.0 [m]: ボクセル格子の下端
+        z_resolution: 0.05             # 既定 0.2 [m]: ボクセル 1 段の高さ
+        z_voxels: 16                   # 既定 10: 段数 (0.05 x 16 = 0.8m まで見る)
+        max_obstacle_height: 2.0       # 既定 2.0 [m]: レイヤ全体で採用する障害物の高さ上限
+        mark_threshold: 0              # 既定 0: 列内でこの数を超えるボクセルが埋まると占有とする
+        observation_sources: scan      # 既定 "": 使う観測源の名前 (空白区切り)
         scan:
-          topic: /scan
-          max_obstacle_height: 2.0
-          clearing: true
-          marking: true
-          data_type: "LaserScan"
-          raytrace_max_range: 3.0
-          raytrace_min_range: 0.0
-          obstacle_max_range: 2.5
-          obstacle_min_range: 0.0
-      always_send_full_costmap: true
+          topic: /scan                 # 既定 <観測源名>: 購読するトピック
+          max_obstacle_height: 2.0     # 既定 0.0 [m]: この源から採用する高さ上限
+          clearing: true               # 既定 false: レイトレースで空きを掃除するか
+          marking: true                # 既定 true: 障害物を書き込むか
+          data_type: "LaserScan"       # 既定 LaserScan: LaserScan / PointCloud2
+          raytrace_max_range: 3.0      # 既定 3.0 [m]: 掃除する距離の上限
+          raytrace_min_range: 0.0      # 既定 0.0 [m]: 同下限
+          obstacle_max_range: 2.5      # 既定 2.5 [m]: 障害物として書き込む距離の上限
+          obstacle_min_range: 0.0      # 既定 0.0 [m]: 同下限
+      always_send_full_costmap: true   # 既定 false: 差分でなく全体を毎回送る (RViz が追従しやすい)
+
+      # ── 未設定 (既定のまま。global_costmap も同じ) ──
+      # robot_radius: 0.1              # [m] footprint が空のときだけ使う円半径。**併記しないこと**
+      # footprint_padding: 0.01        # [m] footprint を外側へ膨らませる余裕
+      # transform_tolerance: 0.3       # [s] TF を引くときの許容遅延
+      # lethal_cost_threshold: 100     # 静的地図でこの値以上を「絶対障害物」とする
+      # unknown_cost_value: 255        # 未観測セルに入れるコスト
+      # trinary_costmap: true          # 静的地図を空き/未知/占有の 3 値に丸める
+      # track_unknown_space: false     # 未観測を「空き」でなく「未知」として保持する (global は true)
+      # use_maximum: false             # レイヤ合成で最大値を採るか (false は上書き)
+      # map_topic: "<ns>/map"          # static_layer が購読する地図トピック
+      # origin_x: 0.0 / origin_y: 0.0  # [m] rolling_window: false のときの原点
+      # filters: []                    # keepout / speed filter などのフィルタ層
+      # inflation_layer.enabled: true
+      # inflation_layer.inflate_unknown: false        # 未知セルも膨張の起点にする
+      # inflation_layer.inflate_around_unknown: false # 未知セルの周りを膨張させる
+      # voxel_layer.footprint_clearing_enabled: true  # 機体の下を毎回空きにする
+      # voxel_layer.unknown_threshold: 15             # 列内の未知ボクセル数の許容
+      # voxel_layer.combination_method: 1             # 0=上書き 1=最大 2=最大(未知を保持)
+      # scan.sensor_frame: ""          # 空なら message の frame_id を使う
+      # scan.observation_persistence: 0.0  # [s] 観測を保持する時間 (0 = 最新のみ)
+      # scan.expected_update_rate: 0.0 # [s] これを超えて更新が無いと警告 (0 = 無効)
+      # scan.min_obstacle_height: 0.0  # [m] この源から採用する高さ下限
+      # scan.inf_is_valid: false       # inf を range_max の有効値として扱う
 
 
 global_costmap:
   global_costmap:
     ros__parameters:
-      update_frequency: 1.0
-      publish_frequency: 1.0
-      global_frame: map
-      robot_base_frame: base_footprint   # 既定 base_link: URDF に base_link が無い
+      update_frequency: 1.0            # 既定 5.0 [Hz]: 全域なので落としてある
+      publish_frequency: 1.0           # 既定 1.0 [Hz]: costmap トピックへ出す周期
+      global_frame: map                # 既定 map: 地図のフレーム
+      robot_base_frame: base_footprint # 既定 base_link: 機体フレーム。URDF に base_link が無い
       use_sim_time: false
       # local_costmap と同値。片方だけ直さないこと。
       footprint: "[[0.10, 0.21], [0.10, -0.21], [-0.35, -0.21], [-0.35, 0.21]]"
-      resolution: 0.05
-      track_unknown_space: true
-      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
+      resolution: 0.05                 # 既定 0.1 [m/cell]: static_layer が /map で上書きする
+      track_unknown_space: true        # 既定 false: 未観測を「空き」にせず未知のまま保持する
+      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]  # 既定 同左
       obstacle_layer:
-        plugin: "nav2_costmap_2d::ObstacleLayer"
-        enabled: true
-        observation_sources: scan
+        plugin: "nav2_costmap_2d::ObstacleLayer"   # 既定 同左
+        enabled: true                  # 既定 true: このレイヤを使うか
+        observation_sources: scan      # 既定 "": 使う観測源の名前
         scan:
-          topic: /scan
-          max_obstacle_height: 2.0
-          clearing: true
-          marking: true
-          data_type: "LaserScan"
-          raytrace_max_range: 3.0
-          raytrace_min_range: 0.0
-          obstacle_max_range: 2.5
-          obstacle_min_range: 0.0
+          topic: /scan                 # 既定 <観測源名>: 購読するトピック
+          max_obstacle_height: 2.0     # 既定 0.0 [m]: この源から採用する高さ上限
+          clearing: true               # 既定 false: レイトレースで空きを掃除するか
+          marking: true                # 既定 true: 障害物を書き込むか
+          data_type: "LaserScan"       # 既定 LaserScan
+          raytrace_max_range: 3.0      # 既定 3.0 [m]
+          raytrace_min_range: 0.0      # 既定 0.0 [m]
+          obstacle_max_range: 2.5      # 既定 2.5 [m]
+          obstacle_min_range: 0.0      # 既定 0.0 [m]
       static_layer:
-        plugin: "nav2_costmap_2d::StaticLayer"
-        map_subscribe_transient_local: true
+        plugin: "nav2_costmap_2d::StaticLayer"     # 既定 同左
+        map_subscribe_transient_local: true        # 既定 true: 遅れて購読しても最後の /map を受け取る QoS
       inflation_layer:
-        plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.55           # 外接円 0.408m 以上にすること
-      always_send_full_costmap: true
+        plugin: "nav2_costmap_2d::InflationLayer"  # 既定 同左
+        cost_scaling_factor: 3.0       # 既定 10.0: 障害物から離れるときのコスト減衰率
+        inflation_radius: 0.55         # 既定 0.55 [m]: 外接円 0.408m 以上にすること
+      always_send_full_costmap: true   # 既定 false: 差分でなく全体を毎回送る
+
+      # ── 未設定 (既定のまま。local と共通のものは上を参照) ──
+      # width: 5 / height: 5           # [m] static_layer が /map の大きさで上書きする
+      # rolling_window: false          # 全域なので固定窓
+      # obstacle_layer.min_obstacle_height: 0.0     # [m] レイヤ全体の高さ下限
+      # obstacle_layer.max_obstacle_height: 2.0     # [m] レイヤ全体の高さ上限
+      # obstacle_layer.footprint_clearing_enabled: true
+      # obstacle_layer.combination_method: 1        # 0=上書き 1=最大 2=最大(未知を保持)
+      # static_layer.enabled: true
+      # static_layer.subscribe_to_updates: false    # 地図の部分更新も購読する
+      # static_layer.transform_tolerance: 0.0       # [s] このレイヤ専用の TF 許容遅延
+      # static_layer.map_topic: ""     # 空なら親の map_topic を使う
+      # static_layer.footprint_clearing_enabled: false

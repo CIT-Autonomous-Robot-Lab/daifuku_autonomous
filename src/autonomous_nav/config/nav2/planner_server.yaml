@@ -1,14 +1,21 @@
-# planner:=navfn のグローバルプランナ。「既定」= nav2_bringup の nav2_params.yaml。
+# planner:=navfn のグローバルプランナ。
+# 「既定」= nav2_planner / nav2_navfn_planner (humble) の declare_parameter。
 # planner:=vi では起動せず、vi_planner.yaml の vi_global_planner が
 # compute_path_to_pose を提供する。合成順序と上書きは ../README.md を参照。
+#
+# ▲ nav2_bringup が配っている nav2_params.yaml は expected_planner_frequency 20.0 /
+#   use_astar true で、**ノードの既定とは違う**。下はどちらもノードの既定と同値。
 
 planner_server:
   ros__parameters:
-    expected_planner_frequency: 1.0   # 既定 20.0: 実測 7.6Hz で WARN 連発。BT の再計画は 1Hz
+    expected_planner_frequency: 1.0   # 既定 1.0 [Hz]: これを下回ると WARN を出す。実測 7.6Hz で連発したので既定へ戻した
     use_sim_time: false
-    planner_plugins: ["GridBased"]
+    planner_plugins: ["GridBased"]    # 既定 ["GridBased"]: 読み込むプランナ名の並び
     GridBased:
-      plugin: "nav2_navfn_planner/NavfnPlanner"
-      tolerance: 0.5
-      use_astar: false                # 既定 true: 根拠未記録 (f867da4)
-      allow_unknown: true
+      plugin: "nav2_navfn_planner/NavfnPlanner"   # 既定 同左
+      tolerance: 0.5                  # 既定 0.5 [m]: ゴールが塞がれているとき代わりに狙う範囲
+      use_astar: false                # 既定 false: true で A*、false でダイクストラ
+      allow_unknown: true             # 既定 true: 未観測セルを通行可として扱う
+
+      # ── 未設定 (既定のまま) ──
+      # use_final_approach_orientation: false  # 経路末端の向きをゴール姿勢でなく進行方向に合わせる

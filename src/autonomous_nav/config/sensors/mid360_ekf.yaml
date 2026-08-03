@@ -1,25 +1,34 @@
+# 車輪オドメトリと Mid-360 の IMU を融合する EKF (robot_localization)。
+# 「既定」= robot_localization (humble-devel) の src/ros_filter.cpp の declare_parameter。
+# use_mid360_imu:=true (既定) のときだけ起動し、最終的な /odom と
+# odom -> base_footprint TF を出す。lidar_bringup.launch.py がノードへ直接渡す。
+
 ekf_filter_node:
   ros__parameters:
-    frequency: 30.0
-    sensor_timeout: 0.2
-    two_d_mode: true
-    transform_time_offset: 0.0
-    transform_timeout: 0.1
-    print_diagnostics: true
-    publish_tf: true
-    publish_acceleration: false
-    reset_on_time_jump: true
+    frequency: 30.0                 # 既定 30.0 [Hz]: 推定値を出す周期
+    sensor_timeout: 0.2             # 既定 1/frequency (0.033) [s]: 観測が来ないとき予測だけで進む猶予
+    two_d_mode: true                # 既定 false: z/roll/pitch を 0 に固定する (平面走行なので有効)
+    transform_time_offset: 0.0      # 既定 0.0 [s]: 発行する TF のタイムスタンプに足す下駄
+    transform_timeout: 0.1          # 既定 0.0 [s]: TF 参照の待ち時間 (0 = 待たない)
+    print_diagnostics: true         # 既定 false: /diagnostics に入力の健全性を出す
+    publish_tf: true                # 既定 true: odom -> base_link TF を発行するか
+    publish_acceleration: false     # 既定 false: accel/filtered を発行するか
+    reset_on_time_jump: true        # 既定 false: 時刻が巻き戻ったらフィルタを初期化する
 
-    map_frame: map
-    odom_frame: odom
-    base_link_frame: base_footprint
-    world_frame: odom
+    map_frame: map                  # 既定 map: world_frame に選べる広域フレーム
+    odom_frame: odom                # 既定 odom: 連続だがドリフトするフレーム
+    base_link_frame: base_footprint # 既定 base_link: 機体フレーム。URDF に base_link が無い
+    world_frame: odom               # 既定 odom_frame: 推定の基準。odom = 連続性優先 (TF は odom->base)
 
-    odom0: /wheel/odom
-    imu0: /imu/mid360
+    # 入力トピック。odomN / imuN は「宣言されていれば購読する」形なので、
+    # 番号を増やせばセンサを足せる (odom1, imu1, ...)。
+    odom0: /wheel/odom              # 既定なし (宣言必須): 車輪オドメトリ
+    imu0: /imu/mid360               # 既定なし (宣言必須): Mid-360 の IMU
 
-    # State order: x, y, z, roll, pitch, yaw, vx, vy, vz,
-    #              vroll, vpitch, vyaw, ax, ay, az
+    # 各センサから取り込む状態量。並びは
+    #   x, y, z, roll, pitch, yaw, vx, vy, vz, vroll, vpitch, vyaw, ax, ay, az
+    # 既定は全 false (何も取り込まない)。位置・姿勢そのものは取らず、車輪から vx、
+    # IMU から vyaw だけを取る = 積分は EKF 側で行い、二重積分を避ける。
     odom0_config: [false, false, false,
                    false, false, false,
                    true,  false, false,
@@ -30,10 +39,44 @@ ekf_filter_node:
                    false, false, false,
                    false, false, true,
                    false, false, false]
-    odom0_queue_size: 10
-    imu0_queue_size: 50
-    odom0_nodelay: true
-    imu0_nodelay: true
-    odom0_differential: false
-    imu0_differential: false
-    imu0_remove_gravitational_acceleration: false
+    odom0_queue_size: 10            # 既定 10: 購読キュー長
+    imu0_queue_size: 50             # 既定 10: IMU は車輪より速いので深くする
+    # ▲ 以下 2 つは効かない。上流ドキュメント (doc/state_estimation_nodes.rst) には
+    #   載っているが、ROS 2 版の ros_filter.cpp は declare も get もしていない
+    #   (ROS 1 の tcpNoDelay トランスポートヒント由来で、DDS に対応物が無い)。
+    odom0_nodelay: true             # 宣言なし: 効かない
+    imu0_nodelay: true              # 宣言なし: 効かない
+    odom0_differential: false       # 既定 false: 絶対値でなく前回との差分として扱うか
+    imu0_differential: false        # 既定 false: 同上
+    imu0_remove_gravitational_acceleration: false  # 既定 false: 加速度から重力を引くか (ax/ay/az 未使用なので無関係)
+
+    # ── 未設定 (既定のまま) ──
+    # base_link_frame_output: base_footprint  # TF の子フレーム名を base_link_frame と変えたいとき
+    # tf_prefix: ""                       # 発行するフレーム名の接頭辞
+    # debug: false                        # 大量のデバッグ出力を debug_out_file へ書く
+    # debug_out_file: "robot_localization_debug.txt"
+    # permit_corrected_publication: false # 過去に遡って補正した推定値も発行するか
+    # predict_to_current_time: false      # 最新観測より先の現在時刻まで予測を進めるか
+    # smooth_lagged_data: false           # 遅れて来た観測で過去に戻って推定し直すか
+    # history_length: 0.0                 # [s] smooth_lagged_data 用に保持する履歴長
+    # disabled_at_startup: false          # 起動直後は止めておき enable サービスで開始する
+    # dynamic_process_noise_covariance: false  # 速度に応じてプロセスノイズを増減させる
+    # process_noise_covariance: [...]     # 15x15。運動モデルの信頼度 (既定は上流の内蔵値)
+    # initial_estimate_covariance: [...]  # 15x15。初期共分散 (既定は対角 1e-9 / 1e9)
+    # initial_state: [0.0, ... ]          # 15 要素。初期状態
+    # use_control: false                  # /cmd_vel を制御入力として予測に使う
+    # stamped_control: false              # 制御入力が TwistStamped か
+    # control_timeout: 0.0                # [s] 制御入力が途切れたとみなす時間
+    # control_config: [true, false, false, false, false, true]  # 使う制御軸
+    # acceleration_limits: [...]        # use_control: true のときの加速度上限 (6 軸)
+    # acceleration_gains: [...]         # 同、指令に掛ける係数
+    # deceleration_limits: [...]        # 同、減速度上限
+    # deceleration_gains: [...]         # 同、係数
+    # gravitational_acceleration: 9.80665 # [m/s^2] 重力補正に使う値
+    # odom0_relative: false             # 最初の観測を原点として扱う
+    # imu0_relative: false              # 同上
+    # odom0_pose_rejection_threshold: DBL_MAX          # マハラノビス距離での外れ値棄却
+    # odom0_twist_rejection_threshold: DBL_MAX
+    # imu0_pose_rejection_threshold: DBL_MAX
+    # imu0_twist_rejection_threshold: DBL_MAX
+    # imu0_linear_acceleration_rejection_threshold: DBL_MAX

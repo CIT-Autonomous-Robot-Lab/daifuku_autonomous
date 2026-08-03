@@ -20,9 +20,9 @@
 # "params: composed emcl2 ..." 行でパスが差し替わったことを確認すること。
 emcl2:
   ros__parameters:
-    alpha_threshold: 0.2                # 断片 0.5: alpha が 0.0-0.4 に張り付くため
-    expansion_radius_orientation: 0.05  # 断片 0.2: リセット時の姿勢の飛びを抑える
-    sensor_reset: false                 # 断片 true: 貫通粒子の引き戻しを止める
+    alpha_threshold: 0.2                # 断片 0.5 (EMCL2 既定 0.5): alpha が 0.0-0.4 に張り付くため
+    expansion_radius_orientation: 0.05  # 断片 0.2 (EMCL2 既定 0.2): リセット時の姿勢の飛びを抑える
+    sensor_reset: false                 # 断片 true (EMCL2 既定 false): 貫通粒子の引き戻しを止める
 
 # ── 価値反復プランナ (表示のみ) ─────────────────────────────────────────────
 # cost_drawing_threshold は value_function の色スケール上限 [ステップ数≒秒] で、
@@ -36,3 +36,13 @@ vi_planner:
 vi_global_planner:
   ros__parameters:
     cost_drawing_threshold: 180         # 断片 60: 同上
+
+# ── ここで上書きしていないもの ────────────────────────────────────────────
+# この地図では断片 (= ほぼノード既定) のままで足りている。上書きが要るとしたら
+# 次の順で疑うこと。
+#   emcl2.range_threshold / laser_likelihood_max_dist … 地図の壁の厚みが実物と
+#     違うとき。今の 19F は貫通が多いので alpha_threshold 側で凌いでいる。
+#   costmaps.*.inflation_radius … 通路幅が足りず経路が出ないとき。ただし外接円
+#     0.408m を下回らせないこと (../nav2/costmaps.yaml)。
+#   vi_planner.safety_radius_penalty … 通路が細くて貪欲ロールアウトが固着する
+#     とき。map_tsudanuma では 1 まで下げている。

@@ -1,4 +1,5 @@
-# localization:=amcl の自己位置推定。「既定」= nav2_bringup の nav2_params.yaml。
+# localization:=amcl の自己位置推定。
+# 「既定」= nav2_amcl (humble) の amcl_node.cpp の add_parameter。
 # localization:=emcl2 (既定) では起動せず、../localization/emcl2.yaml が使われる。
 # nav2 の localization_launch.py が params_file から読むので、断片はここに置く。
 # 合成順序と上書きは ../README.md を参照。
@@ -10,40 +11,55 @@
 amcl:
   ros__parameters:
     use_sim_time: false
-    alpha1: 0.2
-    alpha2: 0.2
-    alpha3: 0.2
-    alpha4: 0.2
-    alpha5: 0.2
-    base_frame_id: "base_footprint"
-    beam_skip_distance: 0.5
-    beam_skip_error_threshold: 0.9
-    beam_skip_threshold: 0.3
+    # ── 運動モデル (差動二輪) の雑音。値が大きいほど粒子が広く散る ──
+    alpha1: 0.2                       # 既定 0.2: 回転 -> 回転推定の雑音
+    alpha2: 0.2                       # 既定 0.2: 並進 -> 回転推定の雑音
+    alpha3: 0.2                       # 既定 0.2: 並進 -> 並進推定の雑音
+    alpha4: 0.2                       # 既定 0.2: 回転 -> 並進推定の雑音
+    alpha5: 0.2                       # 既定 0.2: 全方向モデルでのみ使う並進の雑音
+    robot_model_type: "nav2_amcl::DifferentialMotionModel"  # 既定 同左: 運動モデルのクラス
+    # ── フレーム ──
+    base_frame_id: "base_footprint"   # 既定 base_footprint: 機体フレーム
+    odom_frame_id: "odom"             # 既定 odom: オドメトリのフレーム
+    global_frame_id: "map"            # 既定 map: 地図のフレーム
+    tf_broadcast: true                # 既定 true: map -> odom TF を発行するか
+    transform_tolerance: 1.0          # 既定 1.0 [s]: 発行する TF に持たせる有効期限
+    # ── ビームスキップ (動的障害物で汚れたビームを捨てる) ──
+    beam_skip_distance: 0.5           # 既定 0.5 [m]: 地図と食い違ったとみなす距離
+    beam_skip_error_threshold: 0.9    # 既定 0.9: スキップ率がこれを超えたら全粒子を再初期化
+    beam_skip_threshold: 0.3          # 既定 0.3: このビームを支持する粒子の割合の下限
     do_beamskip: true                 # 既定 false: 根拠未記録
-    global_frame_id: "map"
-    lambda_short: 0.1
-    laser_likelihood_max_dist: 2.0
-    laser_max_range: 100.0
-    laser_min_range: -1.0
-    laser_model_type: "likelihood_field"
-    max_beams: 120                    # 既定 60: 根拠未記録
-    max_particles: 8000               # 既定 2000: 根拠未記録
-    min_particles: 1000               # 既定 500: 根拠未記録
-    odom_frame_id: "odom"
-    pf_err: 0.05
-    pf_z: 0.99
-    recovery_alpha_fast: 0.1          # 既定 0.0: 根拠未記録
-    recovery_alpha_slow: 0.001        # 既定 0.0: 根拠未記録
-    resample_interval: 1
-    robot_model_type: "nav2_amcl::DifferentialMotionModel"
-    save_pose_rate: 0.5
-    sigma_hit: 0.2
-    tf_broadcast: true
-    transform_tolerance: 1.0
-    update_min_a: 0.05                # 既定 0.2: 根拠未記録
-    update_min_d: 0.05                # 既定 0.25: 根拠未記録
-    z_hit: 0.5
-    z_max: 0.05
-    z_rand: 0.5
-    z_short: 0.05
-    scan_topic: scan
+    # ── 観測モデル (likelihood_field) ──
+    laser_model_type: "likelihood_field"  # 既定 同左: beam / likelihood_field / likelihood_field_prob
+    laser_likelihood_max_dist: 2.0    # 既定 2.0 [m]: 尤度場で壁の影響が届く距離
+    laser_max_range: 100.0            # 既定 100.0 [m]: これより遠いビームを捨てる
+    laser_min_range: -1.0             # 既定 -1.0 [m]: これより近いビームを捨てる (-1 = センサ値に従う)
+    lambda_short: 0.1                 # 既定 0.1: z_short の指数分布の減衰率 (beam モデル用)
+    sigma_hit: 0.2                    # 既定 0.2 [m]: 正しい計測の分布の標準偏差
+    z_hit: 0.5                        # 既定 0.5: 正しい計測が起きる重み
+    z_max: 0.05                       # 既定 0.05: 最大距離が返る (何も当たらない) 重み
+    z_rand: 0.5                       # 既定 0.5: でたらめな値が返る重み
+    z_short: 0.05                     # 既定 0.05: 手前の未知障害物に当たる重み
+    max_beams: 120                    # 既定 60: 1 スキャンから使うビーム数。根拠未記録
+    scan_topic: scan                  # 既定 scan: 購読するスキャン
+    # ── 粒子フィルタ ──
+    max_particles: 8000               # 既定 2000: 粒子数の上限。根拠未記録
+    min_particles: 1000               # 既定 500: 粒子数の下限。根拠未記録
+    pf_err: 0.05                      # 既定 0.05: KLD サンプリングの許容誤差
+    pf_z: 0.99                        # 既定 0.99: KLD サンプリングの信頼水準
+    resample_interval: 1              # 既定 1: 何回の更新ごとにリサンプルするか
+    recovery_alpha_fast: 0.1          # 既定 0.0 (無効): 短期の平均尤度の忘却率。根拠未記録
+    recovery_alpha_slow: 0.001        # 既定 0.0 (無効): 長期の平均尤度の忘却率。根拠未記録
+    update_min_a: 0.05                # 既定 0.2 [rad]: この角度動くまでフィルタを更新しない。根拠未記録
+    update_min_d: 0.05                # 既定 0.25 [m]: この距離動くまで同上。根拠未記録
+    save_pose_rate: 0.5               # 既定 0.5 [Hz]: 推定姿勢をパラメータサーバへ保存する頻度
+
+    # ── 未設定 (既定のまま) ──
+    # set_initial_pose: false         # true で下の initial_pose.* を初期姿勢に使う (false は /initialpose 待ち)
+    # initial_pose.x: 0.0             # [m] set_initial_pose: true のときの初期姿勢
+    # initial_pose.y: 0.0             # [m]
+    # initial_pose.z: 0.0             # [m]
+    # initial_pose.yaw: 0.0           # [rad]
+    # always_reset_initial_pose: false  # リセット時に前回の推定姿勢を使わず必ず初期姿勢を要求する
+    # first_map_only: false           # 最初に受け取った /map だけを使い、以後の更新を無視する
+    # map_topic: "map"                # 購読する地図トピック

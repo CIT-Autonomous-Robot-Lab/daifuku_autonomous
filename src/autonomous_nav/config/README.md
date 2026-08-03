@@ -19,26 +19,65 @@ launch_ros はノード自身の `parameters=` をグローバル (`SetParameter
 
 ## コメントの書き方
 
-**既定値から変えたキーにだけ**、1 行で理由を書きます。変えていないキーには
-コメントを付けません（付けると、どれを触ったのか分からなくなります）。
+**すべてのキーに 1 行**で `# 既定 <値>: <何の値か>` を書きます。既定から変えた
+キーには、続けて変えた理由も書きます。
 
 ```yaml
-controller_frequency: 10.0   # 既定 20.0: Pi4 が飽和し bond 心拍が途絶えた
+controller_frequency: 10.0   # 既定 20.0 [Hz]: 制御周期。Pi4 が飽和し bond 心拍が途絶えた
+resample_interval: 1         # 既定 1: 何回の更新ごとにリサンプルするか
 ```
 
-「既定」が何を指すかは各ファイルの冒頭に書いてあります。
+各ファイルの末尾には、**そのノードが持っているのにここで設定していないキー**を
+コメントアウトで並べます。既定値と説明も同じ形で書きます。
+
+```yaml
+    # ── 未設定 (既定のまま) ──
+    # first_map_only: false   # 最初に受け取った /map だけを使い、以後の更新を無視する
+```
+
+「既定」はすべて**ノードの実装**（`declare_parameter` など）から採った値です。
+出どころは各ファイルの冒頭に書いてあります。
 
 | ファイル | 「既定」の出どころ |
 | --- | --- |
-| `nav2/*.yaml` | `nav2_bringup` の `nav2_params.yaml` |
+| `nav2/amcl.yaml` | `nav2_amcl` の `amcl_node.cpp` |
+| `nav2/behaviors.yaml` | `nav2_smoother` / `nav2_behaviors` / `nav2_waypoint_follower` / `nav2_velocity_smoother` |
+| `nav2/bt_navigator.yaml` | `nav2_bt_navigator` と `nav2_behavior_tree` の `bt_action_server_impl.hpp` |
+| `nav2/controller_server.yaml` | `nav2_controller` と `nav2_dwb_controller`（`dwb_core` / `dwb_plugins` / `dwb_critics`） |
+| `nav2/costmaps.yaml` | `nav2_costmap_2d` の `costmap_2d_ros.cpp` と各レイヤプラグイン |
+| `nav2/map_server.yaml` | `nav2_map_server` の `map_server.cpp` / `map_saver.cpp` |
+| `nav2/planner_server.yaml` | `nav2_planner` と `nav2_navfn_planner` |
 | `nav2/vi_planner.yaml` | 各ノードの `main.rs` の `declare_parameter` |
-| `localization/emcl2.yaml` | `src/emcl2_ros2` の `declare_parameter` |
-| `robot/raspicat.yaml` | 上流 `raspicat_ros` の `config/raspicat.param.yaml` |
+| `localization/emcl2.yaml` | `src/emcl2_ros2` の `emcl2_node.cpp` |
+| `mapping/slam_toolbox.yaml` | `slam_toolbox` の `slam_toolbox_common.cpp` / `slam_mapper.cpp` / `laser_utils.cpp` / `ceres_solver.cpp` |
+| `sensors/mid360_ekf.yaml` | `robot_localization` の `ros_filter.cpp` |
+| `sensors/mid360_scan.yaml` | `pointcloud_to_laserscan` の `pointcloud_to_laserscan_node.cpp` |
+| `sensors/scan_filter.yaml` | `laser_filters` の `sector_filter.h`（既定なし＝全項目必須） |
+| `robot/raspicat.yaml` | 上流 `raspicat_ros` の `raspicat/config/raspicat.param.yaml` |
 | `overrides/*.yaml` | 重ねる先の断片の値（「断片 60:」のように書きます） |
+
+見ているブランチは、`robot_localization` が `humble-devel`、`laser_filters` が
+`ros2`（Humble ブランチが無いため）、それ以外はすべて `humble` です。
+
+`nav2_bringup` が配っている `nav2_params.yaml` は**ノードの既定とは違う**値を
+いくつか持つので（`use_astar`、`expected_planner_frequency`、`save_map_timeout`、
+`FollowPath.plugin` など）、そちらを「既定」と呼ばないでください。食い違うキーは
+ファイル側に注記してあります。
 
 1 行に収まらない計測や経緯は、ファイルには書かずに下の「値の由来」へ書き、
 コメントからは `../README.md` を指します。地図や環境に固有の話は
 `overrides/<名前>.yaml` 側に置きます。
+
+### 効かないキー
+
+宣言されていないキーを書いても、ROS 2 はエラーも警告も出さずに無視します。
+調査で見つかったものは、消さずに「効かない」と注記してあります。
+
+| キー | 状況 |
+| --- | --- |
+| `emcl2.open_space_threshold` | 上流 README の表にはあるが、この版の `emcl2_ros2` は `declare_parameter` していない |
+| `ekf_filter_node.odom0_nodelay` / `imu0_nodelay` | 上流ドキュメントにはあるが、ROS 2 版の `ros_filter.cpp` は読まない（ROS 1 の `tcpNoDelay` 由来） |
+| `controller_server.FollowPath.stateful` | DWB に無い。ゴール判定側の同名パラメータと混同したもの |
 
 ## nav2/ の合成
 
@@ -140,8 +179,9 @@ vi_global_planner:
 
 ### `costmaps.yaml` の `footprint`
 
-既定は `robot_radius: 0.22`（nav2 の既定値そのままで、この機体を測った値では
-ありません）。2026-08-03 の実測で車体は 420 (幅) x 450 (奥行) mm、`base_footprint`
+以前は `robot_radius: 0.22` でした。`nav2_bringup` の `nav2_params.yaml` の値を
+そのまま使っていたもので、この機体を測った値ではありません（ノードの既定は
+`robot_radius: 0.1`）。2026-08-03 の実測で車体は 420 (幅) x 450 (奥行) mm、`base_footprint`
 は車軸中心の真下にあり、タイヤ（直径 200mm）の前端が車体前端と一致するので車軸は
 前端から 100mm です。したがって `base_footprint` 基準の張り出しは
 **前 +0.10 / 後 −0.35 / 左右 ±0.21 [m]** で、原点は大きく前寄りになります。
@@ -248,8 +288,10 @@ load が 10〜19 まで跳ね、bond 形成が間に合わずライフサイク�
 
 ### `controller_server` の `transform_tolerance: 1.0`
 
-既定は 0.2。2026-07-29 の実機計測で `map->odom` の遅延は 67 件すべてが
-0.20〜0.47 s に収まり、最小値がちょうど 0.2 = 閾値そのものでした。閾値の直上に
+変更前は 0.2 でした（DWB のノード既定は 0.1 で、0.2 は `nav2_bringup` の
+`nav2_params.yaml` にあった RPP ブロックの値。DWB へ差し替えたときに一緒に
+引き継がれたものです）。2026-07-29 の実機計測で `map->odom` の遅延は 67 件すべてが
+0.20〜0.47 s に収まり、最小値がちょうど当時の閾値 0.2 と同値でした。閾値の直上に
 貼り付いた定常オフセットで、emcl2 の TF 再発行は約 110ms 間隔で一定（＝止まって
 はいない）。遅延の実体は
 `livox -> pointcloud_to_laserscan -> restamp_scan -> filter chain -> emcl2` の
@@ -319,7 +361,7 @@ nav2 既定は 1000ms。`planner:=vi` では `vi_global_planner` が `/map` を�
   楽観側は通路を細らせない代わりに壁側に寄るので、実測の `footprint`
   （420x450mm、外接円 0.408m）/ `inflation_radius` 0.55 と合わせて通れるかは
   経路ごとに確認を。`map_scale: 5` 到達を確認した当時のコストマップは
-  `robot_radius` 0.22（nav2 の既定値のまま）だったので、実機のほうが厳しい。
+  `robot_radius` 0.22（`nav2_bringup` の yaml のまま）だったので、実機のほうが厳しい。
 * この地図は 68.2% が未観測 (205) で、真の占有セルは 0.4% しかありません。
   `unknown_as_obstacle: true`（既定）だと未観測が全て壁になる＝舗装路のみ通行可。
   一方 emcl2/AMCL のスキャンマッチングは占有セルの尤度場を使うので、この地図では

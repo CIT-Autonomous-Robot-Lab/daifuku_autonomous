@@ -1,9 +1,19 @@
-# ライフサイクルマネージャの bond タイムアウト。navigation.launch.py の
-# SetParametersFromFile で、include 先 (nav2 navigation_launch.py) のマネージャにも
-# 注入される。経緯は README.md の「値の由来」を参照。
+# ライフサイクルマネージャの bond タイムアウト。
+# 「既定」= nav2_lifecycle_manager (humble) の lifecycle_manager.cpp。
+# navigation.launch.py の SetParametersFromFile で、include 先
+# (nav2 navigation_launch.py) のマネージャにも注入される。
+# 経緯は README.md の「値の由来」を参照。
+
 lifecycle_manager_navigation:
   ros__parameters:
-    bond_timeout: 60.0    # 既定 4.0 [s]: Pi4 の同時起動で bond 形成が間に合わない
+    bond_timeout: 60.0    # 既定 4.0 [s]: bond 形成待ちと心拍途絶の判定時間。Pi4 の同時起動で間に合わない
+
 lifecycle_manager_localization:
   ros__parameters:
     bond_timeout: 60.0    # 既定 4.0 [s]: 同上
+
+# ── 未設定 (既定のまま。両マネージャ共通) ──
+# node_names: [...]                    # 管理するノード名の並び。nav2 の launch が渡す
+# autostart: false                     # 起動時に自動で activate まで進めるか。launch の autostart:= が渡す
+# bond_respawn_max_duration: 10.0      # [s] 落ちたノードの再出現を待つ上限。超えると bringup を諦める
+# attempt_respawn_reconnection: true   # bond が切れたノードの再接続を試みるか

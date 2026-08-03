@@ -31,7 +31,7 @@ vi_global_planner:
     # goal_margin_radius) はセットで効く。1 つでも欠けると波がゴール近傍で止まり、
     # 到達列 1 で「収束」する。scale 6 は楽観でも通路のセル幅が足りず解けない。
     map_scale: 5                         # 断片 1: 内部だけ 0.25m/cell (5650 万状態)
-    downsample_policy: "optimistic"      # 断片 conservative: 保守側だと通路のセル幅が死ぬ
+    downsample_policy: "optimistic"      # 既定 conservative (断片は未設定): 保守側だと通路のセル幅が死ぬ
     action_forward_m: [0.5, -0.3333, 0.0, 0.3333, 0.0, 0.3333]  # 断片の 5/3 倍 (セル比例)
     allow_action_mismatch: true          # 断片 false: 上行が vi_core 定数と変わるため
     goal_margin_radius: 0.5              # 断片 0.3: ゴールセル数を 7 に保つ (セル比例)
@@ -54,8 +54,8 @@ vi_global_planner:
 vi_planner:
   ros__parameters:
     solver: "frontier2d_sparse_compact"  # 断片 frontier2d_sparse: 密だと 3.17GB で OOM
-    map_scale: 5                         # 断片 1: 内部だけ 0.25m/cell (5650 万状態)
-    downsample_policy: "optimistic"      # 断片 conservative: 保守側だと通路のセル幅が死ぬ
+    map_scale: 5                         # 既定 1 (断片は未設定): 内部だけ 0.25m/cell (5650 万状態)
+    downsample_policy: "optimistic"      # 既定 conservative (断片は未設定): 保守側だと通路のセル幅が死ぬ
     action_forward_m: [0.5, -0.3333, 0.0, 0.3333, 0.0, 0.3333]  # 断片の 5/3 倍 (セル比例)
     allow_action_mismatch: true          # 断片 false: 上行が vi_core 定数と変わるため
     goal_margin_radius: 0.5              # 断片 0.3: ゴールセル数を 7 に保つ (セル比例)
@@ -63,6 +63,16 @@ vi_planner:
     max_rollout_steps: 100000            # 断片 10000: 広域では遠い start から届かない
     # vi_global_planner とは別ディレクトリにして、2 構成を続けて試すときに互いの出力を
     # 踏まないようにする。追従はパッチ置き直しのたびに読むので SD カード上は避けたい。
-    compact_sink_dir: "/tmp/vi_planner_sink"          # 断片 "" (= RAM): 0.68GB を退避
+    compact_sink_dir: "/tmp/vi_planner_sink"          # 既定 "" (= RAM、断片は未設定): 0.68GB を退避
     vi_threads: 3                        # 断片 0 (= 4 コア): 1 コアを stack に残す
     publish_value_function: false        # 断片 true: 配信のたび sink を全走査するため
+
+# ── ここで上書きしていないもの ────────────────────────────────────────────
+# emcl2 は断片のまま (sensor_reset だけノード既定と違う) で走る (ヘッダの注意 1)。この地図は 68.2% が
+# 未観測なので、次も上書きが要るかもしれない。いずれも**未検証**。
+#   emcl2 の 3 つ (alpha_threshold / expansion_radius_orientation / sensor_reset)
+#     … alpha 崩壊が起きたら map_19f.yaml から写す。
+#   costmaps.*.track_unknown_space / vi の unknown_as_obstacle … 未観測を通行可に
+#     するかどうか。今はどちらも「未観測 = 通れない」= 舗装路のみ通行可。
+#   compact_ram_limit_mb (vi_global_planner のみ) … compact_sink_dir を指定して
+#     いるので効かない。RAM 出力に戻すときだけ意味を持つ。

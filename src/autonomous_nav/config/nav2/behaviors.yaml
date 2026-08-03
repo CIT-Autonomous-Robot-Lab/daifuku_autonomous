@@ -1,68 +1,92 @@
 # 経路の平滑化・リカバリ行動・ウェイポイント追従・速度平滑化。
-# 「既定」= nav2_bringup の nav2_params.yaml。合成順序と上書きは ../README.md を参照。
+# 「既定」= nav2_smoother / nav2_behaviors / nav2_waypoint_follower /
+# nav2_velocity_smoother (humble) の declare_parameter。
+# 合成順序と上書きは ../README.md を参照。
 
 smoother_server:
   ros__parameters:
     use_sim_time: false
-    smoother_plugins: ["simple_smoother"]
+    smoother_plugins: ["simple_smoother"]   # 既定 ["simple_smoother"]: 読み込む平滑化器の名前の並び
     simple_smoother:
-      plugin: "nav2_smoother::SimpleSmoother"
-      tolerance: 1.0e-10
-      max_its: 1000
-      do_refinement: true
+      plugin: "nav2_smoother::SimpleSmoother"  # 既定 同左
+      tolerance: 1.0e-10              # 既定 1e-10: 反復を打ち切る変化量のしきい値
+      max_its: 1000                   # 既定 1000: 反復回数の上限
+      do_refinement: true             # 既定 true: 平滑化後にもう一度精密化を回す
+
+    # ── 未設定 (既定のまま) ──
+    # costmap_topic: "global_costmap/costmap_raw"       # 衝突判定に使うコストマップ
+    # footprint_topic: "global_costmap/published_footprint"
+    # robot_base_frame: "base_link"   # ▲ 機体は base_footprint だが、SimpleSmoother は使わない
+    # transform_tolerance: 0.1        # [s] TF を引くときの許容遅延
+    # simple_smoother.w_data: 0.2     # 元の経路に留まろうとする重み
+    # simple_smoother.w_smooth: 0.3   # 滑らかにしようとする重み
 
 
 behavior_server:
   ros__parameters:
-    costmap_topic: local_costmap/costmap_raw
-    footprint_topic: local_costmap/published_footprint
-    cycle_frequency: 10.0
+    costmap_topic: local_costmap/costmap_raw            # 既定 同左: 衝突判定に使うコストマップ
+    footprint_topic: local_costmap/published_footprint  # 既定 同左
+    cycle_frequency: 10.0             # 既定 10.0 [Hz]: リカバリ行動を回す周期
+    # 既定 ["spin","backup","drive_on_heading","wait"]: assisted_teleop を足してある
     behavior_plugins: ["spin", "backup", "drive_on_heading", "assisted_teleop", "wait"]
     spin:
-      plugin: "nav2_behaviors/Spin"
+      plugin: "nav2_behaviors/Spin"              # 既定 同左: その場旋回で周囲を見直す
     backup:
-      plugin: "nav2_behaviors/BackUp"
+      plugin: "nav2_behaviors/BackUp"            # 既定 同左: 指定距離だけ後退する
     drive_on_heading:
-      plugin: "nav2_behaviors/DriveOnHeading"
+      plugin: "nav2_behaviors/DriveOnHeading"    # 既定 同左: 指定方位へ直進する
     wait:
-      plugin: "nav2_behaviors/Wait"
+      plugin: "nav2_behaviors/Wait"              # 既定 同左: 指定時間止まって様子を見る
     assisted_teleop:
-      plugin: "nav2_behaviors/AssistedTeleop"
-    global_frame: odom
-    robot_base_frame: base_footprint  # 既定 base_link: URDF に base_link が無い
-    transform_tolerance: 0.1
+      plugin: "nav2_behaviors/AssistedTeleop"    # 既定なし (宣言必須): 手動操作に衝突回避を足す。
+                                                 # assisted_teleop は既定の behavior_plugins に無いので .plugin に既定が無い
+    global_frame: odom                # 既定 odom: リカバリ中の基準フレーム
+    robot_base_frame: base_footprint  # 既定 base_link: 機体フレーム。URDF に base_link が無い
+    transform_tolerance: 0.1          # 既定 0.1 [s]: TF を引くときの許容遅延
     use_sim_time: false
-    simulate_ahead_time: 2.0
-    max_rotational_vel: 1.0
-    min_rotational_vel: 0.5           # 既定 0.4: 根拠未記録
-    rotational_acc_lim: 3.2
+    # 以下 4 つは Spin / DriveOnHeading プラグインがノード直下 (名前空間なし) に
+    # 宣言するので、プラグイン名の下ではなくここに書く。
+    simulate_ahead_time: 2.0          # 既定 2.0 [s]: 行動前に衝突しないか先読みする時間
+    max_rotational_vel: 1.0           # 既定 1.0 [rad/s]: Spin の旋回速度の上限
+    min_rotational_vel: 0.5           # 既定 0.4 [rad/s]: 同下限。根拠未記録
+    rotational_acc_lim: 3.2           # 既定 3.2 [rad/s^2]: Spin の角加速度の上限
+
+    # ── 未設定 (既定のまま) ──
+    # assisted_teleop.projection_time: 1.0        # [s] 手動操作の先読み時間
+    # assisted_teleop.simulation_time_step: 0.1   # [s] 上記の刻み
+    # assisted_teleop.cmd_vel_teleop: "cmd_vel_teleop"  # 手動操作を受け取るトピック
+    # drive_on_heading.acceleration_limit: 0.0    # [m/s^2] 0 = 制限しない
+    # drive_on_heading.deceleration_limit: 0.0    # [m/s^2]
+    # drive_on_heading.minimum_speed: 0.0         # [m/s]
+    # backup.acceleration_limit / deceleration_limit / minimum_speed: 0.0
+    #     ▲ BackUp は DriveOnHeading の派生なので同じ 3 つを持つ
 
 
 waypoint_follower:
   ros__parameters:
     use_sim_time: false
-    loop_rate: 20
-    stop_on_failure: false
-    waypoint_task_executor_plugin: "wait_at_waypoint"
+    loop_rate: 20                     # 既定 20 [Hz]: ウェイポイント消化ループの周期
+    stop_on_failure: false            # 既定 true: 1 点失敗したら残りを諦めるか。false で次へ進む
+    waypoint_task_executor_plugin: "wait_at_waypoint"  # 既定 同左: 各点に着いたとき実行する処理
     wait_at_waypoint:
-      plugin: "nav2_waypoint_follower::WaitAtWaypoint"
-      enabled: true
-      waypoint_pause_duration: 200
+      plugin: "nav2_waypoint_follower::WaitAtWaypoint" # 既定 同左
+      enabled: true                   # 既定 true: この処理を有効にするか
+      waypoint_pause_duration: 200    # 既定 0 [ms]: 各点で止まる時間
 
 
 velocity_smoother:
   ros__parameters:
     use_sim_time: false
-    smoothing_frequency: 20.0
-    scale_velocities: false
-    feedback: "OPEN_LOOP"
-    # 既定 ±0.26 [m/s] は TurtleBot3 の最高速。DWB の max_vel_x 0.4 に揃えた
-    # (ここが低いと controller_server の出力が頭打ちになる)。
-    max_velocity: [0.4, 0.0, 1.0]
-    min_velocity: [-0.4, 0.0, -1.0]
-    max_accel: [2.5, 0.0, 3.2]
-    max_decel: [-2.5, 0.0, -3.2]
-    odom_topic: "odom"
-    odom_duration: 0.1
-    deadband_velocity: [0.0, 0.0, 0.0]
-    velocity_timeout: 1.0
+    smoothing_frequency: 20.0         # 既定 20.0 [Hz]: 平滑化して cmd_vel を出す周期
+    scale_velocities: false           # 既定 false: 加速度制限に掛かったとき全軸を比例縮小する
+    feedback: "OPEN_LOOP"             # 既定 OPEN_LOOP: 前回指令を基準にする。CLOSED_LOOP は odom を基準にする
+    # 並びは [x, y, theta]。既定 ±0.5 / ±2.5 は nav2 の一般値。
+    # DWB の max_vel_x 0.4 に揃えてある (ここが低いと controller の出力が頭打ちになる)。
+    max_velocity: [0.4, 0.0, 1.0]     # 既定 [0.5, 0.0, 2.5]: 速度の上限
+    min_velocity: [-0.4, 0.0, -1.0]   # 既定 [-0.5, 0.0, -2.5]: 速度の下限
+    max_accel: [2.5, 0.0, 3.2]        # 既定 [2.5, 0.0, 3.2]: 加速度の上限
+    max_decel: [-2.5, 0.0, -3.2]      # 既定 [-2.5, 0.0, -3.2]: 減速度の上限
+    odom_topic: "odom"                # 既定 odom: CLOSED_LOOP のとき現在速度を読むトピック
+    odom_duration: 0.1                # 既定 0.1 [s]: 上記の平均を取る窓
+    deadband_velocity: [0.0, 0.0, 0.0]  # 既定 [0,0,0]: これ未満の指令を 0 に落とす (静止時のうなり対策)
+    velocity_timeout: 1.0             # 既定 1.0 [s]: cmd_vel が途切れたら 0 を出すまでの時間

@@ -1,63 +1,86 @@
+# SLAM Toolbox (mapping モード) の設定。
+# 「既定」= slam_toolbox (humble) の src/slam_toolbox_common.cpp / src/slam_mapper.cpp /
+# src/laser_utils.cpp / solvers/ceres_solver.cpp の declare_parameter。
+# mapping.launch.py が slam_params_file でノードへ直接渡す。
+
 slam_toolbox:
   ros__parameters:
-    solver_plugin: solver_plugins::CeresSolver
-    ceres_linear_solver: SPARSE_NORMAL_CHOLESKY
-    ceres_preconditioner: SCHUR_JACOBI
-    ceres_trust_strategy: LEVENBERG_MARQUARDT
-    ceres_dogleg_type: TRADITIONAL_DOGLEG
-    ceres_loss_function: None
+    # ── ループ閉じ込みのソルバ (Ceres) ──
+    solver_plugin: solver_plugins::CeresSolver     # 既定 同左: 姿勢グラフ最適化の実装
+    ceres_linear_solver: SPARSE_NORMAL_CHOLESKY    # 既定 同左: 線形ソルバ (他に SPARSE_SCHUR / ITERATIVE_SCHUR / CGNR)
+    ceres_preconditioner: SCHUR_JACOBI             # 既定 JACOBI: 前処理行列。反復系ソルバでのみ効く
+    ceres_trust_strategy: LEVENBERG_MARQUARDT      # 既定 "LM": 信頼領域法。コードは "DOGLEG" 以外を全て LM 扱いにするので実質既定と同じ
+    ceres_dogleg_type: TRADITIONAL_DOGLEG          # 既定 同左: DOGLEG を選んだときの種別
+    ceres_loss_function: None                      # 既定 None: 外れ値に強くする損失関数 (HuberLoss を選べる)
 
-    odom_frame: odom
-    map_frame: map
-    base_frame: base_footprint
-    scan_topic: /scan
-    mode: mapping
-    use_map_saver: true
+    # ── フレームとトピック ──
+    odom_frame: odom                # 既定 odom: オドメトリのフレーム
+    map_frame: map                  # 既定 map: 作る地図のフレーム
+    base_frame: base_footprint      # 既定 base_footprint: 機体フレーム
+    scan_topic: /scan               # 既定 /scan: 購読するスキャン
+    mode: mapping                   # 既定 mapping: mapping / localization
+    use_map_saver: true             # 既定 true: 地図保存サービスを立てる
 
-    debug_logging: false
-    throttle_scans: 1
-    transform_publish_period: 0.02
-    map_update_interval: 1.0
-    resolution: 0.05
-    min_laser_range: 0.06
-    max_laser_range: 10.0
-    minimum_time_interval: 0.1
-    transform_timeout: 0.2
-    tf_buffer_duration: 30.0
-    stack_size_to_use: 40000000
-    enable_interactive_mode: true
+    # ── 動作 ──
+    debug_logging: false            # 既定 false: デバッグログを出す
+    throttle_scans: 1               # 既定 1: 何スキャンに 1 枚使うか
+    transform_publish_period: 0.02  # 既定 0.05 [s]: map -> odom TF を出す周期。50Hz に上げてある
+    map_update_interval: 1.0        # 既定 10.0 [s]: /map を作り直す周期。作図中の見えを良くするため短くした
+    resolution: 0.05                # 既定 0.05 [m/cell]: 出力地図のセルサイズ
+    min_laser_range: 0.06           # 既定 0.0 [m]: これより近い点を捨てる
+    max_laser_range: 10.0           # 既定 25.0 [m]: これより遠い点を捨てる (Mid-360 の実用域に合わせた)
+    minimum_time_interval: 0.1      # 既定 0.5 [s]: 2 枚のスキャンを取り込む最小間隔
+    transform_timeout: 0.2          # 既定 0.5 [s]: TF 待ちの上限
+    tf_buffer_duration: 30.0        # 既定 30.0 [s]: TF バッファの長さ
+    stack_size_to_use: 40000000     # 既定 40000000 [byte]: 直列化に使うスレッドスタック。大きい地図で要る
+    enable_interactive_mode: true   # 既定 false: RViz から姿勢グラフのノードを掴んで直せるようにする
 
-    use_scan_matching: true
-    use_scan_barycenter: true
-    minimum_travel_distance: 0.1
-    minimum_travel_heading: 0.1
-    scan_buffer_size: 30
-    scan_buffer_maximum_scan_distance: 6.0
-    link_match_minimum_response_fine: 0.1
-    link_scan_maximum_distance: 1.5
-    loop_search_maximum_distance: 3.0
-    do_loop_closing: true
-    loop_match_minimum_chain_size: 10
-    loop_match_maximum_variance_coarse: 3.0
-    loop_match_minimum_response_coarse: 0.35
-    loop_match_minimum_response_fine: 0.45
+    # ── スキャンマッチングとループ閉じ込み (Karto Mapper) ──
+    use_scan_matching: true         # 既定 true: 隣接スキャン同士を合わせるか (false だと odom 頼み)
+    use_scan_barycenter: true       # 既定 true: スキャンの重心を代表点にする (false は機体位置)
+    minimum_travel_distance: 0.1    # 既定 0.5 [m]: これだけ動くまで新しいスキャンを取らない
+    minimum_travel_heading: 0.1     # 既定 0.5 [rad]: 同、回転
+    scan_buffer_size: 30            # 既定 10: 直近スキャンを何枚保持して照合するか
+    scan_buffer_maximum_scan_distance: 6.0  # 既定 10.0 [m]: バッファに残す距離の上限
+    link_match_minimum_response_fine: 0.1   # 既定 0.1: 隣接スキャンを結ぶのに要る一致度
+    link_scan_maximum_distance: 1.5 # 既定 1.5 [m]: 隣接として結ぶ距離の上限
+    loop_search_maximum_distance: 3.0       # 既定 3.0 [m]: ループ候補を探す半径
+    do_loop_closing: true           # 既定 true: ループ閉じ込みを行うか
+    loop_match_minimum_chain_size: 10       # 既定 10: ループとみなすのに要る連続スキャン数
+    loop_match_maximum_variance_coarse: 3.0 # 既定 3.0: 粗探索で許す共分散の上限
+    loop_match_minimum_response_coarse: 0.35  # 既定 0.35: 粗探索で要る一致度
+    loop_match_minimum_response_fine: 0.45  # 既定 0.45: 精探索で要る一致度
 
-    correlation_search_space_dimension: 0.5
-    correlation_search_space_resolution: 0.01
-    correlation_search_space_smear_deviation: 0.1
+    # ── 相関スキャンマッチャの探索窓 (隣接スキャン用) ──
+    correlation_search_space_dimension: 0.5       # 既定 0.5 [m]: 探索窓の一辺
+    correlation_search_space_resolution: 0.01     # 既定 0.01 [m]: 探索の刻み
+    correlation_search_space_smear_deviation: 0.1 # 既定 0.1 [m]: 尤度をぼかす量
 
-    loop_search_space_dimension: 8.0
-    loop_search_space_resolution: 0.05
-    loop_search_space_smear_deviation: 0.03
+    # ── 同、ループ閉じ込み用 (広く粗く探す) ──
+    loop_search_space_dimension: 8.0        # 既定 8.0 [m]: 探索窓の一辺
+    loop_search_space_resolution: 0.05      # 既定 0.05 [m]: 探索の刻み
+    loop_search_space_smear_deviation: 0.03 # 既定 0.03 [m]: 尤度をぼかす量
 
-    distance_variance_penalty: 0.5
-    angle_variance_penalty: 1.0
+    # ── マッチング結果の罰則 (odom から離れるほど不利にする) ──
+    distance_variance_penalty: 0.5  # 既定 0.5: 位置がずれたときの罰
+    angle_variance_penalty: 1.0     # 既定 1.0: 角度がずれたときの罰
 
-    fine_search_angle_offset: 0.00349
-    coarse_search_angle_offset: 0.349
-    coarse_angle_resolution: 0.0349
-    minimum_angle_penalty: 0.9
-    minimum_distance_penalty: 0.5
-    use_response_expansion: true
-    min_pass_through: 2
-    occupancy_threshold: 0.1
+    fine_search_angle_offset: 0.00349   # 既定 0.00349 [rad]: 精探索の角度刻み (0.2 度)
+    coarse_search_angle_offset: 0.349   # 既定 0.349 [rad]: 粗探索の角度範囲 (20 度)
+    coarse_angle_resolution: 0.0349     # 既定 0.0349 [rad]: 粗探索の角度刻み (2 度)
+    minimum_angle_penalty: 0.9      # 既定 0.9: 角度罰の下限 (これ未満には下げない)
+    minimum_distance_penalty: 0.5   # 既定 0.05: 位置罰の下限。根拠未記録
+    use_response_expansion: true    # 既定 true: 一致度が低いとき探索窓を広げて再試行する
+    min_pass_through: 2             # 既定 2: セルを空きと確定するのに要るビーム通過回数
+    occupancy_threshold: 0.1        # 既定 0.1: 占有とみなす確率のしきい値
+
+    # ── 未設定 (既定のまま) ──
+    # map_name: "/map"              # 地図を配信するトピック名
+    # scan_queue_size: 1            # スキャン購読キュー長
+    # position_covariance_scale: 1.0  # 出力する姿勢の位置共分散に掛ける係数
+    # yaw_covariance_scale: 1.0     # 同、角度共分散
+    # restamp_tf: false             # 発行する TF のスタンプを現在時刻に打ち直す
+    # paused_new_measurements: false  # 起動直後にスキャンの取り込みを止めておく
+    # map_file_name: ""             # 既存の姿勢グラフを読み込んで続きから作図する
+    # map_start_pose: [0.0, 0.0, 0.0]  # 上記を読み込むときの開始姿勢
+    # map_start_at_dock: false      # 上記の代わりにドック位置から始める

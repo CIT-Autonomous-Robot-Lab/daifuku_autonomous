@@ -1,34 +1,39 @@
 # EMCL2 の自己位置推定 (localization:=emcl2、既定)。
-# 「既定」= src/emcl2_ros2 の declare_parameter の値。
+# 「既定」= src/emcl2_ros2 の emcl2_node.cpp の declare_parameter。
 # emcl2 は nav2 のノードではないので params_file を通らず、emcl2_params_file で
 # ノードへ直接渡る。地図ごとの調整はここではなく overrides/ に置く (../README.md)。
 
 emcl2:
   ros__parameters:
     use_sim_time: false
-    odom_freq: 20
-    num_particles: 500
-    odom_frame_id: "odom"
-    footprint_frame_id: "base_footprint"
-    base_frame_id: "base_footprint"     # 既定 base_link: URDF に base_link が無い
-    global_frame_id: "map"
-    initial_pose_x: 0.0
-    initial_pose_y: 0.0
-    initial_pose_a: 0.0
-    odom_fw_dev_per_fw: 0.19
-    odom_fw_dev_per_rot: 0.0001
-    odom_rot_dev_per_fw: 0.13
-    odom_rot_dev_per_rot: 0.2
-    laser_likelihood_max_dist: 0.2
-    scan_increment: 1
+    odom_freq: 20                       # 既定 20 [Hz]: 粒子を動かして姿勢を出す周期
+    num_particles: 500                  # 既定 500: 粒子数
+    odom_frame_id: "odom"               # 既定 odom: オドメトリのフレーム
+    footprint_frame_id: "base_footprint"  # 既定 base_footprint: 出力する姿勢のフレーム
+    base_frame_id: "base_footprint"     # 既定 base_link: LiDAR の TF を引く基準。URDF に base_link が無い
+    global_frame_id: "map"              # 既定 map: 地図のフレーム
+    initial_pose_x: 0.0                 # 既定 0.0 [m]: 起動時の初期姿勢 (RViz で上書きする)
+    initial_pose_y: 0.0                 # 既定 0.0 [m]
+    initial_pose_a: 0.0                 # 既定 0.0 [rad]
+    odom_fw_dev_per_fw: 0.19            # 既定 0.19: 前進量あたりの前進の標準偏差 (運動モデル)
+    odom_fw_dev_per_rot: 0.0001         # 既定 0.0001: 回転量あたりの前進の標準偏差
+    odom_rot_dev_per_fw: 0.13           # 既定 0.13: 前進量あたりの回転の標準偏差
+    odom_rot_dev_per_rot: 0.2           # 既定 0.2: 回転量あたりの回転の標準偏差
+    laser_likelihood_max_dist: 0.2      # 既定 0.2 [m]: 尤度場で壁の影響が届く距離
+    scan_increment: 1                   # 既定 1: 何本に 1 本ビームを使うか (2 で半分に間引く)
     # リセット系の 3 つ (alpha_threshold / expansion_radius_orientation /
     # sensor_reset) は地図と環境の一致度で決まるので、ここは既定のままにして
     # 地図ごとの値は overrides/<地図名>.yaml に置く。19F の値と経緯は
     # ../overrides/map_19f.yaml を参照。
-    alpha_threshold: 0.5
+    alpha_threshold: 0.5                # 既定 0.5: 非貫通率がこれ未満で膨張リセットを起こす
     open_space_threshold: 0.05          # 宣言なし: この版の emcl2 は未実装なので効かない
-    expansion_radius_position: 0.1
-    expansion_radius_orientation: 0.2
-    extraction_rate: 0.1
-    range_threshold: 0.3                # 既定 0.1: 上流 config/emcl2.param.yaml に合わせた
-    sensor_reset: true                  # 既定 false: 根拠未記録 (a3f2899、../README.md)
+    expansion_radius_position: 0.1      # 既定 0.1 [m]: 膨張リセットで粒子をばらまく位置の幅
+    expansion_radius_orientation: 0.2   # 既定 0.2 [rad]: 同、姿勢の幅
+    extraction_rate: 0.1                # 既定 0.1: センサリセットで置き換える粒子の割合
+    range_threshold: 0.3                # 既定 0.1 [m]: 壁をこれ以上貫通したら「貫通」とみなす。上流 config/emcl2.param.yaml に合わせた
+    sensor_reset: true                  # 既定 false: 貫通した粒子を壁際へ引き戻す。根拠未記録 (a3f2899、../README.md)
+
+    # ── 未設定 (既定のまま) ──
+    # transform_tolerance: 0.2          # [s] 発行する map -> odom TF に持たせる有効期限
+    # laser_min_range: 0.0              # [m] これより近いビームを捨てる
+    # laser_max_range: 100000000.0      # [m] これより遠いビームを捨てる

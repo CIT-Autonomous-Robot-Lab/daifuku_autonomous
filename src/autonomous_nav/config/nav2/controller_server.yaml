@@ -1,65 +1,108 @@
-# local_planner:=nav2 のローカルプランナ。「既定」= nav2_bringup の nav2_params.yaml。
+# local_planner:=nav2 のローカルプランナ (controller_server + DWB)。
+# 「既定」= nav2_controller / nav2_dwb_controller (humble) の declare_parameter。
 # local_planner:=vi では起動せず、vi_planner が follow_path も提供する。
 # 合成順序と上書きは ../README.md を参照。
 
 controller_server:
   ros__parameters:
     use_sim_time: false
-    controller_frequency: 10.0        # 既定 20.0: Pi4 が飽和し bond 心拍が途絶えた
-    min_x_velocity_threshold: 0.001
-    min_y_velocity_threshold: 0.5
-    min_theta_velocity_threshold: 0.001
-    failure_tolerance: 0.3
-    progress_checker_plugin: "progress_checker"
-    goal_checker_plugins: ["general_goal_checker"]
-    controller_plugins: ["FollowPath"]
+    controller_frequency: 10.0        # 既定 20.0 [Hz]: 制御周期。Pi4 が飽和し bond 心拍が途絶えた
+    min_x_velocity_threshold: 0.001   # 既定 0.0001 [m/s]: これ未満のオドメトリ速度を 0 とみなす
+    min_y_velocity_threshold: 0.5     # 既定 0.0001 [m/s]: 同 (差動二輪なので y は常に 0 扱いでよい)
+    min_theta_velocity_threshold: 0.001  # 既定 0.0001 [rad/s]: 同
+    failure_tolerance: 0.3            # 既定 0.0 [s]: 制御が連続で失敗しても耐える時間 (0 = 即中断)
+    progress_checker_plugin: "progress_checker"    # 既定 "progress_checker": 進捗判定の名前
+    goal_checker_plugins: ["general_goal_checker"] # 既定 ["goal_checker"]: ゴール判定の名前の並び
+    controller_plugins: ["FollowPath"]             # 既定 ["FollowPath"]: 追従器の名前の並び
     progress_checker:
-      plugin: "nav2_controller::SimpleProgressChecker"
-      required_movement_radius: 0.5
-      movement_time_allowance: 10.0
+      plugin: "nav2_controller::SimpleProgressChecker"  # 既定 同左
+      required_movement_radius: 0.5   # 既定 0.5 [m]: この距離動けば「進んでいる」とみなす
+      movement_time_allowance: 10.0   # 既定 10.0 [s]: 動かないまま許される時間
     general_goal_checker:
-      stateful: true
-      plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.25
-      yaw_goal_tolerance: 0.25
-    # 既定は RegulatedPurePursuitController。DWB に差し替えてあるので、以下は
-    # 上流と 1 行ずつ対応しない (RPP のキーは消え、DWB のキーが入っている)。
+      stateful: true                  # 既定 true: 位置到達後は向きだけ合わせる (位置判定を保持)
+      plugin: "nav2_controller::SimpleGoalChecker"  # 既定なし (宣言必須): 既定の id は goal_checker なので
+                                                    # 改名した general_goal_checker には .plugin の既定が無い
+      xy_goal_tolerance: 0.25         # 既定 0.25 [m]: ゴール到達とみなす位置誤差
+      yaw_goal_tolerance: 0.25        # 既定 0.25 [rad]: 同、角度誤差
+    # DWB は controller_server の**ノード既定**の追従器。nav2_bringup が配っている
+    # nav2_params.yaml だけが RegulatedPurePursuitController に差し替えているので、
+    # 以下はその yaml と 1 行ずつ対応しない。
+    # 既定値は dwb_core / dwb_plugins / dwb_critics のもの。
     FollowPath:
-      plugin: "dwb_core::DWBLocalPlanner"
-      debug_trajectory_details: true
-      min_vel_x: 0.0
-      min_vel_y: 0.0
-      max_vel_x: 0.4
-      max_vel_y: 0.0
-      max_vel_theta: 1.0
-      min_speed_xy: 0.0
-      max_speed_xy: 0.4
-      min_speed_theta: 0.0
-      acc_lim_x: 2.5
-      acc_lim_y: 0.0
-      acc_lim_theta: 3.2
-      decel_lim_x: -2.5
-      decel_lim_y: 0.0
-      decel_lim_theta: -3.2
-      vx_samples: 20
-      vy_samples: 5
-      vtheta_samples: 20
-      sim_time: 1.7
-      linear_granularity: 0.05
-      angular_granularity: 0.025
-      transform_tolerance: 1.0        # DWB 既定 0.2 [s]: スキャン経路の遅延と同値で落ちていた
-      xy_goal_tolerance: 0.25
-      trans_stopped_velocity: 0.25
-      short_circuit_trajectory_evaluation: true
-      stateful: true
+      plugin: "dwb_core::DWBLocalPlanner"   # 既定 同左 (nav2_bringup の yaml だけ RPP)
+      debug_trajectory_details: true  # 既定 false: 却下された軌道の内訳をログに出す
+      # ── 速度・加速度の枠 (dwb_plugins/KinematicParameters) ──
+      # 既定はすべて 0.0 = 「動けない」ので、DWB を使うなら必ず埋める必要がある。
+      min_vel_x: 0.0                  # 既定 0.0 [m/s]: 前後速度の下限 (負で後退可)
+      min_vel_y: 0.0                  # 既定 0.0 [m/s]: 横速度の下限 (差動二輪は 0)
+      max_vel_x: 0.4                  # 既定 0.0 [m/s]: 前進速度の上限
+      max_vel_y: 0.0                  # 既定 0.0 [m/s]: 横速度の上限
+      max_vel_theta: 1.0              # 既定 0.0 [rad/s]: 旋回速度の上限
+      min_speed_xy: 0.0               # 既定 0.0 [m/s]: 並進速さの下限 (合成値)
+      max_speed_xy: 0.4               # 既定 0.0 [m/s]: 並進速さの上限 (合成値)
+      min_speed_theta: 0.0            # 既定 0.0 [rad/s]: 旋回速さの下限
+      acc_lim_x: 2.5                  # 既定 0.0 [m/s^2]: 前後の加速度上限
+      acc_lim_y: 0.0                  # 既定 0.0 [m/s^2]
+      acc_lim_theta: 3.2              # 既定 0.0 [rad/s^2]: 旋回の加速度上限
+      decel_lim_x: -2.5               # 既定 0.0 [m/s^2]: 前後の減速度上限 (負値)
+      decel_lim_y: 0.0                # 既定 0.0 [m/s^2]
+      decel_lim_theta: -3.2           # 既定 0.0 [rad/s^2]: 旋回の減速度上限 (負値)
+      # ── 軌道サンプリング (dwb_plugins/XYThetaIterator, StandardTrajectoryGenerator) ──
+      vx_samples: 20                  # 既定 20: vx 方向のサンプル数
+      vy_samples: 5                   # 既定 5: vy 方向のサンプル数
+      vtheta_samples: 20              # 既定 20: 旋回のサンプル数
+      sim_time: 1.7                   # 既定 1.7 [s]: 1 本の軌道を前方予測する時間
+      linear_granularity: 0.05        # 既定 0.5 [m]: 軌道を刻む並進間隔 (細かいほど正確・重い)
+      angular_granularity: 0.025      # 既定 0.025 [rad]: 同、回転間隔
+      transform_tolerance: 1.0        # 既定 0.1 [s]: 姿勢を経路の frame へ変換するときの許容遅延。スキャン経路の遅延と同値で落ちていた
+      xy_goal_tolerance: 0.25         # 既定 0.25 [m]: RotateToGoal が「ゴール圏内」と判定する距離
+      trans_stopped_velocity: 0.25    # 既定 0.25 [m/s]: RotateToGoal が「停止した」とみなす速さ
+      short_circuit_trajectory_evaluation: true  # 既定 true: 途中で最良を超えたら残りの critic を打ち切る
+      stateful: true                  # ▲ DWB に無いキー: 効かない (goal checker 側の同名パラメータと混同したもの)
+      # ── 評価関数 (dwb_critics) ──
+      # <critic>.scale は TrajectoryCritic 基底が持ち、既定はどれも 1.0。
+      # 既定なし (宣言必須): 使う評価関数の並び
       critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
-      BaseObstacle.scale: 0.02
-      PathAlign.scale: 32.0
-      PathAlign.forward_point_distance: 0.1
-      GoalAlign.scale: 24.0
-      GoalAlign.forward_point_distance: 0.1
-      PathDist.scale: 32.0
-      GoalDist.scale: 24.0
-      RotateToGoal.scale: 32.0
-      RotateToGoal.slowing_factor: 5.0
-      RotateToGoal.lookahead_time: -1.0
+      BaseObstacle.scale: 0.02        # 既定 1.0: 障害物への近さの罰。軌道上のセルコストの合計
+      PathAlign.scale: 32.0           # 既定 1.0: 経路と機体の向きを揃える
+      PathAlign.forward_point_distance: 0.1   # 既定 0.325 [m]: 向きを見るために前方に置く点の距離
+      GoalAlign.scale: 24.0           # 既定 1.0: ゴールの方を向かせる
+      GoalAlign.forward_point_distance: 0.1   # 既定 0.325 [m]: 同上
+      PathDist.scale: 32.0            # 既定 1.0: 経路からの横ずれの罰
+      GoalDist.scale: 24.0            # 既定 1.0: ゴールまでの残距離
+      RotateToGoal.scale: 32.0        # 既定 1.0: ゴール手前で向きを合わせる
+      RotateToGoal.slowing_factor: 5.0        # 既定 5.0: ゴール圏内で速度を落とす割合
+      RotateToGoal.lookahead_time: -1.0       # 既定 -1.0 [s]: 減速判断の先読み時間 (負で無効)
+
+      # ── 未設定 (既定のまま) ──
+      # prune_plan: true              # 通過済みの経路点を捨てる
+      # prune_distance: 2.0           # [m] 機体の後ろ何 m まで残すか
+      # forward_prune_distance: 2.0   # [m] 前方の探索範囲
+      # shorten_transformed_plan: true            # costmap の外へ出る経路を切り詰める
+      # trajectory_generator_name: "dwb_plugins::StandardTrajectoryGenerator"
+      # default_critic_namespaces: []             # critic 名を探す追加の名前空間
+      # discretize_by_time: false     # 軌道を距離でなく時間で刻む
+      # time_granularity: 0.5         # [s] discretize_by_time: true のときの刻み
+      # include_last_point: true      # 軌道の終端点を含める
+      # limit_vel_cmd_in_traj: false  # 生成した軌道の初速を現在速度に制限する
+      # publish_evaluation: true      # 評価結果 (全軌道のスコア) を配信する
+      # publish_global_plan: true     # 受け取った経路をそのまま配信する
+      # publish_transformed_plan: true            # 変換後の経路を配信する
+      # publish_local_plan: true      # 採用した軌道を配信する
+      # publish_trajectories: true    # 候補軌道を配信する
+      # publish_cost_grid_pc: false   # critic のコスト場を点群で配信する (重い)
+      # marker_lifetime: 0.1          # [s] 上記可視化マーカの寿命
+      # BaseObstacle.sum_scores: false            # 軌道上のコストを合計する (false は最大値)
+      # Oscillation.oscillation_reset_dist: 0.05  # [m] これだけ動いたら振動判定を解除
+      # Oscillation.oscillation_reset_angle: 0.2  # [rad] 同、角度
+      # Oscillation.oscillation_reset_time: -1.0  # [s] 同、時間 (負で無効)
+      # Oscillation.x_only_threshold: 0.05        # [m/s] これ未満なら前後方向だけで振動判定する
+      # PathAlign.aggregation_type: "last"        # MapGrid 系の集約方法 (last / sum / product)
+      # PathDist.aggregation_type: "last"
+      # GoalAlign.aggregation_type: "last"
+      # GoalDist.aggregation_type: "last"
+
+    # ── 未設定 (既定のまま) ──
+    # speed_limit_topic: "speed_limit"  # 速度制限を受け取るトピック
+    # publish_zero_velocity: true       # 追従の終わりにゼロ Twist を出す
+    # general_goal_checker.symmetric_yaw_tolerance: false  # 前後どちら向きでもゴールとみなす

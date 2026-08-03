@@ -9,77 +9,94 @@
 #   local_planner:=nav2 … vi_global_planner (広域のみ) + controller_server (DWB)。
 #
 # 両者で意味の同じキーは値を揃えること (どちらで起動しても挙動が変わらないように)。
-# pose_topic / scan_topic は launch 側が上書きする。
 
 # ── local_planner:=vi: 統合プランナ (planner_server + controller_server 置換) ──
 vi_planner:
   ros__parameters:
     use_sim_time: false
-    solver: "frontier2d_sparse"   # compact 系は非対応 (起動時に弾かれる)
-    theta_cell_num: 60
-    safety_radius: 0.2            # [m] 障害物近傍ペナルティ半径 (VI 内部の膨張)
-    safety_radius_penalty: 30     # [秒/セル] 障害物に近寄る代わりに払う迂回コスト
-    goal_margin_radius: 0.3       # [m] ゴール圏 (final_state) 判定半径 = ゴール許容差
-    goal_margin_theta: 15.0       # [deg]
-    map_wait_sec: 60              # 既定 30 [s]: 広域地図では /map の到着が遅い
-    vi_threads: 0                 # 0 = 論理コア数 (VI_THREADS)
-    solve_chunk: 64               # プリエンプト観測間隔 (VI イテレーション)
-    max_solve_iter: 1000000
-    goal_tolerance_xy: 0.25       # [m] 価値関数キャッシュを再利用するゴール一致判定
-    goal_tolerance_deg: 10.0      # [deg]
-    unknown_as_obstacle: true
+    solver: "frontier2d_sparse"   # 既定 同左: 密ソルバ。compact 系は追従側が非対応 (起動時に弾かれる)
+    theta_cell_num: 60            # 既定 60: 姿勢の離散数。vi_rs のコンパイル時定数 N_THETA と一致必須
+    safety_radius: 0.2            # 既定 0.2 [m]: 障害物近傍ペナルティの半径 (VI 内部の膨張)
+    safety_radius_penalty: 30     # 既定 30 [秒/セル]: 障害物に近寄る代わりに払う迂回コスト
+    goal_margin_radius: 0.3       # 既定 0.3 [m]: ゴール圏 (final_state) 判定半径 = ゴール許容差
+    goal_margin_theta: 15.0       # 既定 15.0 [deg]: 同、角度
+    map_wait_sec: 60              # 既定 30 [s]: /map の到着待ち上限。広域地図では遅い
+    vi_threads: 0                 # 既定 0 (= 論理コア数): 価値反復のスレッド数 (VI_THREADS)
+    solve_chunk: 64               # 既定 64 [イテレーション]: プリエンプト (中断要求) を見る間隔
+    max_solve_iter: 1000000       # 既定 1000000: 価値反復の打ち切り回数
+    goal_tolerance_xy: 0.25       # 既定 0.25 [m]: 価値関数キャッシュを再利用するゴール一致判定
+    goal_tolerance_deg: 10.0      # 既定 10.0 [deg]: 同、角度
+    unknown_as_obstacle: true     # 既定 true: 未観測セルを障害物として扱う
     # ── 広域 (compute_path_to_pose) ──
-    max_rollout_steps: 10000
-    start_tolerance: 0.5          # [m] start が方策なしセルのときの近傍スナップ半径
-    path_spacing: 0.05            # [m] Path の姿勢間隔 (0 で無効)
+    max_rollout_steps: 10000      # 既定 10000: 方策を辿って経路を作るときの最大手数
+    start_tolerance: 0.5          # 既定 0.5 [m]: start が方策なしセルのときの近傍スナップ半径
+    path_spacing: 0.05            # 既定 0.05 [m]: 出力する Path の姿勢間隔 (0 で補間しない)
     # ── 狭域 (follow_path) ──
-    control_frequency: 10.0       # [Hz] 制御周期
-    refine_budget_ms: 40          # [ms/tick] ローカルウィンドウ価値反復の時間予算
-    action_tolerance: 0.2         # [m] 方策なしセルでの近傍行動探索半径
-    no_action_timeout_sec: 3.0    # pose/方策なしがこの秒数続いたら追従を中断
+    control_frequency: 10.0       # 既定 10.0 [Hz]: cmd_vel を出す周期
+    refine_budget_ms: 40          # 既定 40 [ms/tick]: ローカルウィンドウ価値反復に使う時間予算
+    action_tolerance: 0.2         # 既定 0.2 [m]: 方策なしセルでの近傍行動探索半径
+    no_action_timeout_sec: 3.0    # 既定 3.0 [s]: pose か方策が無い状態がこれだけ続いたら追従を中断
     # ── 可視化 (経路計算には影響しない) ──
-    publish_value_function: true
-    value_publish_interval_ms: 500  # [ms] solve 途中経過の配信間隔 (0 で完了時のみ)
+    publish_value_function: true  # 既定 true: /value_function を配信するか
+    value_publish_interval_ms: 500  # 既定 500 [ms]: solve 途中経過の配信間隔 (0 で完了時のみ)
     # 色スケール上限 [ステップ数≒秒]。地図ごとに測り直す値なので、ここは地図非依存の
     # 既定のまま。19F の 180 は ../overrides/map_19f.yaml、選び方は ../README.md。
-    cost_drawing_threshold: 60
-    window_cost_drawing_threshold: 60   # local_window_value (±1m 窓) 用
-    allow_action_mismatch: false
-    action_names: ["forward", "back", "right", "rightfw", "left", "leftfw"]
-    action_forward_m: [0.3, -0.2, 0.0, 0.2, 0.0, 0.2]
-    action_rotation_deg: [0.0, 0.0, -20.0, -20.0, 20.0, 20.0]
+    cost_drawing_threshold: 60    # 既定 60: /value_function の色スケール上限
+    window_cost_drawing_threshold: 60  # 既定 60: /local_window_value (±1m 窓) の色スケール上限
+    # ── 行動集合 (前進量と回転量の組。要素数は 3 つの配列で揃えること) ──
+    allow_action_mismatch: false  # 既定 false: 下の値が vi_core の定数と違うとき起動を止める
+    action_names: ["forward", "back", "right", "rightfw", "left", "leftfw"]  # 既定 同左
+    action_forward_m: [0.3, -0.2, 0.0, 0.2, 0.0, 0.2]      # 既定 同左 [m]: 各行動の前進量
+    action_rotation_deg: [0.0, 0.0, -20.0, -20.0, 20.0, 20.0]  # 既定 同左 [deg]: 各行動の回転量
+
+    # ── 未設定 (既定のまま) ──
+    # map_scale: 1                # プランナ内部で地図を粗くする倍率 (1 = /map のまま)
+    # downsample_policy: "conservative"  # map_scale > 1 のときの縮小方針。conservative = 障害物優先、
+    #                             # optimistic = ブロック内に free が 1 つでもあれば free
+    # compact_sink_dir: ""        # アウトオブコア (compact) 解の置き場 ("" = RAM)
+    #     ▲ 上 3 つの実例は ../overrides/map_tsudanuma.yaml
+    # pose_topic: "mcl_pose"      # 自己位置を読むトピック。launch が上書きする
+    # scan_topic: "scan"          # スキャンを読むトピック。launch が上書きする
+    # global_frame: "map"         # 出力する Path のフレーム
 
 # ── local_planner:=nav2: 広域のみ (planner_server 置換、追従は controller_server) ──
 vi_global_planner:
   ros__parameters:
     use_sim_time: false
-    solver: "frontier2d_sparse"   # U64Solver::from_name の任意のソルバ名
+    solver: "frontier2d_sparse"   # 既定 同左: U64Solver::from_name が受ける任意のソルバ名
     # 以下 3 つは広域地図用のアウトオブコア経路 (frontier2d_sparse_compact) の設定。
     # 既定は「使わない」= 全状態を RAM に置く密ソルバのまま。実例は
     # ../overrides/map_tsudanuma.yaml。
-    map_scale: 1                  # プランナ内部で地図を粗くする倍率 (1 = /map のまま)
-    compact_sink_dir: ""          # compact の確定出力先 ("" = RAM)
-    compact_ram_limit_mb: 512     # RAM 出力がこれを超えると自動でディスクへ退避
-    theta_cell_num: 60
-    safety_radius: 0.2            # [m] 障害物近傍ペナルティ半径 (VI 内部の膨張)
-    safety_radius_penalty: 30     # [秒/セル] 障害物に近寄る代わりに払う迂回コスト
-    goal_margin_radius: 0.3       # [m] ゴール圏 (final_state) 判定半径
-    goal_margin_theta: 15.0       # [deg]
-    map_wait_sec: 60              # 既定 30 [s]: 広域地図では /map の到着が遅い
-    vi_threads: 0                 # 0 = 論理コア数 (VI_THREADS)
-    solve_chunk: 64               # プリエンプト観測間隔 (VI イテレーション)
-    max_solve_iter: 1000000
-    max_rollout_steps: 10000
-    start_tolerance: 0.5          # [m] start が方策なしセルのときの近傍スナップ半径
-    path_spacing: 0.05            # [m] Path の姿勢間隔 (DWB 向け補間; 0 で無効)
-    goal_tolerance_xy: 0.25       # [m] 価値関数キャッシュを再利用するゴール一致判定
-    goal_tolerance_deg: 10.0      # [deg]
-    # 色スケール上限 [ステップ数≒秒]。vi_planner の同名キーと同じ扱い。
-    cost_drawing_threshold: 60
-    publish_value_function: true
-    value_publish_interval_ms: 500  # [ms] solve 途中経過の配信間隔 (0 で完了時のみ)
-    unknown_as_obstacle: true
-    allow_action_mismatch: false
-    action_names: ["forward", "back", "right", "rightfw", "left", "leftfw"]
-    action_forward_m: [0.3, -0.2, 0.0, 0.2, 0.0, 0.2]
-    action_rotation_deg: [0.0, 0.0, -20.0, -20.0, 20.0, 20.0]
+    map_scale: 1                  # 既定 1: プランナ内部で地図を粗くする倍率 (1 = /map のまま)
+    compact_sink_dir: ""          # 既定 "": compact の確定出力先 ("" = RAM)
+    compact_ram_limit_mb: 512     # 既定 512 [MB]: RAM 出力がこれを超えると自動でディスクへ退避
+    theta_cell_num: 60            # 既定 60: 姿勢の離散数
+    safety_radius: 0.2            # 既定 0.2 [m]: 障害物近傍ペナルティの半径
+    safety_radius_penalty: 30     # 既定 30 [秒/セル]: 障害物に近寄る代わりに払う迂回コスト
+    goal_margin_radius: 0.3       # 既定 0.3 [m]: ゴール圏 (final_state) 判定半径
+    goal_margin_theta: 15.0       # 既定 15.0 [deg]: 同、角度
+    map_wait_sec: 60              # 既定 30 [s]: /map の到着待ち上限。広域地図では遅い
+    vi_threads: 0                 # 既定 0 (= 論理コア数): 価値反復のスレッド数
+    solve_chunk: 64               # 既定 64 [イテレーション]: プリエンプトを見る間隔
+    max_solve_iter: 1000000       # 既定 1000000: 価値反復の打ち切り回数
+    max_rollout_steps: 10000      # 既定 10000: 方策を辿って経路を作るときの最大手数
+    start_tolerance: 0.5          # 既定 0.5 [m]: start が方策なしセルのときの近傍スナップ半径
+    path_spacing: 0.05            # 既定 0.05 [m]: Path の姿勢間隔 (DWB 向け補間; 0 で無効)
+    goal_tolerance_xy: 0.25       # 既定 0.25 [m]: 価値関数キャッシュを再利用するゴール一致判定
+    goal_tolerance_deg: 10.0      # 既定 10.0 [deg]: 同、角度
+    cost_drawing_threshold: 60    # 既定 60: /value_function の色スケール上限 (vi_planner と同じ扱い)
+    publish_value_function: true  # 既定 true: /value_function を配信するか
+    value_publish_interval_ms: 500  # 既定 500 [ms]: solve 途中経過の配信間隔 (0 で完了時のみ)
+    unknown_as_obstacle: true     # 既定 true: 未観測セルを障害物として扱う
+    allow_action_mismatch: false  # 既定 false: 下の値が vi_core の定数と違うとき起動を止める
+    action_names: ["forward", "back", "right", "rightfw", "left", "leftfw"]  # 既定 同左
+    action_forward_m: [0.3, -0.2, 0.0, 0.2, 0.0, 0.2]      # 既定 同左 [m]
+    action_rotation_deg: [0.0, 0.0, -20.0, -20.0, 20.0, 20.0]  # 既定 同左 [deg]
+
+    # ── 未設定 (既定のまま) ──
+    # downsample_policy: "conservative"  # map_scale > 1 のときの縮小方針
+    # pose_topic: "mcl_pose"      # 自己位置を読むトピック。launch が上書きする
+    # global_frame: "map"         # 出力する Path のフレーム
+    #     ▲ vi_global_planner は広域専用なので scan_topic / control_frequency /
+    #       refine_budget_ms / action_tolerance / no_action_timeout_sec /
+    #       window_cost_drawing_threshold は**そもそも持たない**。
