@@ -37,7 +37,6 @@ vi_global_planner:
     goal_margin_radius: 0.5              # 断片 0.3: ゴールセル数を 7 に保つ (セル比例)
     # tmpfs でないこと (`findmnt -no FSTYPE /tmp`)。tmpfs だと RAM に載って無意味。
     compact_sink_dir: "/tmp/vi_global_planner_sink"   # 断片 "" (= RAM): 0.68GB を退避
-    vi_threads: 3                        # 断片 0 (= 4 コア): 1 コアを stack に残す
     safety_radius_penalty: 1             # 断片 30: 30 だと貪欲ロールアウトが降下できない
     max_rollout_steps: 100000            # 断片 10000: 広域では遠い start から届かない
     publish_value_function: false        # 断片 true: 2.6MB の grid を繰り返し配信するため
@@ -64,8 +63,11 @@ vi_planner:
     # vi_global_planner とは別ディレクトリにして、2 構成を続けて試すときに互いの出力を
     # 踏まないようにする。追従はパッチ置き直しのたびに読むので SD カード上は避けたい。
     compact_sink_dir: "/tmp/vi_planner_sink"          # 既定 "" (= RAM、断片は未設定): 0.68GB を退避
-    vi_threads: 3                        # 断片 0 (= 4 コア): 1 コアを stack に残す
     publish_value_function: false        # 断片 true: 配信のたび sink を全走査するため
+    # compact には狭域 → 広域のフィードバックに使う共有場が無いので明示的に切る。
+    # true のままだと launch の _validate_vi_solver が「黙って効かない設定」として
+    # 起動を止める。この地図では狭域が避けても広域の経路は障害物を通り続ける。
+    global_sweep: false                  # 断片 true: compact には共有する states が無い
 
 # ── ここで上書きしていないもの ────────────────────────────────────────────
 # emcl2 は断片のまま (sensor_reset だけノード既定と違う) で走る (ヘッダの注意 1)。この地図は 68.2% が
@@ -74,5 +76,6 @@ vi_planner:
 #     … alpha 崩壊が起きたら map_19f.yaml から写す。
 #   costmaps.*.track_unknown_space / vi の unknown_as_obstacle … 未観測を通行可に
 #     するかどうか。今はどちらも「未観測 = 通れない」= 舗装路のみ通行可。
-#   compact_ram_limit_mb (vi_global_planner のみ) … compact_sink_dir を指定して
-#     いるので効かない。RAM 出力に戻すときだけ意味を持つ。
+#   compact_ram_limit_mb … 断片が両ノードとも 2048MB だが、compact_sink_dir を指定
+#     しているので効かない。RAM 出力に戻すときだけ意味を持つ (sink 0.68GB なので
+#     2048MB には収まってしまい、退避されない)。

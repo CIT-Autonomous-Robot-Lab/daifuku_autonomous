@@ -24,18 +24,41 @@ emcl2:
     expansion_radius_orientation: 0.05  # 断片 0.2 (EMCL2 既定 0.2): リセット時の姿勢の飛びを抑える
     sensor_reset: false                 # 断片 true (EMCL2 既定 false): 貫通粒子の引き戻しを止める
 
-# ── 価値反復プランナ (表示のみ) ─────────────────────────────────────────────
+# ── 価値反復プランナ ────────────────────────────────────────────────────────
+# map_scale は**プランナ内部だけ**の解像度で、/map・コストマップ・emcl2 は 0.05m の
+# まま。2 で 458x289 @0.10m = 794 万状態 (scale 1 の 3168 万の 1/4)。代償は 0.10m/cell
+# の粗さと、保守的プーリングで通路が片側最大 0.05m 細ること。
+#
+# **ここで 2 にしている理由は密ソルバを載せるため。** vi_planner の狭域 → 広域の
+# フィードバック (global_sweep) は `states` を共有場として使うので、密でないと
+# 成立しない (compact は states を作らない)。密の常駐は 80 B/state — states 56 +
+# sweep_orders 24 — で、scale 1 なら 2.5GB、**2 なら実測 654.8MB** (states 444.7 +
+# sweep_orders 210.1)。4GB の Pi4 で他のノードと同居できるのは後者だけ。
+# かつてここには「scale > 1 は密ソルバでは通らない」と書いてあったが前提が逆で、
+# scale は密を**載せるための**手段。launch の _validate_vi_solver もそれに合わせて
+# 直してあり、いまメモリ上限を見るのはノード側の dense_limit_mb。
+#
+# **未検証** — この地図・この scale での solve 時間と経路、および全域 1 掃きの
+# 実時間は測っていない (host 実測 5.23M cells/s から Pi4 で 1 掃き 8〜11 秒の見込み。
+# 実測値は起動ログの "global sweep done in" に出る)。参考に 2026-07-29 の実機は
+# compact scale 1 で solve 29.25s / RSS 833MB で通っている。
+#
+# map_tsudanuma の scale 5 は downsample_policy / action_forward_m /
+# goal_margin_radius とセットだが、2 では 1 手 3 セル・ゴール半径 3 セル・
+# safety_radius 2 セルが残るので断片のまま。両ノードに同じ map_scale を置くのは、
+# 片方だけだと同じ地図なのに 2 構成で別の経路が出るため。
+#
 # cost_drawing_threshold は value_function の色スケール上限 [ステップ数≒秒] で、
-# **表示専用**。180 は 2026-07-29 に 19F で測った到達ステップ数の分布 (中央値 60 /
-# p90 110 / p99 300 / 最大 680) の p90-p99 間。断片の 60 では到達可能セルの 66% が
-# 飽和する。導出は ../README.md。地図ごとに測り直すこと。
+# **表示専用**。導出は ../README.md。地図ごとに測り直すこと。
 vi_planner:
   ros__parameters:
-    cost_drawing_threshold: 180         # 断片 60: 19F の到達ステップ分布に合わせた
+    map_scale: 2                       # 既定 1 (断片は未設定): 内部だけ 0.10m/cell (794 万状態)。密を載せるため
+    cost_drawing_threshold: 60         # 断片 60: 19F の到達ステップ分布に合わせた
 
 vi_global_planner:
   ros__parameters:
-    cost_drawing_threshold: 180         # 断片 60: 同上
+    map_scale: 2                       # 断片 1: 同上 (vi_planner と揃える)
+    cost_drawing_threshold: 60         # 断片 60: 同上
 
 # ── ここで上書きしていないもの ────────────────────────────────────────────
 # この地図では断片 (= ほぼノード既定) のままで足りている。上書きが要るとしたら
@@ -46,3 +69,11 @@ vi_global_planner:
 #     0.408m を下回らせないこと (../nav2/costmaps.yaml)。
 #   vi_planner.safety_radius_penalty … 通路が細くて貪欲ロールアウトが固着する
 #     とき。map_tsudanuma では 1 まで下げている。
+#   vi_planner/vi_global_planner.compact_sink_dir … sink を RAM から追い出すとき。
+#     断片の compact_ram_limit_mb (2048MB) による自動退避先は /tmp/vi_*_sink (コンテナの
+#     書き込み層 = SD カード) なので、逃がすなら速い場所を明示するほうがよい。vi_planner の
+#     追従はパッチ置き直しのたびに sink を読むので、遅い先だと制御周期に響く。
+#     19F は scale 2 で sink 0.095GB なので、そもそも退避しない。
+#   vi_planner/vi_global_planner.downsample_policy … 通路のセル幅が足りず波が
+#     ゴール近傍で止まるとき。map_scale >= 4 では optimistic が必須だが、2 では
+#     保守側でも通路が片側 0.05m しか細らないので既定のまま。

@@ -390,8 +390,9 @@ nav2 既定は 1000ms。`planner:=vi` では `vi_global_planner` が `/map` を�
   `map_scale` とアウトオブコア経路 (`frontier2d_sparse_compact`) を持ちます。
   `vi_planner` の狭域追従だけは密な状態配列を要るので、全域ではなくロボット近傍の
   パッチ（±1m ウィンドウ + 遷移到達距離 + 余裕、0.25m セルで 27x27x60 ≒ 2.5MB）を
-  compact の場から起こして回します。ただし **`map_scale > 1` で密ソルバのままだと
-  launch が止めます** — 全域の状態配列 56 B/state を実際に確保してしまうためです。
+  compact の場から起こして回します。ただしこの地図では **`global_sweep: false` が
+  必須**です（下節）。compact には狭域 → 広域のフィードバックに使う共有場が無く、
+  true のままだと「黙って効かない設定」として launch が止めます。
 * `map_scale: 5` は `downsample_policy: optimistic`（ブロック内に free が 1 つでも
   あれば free）とセットです。既定の保守的プーリング（障害物優先）だと通路のセル幅が
   VI の遷移分布（約 2 セル幅）を下回り、`map_scale >= 4` で波がゴール近傍から広がりません。
@@ -411,3 +412,125 @@ nav2 既定は 1000ms。`planner:=vi` では `vi_global_planner` が `/map` を�
   emcl2 まで巻き込んで 900 秒でも `/plan` が出ません**。実機 Pi4 は 4 コアあるので
   同じにはなりませんが、`vi_threads: 3` を明示して 1 コアを stack に残すのは
   そのためです。実機での通し確認は別途。
+
+### `overrides/map_19f.yaml` の `map_scale: 2`
+
+`map_scale` は**プランナ内部だけ**の作業解像度です。`/map`・コストマップ・emcl2 は
+0.05 m/cell のままで、粗くなるのは VI が解く格子だけです。
+
+| | scale 1 | scale 2 |
+| --- | --- | --- |
+| プランナ内部の格子 | 915x577 @0.05m | 458x289 @0.10m |
+| 状態数（x60 θ） | 3168 万 | 794 万 |
+| compact の確定出力（12 B/state） | 0.38 GB | 0.095 GB |
+| **密の常駐（80 B/state）** | **2.53 GB** | **0.65 GB**（実測 654.8 MB） |
+
+**2 にしている理由は密ソルバを載せるためです。** `vi_planner` の狭域 → 広域の
+フィードバック（`global_sweep`、下節）は `states` を共有場として使うので、密で
+なければ成立しません。密の常駐は 80 B/state — `states` 56 B に加えて
+`set_sweep_orders` が掃き順を 6 本ぶん持つので +24 B/state — で、scale 1 の
+2.53 GB は 4 GB の Pi4 に他のノードと同居させられません。scale 2 の実測は
+**654.8 MB**（`states` 444.7 MB + `sweep_orders` 210.1 MB）です。
+
+以前ここには「`map_scale > 1` は密ソルバでは通らない（launch が止める）」と
+書いてありましたが、前提が逆でした。`map_scale` は密を**載せるための**手段です。
+launch の `_validate_vi_solver` もそれに合わせて直してあり、メモリ上限を見るのは
+ノード側の `dense_limit_mb`（既定 1500 MB、19F の断片では 2048 MB）です。地図の
+実寸はノードしか知らないので、そちらのほうが正確に判定できます。
+
+代償は 0.10 m/cell の粗さと、保守的プーリングで通路が片側最大 0.05 m 細ること。
+**未検証** — この地図・この scale での solve 時間と経路そのものは測っていません
+（参考: 2026-07-29 の実機は compact scale 1 で solve 29.25 s / RSS 833 MB / OOM なし）。
+
+`map_tsudanuma` の `map_scale: 5` は `downsample_policy` /`action_forward_m` /
+`goal_margin_radius` とセットでないと波がゴール近傍で止まりますが、2 では
+1 手 = 3 セル（`action_forward_m` 0.3 m）、ゴール半径 3 セル、`safety_radius` 2 セルが
+残るので断片のままにしてあります。楽観プーリングが要るのは `map_scale >= 4` からです。
+
+なお `cost_drawing_threshold` の分布計測（上節）自体が 0.10 m/cell の 458x289 で
+行われているので、scale 2 のほうが計測条件と一致します。
+
+### `vi_planner` の `global_sweep`（狭域 → 広域のフィードバック）
+
+`vi_planner` は 1 本の価値関数を広域（`compute_path_to_pose` のロールアウト）と
+狭域（`follow_path` の ±1m ウィンドウ）で共有します。狭域はスキャンのヒット点に
+`local_penalty` を書き込み、その場でウィンドウ内の価値反復を回して障害物を避けます。
+
+**ここに穴がありました。** ウィンドウ内の価値反復（`refine_pass_until`）が掃くのは
+ウィンドウの中だけなので、上がった値はそこで止まります。20 m 先から降りてくる
+広域のロールアウトは塞がった通路へ降り続け、着いてから初めて気づきます。結果として
+`compute_path_to_pose` が `LoopDetected` を返し、BT が復帰行動へ落ちます。
+
+`global_sweep` はこれを埋めるもので、同じ `states` を全域 Gauss–Seidel で掃き直し、
+局所で上がった値を外へ広げます。新しい Bellman 更新は書かず `value_iteration_at` を
+そのまま使うので、狭域・広域・solve の 3 者は同一の更新式のままです。
+
+* **密ソルバ専用です。** compact は `states` を作らず、追従は sink から起こした
+  パッチの上で回り、それは置き直しのたびに捨てられます（`hydrate` が
+  `local_penalty = 0` で潰します）。共有場が無いので掃きようがありません。
+  compact + `global_sweep: true` は launch が止めます（黙って効かない設定なので）。
+* **反応速度**: 合成テストでの実測は **1 掃き目で広域の価値が動き**、30 掃きで
+  ほぼ収束、数値的な完全収束（Δ=0）は約 80 掃きでした。収束を待つ必要はありません
+  — 掃くたび不動点へ単調に近づき、経路が変わるのは遥かに手前です。
+* **1 掃きの実時間**: 掃き速度の host 実測は 5.23 M cells/s なので、19F の scale 2
+  （794 万状態）なら 1.5 秒。Pi4 は同種の処理で 5〜8 倍遅いので **8〜11 秒**の見込み
+  です。既定の `global_sweep_budget_ms: 20` / `global_sweep_idle_ms: 60`（1 コアの
+  25%）だとその 4 倍かかります。**実測値は起動ログの `global sweep done in ...` に
+  出る**ので、そこから詰めてください。**未検証** — 実機での 1 掃きは測っていません。
+* **ロックの持ち方**が肝です。10 Hz の追従ループは同じ `Mutex<PlannerCore>` を
+  `try_lock` で取り、3 tick 続けて取れないとロボットを止めます。掃きは
+  `global_sweep_budget_ms` だけ掃いてロックを手放し、`global_sweep_idle_ms` 待ちます。
+  budget を伸ばすときは idle も一緒に伸ばさないと、走行がぎくしゃくします。
+* **止まるとき**: 1 掃き丸ごとで Δ=0 になったら新しい不動点に達したので、次に狭域が
+  場を動かすまで掃きは止まります（CPU を焼き続けません）。
+
+**ウィンドウの外の `local_penalty` は誰も消しません**（`set_local_cost` は
+`in_local_area` の中しか触らない）。障害物の脇を通り過ぎると、その penalty はその
+ゴールの間ずっと `states` に残り、全域掃きのたびに広域の場を歪め続けます。本家
+`ViNode` から引き継いだ挙動で、「一度通れないと分かった場所を覚えておく」という
+望ましい側の効果でもあるため意図的にそのままにしてあります。消したければゴールを
+取り直してください。誤検知（この地図では emcl2 の有効ビームの 28% が壁を貫通する）が
+残り続ける経路でもあるので、挙動が怪しいときはここを疑ってください。
+
+### `vi_planner` / `vi_global_planner` の `compact_ram_limit_mb: 2048`
+
+**これはプロセス全体のメモリ上限ではありません。** compact の確定出力（sink）を
+RAM に置いたままにする上限で、超えたぶんだけ `/tmp/vi_*_sink` へ mmap で逃がす、
+という分岐の閾値です。プロセスの実際のピークはこれとは別に決まります（19F の
+scale 1 では sink 0.38 GB がノード既定の 512 MB に収まって RAM に載っていたのに、
+実測の RSS は 833 MB でした）。
+
+**いま同梱している 2 つの地図では、512 → 2048 に上げても動作は変わりません。**
+19F の `vi_planner` は密ソルバなので sink を作らず、このキーは**そもそも読まれません**
+（`vi_global_planner` 側は compact のままで、scale 2 の sink 0.095 GB は 512 MB でも
+2048 MB でも RAM に載ります）。`map_tsudanuma` は両ノードとも `compact_sink_dir` を
+指定しているので、そもそもこの分岐（`main.rs` の「未指定でも上限を超えるなら退避」）に
+入りません。値が効いてくるのは `overrides:=none` や新しい地図で、
+`compact_sink_dir` を指定しないまま sink が 0.5 GB を超えたときです。そこで
+「SD カードへ逃がさず 2 GiB までは RAM で持つ」という意味になります。
+
+密ソルバ側の上限は別のキーです（`dense_limit_mb`、既定 1500 MB）。こちらは
+「超えたら退避する」ではなく **「超えたら起動を止める」** で、黙って確保して OOM
+killer に落とされるより理由を出して止めるためのものです。
+
+**代償**: 逃がさない代わりに、その 2 GiB は匿名メモリとして居座ります。Pi4（4 GB）で
+`compact_sink_dir` 無しの広域地図を解くと、512 MB で退避していたときには起きなかった
+OOM kill があり得ます（`vi_global_planner` が SIGKILL された実測は
+`simulator/docs/pi4_sim.md` の「C. 本命」）。広域地図を足すときは `compact_sink_dir` を
+セットで書くこと。
+
+VI のメモリを実際に頭打ちにしたいなら、手段は `map_scale` を上げる（状態数を
+減らす）、`compact_sink_dir` を実ディスクに向ける（sink を匿名メモリから外す）、
+`dense_limit_mb` で密の上限を切る、コンテナ側で `mem_limit` を掛ける、の
+いずれかです。
+
+このキーは元々 `vi_global_planner` にしかありませんでした。2026-08-04 に
+`vi_planner` にも同じ既定値（512 MB）・同じ判断順で実装したので、いまは両方に
+置けます。自動退避先だけがノードごとに違います（`/tmp/vi_global_planner_sink` /
+`/tmp/vi_planner_sink`）。
+
+ただし**ディスクへ逃がしたときの代償は `vi_planner` のほうが大きい**です。広域を
+1 回解くだけの `vi_global_planner` と違い、`vi_planner` の追従は 10 Hz の制御ループの
+中でパッチを置き直すたびに sink を読みます。コンテナの `/tmp` は tmpfs ではなく
+書き込み層（= SD カード）なので、自動退避に頼らず `compact_sink_dir` で速い場所を
+明示するほうが安全です。なお 19F の `vi_planner` はこの経路を使いません（密ソルバ）。

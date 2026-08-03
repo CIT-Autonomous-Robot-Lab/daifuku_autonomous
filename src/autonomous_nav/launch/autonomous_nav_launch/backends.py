@@ -75,14 +75,23 @@ def validate_planner(context, *args, **kwargs):
 
 
 def _validate_vi_solver(context):
-    """local_planner:=vi が実際に解ける設定になっているか見る。
+    """local_planner:=vi の設定に、静かに効かなくなる組み合わせが無いか見る。
+
+    見るのは 1 つだけ、**compact ソルバ + global_sweep** の組み合わせ。
 
     vi_planner は 1 ノードが compute_path_to_pose と follow_path の両方を
-    提供する (vi_global_planner は起動しない)。map_scale もアウトオブコア経路
-    (compact) も持つが、密ソルバのままだと状態配列 (56 B/state) を全域ぶん
-    **実際に**確保する。overrides が map_scale を上げている = 密には解けない
-    大きさの地図、ということなので、compact を選んでいない設定はここで止める
-    (auto で vi が選ばれた場合も同じ)。
+    提供する (vi_global_planner は起動しない)。密ソルバではその 2 つが同じ
+    ``states`` を共有するので、追従がスキャンから書いた local_penalty を
+    ``global_sweep`` が全域へ掃き広げれば、広域の経路も塞がった通路を避ける
+    ようになる。compact にはこの共有場が無い (``states`` を作らず、追従は
+    sink から起こしたパッチの上で回り、それは置き直しのたびに捨てられる) ので、
+    同じ設定でも**フィードバックだけが黙って効かなくなる**。
+
+    メモリの上限判定はここではやらない。地図の実寸はノードしか知らないので、
+    ``dense_limit_mb`` としてノード側に移した (超えたら起動時にエラーで止まる)。
+    かつてここには「map_scale > 1 なら密ソルバを禁止」という代理判定があったが、
+    前提が逆になった: map_scale は密を**載せるための**手段で、19F を 2 で解いた
+    密の実測は 655 MB しかない。
     """
     import yaml
 
@@ -90,20 +99,18 @@ def _validate_vi_solver(context):
     with open(value(context, "params_file")) as f:
         merged = yaml.safe_load(f) or {}
     vp = merged.get("vi_planner", {}).get("ros__parameters", {})
-    gp = merged.get("vi_global_planner", {}).get("ros__parameters", {})
-    # vi_planner セクションが無い overrides では、広域側の map_scale が
-    # 「この地図は密には解けない」という同じ合図になる。
-    scale = int(vp.get("map_scale", gp.get("map_scale", 1)))
     solver = str(vp.get("solver", ""))
-    if scale > 1 and not solver.endswith("_compact"):
+    if solver.endswith("_compact") and vp.get("global_sweep", True):
         raise RuntimeError(
-            f"local_planner:=vi with map_scale={scale} needs the out-of-core "
-            f"solver, but vi_planner.solver={solver or '(default, dense)'}.\n"
-            "map_scale > 1 means the map is too large to solve densely, and a "
-            "dense solve really allocates 56 B/state for the whole map.\n"
-            'Set vi_planner.solver: "frontier2d_sparse_compact" (plus '
-            "compact_sink_dir) in the overrides, or use local_planner:=nav2 "
-            "(vi_global_planner + controller_server)."
+            f"local_planner:=vi with vi_planner.solver={solver} and "
+            "global_sweep enabled.\n"
+            "The out-of-core (compact) solver never builds the shared `states` "
+            "array, so the local planner's scan penalties have no way to reach "
+            "the global value function: the robot would avoid obstacles locally "
+            "while compute_path_to_pose keeps returning a path through them.\n"
+            'Either use a dense solver ("frontier2d_sparse" — 19F at map_scale 2 '
+            "measures 655 MB, see src/autonomous_nav/config/README.md), or set "
+            "vi_planner.global_sweep: false to accept the old behaviour."
         )
 
 
