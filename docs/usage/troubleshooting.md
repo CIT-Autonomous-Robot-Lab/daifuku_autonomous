@@ -80,7 +80,7 @@ ros2 param get /lifecycle_manager_localization bond_timeout
 ずれている旨のログが、起動から数分後に出る場合です。Mid-360がPTP同期していないため、
 デバイス内蔵時計がPiのシステム時計に対して毎分数秒ずれていくことが原因です。
 
-`lidar:=mid360`では`scripts/restamp_scan.py`が受信時刻でスタンプを打ち直します。
+`lidar:=mid360`では`src/restamp_scan.py`が受信時刻でスタンプを打ち直します。
 中継が動いているか確認してください。
 
 ```bash
@@ -90,17 +90,19 @@ ros2 topic hz /scan_raw
 ```
 
 `/scan_mid360_prestamp`だけが流れて`/scan_raw`が止まっている場合は、中継ノードが
-起動していません。中継は`share/autonomous_nav/scripts/restamp_scan.py`を
+起動していません。中継は`share/autonomous_nav/src/restamp_scan.py`を
 `ExecuteProcess`で直接起動します。`ExecuteProcess`は失敗しても他のノードを止めないため、
 エラーが出ないまま`/scan_raw`だけが欠けた状態になります。まずファイルの有無を
 確認してください。
 
 ```bash
 ros2 pkg prefix autonomous_nav
-ls $(ros2 pkg prefix autonomous_nav)/share/autonomous_nav/scripts/
+ls $(ros2 pkg prefix autonomous_nav)/share/autonomous_nav/src/
 ```
 
-見つからなければ、`scripts`をインストールする前の`install/`が残っています。`colcon build`を
+見つからなければ、`src`をインストールする前の`install/`が残っています（`scripts/`から
+`src/`へ移す前の`install/`も同じで、古い`share/autonomous_nav/scripts/`だけが残ります）。
+`colcon build`を
 やり直してください（`docker/raspberrypi/`では`docker compose up`）。
 
 なお`lidar_driver:=false`（シミュレータやバッグ再生）では中継そのものを挟まず、

@@ -71,15 +71,15 @@ ros2 run <2d_lidar_package> <2d_lidar_node> \
 Nav2コストマップのメッセージフィルタが、起動から数分でデータを「古すぎる」
 「未来の時刻」として破棄します。
 
-対策として、`lidar:=mid360`で実機ドライバを立てるときだけ`scripts/restamp_scan.py`が
+対策として、`lidar:=mid360`で実機ドライバを立てるときだけ`src/restamp_scan.py`が
 `/scan_mid360_prestamp`を購読し、受信時刻でスタンプを打ち直して`/scan_raw`へ再配信
 します。こうするとスキャンのスタンプが、車輪オドメトリ・TF・Nav2と同じ時計に
 そろいます。ドリフトのないシミュレータやバッグ再生（`lidar_driver:=false`）では中継を
 挟まず、`pointcloud_to_laserscan`が`/scan_raw`へ直接出します。センサー側をPTP同期
 できるようになれば、この中継は不要になります。
 
-中継は`share/autonomous_nav/scripts/restamp_scan.py`を`ExecuteProcess`で直接起動する形
-なので、`CMakeLists.txt`が`scripts`ディレクトリを`share`へインストールしています
+中継は`share/autonomous_nav/src/restamp_scan.py`を`ExecuteProcess`で直接起動する形
+なので、`CMakeLists.txt`が`src`ディレクトリを`share`へインストールしています
 （通常のノードとして起動する`prepare_mid360_imu.py`のほうは、これに加えて`lib`へも
 入ります）。`ExecuteProcess`は失敗しても他のノードを止めません。そのため、古い`install/`が
 残っているなどで`restamp_scan.py`が置かれていない環境では、エラーが出ないまま

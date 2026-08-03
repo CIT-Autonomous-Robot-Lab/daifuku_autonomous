@@ -236,8 +236,8 @@ if [ -n "$ROBOT_URDF" ]; then
     $ENGINE cp "$ROBOT_URDF" "$CONTAINER:${CONTAINER_URDF:-/tmp/raspicat_plain.urdf}"
 fi
 # 編集中の launch / config をコンテナへ反映する (pi4_sim 側と同じ理由で bind mount しない)。
-$ENGINE exec "$CONTAINER" bash -lc "rm -rf $SHARE/config"
-for d in behavior_trees config launch maps rviz scripts; do
+$ENGINE exec "$CONTAINER" bash -lc "rm -rf $SHARE/config $SHARE/scripts"
+for d in behavior_trees config launch maps rviz src; do
     [ -d "$REPO/src/autonomous_nav/$d" ] && \
         $ENGINE cp "$REPO/src/autonomous_nav/$d" "$CONTAINER:$SHARE/"
 done

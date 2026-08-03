@@ -27,7 +27,7 @@ Mid-360は時刻同期がないためスタンプが実時計からずれてい�
 - LiDAR前処理とEKF
 - launchファイル
 - 地図とRViz設定
-- `scripts/`のPythonノード2本
+- `src/`のPythonノード2本
 
 Pythonノードはどちらも`lidar:=mid360`のときだけ立ちます。`restamp_scan.py`がスキャンの
 スタンプを打ち直し（実機ドライバを立てる`lidar_driver:=true`のときのみ）、

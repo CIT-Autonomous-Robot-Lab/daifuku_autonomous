@@ -39,6 +39,8 @@ LED・ブザー・スイッチ・測距センサを持たないのは、この�
 
 ## 中身
 
+実装は `src/raspicat_driver/` の下です（`setup.py` の `package_dir={"": "src"}`）。
+
 | ファイル | 何を持つか |
 | --- | --- |
 | `node.py` | ROS に見える面。lifecycle・`cmd_vel`・`odom`・TF・`motor_power`・オドメトリの積分。レジスタもチップ名も出てこない |

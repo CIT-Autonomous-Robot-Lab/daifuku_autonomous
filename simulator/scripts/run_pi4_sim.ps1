@@ -111,8 +111,8 @@ podman @c cp (Join-Path $container_dir "fastdds_local.xml") "${Container}:/etc/f
 # podman cp は「足す」だけで消さないので、リネーム・移動したファイルが
 # コンテナ側に残り続ける (config/ を分割したときの旧 nav2_params.yaml など)。
 # 読まれはしないが紛らわしいので、上書き前に消しておく。
-podman @c exec $Container bash -lc "rm -rf $share/config" | Out-Null
-foreach ($d in "behavior_trees", "config", "launch", "maps", "rviz", "scripts") {
+podman @c exec $Container bash -lc "rm -rf $share/config $share/scripts" | Out-Null
+foreach ($d in "behavior_trees", "config", "launch", "maps", "rviz", "src") {
     $src = Join-Path $pkg $d
     if (Test-Path $src) { podman @c cp $src "${Container}:${share}/" | Out-Null }
 }

@@ -1,5 +1,5 @@
 # raspicat_driver (自前の本体ドライバ) のパラメータ。Pi 4 と Pi 5 で共通。
-# 「既定」= src/raspicat_driver/raspicat_driver/node.py の declare_parameter の値。
+# 「既定」= src/raspicat_driver/src/raspicat_driver/node.py の declare_parameter の値。
 # robot_bringup.launch.py が driver:=original のとき LifecycleNode の parameters= に直接渡す。
 #
 # 上流 raspicat_ros の raspimouse ノード (driver:=raspimouse、Pi 4 のみ) 用は
@@ -14,7 +14,7 @@
 #
 # 機種差は model: auto が解決する。gpiochip_label と pwmchip_match を空にしてある
 # のはそのためで、Pi 4 では pinctrl-bcm2835 / fe20c000.pwm、Pi 5 では pinctrl-rp1 /
-# 98000.pwm が使われる (src/raspicat_driver/raspicat_driver/pi4.py・pi5.py)。
+# 98000.pwm が使われる (src/raspicat_driver/src/raspicat_driver/pi4.py・pi5.py)。
 
 raspicat_driver:
   ros__parameters:

@@ -125,7 +125,7 @@ TELEOP_LINEAR_SPEED=0.1 bash docker/raspberrypi/tools/control.sh teleop keyboard
 
 | 変更したもの | やること |
 |---|---|
-| `src/autonomous_nav`配下のlaunch、config、behavior_trees、maps、rviz | 何もしない。`--symlink-install`なのでノードを再起動するだけで反映される |
+| `src/autonomous_nav`配下のlaunch、config、behavior_trees、maps、rviz、src | 何もしない。`--symlink-install`なのでノードを再起動するだけで反映される |
 | C++やRustのコード、`CMakeLists.txt`、外部パッケージのソース | `docker compose up`で差分ビルドする |
 | aptの依存、`Dockerfile`、`package.xml`の依存、`docker/`配下のスクリプト | `docker compose build`からやり直す |
 

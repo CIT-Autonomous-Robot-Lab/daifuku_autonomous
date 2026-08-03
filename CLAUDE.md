@@ -52,14 +52,17 @@ bash tools/setup/setup_native.sh              # --jobs 1 / --no-livox / --no-vi
 
 | 変えたもの | やること |
 | --- | --- |
-| `autonomous_nav` の launch・config・behavior_trees・maps・rviz | 何もしない。ノード再起動だけで反映される |
+| `autonomous_nav` の launch・config・behavior_trees・maps・rviz・src | 何もしない。ノード再起動だけで反映される |
 | `raspicat_driver` の Python | 同上（`--symlink-install` なので）。ただし `setup.py` の `entry_points` を増やしたときはビルドが要る |
 | C++ / Rust のコード、`CMakeLists.txt`、外部パッケージのソース | `docker compose up`（差分ビルド） |
 | apt 依存、`Dockerfile`、`package.xml`、`docker/` 配下のスクリプト | `docker compose build` からやり直す |
 
-**ファイルを新しく足したときだけは例外**です。`install/` の symlink はビルド時に
-張られるので、launch や config を追加したら一度 `up`（ネイティブなら `colcon build`）を
-通してください。
+**ファイルを新しく足したとき・動かしたときだけは例外**です。`install/` の symlink は
+ビルド時に張られるので、launch や config を追加したら一度 `up`（ネイティブなら
+`colcon build`）を通してください。名前を変えたり移したりしたときは、それに加えて
+**古い symlink が `install/` に残ります**（`scripts/` を `src/` へ移したときの
+`share/autonomous_nav/scripts/` など）。両方あるように見えて新しいほうしか更新されない
+ので、紛らわしければ `install/` を消してからビルドしてください。
 
 ## テスト
 

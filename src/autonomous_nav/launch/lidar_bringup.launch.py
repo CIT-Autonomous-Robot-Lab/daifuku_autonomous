@@ -212,7 +212,7 @@ def generate_launch_description():
         condition=IfCondition(use_livox_driver),
         cmd=[
             "python3",
-            os.path.join(pkg_share, "scripts", "restamp_scan.py"),
+            os.path.join(pkg_share, "src", "restamp_scan.py"),
             "/scan_mid360_prestamp",
             scan_raw_topic,
         ],

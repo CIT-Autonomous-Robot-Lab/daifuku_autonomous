@@ -264,7 +264,7 @@ ros2 launch autonomous_nav navigation.launch.py \
 モーター電源は、この起動確認だけでは有効にしません。
 
 `docker/dev/`は`autonomous_nav`をcolconでビルドするため、
-`share/autonomous_nav/scripts/`がインストールされず、Mid-360のスタンプ打ち直しが
+`share/autonomous_nav/src/`がインストールされず、Mid-360のスタンプ打ち直しが
 起動しません（`/scan_raw`が配信されません）。詳細と対処は
 [LiDARとオドメトリ](../../docs/setup/lidar.md#タイムスタンプの打ち直し)を参照して
 ください。
