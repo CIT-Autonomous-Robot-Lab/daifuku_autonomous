@@ -10,6 +10,7 @@
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/point_stamped.hpp>
 #include <nav2_msgs/action/follow_waypoints.hpp>
+#include <nav_msgs/msg/path.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_action/rclcpp_action.hpp>
 #include <rviz_common/panel.hpp>
@@ -59,6 +60,10 @@ private:
   // reset=false のときは DELETEALL を付けない。同じ ns/id は ADD で上書きされるので、
   // タイマからの出し直し (updateLead) で全マーカが作り直されて瞬くのを避ける。
   void publishMarkers(bool reset = true);
+  // 巡回の順路そのものを nav_msgs/Path で latch する。マーカ (見せるため) と違い、
+  // これは他ノードが読むためのもの — vi_planner の先読み (waypoint_prefetch) が
+  // 「いま向かっている点の次はどこか」をこれで知る。
+  void publishWaypointPath();
   bool leadPoint(geometry_msgs::msg::Point * point, QString * reason) const;
   void updateLead();
   void updateButtons();
@@ -73,6 +78,7 @@ private:
   std::vector<geometry_msgs::msg::PoseStamped> waypoints_;
   rclcpp::Node::SharedPtr node_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_publisher_;
+  rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_publisher_;
   rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr clicked_point_subscription_;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr clicked_pose_subscription_;
   rclcpp_action::Client<FollowWaypoints>::SharedPtr action_client_;

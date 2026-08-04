@@ -130,6 +130,17 @@ Docker 越しに叩く形は
   ここへ投げるものは**即座に ABORTED になり、ログにも何も出ない**。複数点を回すなら
   `nav2_waypoint_follower` の `/follow_waypoints` を使うこと（`daifuku_waypoint_manager`
   はそちら。両プランナ経路で lifecycle 管理下に立っている）。
+- **`vi_planner` の先読み（`waypoint_prefetch`）は `/waypoints` が来ないと何も
+  しない。** 次のウェイポイントを走行中に解いておく機能だが、「次」を知る手立ては
+  順路そのものを latch する `nav_msgs/Path` だけで、これを出すのは
+  `daifuku_waypoint_manager` のパネルと `joy_teleop`（START+BACK での巡回開始）の
+  **2 か所しかない**。どちらも通らない経路（`/follow_waypoints` へ直接投げる、
+  単発ゴール）では**エラーも警告も出ないまま先読みだけが起きない**。トピック名は
+  パネルの `kWaypointPathTopic`、`joy_teleop` の publisher、`vi_planner` の
+  `waypoint_topic` の 3 か所にあり、1 つだけ変えても同じことになる。既定は
+  `false` — 価値関数が同時に 2 つ生きるので、密ならメモリが、compact なら sink の
+  ディスクが 2 倍要る（津田沼は 648MB×2 = 1.3GB で、Pi の空き 1.5GB をほぼ
+  使い切る）。
 - **`navigation.rviz` の `2D Goal Pose` は `/goal_pose` を出さない。**
   `daifuku_waypoint_manager` へ waypoint を渡すため `/waypoint_pose` に付け替えて
   ある。単発ゴールは `Nav2 Goal` (`nav2_rviz_plugins/GoalTool`) のほうを使う。

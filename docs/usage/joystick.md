@@ -72,6 +72,14 @@ STARTとBACKを同時に3秒押すと、`waypoints_file`のYAMLを読んで
 `follow_waypoints action server is not available`が出ます）。走行中にもう一度押しても
 何も起きません。取り消すにはSTARTを3秒押してteleopへ移ります。
 
+ゴールを投げる直前に、順路そのものを`/waypoints`（`nav_msgs/Path`、latch）へも出します。
+**見せるためのものではなく**、`vi_planner`の先読み（`waypoint_prefetch`、
+[navigation.md](navigation.md#次の点を走行中に解いておくwaypoint_prefetch)）が「いま
+向かっている点の次はどこか」を知る唯一の手立てです。同じものをRVizの
+`daifuku_waypoint_manager`パネルも出しますが、**実機のイメージにパネルは入っていない**
+ので、機体だけで巡回するときはこちらが出どころになります。起動時にYAMLを読めた時点でも
+一度出します。
+
 ## 確かめかた
 
 ```bash

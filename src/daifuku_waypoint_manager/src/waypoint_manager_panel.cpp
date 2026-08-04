@@ -28,6 +28,9 @@ namespace daifuku_waypoint_manager
 namespace
 {
 constexpr char kMarkerTopic[] = "/waypoint_markers";
+// 巡回の順路。vi_planner の先読み (waypoint_prefetch) が購読する既定のトピック名と
+// そろえてある。片方だけ変えると先読みが黙って効かなくなる。
+constexpr char kWaypointPathTopic[] = "/waypoints";
 constexpr char kActionName[] = "/follow_waypoints";
 constexpr char kClickedPointTopic[] = "/clicked_point";
 constexpr char kWaypointPoseTopic[] = "/waypoint_pose";
@@ -65,6 +68,10 @@ void WaypointManagerPanel::onInitialize()
   node_ = ros_node_abstraction->get_raw_node();
   marker_publisher_ = node_->create_publisher<visualization_msgs::msg::MarkerArray>(
     kMarkerTopic, rclcpp::QoS(1).transient_local());
+  // latch する。購読側 (vi_planner) は RViz より後に上がることも先に落ちて上がり
+  // 直すこともあるので、そのたびに編集し直させない。
+  path_publisher_ = node_->create_publisher<nav_msgs::msg::Path>(
+    kWaypointPathTopic, rclcpp::QoS(1).transient_local());
   clicked_point_subscription_ = node_->create_subscription<geometry_msgs::msg::PointStamped>(
     kClickedPointTopic, rclcpp::QoS(10),
     [this](geometry_msgs::msg::PointStamped::SharedPtr point) {
@@ -275,10 +282,33 @@ void WaypointManagerPanel::selectionChanged()
   publishMarkers(false);
 }
 
+void WaypointManagerPanel::publishWaypointPath()
+{
+  if (!path_publisher_) {
+    return;
+  }
+  nav_msgs::msg::Path path;
+  path.header.frame_id = frame_id_;
+  path.header.stamp = node_->now();
+  path.poses = waypoints_;
+  for (auto & pose : path.poses) {
+    pose.header = path.header;
+  }
+  path_publisher_->publish(path);
+}
+
 void WaypointManagerPanel::publishMarkers(bool reset)
 {
   if (!marker_publisher_) {
     return;
+  }
+  // 順路が変わったときだけ出す。reset=true が「並びが変わった」、false が
+  // 「見た目を出し直すだけ」(選択の変更と機体からの線) という切り分けで、
+  // 後者で出すと走行中に毎秒 Path が飛び、購読側 (vi_planner) が並びを
+  // 受け取り直し続ける。**publishMarkers(true) を出し直しにも使い始めたら、
+  // ここは別の判定にすること。**
+  if (reset) {
+    publishWaypointPath();
   }
   visualization_msgs::msg::MarkerArray markers;
   if (reset) {

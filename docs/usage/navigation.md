@@ -283,6 +283,32 @@ RVizのFixed Frameとwaypointの`frame_id`が一致している必要があり�
 `waypoint_pause_duration`）。行けない点があっても巡回は続き、完了時に取りこぼした
 点数がステータス行に出ます。
 
+### 次の点を走行中に解いておく（`waypoint_prefetch`）
+
+`planner:=vi`では、上の「いったん止まる」がポーズ時間だけでは済みません。VIは
+ゴールごとに価値関数を解き直すので、**点が変わるたびに丸ごと1回のsolveが入り、その
+間ずっと機体が止まっています**（実測で19Fが29秒、津田沼が87秒）。
+
+`config/nav2/vi_planner.yaml`の`waypoint_prefetch`を`true`にすると、いまの点へ走って
+いるあいだに次の点を別スレッドで解いておき、着いたらsolveを飛ばして受け取ります。
+効いた回はログに出ます。
+
+```
+vi_planner: prefetched the value function for (12.30, -4.50) in 31.20s
+vi_planner: path with 412 poses in 0.34s (solved_now=true, iters=0, prefetched)
+```
+
+順路を`/waypoints`（`nav_msgs/Path`、latch）へ出すのは
+`daifuku_waypoint_manager`のパネルと`joy_teleop`（START+BACK）の2つです。
+`/follow_waypoints`へ直接投げる経路と単発ゴールは順路が無いので対象外で、そのときも
+**エラーは出ません**。効いているかは上のログで判断してください。
+
+既定が`false`なのは代償があるためです。価値関数が同時に2つ生きるので、密ソルバなら
+メモリが、compactならsinkのディスクが2倍要ります。津田沼のsinkは648MBなので2つで1.3GB、
+Piの空き1.5GBに対しては危険側です。19Fは95MBなので余裕があります。solveのCPUも取られ
+ます（追従の`try_lock`は邪魔しませんが、10Hzの制御周期がずれ得ます）。
+**まだ実機でもpi4_simでも通していません。**
+
 詳細は[`src/daifuku_waypoint_manager/README.md`](../../src/daifuku_waypoint_manager/README.md)。
 
 ## 価値反復の表示

@@ -85,6 +85,29 @@ waypoint どうしを結ぶオレンジの線に加えて、**機体の現在地
 **巡回中は引かない。** 1 点目はもう機体の後ろにあり、そこへ線を引いても嘘になる。
 走行中に向かっている先は Nav2 の `Path` 表示のほうに出る。
 
+## 順路を `/waypoints` に出す（先読み用）
+
+マーカ（見せるため）とは別に、順路そのものを `nav_msgs/Path` で `/waypoints` へ
+latch して出す。**これは他ノードが読むためのもの**で、いまの用途は
+`vi_planner` の先読み（`waypoint_prefetch`）1 つ。VI は経路計画も経路追従も
+ゴールごとの価値反復に依っていて、点が変わるたびに丸ごと 1 回解き直す（実測で
+19F が 29 秒、津田沼が 87 秒）。その間**機体は止まっている**ので、次の点が分かって
+いれば走行中に解いておける。「次の点」を知る手段がこの Path。
+
+出すのは**並びが変わったとき**だけ（`publishMarkers(reset=true)` の側）。選択の
+変更と機体からの線の引き直しでは出さない — 走行中に毎秒飛ばすと購読側が並びを
+受け取り直し続けるため。
+
+`vi_planner` 側は既定でトピック名が `waypoints`・`waypoint_prefetch: false` なので、
+**このパネルだけを更新しても挙動は変わらない**。有効にするのは
+`daifuku_stack/config/nav2/vi_planner.yaml`（そこに代償と一緒に書いてある）。
+
+同じものを `daifuku_stack/src/joy_teleop.py`（START+BACK での巡回開始）も出す。
+**実機のイメージにこのパネルは入らない**ので、機体だけで走らせるときはあちらが
+出どころになる。トピック名はパネルの `kWaypointPathTopic`・`joy_teleop` の
+publisher・`vi_planner` の `waypoint_topic` の 3 か所にあり、1 つだけ変えると
+**エラーは出ず、ただ先読みが効かない**。
+
 ## frame_id
 
 RViz の Fixed Frame と waypoint の `frame_id` が一致している必要がある。waypoint が

@@ -69,6 +69,34 @@ vi_planner:
     global_sweep: true            # 既定 true: 全域掃き (compact ではタイル修復) を回すか
     global_sweep_budget_ms: 60    # 既定 20 [ms]: 1 回のロック取得で掃きに使う時間。Pi 5 は 4 コア中 2 コアが空いていた (2026-08-04 実測) ので既定の 3 倍
     global_sweep_idle_ms: 100     # 既定 60 [ms]: そのあとロックを手放して待つ時間 (60:100 = 1 コアの 37%。既定の 20:60 は 25%)
+    # ── ウェイポイントの先読み ──
+    # 巡回は 1 点ずつ navigate_to_pose を呼ぶ形なので (../../../daifuku_waypoint_manager/README.md)、
+    # 点が変わるたびに新しいゴールの価値反復が丸ごと 1 回走り、その間**機体が止まる**
+    # (19F で 29 秒、津田沼 compact で 87 秒)。true にすると、いまの点へ走っている間に次の点を
+    # 別スレッドで解いておき、着いたら solve を飛ばして受け取る。効いた回はログの
+    # "path with ... , prefetched" と "prefetched the value function for ... in Xs" に出る。
+    #
+    # **切ってあるのは代償があるから**: 価値関数が同時に 2 つ生きるので、密ならメモリが、
+    # compact なら sink のディスクが 2 倍要る (津田沼は 648MB x2 = 1.3GB。Pi の空きは
+    # 1.5GB しかない)。19F は sink 95MB なので余裕がある。
+    # solve の CPU も取られる — 追従の try_lock は邪魔しないが、10Hz の制御周期がずれ得る。
+    # **並びを出すものがいないと何も起きない** (下の waypoint_topic)。**未検証** — 実機でも
+    # pi4_sim でも通していない。
+    waypoint_prefetch: false      # 既定 false: 次のウェイポイントを走行中に解いておくか
+    # ── 未設定 (既定のまま。先読みを使うときだけ意味を持つ) ──
+    # waypoint_topic: "waypoints" # 順路 (nav_msgs/Path、latch)。出すのは 2 か所だけ —
+    #                             # daifuku_waypoint_manager のパネル (編集のたび) と
+    #                             # ../../src/joy_teleop.py (START+BACK での巡回開始)。
+    #                             # **実機のイメージにパネルは入らない**ので、機体だけで
+    #                             # 走らせるときは後者が唯一の出どころになる。ここに並びが
+    #                             # 来ない構成 (/follow_waypoints へ直接投げる、単発ゴール)
+    #                             # では waypoint_prefetch: true でも先読みは起きない。
+    #                             # 名前を変えるならパネルの kWaypointPathTopic と
+    #                             # joy_teleop の publisher も一緒に。
+    # waypoint_prefetch_threads: 1  # 先読みの solve のスレッド数。追従は 10Hz・予算 40ms/tick
+    #                             # なので既定 1 に絞ってある。**効くのは compact だけ** —
+    #                             # 密の frontier2d_sparse はスレッド数を環境変数 VI_THREADS から
+    #                             # 読む (プロセスで 1 つ) ので、先読みだけを絞れない
     # ── 可視化 (経路計算には影響しない) ──
     # /value_function は solve のときだけでなく、**追従中も掃きスレッドが 2 秒ごとに
     # 出し直す**。これが無いと全域スライスは solve した瞬間のまま固まり、伝播が効いて

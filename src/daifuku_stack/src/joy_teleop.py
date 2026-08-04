@@ -53,6 +53,8 @@ from geometry_msgs.msg import Twist
 
 from nav2_msgs.action import FollowWaypoints
 
+from nav_msgs.msg import Path
+
 import rclpy
 from rclpy.action import ActionClient
 from rclpy.node import Node
@@ -186,6 +188,16 @@ class JoyTeleop(Node):
             Bool, "~/enabled",
             QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL),
         )
+        # 順路そのもの。vi_planner の先読み (waypoint_prefetch) が「いま向かって
+        # いる点の次はどこか」をこれで知る。RViz のパネル
+        # (daifuku_waypoint_manager) も同じトピックへ同じものを出すが、**実機の
+        # イメージにパネルは入っていない** ので、ここから始めた巡回では
+        # こちらが唯一の出どころになる。latch するのは vi_planner が後から
+        # 上がることがあるため。
+        self._path_pub = self.create_publisher(
+            Path, "waypoints",
+            QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL),
+        )
         self.create_subscription(Joy, "joy", self._on_joy, 10)
 
         self._follow_action = value("follow_waypoints_action")
@@ -202,10 +214,11 @@ class JoyTeleop(Node):
         # 起動時に一度読んでおく。走らせようとした瞬間に「書式が違う」と分かるより、
         # 立ち上げのログで分かるほうがよい (読むのは押されたときに読み直す)。
         try:
-            _, poses = load_waypoints(self._waypoints_file)
+            frame_id, poses = load_waypoints(self._waypoints_file)
             self.get_logger().info(
                 "waypoints: %d points from %s" % (len(poses), self._waypoints_file)
             )
+            self._publish_waypoints(frame_id, poses)
         except (OSError, ValueError, yaml.YAMLError) as exc:
             self.get_logger().warning(
                 "waypoints file unusable (%s): %s" % (self._waypoints_file, exc)
@@ -359,6 +372,10 @@ class JoyTeleop(Node):
         for pose in poses:
             pose.header.stamp = stamp
 
+        # ゴールを投げる前に順路を出す。先読み (waypoint_prefetch) は 1 点目の
+        # 計画が来た時点で並びを引くので、後出しにすると 1 点目ぶんだけ間に合わない。
+        self._publish_waypoints(frame_id, poses)
+
         goal = FollowWaypoints.Goal()
         goal.poses = poses
         self._goal_pending = True
@@ -367,6 +384,20 @@ class JoyTeleop(Node):
         self.get_logger().info(
             "following %d waypoints in %s" % (len(poses), frame_id)
         )
+
+    def _publish_waypoints(self, frame_id, poses):
+        """順路を latch して出す (vi_planner の先読み用。見せるためのものではない)。"""
+        path = Path()
+        path.header.frame_id = frame_id
+        path.header.stamp = self.get_clock().now().to_msg()
+        path.poses = poses
+        for pose in path.poses:
+            # header ごと差し替えない。poses は呼び出し元がそのまま
+            # FollowWaypoints のゴールに使う同じ配列なので、1 つの header を
+            # 共有させると片方を触ったつもりが全点に効く。
+            pose.header.frame_id = frame_id
+            pose.header.stamp = path.header.stamp
+        self._path_pub.publish(path)
 
     def _on_goal_response(self, future):
         self._goal_pending = False
