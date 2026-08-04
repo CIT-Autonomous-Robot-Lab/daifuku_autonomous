@@ -15,6 +15,13 @@
 # alpha 崩壊が起きる余地がある。起きたら map_19f.yaml の emcl2 ブロックをここへ写す。
 # **未検証** — この地図で emcl2 のリセット挙動は測っていない。
 #
+# **注意 3**: action_forward_m を既定から変えるので、value_iteration3 は
+# **ec2579d (2026-08-04)「vi_core の params を捨てて launch から行動集合を決められる
+# ようにする」以降が要る**。それより前の VI は行動集合を vi_rs のコンパイル時定数
+# (ACTION_FW = [0.3, -0.2, 0.0, 0.2, 0.0, 0.2]) と照合し、違うと **exit 1 で即死する**。
+# 落ちてもログに出るのは launch の "process has died ... exit code 1" だけなので、
+# 症状は「プランナだけ上がらず nav2 が inactive のまま」に見える (2026-08-04 に遭遇)。
+#
 # **注意 2**: 下の実測は BT を外した最小構成のもの。`simulator/` の pi4_sim ハーネスの枠 (0.6 コアを
 # stack 全体で共有) に BT 込みで通すと、BT が solve を待たず 3 回リカバリして ABORT
 # する。実機での通し確認は別途。
@@ -49,7 +56,7 @@ vi_global_planner:
 # 起こして回す。外側は compact の値のまま凍結して境界条件にする。窓の成果は毎 tick
 # sink へ書き戻すので置き直しで失われず、広域のロールアウトからも見える。全域伝播
 # (global_sweep) も効く — 密のような全域 Gauss–Seidel ではなく、sink をタイル単位で
-# 起こして掃いて書き戻す形になる。vi_planner/src/core.rs 冒頭に詳しい。
+# 起こして掃いて書き戻す形になる。vi_planner/src/core/compact.rs 冒頭に詳しい。
 vi_planner:
   ros__parameters:
     solver: "frontier2d_sparse_compact"  # 断片も同じ値: 密だと 3.17GB で OOM。この地図では必須なので明示する
