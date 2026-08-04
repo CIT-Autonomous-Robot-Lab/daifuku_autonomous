@@ -16,7 +16,7 @@ emcl2:
     odom_rot_dev_per_rot: 0.2
     laser_likelihood_max_dist: 0.2
     scan_increment: 1
-    alpha_threshold: 0.5
+    alpha_threshold: 0.2
     open_space_threshold: 0.05
     expansion_radius_position: 0.1
     expansion_radius_orientation: 0.2
