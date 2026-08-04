@@ -34,9 +34,13 @@ rqt                                          # Plugins > Raspicat > Raspicat Con
 
 ## 止まり方（ここが一番重要）
 
-`config/robot/raspicat_driver.yaml` の `cmd_vel_timeout` は **60 秒**です。つまり
-「`cmd_vel` が途切れたから止まる」までに 1 分かかります。teleop の停止をドライバ側の
-タイムアウトに任せることはできないので、パネルが自分で 0 の `Twist` を出します。
+自前実装（`driver:=original`）の `config/robot/raspicat_driver.yaml` は
+`cmd_vel_timeout` が **60 秒**です。つまり「`cmd_vel` が途切れたから止まる」までに
+1 分かかります。公式実装（既定の `driver:=raspimouse`）にはこのキーが**そもそも
+ありません**（`raspicat.yaml` が並べている 14 個で全部）。指令が途切れたときに
+上流のノードが止めるのかどうかは**未確認**です。少なくとも 60 秒は見ておいてください。
+どちらにせよ teleop の停止をドライバ側のタイムアウトに任せられないので、パネルが
+自分で 0 の `Twist` を出します。
 
 出す条件は次のとおりです。
 
@@ -45,8 +49,9 @@ rqt                                          # Plugins > Raspicat > Raspicat Con
 - パネルが隠れたとき、ウィンドウが非アクティブになったとき
 - プラグインを閉じるとき（3 回まとめて出します）
 
-それでも、**パネルのプロセスごと落ちた場合は 60 秒動き続けます。** teleop を常用するなら
-`cmd_vel_timeout` を 1 秒程度へ下げることを検討してください（既定 60.0 は上流の値です）。
+それでも、**パネルのプロセスごと落ちた場合は 60 秒動き続けます。** `driver:=original` で
+teleop を常用するなら `cmd_vel_timeout` を 1 秒程度へ下げることを検討してください
+（既定 60.0 は上流の値です）。確実に止めるのはどちらのドライバでもモータ電源です。
 
 ## teleop とナビゲーションの排他
 
@@ -62,7 +67,7 @@ publish している間と 0.5 秒だけで、指を離せば自律側が動き�
 
 `twist_mux:=false` で立てた機体では、`/cmd_vel_teleop` を誰も購読しません。
 パネルは何事もなく動いているように見えて**機体だけが動かない**ので、そのときは宛先を
-`/cmd_vel` に戻してください。宛先は `src/daifuku_rqt/control_panel.py` の
+`/cmd_vel` に戻してください。宛先は `src/daifuku_rqt/src/daifuku_rqt/control_panel.py` の
 `TELEOP_CMD_VEL_TOPIC` という**モジュール先頭の定数**です（ROSパラメータでも環境変数でも
 ないので、直したらパネルを開き直します）。
 

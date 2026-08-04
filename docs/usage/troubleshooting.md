@@ -49,8 +49,9 @@ rtmouseもMCP3204を自前で叩くので、両者が同じデバイスを取り
 ## 遠隔操作しても機体が動かない
 
 `twist_mux`（`robot_bringup.launch.py`の`twist_mux:=true`が既定）を挟むと、ドライバが
-購読するのは`/cmd_vel`ではなく`/cmd_vel_mux`です。`/cmd_vel`へ直接投げても、仲裁を
-経由しないので**エラーも警告も出ないまま無視されます**。
+購読するのは`/cmd_vel`ではなく`/cmd_vel_mux`です。ただし`/cmd_vel`のほうも仲裁の
+入力（優先度10）として残っているので、**ほかに誰も出していなければそのまま届きます**。
+効かなくなるのは自律走行中で、`/cmd_vel`へ投げると自律側の出力と取り合いになります。
 
 ```bash
 ros2 node list | grep twist_mux

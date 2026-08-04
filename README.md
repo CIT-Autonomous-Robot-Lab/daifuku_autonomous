@@ -31,6 +31,8 @@
   - [地図作成](docs/usage/mapping.md)
   - [自律移動](docs/usage/navigation.md)
   - [日常操作と確認](docs/usage/operations.md)
+  - [操作パネル（rqt）](docs/usage/control-panel.md)
+  - [ゲームパッドで操作する](docs/usage/joystick.md)
   - [設定リファレンス](docs/usage/configuration.md)
   - [構成とパッケージ](docs/usage/architecture.md)
   - [トラブルシューティング](docs/usage/troubleshooting.md)

@@ -72,6 +72,12 @@ ros2 launch daifuku_stack navigation.launch.py \
 ros2 launch raspicat_bringup teleop.launch.py teleop:=key
 ```
 
+人が出す指令の宛先は`/cmd_vel_teleop`（優先度100）です（`control.sh teleop`と
+[操作パネル](../usage/control-panel.md)はそちらへ出しています）。**この上流launchが
+どこへ出すかは確認していません。** `/cmd_vel`へ出しているなら、`twist_mux:=true`
+（既定）ではそれは自律側の入力（優先度10）なので、自律走行中に開くと取り合いに
+なります。`ros2 topic info /cmd_vel_teleop`で購読者と配信者を見て確かめてください。
+
 ## GUI
 
 - WSLg: WSLシェルの`DISPLAY`と`WAYLAND_DISPLAY`を確認

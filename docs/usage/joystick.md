@@ -56,7 +56,9 @@ STARTで入れているあいだ、`joy_teleop`はスティックが中立でも
 だと、それが取り消されずに残ります。
 
 teleopを切ったあとは1秒（`stop_tail`）だけゼロを出してから黙ります。黙るだけだと本体
-ドライバは最後に受けた速度を保持し続けます（`cmd_vel_timeout`の既定は60秒）。
+ドライバは最後に受けた速度を保持し続けるためです。自前実装（`driver:=original`）は
+`cmd_vel_timeout`の60秒で止まりますが、公式実装（既定の`driver:=raspimouse`）は
+このキーを持たず、いつ止まるかは**未確認**です。
 
 ## 巡回を始める
 
@@ -97,6 +99,17 @@ ros2 topic echo /cmd_vel_mux               # 仲裁を抜けてドライバへ�
 | スティックを一定角度で保持すると止まる | `joy_node`の`autorepeat_rate`が0になっていないか。0だと状態が変わったときしか`/joy`が出ず、`joy_timeout`に引っかかります |
 | 手を離していないのに止まる | 無線が切れています（電池・受信機）。`joy_timeout`（0.5秒）でゼロに落とす仕様です |
 | 自律走行が始まらない | teleopが入ったままではありませんか（`/joy_teleop/enabled`） |
+
+## `control.sh teleop joystick`とは別物です
+
+[日常操作と確認](operations.md#controlshで操作する)の`control.sh teleop joystick`は、
+`teleop_twist_joy`のlaunchを別に立てるものです。そちらは自前の`joy_node`を持つので、
+`joy:=true`（既定）のまま実行すると**`joy_node`が2つ**になり、`/joy`にも
+`/cmd_vel_teleop`にもpublisherが2つ載ります。長押しでモードを切り替える`joy_teleop`と
+デッドマン方式の`teleop_twist_joy`が同じトピックへ同時に書くので、どちらが出した
+指令なのか区別が付きません。パッドで走らせるならこのページの操作を使い、
+`control.sh`のほうはキーボード（`teleop keyboard`）に留めてください。両方を試すなら
+`joy:=false`で立ててから`control.sh`へ渡します。
 
 ## 使わないとき
 

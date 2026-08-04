@@ -108,6 +108,12 @@ latch して出す。**これは他ノードが読むためのもの**で、い�
 publisher・`vi_planner` の `waypoint_topic` の 3 か所にあり、1 つだけ変えると
 **エラーは出ず、ただ先読みが効かない**。
 
+**パネルだけが絶対名 `"/waypoints"`** で、残る 2 つは相対名 `"waypoints"` である。
+名前空間なし（既定）では 3 つとも `/waypoints` に解決されるので噛み合うが、
+`namespace:=` を付けた構成ではパネルの出す `/waypoints` と `vi_planner` の見る
+`/<名前空間>/waypoints` が別になる。**このときも先読みが黙って効かなくなるだけ**で、
+警告は出ない。
+
 ## frame_id
 
 RViz の Fixed Frame と waypoint の `frame_id` が一致している必要がある。waypoint が

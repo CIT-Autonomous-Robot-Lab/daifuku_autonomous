@@ -88,7 +88,7 @@ bash docker/raspberrypi/tools/control.sh help
 | `motor off` | `CMD_VEL_TOPIC`へ停止指令を送ってからモーター電源を切る |
 | `stop` | `CMD_VEL_TOPIC`へ停止指令を1回送る |
 | `teleop keyboard` | キーボードで操作する（Ctrl-Cで終了） |
-| `teleop joystick` | ジョイスティックで操作する（Ctrl-Cで終了） |
+| `teleop joystick` | `teleop_twist_joy`で操作する（Ctrl-Cで終了）。`joy:=true`（既定）と併用しない（下記） |
 | `status` | コンテナ、ROSノード、モーターサービスを確認する |
 | `nodes` / `topics` / `services` | それぞれの一覧を表示する |
 | `ros ARGS...` | 任意の`ros2`コマンドを実行する |
@@ -115,6 +115,11 @@ TELEOP_LINEAR_SPEED=0.1 bash docker/raspberrypi/tools/control.sh teleop keyboard
 
 `motor off`は停止指令を送ってから電源を切ります。停止指令の送信に失敗した場合も、
 警告を出したうえで電源を切ります。作業を終えるときは`motor off`を実行してください。
+
+`teleop joystick`は`teleop_twist_joy`のlaunchを別に立てるもので、自前の`joy_node`を
+持ちます。`robot_bringup.launch.py`の`joy:=true`（既定）と重ねると`joy_node`が2つ、
+`/joy`と`/cmd_vel_teleop`のpublisherも2つになります。パッドで走らせるなら
+[ゲームパッドで操作する](joystick.md)のほうを使ってください。
 
 ## 設定変更を反映する
 

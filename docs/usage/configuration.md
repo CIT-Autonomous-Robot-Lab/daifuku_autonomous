@@ -10,6 +10,8 @@
 | `config/localization/emcl2.yaml` | EMCL2のフレーム、初期姿勢、粒子数、オドメトリモデル |
 | `config/robot/raspicat.yaml` | 公式実装（`driver:=raspimouse`）のパラメータ。車輪径、トレッド、オドメトリ源 |
 | `config/robot/raspicat_driver.yaml` | 自前実装（`driver:=original`）のパラメータ。上に加えてGPIO・PWM・I2Cの配線 |
+| `config/robot/twist_mux.yaml` | 速度指令の仲裁（購読トピックと優先度）。`twist_mux:=true`（既定）のときだけ |
+| `config/robot/joy_teleop.yaml` | ゲームパッド。`joy_node`と`joy_teleop`の2ノード分が1ファイルに入る。`joy:=true`（既定）のときだけ |
 | `config/lifecycle_bond.yaml` | ライフサイクルマネージャのbondタイムアウト |
 | `config/mapping/slam_toolbox.yaml` | SLAM Toolboxのmapping設定 |
 | `config/sensors/scan_filter.yaml` | LiDARの角度フィルタ |
@@ -77,6 +79,8 @@ ros2 launch daifuku_stack mapping.launch.py --show-args
 | `params_file` | 空（`driver:=`に応じて`config/robot/`から選ぶ） | ドライバのパラメータファイル |
 | `twist_mux` | `true` | 速度指令の仲裁を挟むか。`true`だと**ドライバが購読するのは`/cmd_vel`ではなく`/cmd_vel_mux`**になり、人が出す指令は`/cmd_vel_teleop`（優先度100）へ。`false`で全員が`/cmd_vel`へ書く従来の配線に戻る |
 | `twist_mux_params_file` | 空（`config/robot/twist_mux.yaml`） | `twist_mux`のパラメータファイル |
+| `joy` | `true` | ゲームパッドでの手動走行を立てるか。`joy_node`と`joy_teleop`が上がり、STARTの3秒長押しでteleopの入/切、START+BACK同時3秒でウェイポイント巡回を始める（[ゲームパッドで操作する](joystick.md)）。挿していなくても他のノードは動く |
+| `joy_teleop_params_file` | 空（`config/robot/joy_teleop.yaml`） | ゲームパッドのパラメータファイル。`joy_node`と`joy_teleop`の両方に渡る |
 | `lidar_frame` | `lidar_link` | URDFへ渡すLiDARのフレーム名 |
 | `use_joint_state_publisher` | `True` | `joint_state_publisher`を起動するか |
 

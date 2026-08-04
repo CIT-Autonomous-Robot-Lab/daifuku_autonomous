@@ -17,7 +17,8 @@
 #
 # emcl2 は params_file を通らない。navigation.launch.py が emcl2 用の合成を別に
 # 行うことで効いている (../README.md)。値を足したら、起動ログの
-# "params: composed emcl2 ..." 行でパスが差し替わったことを確認すること。
+# "params: emcl2_params_file: ... -> /tmp/... (+ overrides:map_19f -> emcl2)" の行で
+# パスが差し替わったことを確認すること。
 emcl2:
   ros__parameters:
     alpha_threshold: 0.2                # 断片 0.5 (EMCL2 既定 0.5): alpha が 0.0-0.4 に張り付くため
