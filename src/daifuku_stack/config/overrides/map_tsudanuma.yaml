@@ -47,8 +47,9 @@ vi_global_planner:
 # vi_planner の狭域追従は密な states を要求するが、全域ではなくロボット近傍のパッチ
 # (±1m 窓 + 遷移到達距離 + 余裕、0.25m セルで 27x27x60 ≒ 2.5MB) だけを compact の場から
 # 起こして回す。外側は compact の値のまま凍結して境界条件にする。窓の成果は毎 tick
-# sink へ書き戻すので置き直しで失われず、広域のロールアウトからも見える。残る差異は
-# 全域伝播 (global_sweep) が compact に無いことだけ。vi_planner/src/core.rs 冒頭に詳しい。
+# sink へ書き戻すので置き直しで失われず、広域のロールアウトからも見える。全域伝播
+# (global_sweep) も効く — 密のような全域 Gauss–Seidel ではなく、sink をタイル単位で
+# 起こして掃いて書き戻す形になる。vi_planner/src/core.rs 冒頭に詳しい。
 vi_planner:
   ros__parameters:
     solver: "frontier2d_sparse_compact"  # 断片も同じ値: 密だと 3.17GB で OOM。この地図では必須なので明示する
@@ -62,10 +63,9 @@ vi_planner:
     # 踏まないようにする。追従はパッチ置き直しのたびに読むので SD カード上は避けたい。
     compact_sink_dir: "/tmp/vi_planner_sink"          # 既定 "" (= RAM、断片は未設定): 0.68GB を退避
     publish_value_function: false        # 断片 true: 配信のたび sink を全走査するため
-    # compact には狭域 → 広域のフィードバックに使う共有場が無いので明示的に切る。
-    # true のままだと launch の _validate_vi_solver が「黙って効かない設定」として
-    # 起動を止める。この地図では狭域が避けても広域の経路は障害物を通り続ける。
-    global_sweep: false                  # 断片 true: compact には共有する states が無い
+    # global_sweep は断片の true のまま (compact でもタイル修復として効く)。この
+    # 地図で伝播にどれだけかかるかは**未計測** — 起動ログの "global sweep done in"
+    # を見て、長すぎるなら global_sweep_budget_ms / idle_ms の比を変えること。
 
 # ── ここで上書きしていないもの ────────────────────────────────────────────
 # emcl2 は断片のまま (sensor_reset だけノード既定と違う) で走る (ヘッダの注意 1)。この地図は 68.2% が

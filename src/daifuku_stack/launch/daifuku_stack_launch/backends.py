@@ -74,44 +74,13 @@ def validate_planner(context, *args, **kwargs):
     return []
 
 
-def _validate_vi_solver(context):
-    """local_planner:=vi の設定に、静かに効かなくなる組み合わせが無いか見る。
-
-    見るのは 1 つだけ、**compact ソルバ + global_sweep** の組み合わせ。
-
-    vi_planner は 1 ノードが compute_path_to_pose と follow_path の両方を
-    提供する (vi_global_planner は起動しない)。密ソルバではその 2 つが同じ
-    ``states`` を共有するので、追従がスキャンから書いた local_penalty を
-    ``global_sweep`` が全域へ掃き広げれば、広域の経路も塞がった通路を避ける
-    ようになる。compact にはこの共有場が無い (``states`` を作らず、追従は
-    sink から起こしたパッチの上で回り、それは置き直しのたびに捨てられる) ので、
-    同じ設定でも**フィードバックだけが黙って効かなくなる**。
-
-    メモリの上限判定はここではやらない。地図の実寸はノードしか知らないので、
-    ``dense_limit_mb`` としてノード側に移した (超えたら起動時にエラーで止まる)。
-    かつてここには「map_scale > 1 なら密ソルバを禁止」という代理判定があったが、
-    前提が逆になった: map_scale は密を**載せるための**手段で、19F を 2 で解いた
-    密の実測は 655 MB しかない。
-    """
-    import yaml
-
-    # compose が差し替えた後の合成結果を読む。
-    with open(value(context, "params_file")) as f:
-        merged = yaml.safe_load(f) or {}
-    vp = merged.get("vi_planner", {}).get("ros__parameters", {})
-    solver = str(vp.get("solver", ""))
-    if solver.endswith("_compact") and vp.get("global_sweep", True):
-        raise RuntimeError(
-            f"local_planner:=vi with vi_planner.solver={solver} and "
-            "global_sweep enabled.\n"
-            "The out-of-core (compact) solver never builds the shared `states` "
-            "array, so the local planner's scan penalties have no way to reach "
-            "the global value function: the robot would avoid obstacles locally "
-            "while compute_path_to_pose keeps returning a path through them.\n"
-            'Either use a dense solver ("frontier2d_sparse" — 19F at map_scale 2 '
-            "measures 655 MB, see src/daifuku_stack/config/README.md), or set "
-            "vi_planner.global_sweep: false to accept the old behaviour."
-        )
+# かつてここには ``_validate_vi_solver`` があり、**compact ソルバ +
+# global_sweep** を「フィードバックが黙って効かない組み合わせ」として弾いて
+# いた。2026-08-04 に compact も同じフィードバックを持つようになった
+# (sink への書き戻し + タイル修復) ので、その検査は消してある。
+#
+# メモリの上限判定もここではやらない。地図の実寸はノードしか知らないので、
+# ``dense_limit_mb`` としてノード側にある (超えたら起動時にエラーで止まる)。
 
 
 def validate_local_planner(context, *args, effective_local_planner, **kwargs):
@@ -141,7 +110,6 @@ def validate_local_planner(context, *args, effective_local_planner, **kwargs):
     if effective_local_planner.perform(context) != "vi":
         return []
 
-    _validate_vi_solver(context)
     try:
         get_package_prefix("vi_planner")
     except PackageNotFoundError as exc:

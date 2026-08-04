@@ -146,15 +146,18 @@ ros2 launch daifuku_stack navigation.launch.py \
 
 `local_planner:=auto`（既定）は、`planner:=vi`なら`vi`、`planner:=navfn`なら`nav2`を選びます。
 
-`map_19f`では`vi_planner`は密ソルバで解きます。経路計画と経路追従が1本の状態配列を
-共有し、追従がスキャンから書いたペナルティを全域掃き（`global_sweep`、既定で有効）が
-広域の経路まで広げるからです。
+`vi_planner`は既定でアウトオブコアソルバ（`frontier2d_sparse_compact`）で解きます。
+状態配列を確保せず、確定した価値関数と方策だけを12バイト/状態で持つので、地図が
+大きくなっても載ります。経路計画と経路追従はその確定出力を共有場として使い、追従が
+スキャンから書いたペナルティを全域掃き（`global_sweep`、既定で有効）が広域の経路まで
+広げます。掃きは追従中もバックグラウンドで回り、1コアの25%を使います。実時間は起動
+ログの`global sweep done in ...`に出ます。
 
-密は状態1つあたり80バイト要るので、プランナ内部だけを0.10 m/セルに粗くして実測655 MBに
-収めています（`map_scale: 2`。地図、コストマップ、自己位置推定は0.05 mのままです）。
-掃きは追従中もバックグラウンドで回り、1コアの25%を使います。1掃きの実時間は起動ログの
-`global sweep done in ...`に出ます。`dense_limit_mb`を超える地図では、確保してから
-OOMされる代わりに起動を止めます。値の導出は
+`map_19f`では`map_scale: 2`でプランナ内部だけを0.10 m/セルに粗くしています（地図、
+コストマップ、自己位置推定は0.05 mのままです）。solveと伝播を軽くするためで、必須では
+ありません。密ソルバ（`frontier2d_sparse`）に戻すこともできますが、そちらは状態1つ
+あたり80バイト要るので`map_scale: 2`とセットです（実測655 MB。`dense_limit_mb`を
+超える地図では、確保してからOOMされる代わりに起動を止めます）。値の導出は
 [`config/README.md`](../../src/daifuku_stack/config/README.md)にあります。
 
 ## 広域地図（map_tsudanuma）で動かす
@@ -183,12 +186,13 @@ ros2 launch daifuku_stack navigation.launch.py \
 `compact_sink_dir`のmmapファイルから起こして回します（±1 mウィンドウ＋遷移到達距離＋余裕。
 0.25 mセルで27×27×60≒2.5 MB）。
 
-ただし**この地図では`vi_planner`の`global_sweep`を`false`にしてください**。この掃きは
-経路計画と経路追従が共有する密な状態配列の上でしか動かず、compactにはその共有場が
-ありません。`true`のままだと、機体は目の前の障害物を避けるのに
-`compute_path_to_pose`は塞がった通路を返し続けます。黙って効かない設定なので、この
-組み合わせはlaunchが起動前に弾きます。`overrides:=map_tsudanuma`には
-`global_sweep: false`が入っています。
+狭域→広域のフィードバック（`global_sweep`）もこの地図で効きます。compactでは共有場が
+状態配列ではなくmmapの確定出力なので、掃きは全域Gauss–Seidelではなく、そこを
+タイル単位（更新する16セル角＋遷移到達距離だけの凍結境界）で起こして掃いて書き戻す
+形になります。仕事量は地図の大きさではなく、値が実際に動く範囲に比例します。
+**この地図で伝播にどれだけかかるかは未計測**です。起動ログの
+`global sweep done in ...`を見て、長すぎるようなら
+`global_sweep_budget_ms`と`global_sweep_idle_ms`の比を変えてください。
 
 NavFnとDWBで動かす場合、`map_tsudanuma`の価値反復向け設定は要りませんが、
 `overrides:=none`を渡してください。省略すると既定の`map_19f`が載り、この地図には

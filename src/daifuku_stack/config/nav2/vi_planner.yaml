@@ -1,7 +1,7 @@
 # 価値反復プランナ (value_iteration3, Rust)。「既定」= 各ノードの main.rs が
 # declare_parameter で持つ値。ここはほぼ既定の書き出しで、既定と違うのは
-# map_wait_sec と dense_limit_mb と compact_ram_limit_mb と
-# vi_global_planner.solver の 4 つだけ。
+# map_wait_sec と dense_limit_mb と compact_ram_limit_mb と、両ノードの
+# solver (ノード既定は密、ここは compact) の 4 つだけ。
 # 地図ごとの調整は ../overrides/<地図名>.yaml に置く。合成順序と上書きは
 # ../README.md を参照。
 #
@@ -16,16 +16,16 @@
 vi_planner:
   ros__parameters:
     use_sim_time: false
-    # 既定 同左 (密): **密でなければ狭域 → 広域のフィードバックが効かない。**
-    # 密は states を広域 (ロールアウト) と狭域 (スキャンの local_penalty) で共有し、
-    # global_sweep がその書き込みを全域へ広げる。compact は states を作らないので
-    # 共有場が無く、追従は避けても広域の経路は塞がった通路を指し続ける
-    # (launch の _validate_vi_solver が compact + global_sweep を止める)。
-    # 密の代償はメモリ (states 56B + sweep_orders 24B = 80B/state) で、これは
-    # map_scale で落とす。19F は ../overrides/map_19f.yaml の scale 2 で実測 655MB。
-    solver: "frontier2d_sparse"
-    dense_limit_mb: 2048          # 既定 1500 [MB]: 密の価値関数 (states + sweep_orders) の上限。超えたら起動を止める。19F は map_scale 2 で実測 655MB
-    compact_ram_limit_mb: 2048    # 既定 512 [MB]: **上の solver が密の間は効かない** (sink を作らないため)。compact に戻したときのための値。sink を RAM に置ける上限 (超過分は /tmp/vi_planner_sink へ mmap 退避)
+    # 既定 frontier2d_sparse (密): アウトオブコアを既定にする。地図が大きくなっても
+    # 載る側で、Pi4 4GB に対する余裕がまるで違う (常駐は sink 12B/state + 追従パッチと
+    # 修復タイルで数 MB。密は states 56B + sweep_orders 24B = 80B/state)。
+    # 狭域 → 広域のフィードバックはどちらでも効く: 密は共有した states を全域
+    # Gauss–Seidel で掃き、compact は sink を共有場にしてタイル単位で修復する
+    # (同じ更新式・同じ不動点)。密が速いのは確かなので、載る地図で速さが要るなら
+    # 地図ごとの overrides で密に戻すこと (../overrides/map_19f.yaml に見積もりあり)。
+    solver: "frontier2d_sparse_compact"
+    dense_limit_mb: 2048          # 既定 1500 [MB]: **上の solver が compact の間は効かない**。密に戻したときの上限 (states + sweep_orders。超えたら起動を止める)。19F は map_scale 2 で実測 655MB
+    compact_ram_limit_mb: 2048    # 既定 512 [MB]: sink を RAM に置ける上限 (超過分は /tmp/vi_planner_sink へ mmap 退避)。19F は map_scale 2 で 95MB なので RAM に載る
     theta_cell_num: 60            # 既定 60: 姿勢の離散数。360 を割り切ること (t_resolution = 360/この値 が整数除算)
     safety_radius: 0.2            # 既定 0.2 [m]: 障害物近傍ペナルティの半径 (VI 内部の膨張)
     safety_radius_penalty: 30     # 既定 30 [秒/セル]: 障害物に近寄る代わりに払う迂回コスト
@@ -54,7 +54,9 @@ vi_planner:
     # budget:idle の比がそのまま CPU の取り分。追従ループは同じ Mutex を try_lock で
     # 取り、3 tick 続けて取れないとロボットを止めるので、budget を伸ばすときは
     # idle も一緒に伸ばすこと。1 掃きの実測は起動ログの "global sweep done in" に出る。
-    global_sweep: true            # 既定 true: 全域掃きを回すか (密ソルバ専用)
+    # compact ではこれが sink のタイル修復になる (1 回の呼び出し = タイル 1 枚)。
+    # 掃き終わるまでの時間は地図の大きさではなく、変化が及ぶ範囲に比例する。
+    global_sweep: true            # 既定 true: 全域掃き (compact ではタイル修復) を回すか
     global_sweep_budget_ms: 20    # 既定 20 [ms]: 1 回のロック取得で掃きに使う時間
     global_sweep_idle_ms: 60      # 既定 60 [ms]: そのあとロックを手放して待つ時間 (20:60 = 1 コアの 25%)
     # ── 可視化 (経路計算には影響しない) ──
@@ -79,8 +81,6 @@ vi_planner:
     #                             # sink を読むので、退避先が遅いと制御周期に響く
     #     ▲ 上 3 つの実例は ../overrides/map_tsudanuma.yaml (scale 5 + 楽観 + ディスク退避)。
     #       map_scale だけなら ../overrides/map_19f.yaml (scale 2、保守のまま)。
-    #       ただし tsudanuma のように compact が要る大きさの地図では、上の
-    #       global_sweep を false にしないと launch が止める (共有場が無いため)。
     # pose_topic: "mcl_pose"      # 自己位置を読むトピック。launch が上書きする
     # scan_topic: "scan"          # スキャンを読むトピック。launch が上書きする
     # global_frame: "map"         # 出力する Path のフレーム
@@ -89,7 +89,7 @@ vi_planner:
 vi_global_planner:
   ros__parameters:
     use_sim_time: false
-    solver: "frontier2d_sparse_compact"  # 既定 frontier2d_sparse (密): vi_planner と揃える。実例は ../overrides/map_tsudanuma.yaml
+    solver: "frontier2d_sparse_compact"  # 既定 frontier2d_sparse (密): vi_planner と揃える (理由は上のブロック)
     map_scale: 1                  # 既定 1: プランナ内部で地図を粗くする倍率 (1 = /map のまま)。19F は ../overrides/ で 2
     compact_sink_dir: ""          # 既定 "": compact の確定出力先 ("" = RAM)
     compact_ram_limit_mb: 2048    # 既定 512 [MB]: sink を RAM に置ける上限 (超過分は /tmp/vi_global_planner_sink へ mmap 退避)。vi_planner と揃える。compact_sink_dir 無しの広域地図では 2GiB を RAM に抱えたまま OOM し得る

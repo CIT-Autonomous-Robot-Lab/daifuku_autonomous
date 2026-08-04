@@ -29,19 +29,20 @@ emcl2:
 # まま。2 で 458x289 @0.10m = 794 万状態 (scale 1 の 3168 万の 1/4)。代償は 0.10m/cell
 # の粗さと、保守的プーリングで通路が片側最大 0.05m 細ること。
 #
-# **ここで 2 にしている理由は密ソルバを載せるため。** vi_planner の狭域 → 広域の
-# フィードバック (global_sweep) は `states` を共有場として使うので、密でないと
-# 成立しない (compact は states を作らない)。密の常駐は 80 B/state — states 56 +
-# sweep_orders 24 — で、scale 1 なら 2.5GB、**2 なら実測 654.8MB** (states 444.7 +
-# sweep_orders 210.1)。4GB の Pi4 で他のノードと同居できるのは後者だけ。
-# かつてここには「scale > 1 は密ソルバでは通らない」と書いてあったが前提が逆で、
-# scale は密を**載せるための**手段。launch の _validate_vi_solver もそれに合わせて
-# 直してあり、いまメモリ上限を見るのはノード側の dense_limit_mb。
+# **ここで 2 にしている理由は solve を軽くするため**で、断片が compact になった今は
+# 必須ではない (2026-07-29 の実機は compact scale 1 で solve 29.25s / RSS 833MB で
+# 通っている)。状態数が 1/4 になるぶん solve も伝播も速い。
 #
-# **未検証** — この地図・この scale での solve 時間と経路、および全域 1 掃きの
-# 実時間は測っていない (host 実測 5.23M cells/s から Pi4 で 1 掃き 8〜11 秒の見込み。
-# 実測値は起動ログの "global sweep done in" に出る)。参考に 2026-07-29 の実機は
-# compact scale 1 で solve 29.25s / RSS 833MB で通っている。
+# 密に戻すなら**この scale 2 とセット**。密の常駐は 80 B/state — states 56 +
+# sweep_orders 24 — で、scale 1 なら 2.5GB、**2 なら実測 654.8MB** (states 444.7 +
+# sweep_orders 210.1)。4GB の Pi4 で他のノードと同居できるのは後者だけ。上限を見るのは
+# ノード側の dense_limit_mb (断片で 2048MB にしてある)。かつてここには「scale > 1 は
+# 密ソルバでは通らない」と書いてあったが前提が逆で、scale は密を**載せるための**手段。
+#
+# **未検証** — この地図・この scale での solve 時間と経路、および狭域 → 広域の伝播に
+# かかる実時間は測っていない (密なら host 実測 5.23M cells/s から Pi4 で 1 掃き
+# 8〜11 秒の見込み。compact のタイル修復は見積もりも無い)。実測値は起動ログの
+# "global sweep done in" に出る。
 #
 # map_tsudanuma の scale 5 は downsample_policy / action_forward_m /
 # goal_margin_radius とセットだが、2 では 1 手 3 セル・ゴール半径 3 セル・
@@ -49,7 +50,7 @@ emcl2:
 # 片方だけだと同じ地図なのに 2 構成で別の経路が出るため。
 vi_planner:
   ros__parameters:
-    map_scale: 2                       # 既定 1 (断片は未設定): 内部だけ 0.10m/cell (794 万状態)。密を載せるため
+    map_scale: 2                       # 既定 1 (断片は未設定): 内部だけ 0.10m/cell (794 万状態)。solve を軽くするため
 
 vi_global_planner:
   ros__parameters:
