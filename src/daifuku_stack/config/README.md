@@ -374,6 +374,19 @@ Pi 4 と Pi 5 で 1 ファイルです。機種差は `model: auto` が device-t
 * `publish_tf` があります。EKF に `odom -> base_footprint` を出させる構成では
   `false` にしてください。
 
+* **LED・ブザー・スイッチのキーがあります**（`use_leds` / `use_switches` /
+  `use_buzzer` / `gpio_leds` / `gpio_switches` / `gpio_buzzer` / `switch_pull_up` /
+  `switches_hz` / `buzzer_pwm_channel` / `buzzer_max_frequency`）。トピックの型は
+  公式実装と同じで、`/leds` が `raspimouse_msgs/Leds`、`/switches` が
+  `raspimouse_msgs/Switches`（true が押下）、`/buzzer` が `std_msgs/Int16`（Hz、
+  0 で停止）です。掴めないピンがあっても走行には影響しません（起動ログの
+  `peripherals:` の行に出るだけ）。
+  **`buzzer_pwm_channel` の既定 `-1`（ソフト生成）は意図的です。** ブザーの GPIO19 は
+  右モータのステップクロックと同じ PWM チャネルで、sysfs からはピンの alt 機能を
+  変えられないので、両方を PWM に mux すると鳴らすたびに右車輪が回ります。モータと
+  同じ番号を書いた場合と、Pi 4 で 0 以上を書いた場合は `configure` が拒否します。
+  経緯は [`src/raspicat_driver/README.md`](../../raspicat_driver/README.md)。
+
 配線に関わるキー（`gpio_*` / `pwm*` / `i2c_*` / `direction_*_forward_level`）は
 すべて rtmouse の `rtmouse.h` から写した値で、**実機で確認していません**。
 確認項目と直しかたは上の 2 つのドキュメントの表にあります。

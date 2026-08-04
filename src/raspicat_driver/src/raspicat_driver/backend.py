@@ -19,6 +19,8 @@ from dataclasses import dataclass
 from dataclasses import field
 import os
 
+from .buzzer import SoftwareBuzzer
+from .gpio import GpioInputs
 from .gpio import GpioOutputs
 from .gpio import chip_devices
 from .gpio import chip_labels
@@ -51,6 +53,16 @@ class Wiring:
     i2c_address: tuple = (0x10, 0x11)
     use_pulse_counters: bool = True
     allow_rtmouse: bool = False
+    gpio_leds: tuple = (25, 24, 23, 18)
+    gpio_switches: tuple = (20, 26, 21)
+    gpio_buzzer: int = 19
+    switch_pull_up: bool = True
+    # -1 means "no PWM channel is free for the buzzer, toggle the line
+    # instead"; see buzzer.py for why that is the default on both models.
+    buzzer_pwm_channel: int = -1
+    use_leds: bool = True
+    use_switches: bool = True
+    use_buzzer: bool = True
 
 
 @dataclass
@@ -62,6 +74,12 @@ class Hardware:
     gpio: object = None
     clocks: list = field(default_factory=lambda: [None, None])
     counters: list = field(default_factory=lambda: [None, None])
+    # None whenever the peripheral is switched off or could not be claimed;
+    # unlike the motor path, none of these are worth failing configure over.
+    leds: object = None
+    switches: object = None
+    buzzer: object = None
+    buzzer_kind: str = ""
 
     def close(self):
         """Release everything.  Safe to call twice, and on a half-built object."""
@@ -71,9 +89,14 @@ class Hardware:
                     device.close()
             self.clocks[index] = None
             self.counters[index] = None
-        if self.gpio is not None:
-            self.gpio.close()
-            self.gpio = None
+        # The buzzer goes first: it has a thread of its own, and it must not
+        # still be toggling a line we are about to hand back.
+        for name in ("buzzer", "switches", "leds", "gpio"):
+            device = getattr(self, name)
+            if device is not None:
+                device.close()
+                setattr(self, name, None)
+        self.buzzer_kind = ""
 
 
 class Backend:
@@ -96,13 +119,23 @@ class Backend:
                 "(docker/raspberrypi/compose.original.yaml); on the host it means the "
                 "PWM overlay is missing from config.txt."
             )
+        if wiring.use_buzzer and wiring.buzzer_pwm_channel in wiring.pwm_channel:
+            # A channel drives every pin muxed to it, so this does not merely
+            # fail to buzz: every beep would step that wheel.
+            side = "left" if wiring.buzzer_pwm_channel == wiring.pwm_channel[LEFT] else "right"
+            raise RuntimeError(
+                "buzzer_pwm_channel:=%d is the %s motor's step clock. Give the buzzer a "
+                "channel of its own, or leave buzzer_pwm_channel at -1 to have the line "
+                "toggled in software." % (wiring.buzzer_pwm_channel, side)
+            )
 
     def open(self, wiring, logger):
         """Claim the GPIO lines, the step clocks and (optionally) the counters.
 
         Order matters: the direction and motor-enable lines are claimed first,
         so a failure further down leaves the motors disabled rather than
-        enabled with an unknown step clock.
+        enabled with an unknown step clock.  The LEDs, switches and buzzer come
+        last and never raise -- losing a beep must not cost us a robot.
         """
         hardware = Hardware()
         try:
@@ -128,7 +161,60 @@ class Backend:
         except Exception:
             hardware.close()
             raise
+        self._open_peripherals(hardware, wiring, logger)
         return hardware
+
+    def _open_peripherals(self, hardware, wiring, logger):
+        """Claim the LEDs, the switches and the buzzer, or log why not.
+
+        Each is claimed on its own handle, so one line another consumer already
+        holds costs only that peripheral.  None of them is worth refusing to
+        drive over, so nothing here raises.
+        """
+        if wiring.use_leds:
+            try:
+                hardware.leds = GpioOutputs(hardware.gpiochip_path, wiring.gpio_leds)
+            except OSError as exc:
+                logger.warning("LEDs unavailable (GPIO %s): %s" % (
+                    ", ".join(str(line) for line in wiring.gpio_leds), exc))
+
+        if wiring.use_switches:
+            try:
+                hardware.switches = GpioInputs(
+                    hardware.gpiochip_path, wiring.gpio_switches, pull_up=wiring.switch_pull_up
+                )
+            except OSError as exc:
+                # A pin controller that refuses bias fails the whole request,
+                # so fall back to whatever pull-up the board itself has.
+                if not wiring.switch_pull_up:
+                    logger.warning("switches unavailable: %s" % exc)
+                else:
+                    logger.warning(
+                        "the pin controller refused an internal pull-up on the switch "
+                        "lines (%s); relying on the board's own. A switch that reads "
+                        "pressed at rest means there is none." % exc
+                    )
+                    try:
+                        hardware.switches = GpioInputs(
+                            hardware.gpiochip_path, wiring.gpio_switches, pull_up=False
+                        )
+                    except OSError as retry:
+                        logger.warning("switches unavailable: %s" % retry)
+
+        if wiring.use_buzzer:
+            try:
+                if wiring.buzzer_pwm_channel >= 0:
+                    hardware.buzzer = StepClock(
+                        hardware.pwmchip_path, wiring.buzzer_pwm_channel
+                    )
+                    hardware.buzzer_kind = "pwm channel %d" % wiring.buzzer_pwm_channel
+                else:
+                    hardware.buzzer = SoftwareBuzzer(
+                        hardware.gpiochip_path, wiring.gpio_buzzer
+                    )
+                    hardware.buzzer_kind = "software on GPIO%d" % wiring.gpio_buzzer
+            except OSError as exc:
+                logger.warning("buzzer unavailable: %s" % exc)
 
     def _resolve_gpiochip(self, wiring):
         if wiring.gpiochip_device:

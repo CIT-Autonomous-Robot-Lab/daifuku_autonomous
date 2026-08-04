@@ -16,7 +16,8 @@ Pi 4 では 2 つから選べます（Pi 5 では自前実装しか選べませ�
 | モータ経路 | rtmouse がレジスタを直書き | `/sys/class/pwm`・`/dev/gpiochip*`・`/dev/i2c-1` |
 | rtmouse | **要る** | **載っていてはいけない** |
 | パルスカウンタ | 使わない設定にしてある（下記） | 使う（`use_pulse_counters: true`） |
-| LED・ブザー・スイッチ・測距センサ | あり | なし |
+| LED・ブザー・スイッチ | あり | あり（ブザーはソフト生成。下記） |
+| 測距センサ | あり | なし |
 | SD カード | `create_image.py --model pi4`（既定） | `create_image.py --model pi4 --no-rtmouse` |
 
 **同時には動かせません。** rtmouse は GPIO と PWM のレジスタを `ioremap()` して直接
@@ -111,8 +112,16 @@ Pi 4 のメモリとコア数に由来するもので、Pi 5 では緩みます�
 
 ## LED・ブザー・スイッチ・測距センサ
 
-rtmouse があるので公式実装では出せます。ただし、このワークスペースの中にこれらを
-使うものはありません。自前ドライバがこれらを持たないのはそのためです。
+LED とスイッチはどちらの実装でも出せます（自前実装は `/dev/gpiochip*` を直接使う）。
+
+**ブザーだけは Pi 4 で事情が違います。** ブザーの GPIO19 は右モータのステップクロック
+（GPIO13）と同じ PWM チャネルで、BCM2711 の PWM0 にはチャネルが 2 本しかありません。
+rtmouse はレジスタを `ioremap` していて鳴らす瞬間だけ GPIO19 を mux し直すのでこれで
+成立しますが、sysfs PWM ではピンの alt 機能を変えられません。両方を PWM に mux したま
+まにすると**鳴らすたびに右車輪がステップします**。そのため自前実装の Pi 4 では
+`buzzer_pwm_channel` を 0 以上にすると configure を拒否し、既定ではスレッドで GPIO19 を
+叩いて鳴らします（音程がわずかに揺れる。理由と Pi 5 での回避策は
+[`src/raspicat_driver/README.md`](../../src/raspicat_driver/README.md)）。
 
 **測距センサだけは切ってあります**（`config/robot/raspicat.yaml` の
 `use_light_sensors: false`）。`true` に戻すと `raspimouse` が

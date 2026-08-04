@@ -6,7 +6,10 @@ The contract is the one raspimouse (raspimouse2) offers, so robot_bringup,
 the EKF and Nav2 do not care which driver is running:
 
   subscribe  cmd_vel        geometry_msgs/Twist
+  subscribe  leds           raspimouse_msgs/Leds
+  subscribe  buzzer         std_msgs/Int16      (data = Hz, 0 = silence)
   publish    odom           nav_msgs/Odometry
+  publish    switches       raspimouse_msgs/Switches  (true = pressed)
   publish    odom -> base_footprint TF   (publish_tf, unlike raspimouse)
   service    motor_power    std_srvs/SetBool
   lifecycle  configure -> activate, driven by robot_bringup.launch.py
@@ -14,9 +17,13 @@ the EKF and Nav2 do not care which driver is running:
 Everything below the node is a Backend (backend.py, pi4.py, pi5.py); this file
 never mentions a register, a chip label or a kernel module.
 
-Deliberately not provided: LEDs, buzzer, switches and light sensors.  Nothing
-in this workspace subscribes to /leds or /buzzer or reads /switches or
-/light_sensors -- only raspimouse's own parameters mention them.
+Still not provided: the light sensors.  They hang off the board's SPI ADC
+rather than a GPIO line, nothing in this workspace reads /light_sensors, and
+polling them at 100 Hz is what wedges rtmouse on the real robot
+(docs/usage/troubleshooting.md).
+
+The three peripherals that are provided are optional in a way the motor path
+is not: if a line cannot be claimed the node says so and carries on driving.
 
 Two deliberate differences from raspimouse:
   * the encoder and the stepper are counted separately.  On this robot a wheel
@@ -43,12 +50,15 @@ import time
 from geometry_msgs.msg import TransformStamped
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
+from raspimouse_msgs.msg import Leds
+from raspimouse_msgs.msg import Switches
 import rclpy
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.lifecycle import LifecycleNode
 from rclpy.lifecycle import LifecycleState
 from rclpy.lifecycle import TransitionCallbackReturn
+from std_msgs.msg import Int16
 from std_srvs.srv import SetBool
 from tf2_ros import TransformBroadcaster
 
@@ -109,6 +119,17 @@ class RaspicatDriver(LifecycleNode):
         self.declare_parameter("pwm_channel_left", 0)
         self.declare_parameter("pwm_channel_right", 1)
 
+        self.declare_parameter("use_leds", True)
+        self.declare_parameter("use_switches", True)
+        self.declare_parameter("use_buzzer", True)
+        self.declare_parameter("gpio_leds", [25, 24, 23, 18])
+        self.declare_parameter("gpio_switches", [20, 26, 21])
+        self.declare_parameter("gpio_buzzer", 19)
+        self.declare_parameter("switch_pull_up", True)
+        self.declare_parameter("switches_hz", 10.0)
+        self.declare_parameter("buzzer_pwm_channel", -1)
+        self.declare_parameter("buzzer_max_frequency", 5000.0)
+
         self.declare_parameter("i2c_bus", "/dev/i2c-1")
         self.declare_parameter("i2c_address_left", 0x10)
         self.declare_parameter("i2c_address_right", 0x11)
@@ -119,15 +140,23 @@ class RaspicatDriver(LifecycleNode):
 
         self._motor_group = MutuallyExclusiveCallbackGroup()
         self._odom_group = MutuallyExclusiveCallbackGroup()
+        # LEDs, buzzer and switches share a group of their own: they must not
+        # sit behind a cmd_vel callback, and an odom tick must not sit behind
+        # them.
+        self._aux_group = MutuallyExclusiveCallbackGroup()
 
         self._state_lock = threading.Lock()
         self._backend = None
         self._hardware = Hardware()
         self._odom_pub = None
+        self._switches_pub = None
         self._tf_broadcaster = None
         self._odom_timer = None
         self._watchdog_timer = None
+        self._switches_timer = None
         self._cmd_vel_sub = None
+        self._leds_sub = None
+        self._buzzer_sub = None
         self._motor_power_srv = None
         self._forward = [True, True]
 
@@ -163,6 +192,13 @@ class RaspicatDriver(LifecycleNode):
             self._on_motor_power,
             callback_group=self._motor_group,
         )
+        self._leds_sub = self.create_subscription(
+            Leds, "leds", self._on_leds, 10, callback_group=self._aux_group
+        )
+        self._buzzer_sub = self.create_subscription(
+            Int16, "buzzer", self._on_buzzer, 10, callback_group=self._aux_group
+        )
+        self._switches_pub = self.create_lifecycle_publisher(Switches, "switches", 10)
 
         period = 1.0 / max(self._odom_hz, 1.0)
         self._odom_timer = self.create_timer(
@@ -173,12 +209,24 @@ class RaspicatDriver(LifecycleNode):
             1.0, self._check_watchdog, callback_group=self._motor_group
         )
         self._watchdog_timer.cancel()
+        self._switches_timer = self.create_timer(
+            1.0 / max(self._switches_hz, 1.0),
+            self._publish_switches,
+            callback_group=self._aux_group,
+        )
+        self._switches_timer.cancel()
 
         self._set_motor_power(False)
         self.get_logger().info(
             "configured: model=%s (%s) gpiochip=%s pwmchip=%s counters=%s"
             % (self._backend.name, self._backend.soc, self._hardware.gpiochip_path,
                self._hardware.pwmchip_path, "on" if self._use_pulse_counters else "off")
+        )
+        self.get_logger().info(
+            "peripherals: leds=%s switches=%s buzzer=%s"
+            % ("on" if self._hardware.leds is not None else "off",
+               "on" if self._hardware.switches is not None else "off",
+               self._hardware.buzzer_kind or "off")
         )
         return TransitionCallbackReturn.SUCCESS
 
@@ -190,6 +238,7 @@ class RaspicatDriver(LifecycleNode):
         self._active = True
         self._odom_timer.reset()
         self._watchdog_timer.reset()
+        self._switches_timer.reset()
         self._set_motor_power(self._initial_motor_power)
         self.get_logger().info("activated")
         return TransitionCallbackReturn.SUCCESS
@@ -199,10 +248,14 @@ class RaspicatDriver(LifecycleNode):
         self._active = False
         self._stop_motors()
         self._set_motor_power(False)
-        if self._odom_timer is not None:
-            self._odom_timer.cancel()
-        if self._watchdog_timer is not None:
-            self._watchdog_timer.cancel()
+        # An inactive node publishes no switch states, so leaving the LEDs lit
+        # and the buzzer sounding would be reporting something we no longer
+        # know.  raspimouse silences its buzzer here for the same reason.
+        self._silence_buzzer()
+        self._clear_leds()
+        for timer in (self._odom_timer, self._watchdog_timer, self._switches_timer):
+            if timer is not None:
+                timer.cancel()
         super().on_deactivate(state)
         return TransitionCallbackReturn.SUCCESS
 
@@ -227,24 +280,32 @@ class RaspicatDriver(LifecycleNode):
         self._active = False
         self._stop_motors()
         self._set_motor_power(False)
+        self._silence_buzzer()
+        self._clear_leds()
         self._hardware.close()
         # Entities are recreated by on_configure, so drop them here rather than
         # leaving a second subscription/timer behind after a cleanup+configure.
-        for timer in (self._odom_timer, self._watchdog_timer):
+        for timer in (self._odom_timer, self._watchdog_timer, self._switches_timer):
             if timer is not None:
                 timer.cancel()
                 self.destroy_timer(timer)
         self._odom_timer = None
         self._watchdog_timer = None
-        if self._cmd_vel_sub is not None:
-            self.destroy_subscription(self._cmd_vel_sub)
-            self._cmd_vel_sub = None
+        self._switches_timer = None
+        for subscription in (self._cmd_vel_sub, self._leds_sub, self._buzzer_sub):
+            if subscription is not None:
+                self.destroy_subscription(subscription)
+        self._cmd_vel_sub = None
+        self._leds_sub = None
+        self._buzzer_sub = None
         if self._motor_power_srv is not None:
             self.destroy_service(self._motor_power_srv)
             self._motor_power_srv = None
-        if self._odom_pub is not None:
-            self.destroy_lifecycle_publisher(self._odom_pub)
-            self._odom_pub = None
+        for publisher in (self._odom_pub, self._switches_pub):
+            if publisher is not None:
+                self.destroy_lifecycle_publisher(publisher)
+        self._odom_pub = None
+        self._switches_pub = None
         self._tf_broadcaster = None
 
     # -- setup -------------------------------------------------------------
@@ -277,6 +338,10 @@ class RaspicatDriver(LifecycleNode):
         self._max_step = get("max_step_frequency").value
         self._counter_error_limit = get("counter_error_limit").value
         self._counter_retry_period = get("counter_retry_period").value
+        self._switches_hz = get("switches_hz").value
+        # Every edge costs an ioctl and, in the software buzzer, a spin to the
+        # microsecond -- so the ceiling is a CPU budget, not a musical one.
+        self._buzzer_max = get("buzzer_max_frequency").value
 
         prefix = get("odom_frame_prefix").value
         self._odom_frame = get("odom_frame_id").value
@@ -291,6 +356,14 @@ class RaspicatDriver(LifecycleNode):
             raise ValueError("pulses_per_revolution must be positive")
         if self._steps_per_revolution <= 0.0:
             raise ValueError("steps_per_revolution must be positive")
+        # The message has a fixed number of fields, so a short list here would
+        # otherwise become an IndexError inside a callback.
+        if len(get("gpio_leds").value) != 4:
+            raise ValueError("gpio_leds must have 4 entries (Leds has led0..led3)")
+        if len(get("gpio_switches").value) != 3:
+            raise ValueError(
+                "gpio_switches must have 3 entries (Switches has switch0..switch2)"
+            )
 
         self._forward_level = (
             get("direction_left_forward_level").value,
@@ -318,6 +391,14 @@ class RaspicatDriver(LifecycleNode):
             ),
             use_pulse_counters=self._use_pulse_counters,
             allow_rtmouse=get("allow_rtmouse").value,
+            gpio_leds=tuple(get("gpio_leds").value),
+            gpio_switches=tuple(get("gpio_switches").value),
+            gpio_buzzer=get("gpio_buzzer").value,
+            switch_pull_up=get("switch_pull_up").value,
+            buzzer_pwm_channel=get("buzzer_pwm_channel").value,
+            use_leds=get("use_leds").value,
+            use_switches=get("use_switches").value,
+            use_buzzer=get("use_buzzer").value,
         )
 
     def _reset_state(self):
@@ -460,6 +541,78 @@ class RaspicatDriver(LifecycleNode):
             self._watchdog_tripped = True
         self.get_logger().warning("no cmd_vel for %.1f s; stopping motors" % idle)
         self._stop_motors()
+
+    # -- LEDs, buzzer and switches (aux callback group) --------------------
+
+    def _on_leds(self, msg):
+        """Light the LEDs the message asks for.  High is lit, as in rtmouse."""
+        leds = self._hardware.leds
+        if leds is None:
+            return
+        try:
+            leds.set_many((msg.led0, msg.led1, msg.led2, msg.led3))
+        except OSError as exc:
+            self.get_logger().error(
+                "LED write failed: %s" % exc, throttle_duration_sec=5.0
+            )
+
+    def _on_buzzer(self, msg):
+        """Sound the buzzer at msg.data Hz; 0 (or less) is silence."""
+        buzzer = self._hardware.buzzer
+        if buzzer is None:
+            return
+        frequency = float(msg.data)
+        if frequency > self._buzzer_max:
+            self.get_logger().warning(
+                "buzzer asked for %.0f Hz; capped at buzzer_max_frequency (%.0f Hz)"
+                % (frequency, self._buzzer_max),
+                throttle_duration_sec=5.0,
+            )
+            frequency = self._buzzer_max
+        try:
+            if frequency <= 0.0:
+                buzzer.stop()
+            else:
+                buzzer.set_frequency(frequency)
+        except OSError as exc:
+            self.get_logger().error(
+                "buzzer write failed: %s" % exc, throttle_duration_sec=5.0
+            )
+
+    def _silence_buzzer(self):
+        if self._hardware.buzzer is None:
+            return
+        try:
+            self._hardware.buzzer.stop()
+        except OSError as exc:
+            self.get_logger().error("buzzer stop failed: %s" % exc)
+
+    def _clear_leds(self):
+        if self._hardware.leds is None:
+            return
+        try:
+            self._hardware.leds.set_many((False, False, False, False))
+        except OSError as exc:
+            self.get_logger().error("LED write failed: %s" % exc)
+
+    def _publish_switches(self):
+        """Publish the three push switches.  True is pressed, as raspimouse has it."""
+        switches = self._hardware.switches
+        if not self._active or self._switches_pub is None or switches is None:
+            return
+        try:
+            levels = switches.read()
+        except OSError as exc:
+            self.get_logger().error(
+                "switch read failed: %s" % exc, throttle_duration_sec=5.0
+            )
+            return
+        message = Switches()
+        # The switches pull their line to ground, so a pressed one reads low.
+        message.switch0 = levels[0] == 0
+        message.switch1 = levels[1] == 0
+        message.switch2 = levels[2] == 0
+        self._switches_pub.publish(message)
 
     # -- odometry path (odom callback group) -------------------------------
 
@@ -622,9 +775,10 @@ def main():
     """Spin the node until it is shut down, then stop the wheels."""
     rclpy.init(args=sys.argv)
     node = RaspicatDriver()
-    # One thread for the motor group, one for the counters, and the rest for
-    # the lifecycle services -- an I2C stall must not delay cmd_vel.
-    executor = MultiThreadedExecutor(num_threads=4)
+    # One thread for the motor group, one for the counters, one for the LEDs,
+    # buzzer and switches, and the rest for the lifecycle services -- an I2C
+    # stall must not delay cmd_vel.
+    executor = MultiThreadedExecutor(num_threads=5)
     executor.add_node(node)
     try:
         executor.spin()

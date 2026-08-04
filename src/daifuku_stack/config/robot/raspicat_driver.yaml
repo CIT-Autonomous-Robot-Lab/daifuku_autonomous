@@ -52,6 +52,18 @@ raspicat_driver:
     pwm_channel_left          : 0       # 既定 0: GPIO12 に出るチャネル
     pwm_channel_right         : 1       # 既定 1: GPIO13 に出るチャネル
 
+    # ── LED・ブザー・スイッチ (実機で確認するまでは既定のまま) ──
+    use_leds                  : true    # 既定 true: /leds を受けて LED を光らせる。掴めなくても走行には影響しない
+    use_switches              : true    # 既定 true: /switches を出す
+    use_buzzer                : true    # 既定 true: /buzzer を受けて鳴らす
+    gpio_leds                 : [25, 24, 23, 18]  # 既定 同左: LED0〜3 (rtmouse の LED0_BASE〜LED3_BASE)。High で点灯
+    gpio_switches             : [20, 26, 21]      # 既定 同左: SW0〜2 (同 SW1_PIN〜SW3_PIN)。押下で Low、true が押下
+    gpio_buzzer               : 19      # 既定 19: ブザー (同 BUZZER_BASE)。buzzer_pwm_channel が -1 のときソフトで叩く先
+    switch_pull_up            : true    # 既定 true: スイッチ線に内部プルアップを要求する。断られたら基板側のものに頼る
+    switches_hz               : 10.0    # 既定 同左 [Hz]: /switches を出す周期 (raspimouse の switches_hz と同値)
+    buzzer_pwm_channel        : -1      # 既定 -1: ブザーに使う PWM チャネル。-1 = ソフト生成。モータと同じ番号なら起動時にエラー
+    buzzer_max_frequency      : 5000.0  # 既定 同左 [Hz]: これを超える指定は丸める (ソフト生成が CPU を食い切らない上限)
+
     i2c_bus                   : "/dev/i2c-1"  # 既定 同左: パルスカウンタの載っている I2C バス
     i2c_address_left          : 16      # 既定 16 (0x10): 左パルスカウンタのアドレス
     i2c_address_right         : 17      # 既定 17 (0x11): 右パルスカウンタのアドレス

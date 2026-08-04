@@ -10,6 +10,10 @@
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
   <exec_depend>rclpy</exec_depend>
+  <!-- Leds と Switches。公式実装と同じ型でなければ差し替えの意味がないので、
+       raspimouse2 (vcs import) のこのパッケージだけは自前実装からも参照する。 -->
+  <exec_depend>raspimouse_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
   <exec_depend>std_srvs</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
 

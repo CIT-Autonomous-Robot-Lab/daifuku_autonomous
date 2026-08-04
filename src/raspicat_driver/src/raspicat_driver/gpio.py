@@ -8,6 +8,11 @@ python3-gpiod, and adding one would force a `docker compose build`.
 The same code covers both models: a Pi 4 exposes the header pins through the
 gpiochip labelled "pinctrl-bcm2835" and a Pi 5 through "pinctrl-rp1", but the
 line offsets are the BCM numbers on both.
+
+Outputs (direction, motor power, LEDs, the software buzzer) and inputs (the
+push switches) are separate handles even on the same chip, so a chip that
+refuses one bundle -- a line already claimed by another consumer, say -- does
+not cost us the others.
 """
 
 import fcntl
@@ -49,9 +54,15 @@ _HANDLE_DATA_SIZE = struct.calcsize(_HANDLE_DATA_FMT)
 
 _GPIO_GET_CHIPINFO = _ioc(_IOC_READ, _GPIO_MAGIC, 0x01, _CHIPINFO_SIZE)
 _GPIO_GET_LINEHANDLE = _ioc(_IOC_READ | _IOC_WRITE, _GPIO_MAGIC, 0x03, _HANDLE_REQ_SIZE)
+_GPIO_GET_LINE_VALUES = _ioc(_IOC_READ | _IOC_WRITE, _GPIO_MAGIC, 0x08, _HANDLE_DATA_SIZE)
 _GPIO_SET_LINE_VALUES = _ioc(_IOC_READ | _IOC_WRITE, _GPIO_MAGIC, 0x09, _HANDLE_DATA_SIZE)
 
+_GPIOHANDLE_REQUEST_INPUT = 1 << 0
 _GPIOHANDLE_REQUEST_OUTPUT = 1 << 1
+# Kernel 5.5 and later only.  Both images are well past that (5.15 on the Pi 4
+# image, 6.8 on the Pi 5 one), but a chip may still refuse bias on a given
+# line, so the caller is expected to retry without it.
+_GPIOHANDLE_REQUEST_BIAS_PULL_UP = 1 << 5
 
 
 def chip_devices():
@@ -96,16 +107,15 @@ def find_gpiochip(label):
     return None
 
 
-class GpioOutputs:
-    """Output lines on one gpiochip, requested together and set together."""
+class _GpioLines:
+    """One line handle on one gpiochip: several lines claimed in one request."""
 
-    def __init__(self, chip_path, offsets):
+    def __init__(self, chip_path, offsets, flags):
         self._offsets = list(offsets)
-        self._values = [0] * len(self._offsets)
         self._chip_fd = os.open(chip_path, os.O_RDWR | os.O_CLOEXEC)
         try:
             fields = self._offsets + [0] * (64 - len(self._offsets))
-            fields.append(_GPIOHANDLE_REQUEST_OUTPUT)
+            fields.append(flags)
             fields.extend([0] * 64)
             fields.append(CONSUMER.encode("ascii")[:31])
             fields.append(len(self._offsets))
@@ -120,9 +130,30 @@ class GpioOutputs:
             raise
         self._line_fd = struct.unpack(_HANDLE_REQ_FMT, reply)[-1]
 
+    def close(self):
+        """Release the line handle and the chip.  Safe to call twice."""
+        for fd in (self._line_fd, self._chip_fd):
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
+
+class GpioOutputs(_GpioLines):
+    """Output lines on one gpiochip, requested together and set together."""
+
+    def __init__(self, chip_path, offsets):
+        super().__init__(chip_path, offsets, _GPIOHANDLE_REQUEST_OUTPUT)
+        self._values = [0] * len(self._offsets)
+
     def set(self, index, value):
         """Drive one of the requested lines high or low."""
         self._values[index] = 1 if value else 0
+        self.flush()
+
+    def set_many(self, values):
+        """Drive every requested line, in one ioctl."""
+        self._values = [1 if value else 0 for value in values]
         self.flush()
 
     def flush(self):
@@ -132,10 +163,25 @@ class GpioOutputs:
             self._line_fd, _GPIO_SET_LINE_VALUES, struct.pack(_HANDLE_DATA_FMT, *padded)
         )
 
-    def close(self):
-        """Release the line handle and the chip.  Safe to call twice."""
-        for fd in (self._line_fd, self._chip_fd):
-            try:
-                os.close(fd)
-            except OSError:
-                pass
+
+class GpioInputs(_GpioLines):
+    """Input lines on one gpiochip, read together in one ioctl.
+
+    `pull_up` asks the pin controller for the internal pull-up.  The switches
+    on the control board are wired to ground, so without a pull-up -- from the
+    board or from here -- an open switch floats and reads as noise.
+    """
+
+    def __init__(self, chip_path, offsets, pull_up=False):
+        flags = _GPIOHANDLE_REQUEST_INPUT
+        if pull_up:
+            flags |= _GPIOHANDLE_REQUEST_BIAS_PULL_UP
+        super().__init__(chip_path, offsets, flags)
+
+    def read(self):
+        """Return the level of every requested line, in the order requested."""
+        reply = fcntl.ioctl(
+            self._line_fd, _GPIO_GET_LINE_VALUES, bytes(_HANDLE_DATA_SIZE)
+        )
+        values = struct.unpack(_HANDLE_DATA_FMT, reply)
+        return list(values[: len(self._offsets)])

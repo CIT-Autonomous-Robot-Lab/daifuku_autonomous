@@ -31,8 +31,19 @@ class Pi4Backend(Backend):
     pwmchip_match = "fe20c000.pwm"
 
     def preflight(self, wiring, logger):
-        """Refuse to share the motor path with rtmouse."""
+        """Refuse to share the motor path with rtmouse, or the PWM with the buzzer."""
         super().preflight(wiring, logger)
+        if wiring.use_buzzer and wiring.buzzer_pwm_channel >= 0:
+            # BCM2711's PWM0 has two channels and both are spoken for: GPIO12
+            # is channel 0 and GPIO13 channel 1.  The buzzer's GPIO19 is the
+            # ALT5 route to channel 1, i.e. the right motor's, so muxing it
+            # would step that wheel on every beep.
+            raise RuntimeError(
+                "a Pi 4 has no PWM channel to spare for the buzzer: the two channels of "
+                "the pwm block are the step clocks, and GPIO19 is a second route to the "
+                "right motor's. Leave buzzer_pwm_channel at -1 (the line is toggled in "
+                "software instead)."
+            )
         if not rtmouse_present():
             return
         if wiring.allow_rtmouse:

@@ -21,15 +21,55 @@ ros2 launch daifuku_stack robot_bringup.launch.py driver:=original model:=pi4
 | 方向・モータ電源 | rtmouse が GPSET/GPCLR を直書き | `/dev/gpiochip*` のキャラクタデバイス（GPIO16 / 6 / 5） |
 | パルスカウンタ | rtmouse が `/dev/rtcounter_*` を出す | `/dev/i2c-1` の 0x10 / 0x11 を直読み |
 | 対応機種 | Pi 4 のみ | Pi 4 / Pi 5 |
-| LED・ブザー・スイッチ・測距センサ | あり | **なし** |
+| LED・スイッチ | あり | あり（`/dev/gpiochip*` を直接） |
+| ブザー | あり（PWM レジスタ直書き） | あり（既定はソフト生成。下記） |
+| 測距センサ | あり | **なし** |
 | カーネルモジュール | 要 rtmouse | 不要 |
 
-上に見せる契約は同じです。`cmd_vel` を購読し、`odom` と `odom -> base_footprint`
-TF を出し、`motor_power` サービスを持つ lifecycle ノードなので、Nav2・EKF・emcl2 の
-設定は変わりません。
+上に見せる契約は同じです。`cmd_vel` と `/leds`（`raspimouse_msgs/Leds`）と
+`/buzzer`（`std_msgs/Int16`、値は Hz・0 で停止）を購読し、`odom` と
+`odom -> base_footprint` TF と `/switches`（`raspimouse_msgs/Switches`、true が押下）を
+出し、`motor_power` サービスを持つ lifecycle ノードなので、Nav2・EKF・emcl2 の設定は
+変わりません。
 
-LED・ブザー・スイッチ・測距センサを持たないのは、このワークスペースの中に
-`/leds`・`/buzzer`・`/switches`・`/light_sensors` を使うものが無いためです。
+**測距センサだけは持ちません。** GPIO ではなく基板の SPI 側 AD にぶら下がっていて、
+このワークスペースの中に `/light_sensors` を読むものが無く、100 Hz で読むと rtmouse
+側がカーネル oops を起こす（[`troubleshooting.md`](../../docs/usage/troubleshooting.md)）
+ためです。
+
+LED・ブザー・スイッチは**モータ経路と違って必須ではありません**。ピンを掴めなければ
+その旨を 1 行出して走行だけ続けます（`configure` は成功します）。起動ログの
+`peripherals: leds=... switches=... buzzer=...` が結果です。
+
+### ブザーが PWM ではなくソフト生成なのは
+
+ブザーは GPIO19 で、**Pi 4 ではこれが右モータのステップクロック（GPIO13）と同じ PWM
+チャネル**です（BCM2711 の PWM0 ch1。GPIO19 は同じチャネルへの ALT5 経路）。rtmouse は
+GPFSEL を `ioremap` していて、鳴らす瞬間だけ GPIO19 を ALT5 に、止めたら OUTPUT に
+**mux し直す**のでこれで成立しています。sysfs PWM も gpiochip キャラクタデバイスも
+ピンの alt 機能を変えられないので、自前実装は同じ手が使えません。両方のピンを PWM に
+mux したままにすると、**鳴らすたびに右車輪がステップします**。
+
+そのため既定（`buzzer_pwm_channel: -1`）はスレッドで GPIO19 を叩く方式です。オーバレイも
+再起動も要らず両機種で鳴りますが、スケジューラのゆらぎのぶん**音程がわずかに揺れます**
+（Windows でのベンチでは半周期が最悪 6 倍に伸びる瞬間があった）。鳴らしているあいだ
+1 コアの 2〜3 割を使います（周波数が高いほど多い。`buzzer_max_frequency` が上限）。
+
+**Pi 5 なら本物の PWM にできます。** RP1 の PWM ブロックは 4 チャネルあり（実機で
+`npwm=4`）、`pinctrl-rp1.c` では GPIO18/19 も `pwm0` に繋がるので、モータの ch0・ch1 と
+別のチャネルが空いている可能性があります。やることは 2 つです。
+
+1. `config.txt` でピン 19 を PWM へ mux する。`create_image.py` が書くのは
+   `dtoverlay=pwm-2chan,pin=12,func=4,pin2=13,func2=4`（モータの 2 本）だけなので、
+   **今は自分で足して再起動する**ことになります。
+2. `buzzer_pwm_channel` にそのチャネル番号を入れる。番号は**実機で当てる**しかありま
+   せん（外しても鳴らないだけで、車輪は動きません。モータと同じ番号を書いた場合は
+   `configure` がその旨を出して失敗します）。
+
+固まったら `create_image.py` 側にも入れてください。
+
+Pi 4 では `buzzer_pwm_channel` を 0 以上にすると `configure` を拒否します（チャネルが
+2 本しかなく、どちらもステップクロックのため）。
 
 **Pi 4 では両者を同時に動かせません。** rtmouse は GPIO と PWM のレジスタを
 `ioremap()` して直接書くので、カーネルの pinctrl には何も見えず、衝突は検出され
@@ -43,12 +83,13 @@ LED・ブザー・スイッチ・測距センサを持たないのは、この�
 
 | ファイル | 何を持つか |
 | --- | --- |
-| `node.py` | ROS に見える面。lifecycle・`cmd_vel`・`odom`・TF・`motor_power`・オドメトリの積分。レジスタもチップ名も出てこない |
-| `backend.py` | 両機種で共通の手順（GPIO → PWM → I2C の順で掴む）と、機種の判定 |
-| `pi4.py` | BCM2711 の同定（`pinctrl-bcm2835` / `fe20c000.pwm`）と rtmouse の排除 |
+| `node.py` | ROS に見える面。lifecycle・`cmd_vel`・`odom`・TF・`motor_power`・`/leds`・`/buzzer`・`/switches`・オドメトリの積分。レジスタもチップ名も出てこない |
+| `backend.py` | 両機種で共通の手順（GPIO → PWM → I2C → 周辺の順で掴む）と、機種の判定 |
+| `pi4.py` | BCM2711 の同定（`pinctrl-bcm2835` / `fe20c000.pwm`）と rtmouse の排除、ブザーへの PWM 割り当ての拒否 |
 | `pi5.py` | RP1 の同定（`pinctrl-rp1` / `98000.pwm`） |
-| `gpio.py` | gpiochip キャラクタデバイス（v1 uAPI）。libgpiod は使わない |
-| `pwm.py` | `/sys/class/pwm` 経由のハードウェア PWM |
+| `gpio.py` | gpiochip キャラクタデバイス（v1 uAPI）。出力（方向・モータ電源・LED）と入力（スイッチ）。libgpiod は使わない |
+| `pwm.py` | `/sys/class/pwm` 経由のハードウェア PWM。ステップクロックと、チャネルが空いていればブザーも |
+| `buzzer.py` | PWM が使えないときのブザー（スレッドで GPIO19 を叩く） |
 | `i2c.py` | パルスカウンタ（`I2C_RDWR` の write+read 結合転送） |
 
 機種差は**チップの同定だけ**です。ピン番号・PWM チャネル・I2C アドレスは制御基板
@@ -97,3 +138,22 @@ rtmouse は I2C が 1 回タイムアウトするとカーネルの mutex を握
 と `steps_per_revolution` の較正まで済ませました。Pi 4 では未確認です。残っている
 ものは機種ごとに [`docs/setup/raspberry-pi-4.md`](../../docs/setup/raspberry-pi-4.md)
 と [`docs/setup/raspberry-pi-5.md`](../../docs/setup/raspberry-pi-5.md) の表にあります。
+
+**LED・ブザー・スイッチも実機では未確認です。** ピン番号は rtmouse の `rtmouse.h` から
+写したもの（LED 25/24/23/18、SW 20/26/21、ブザー 19）で、机上で確かめたのはソフト生成の
+波形だけです（スタブを噛ませて 100 / 440 / 2000 Hz のエッジ数を数えた）。実機では次の
+順で見てください。
+
+```bash
+ros2 topic pub --once /leds raspimouse_msgs/msg/Leds "{led0: true, led1: false, led2: false, led3: false}"
+ros2 topic echo /switches      # 押していないとき全部 false、押すと該当が true
+ros2 topic pub --once /buzzer std_msgs/msg/Int16 "{data: 440}"
+ros2 topic pub --once /buzzer std_msgs/msg/Int16 "{data: 0}"
+```
+
+- LED が 1 つずれる → `gpio_leds` の並びが逆（`[18, 23, 24, 25]`）。
+- スイッチが押していないのに true → 内部プルアップが効いていない。起動ログに
+  「the pin controller refused an internal pull-up」が出ていないか見る。
+- ブザーが鳴らない → まず `peripherals: ... buzzer=` の行。`software on GPIO19` なのに
+  無音ならピン番号かハードの側。`pwm channel N` なら番号が違う（Pi 5 でオーバレイを
+  入れた場合）。

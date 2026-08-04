@@ -140,10 +140,12 @@ echo "[4/4] Building daifuku_stack, daifuku_rqt, daifuku_waypoint_manager, raspi
 cd "${WORKSPACE}"
 # daifuku_rqt と daifuku_waypoint_manager はここでは建てる。ネイティブ環境は RViz と
 # rqt を動かす PC 側の構成であり、rqt と RViz が無いのは docker/raspberrypi/ の
-# イメージだけ。
+# イメージだけ。raspimouse_msgs は raspicat_driver が /leds と /switches で使うので
+# 要る (公式実装と同じ型に揃えてある)。
 colcon build --symlink-install \
   --parallel-workers "${BUILD_JOBS}" \
-  --packages-select daifuku_rqt daifuku_stack daifuku_waypoint_manager emcl2 raspicat_driver \
+  --packages-select daifuku_rqt daifuku_stack daifuku_waypoint_manager emcl2 \
+                    raspicat_driver raspimouse_msgs \
   --cmake-args -DCMAKE_BUILD_TYPE=Release
 
 cat <<EOF

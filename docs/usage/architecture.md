@@ -59,8 +59,9 @@ rtmouseカーネルモジュールは使いません。
 ROSに見える契約は既定の`driver:=raspimouse`（公式実装）と同じです。相対名`cmd_vel`を購読し
 （`twist_mux:=true`なら`/cmd_vel_mux`へremapされる）、
 `/odom`と`odom -> base_footprint` TFを配信し、`motor_power`サービスを持つlifecycleノード
-なので、Nav2・EKF・EMCL2の設定は変わりません。LED、ブザー、スイッチ、測距センサは
-持ちません。
+なので、Nav2・EKF・EMCL2の設定は変わりません。LED（`/leds`）、ブザー（`/buzzer`）、
+スイッチ（`/switches`）も公式実装と同じ型で持ちます。持たないのは測距センサ
+（`/light_sensors`）だけです。
 
 Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。パラメータは
 `config/robot/raspicat_driver.yaml`、実装と機種ごとの前提は

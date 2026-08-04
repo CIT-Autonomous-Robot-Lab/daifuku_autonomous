@@ -50,7 +50,12 @@ def pwmchips():
 
 
 class StepClock:
-    """One PWM channel driving a stepper step clock at 50% duty."""
+    """One PWM channel at 50% duty.
+
+    A stepper's step clock, and -- where a channel is free for it -- the
+    buzzer's tone as well: both want a square wave at a frequency, and the
+    kernel makes no distinction.
+    """
 
     # A freshly exported channel has period 0, and the kernel's PWM core
     # rejects any apply with a zero period -- so writing duty_cycle before a

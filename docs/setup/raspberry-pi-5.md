@@ -35,8 +35,11 @@ GPIO / PWM / SPI / I2C はすべて PCIe の先の RP1 側にあります。こ�
 TF を出し、`motor_power` サービスを持つ lifecycle ノードなので、Nav2・EKF・emcl2 の
 設定は一切変わりません。
 
-LED・ブザー・スイッチ・測距センサは**用意しません**。このワークスペースの中に
-`/leds`・`/buzzer`・`/switches`・`/light_sensors` を使うものが無いためです。
+LED・ブザー・スイッチも同じ型で出します（`/leds`・`/buzzer`・`/switches`）。**測距
+センサだけは用意しません**（基板の SPI 側 AD にぶら下がっていて、このワークスペースの
+中に `/light_sensors` を読むものが無いため）。ブザーは既定ではソフト生成で、Pi 5 なら
+PWM チャネルに載せ替えられます（手順と理由は
+[`src/raspicat_driver/README.md`](../../src/raspicat_driver/README.md)）。
 
 ## 公式実装との意図的な違い
 
