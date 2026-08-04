@@ -40,9 +40,12 @@ LED・ブザー・スイッチ・測距センサは**用意しません**。こ�
 
 ## 公式実装との意図的な違い
 
-- `cmd_vel` → ステップ周波数の換算に `pulses_per_revolution` を使います。上流の
-  `raspimouse_component.cpp` はここだけ 400.0 を直書きしていて、パラメータは
-  オドメトリ側にしか効きません。
+- **エンコーダとステッピングを別のパラメータで数えます。** この機体は車輪 1 回転が
+  エンコーダ 1118 パルス・ステップ 570 回で、**1.96 倍違います**（2026-08-04 実測。
+  由来は [`config/README.md`](../../src/daifuku_stack/config/README.md)）。`odom` は
+  `pulses_per_revolution`、`cmd_vel` → ステップ周波数は `steps_per_revolution`。
+  上流の `raspimouse_component.cpp` は換算側に 400.0 を直書きしていてパラメータは
+  オドメトリ側にしか効かないので、公式実装だとこの機体は指令の 70% で走ります。
 - パルスカウンタが生きているとき、`odom` の Twist は**指令値ではなく実測値**です。
   `config/sensors/mid360_ekf.yaml` はこのメッセージから vx と vyaw だけを取るので、
   指令値を入れると自分の出力でループを閉じることになります。
@@ -208,15 +211,22 @@ ros2 topic pub --times 20 /cmd_vel geometry_msgs/msg/Twist \
 
 ## 実機で確かめること
 
-**まだ走らせていません（配線していないため）。** 2026-08-04 に Pi 5 Model B Rev 1.1
-（8GB・Ubuntu 24.04.4・6.8.0-1060-raspi）で、チップの同定と**`/cmd_vel` から PWM
-出力までの一本の経路**は確かめました。モータを回した先は未確認です。ピン・チャネル・
-アドレス・デバイスパスはすべてパラメータに出してあるので、
-`config/robot/raspicat_driver.yaml` を直せばコードは触らずに済みます。
+2026-08-04 に Pi 5 Model B Rev 1.1（8GB・Ubuntu 24.04.4・6.8.0-1060-raspi）に
+Raspberry Pi Cat の HAT を載せ、**車輪を浮かせた状態でモータを回すところまで**
+確かめました。走行はまだです。ピン・チャネル・アドレス・デバイスパスはすべて
+パラメータに出してあるので、`config/robot/raspicat_driver.yaml` を直せばコードは
+触らずに済みます。
 
-`/cmd_vel` に `linear.x = 0.1` を投げたときの実測は左右とも
-`period = 15707963 ns`（63.66 Hz）・`duty_cycle` はその半分・`enable = 1` で、
-`pulses_per_revolution = 400` から計算した値と一致しました。odom も出ます。
+`/cmd_vel` から PWM までは一致します。ステップ周波数は
+`steps_per_revolution / (2π) × ω` で、`period` を読めばオシロなしで検算できます
+（`linear.x = 0.1` なら 15707963 ns。これは `steps_per_revolution` が 400 だった
+時点の実測値で、実測較正後の 570 では 11022124 ns になります）。
+
+**較正はこの段階で済ませてあります。** 右車輪だけを回して 11148 パルスぶん
+（9.972 回転）測り、`pulses_per_revolution = 1118`（エンコーダ）と
+`steps_per_revolution = 570`（ステップ）を得ました。この 2 つは **1.96 倍違う**ので、
+上流のように 1 つの数で兼ねられません。導出は
+[`config/README.md`](../../src/daifuku_stack/config/README.md)。
 
 同定と権限まわりは確認済み（どれも黙って失敗するので、ノードを立てる前に見ること）:
 
@@ -228,16 +238,17 @@ ros2 topic pub --times 20 /cmd_vel geometry_msgs/msg/Twist \
 | gpiochip | `/dev/gpiochip4` が `pinctrl-rp1`（54 本）。`gpiochip0`〜`3` は `gpio-brcmstb@...` |
 | 所有者 | `provision.sh` を流した直後は `/sys/class/pwm` が root のまま。**再起動で `ubuntu:ubuntu` になる**。またチャネルの export は子デバイスの `add` ではなく `pwmchip` への `change` で飛ぶので、udev ルールは両方を見る必要がある |
 | AppArmor | Docker 既定の `docker-default` は `/sys/fs` 以外の `/sys/**` への書き込みを拒否する。所有者が合っていても export が EACCES になり、監査ログにも残らない。`compose.original.yaml` の `security_opt: apparmor=unconfined` で外してある |
+| I2C | パルスカウンタ 0x10 / 0x11 が応答する。62.5 kHz は RP1 の DesignWare コントローラでも効いていて、142 秒の連続読み出しで `pulses counters failed` は 0 件 |
+| 片輪駆動 | 右だけを回すあいだ左のカウンタは**厳密に 0**（`period` も初期値のまま）。チャネルと方向線が左右で独立していることの確認になる |
 
-未確認（配線してから）:
+未確認（接地させてから）:
 
 | 項目 | 見かた | 直す場所 |
 | --- | --- | --- |
-| 方向の極性 | 前進を指令して両輪が同じ向きに回るか | `direction_*_forward_level` |
-| ステップ周波数と実速度 | 0.1 m/s を指令して実測。`wheel_diameter` は 200 mm 実測値 | `pulses_per_revolution` |
-| I2C ボーレート | RP1 の I2C は DesignWare 系でタイミング生成が Pi 4 と違う。62.5 kHz が効くか | `config.txt` |
-| **電源** | 制御基板は 40 ピンヘッダ経由で Pi に 5V を供給する。Pi 5 の電流で足りるか | — |
-| ステッピングのトルク | PWM のクロック源が変わるので、同じ周波数で同じ回転になるか | — |
+| 方向の極性 | 前進を指令して両輪が同じ向きに回るか。**確かめたのは右輪の 1 方向だけ** | `direction_*_forward_level` |
+| 荷重下の実速度 | 0.1 m/s を 10 秒指令して巻尺と `/odom` を比べる。較正済みなので一致するはずで、ずれるなら脱調かすべり | `steps_per_revolution` |
+| **電源** | 制御基板は 40 ピンヘッダ経由で Pi に 5V を供給する。Pi 5 の電流で足りるか。無負荷では `vcgencmd get_throttled` が `0x0` | — |
+| ステッピングのトルク | PWM のクロック源が変わるので、荷重をかけても脱調しないか | — |
 
 ## 関連
 

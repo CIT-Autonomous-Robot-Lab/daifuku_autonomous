@@ -25,7 +25,8 @@ raspicat_driver:
     odometry_scale_right_wheel: 1.0     # 既定 1.0: 右車輪の同上
     wheel_diameter            : 0.2     # 既定 同左 [m]: 車輪の直径 (実測 200 mm)
     wheel_tread               : 0.35    # 既定 同左 [m]: 左右車輪の間隔 (実測 350 mm)
-    pulses_per_revolution     : 400.0   # 既定 400.0: 車輪 1 回転あたりのパルス数。cmd_vel → 周波数の換算にも使う
+    pulses_per_revolution     : 1118.0  # 既定 同左: 車輪 1 回転あたりのエンコーダのパルス数 (実測)。odom 専用
+    steps_per_revolution      : 570.0   # 既定 同左: 車輪 1 回転あたりのステップ数 (実測)。cmd_vel → 周波数専用
     odom_hz                   : 50.0    # 既定 50.0 [Hz]: odom と TF を出す周期。raspimouse の 100 から半減 (I2C の占有率を下げる)
     initial_motor_power       : false   # 既定 false: 起動時にモータ電源を入れるか
     cmd_vel_timeout           : 60.0    # 既定 60.0 [s]: cmd_vel が途切れたらモータを止めるまでの猶予

@@ -26,7 +26,7 @@ raspimouse:
     wheel_diameter            : 0.2     # [m] 車輪の直径 (実測 200 mm)
     wheel_tread               : 0.35    # [m] 左右車輪の間隔 (実測 350 mm)
 
-    pulses_per_revolution     : 400.0   # 既定 400.0: 車輪 1 回転あたりのエンコーダパルス数
+    pulses_per_revolution     : 400.0   # 既定 400.0: 車輪 1 回転あたりのエンコーダパルス数。実測は 1118 だが上流ノードは odom にしか使わず、cmd_vel → 周波数は 400 直書きで直せない (../README.md)
     light_sensors_hz          : 100.0   # 既定 100.0 [Hz]: 測距センサを読む周期
     odom_hz                   : 100.0   # 既定 100.0 [Hz]: odom と TF を出す周期
     switches_hz               : 10.0    # 既定 10.0 [Hz]: 本体スイッチを読む周期

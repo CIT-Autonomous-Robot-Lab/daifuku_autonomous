@@ -92,6 +92,8 @@ rtmouse は I2C が 1 回タイムアウトするとカーネルの mutex を握
 
 ## 実機での確認
 
-**まだハードウェアで走らせていません。** 最初のベンチで見るべきものは機種ごとに
-[`docs/setup/raspberry-pi-4.md`](../../docs/setup/raspberry-pi-4.md) と
-[`docs/setup/raspberry-pi-5.md`](../../docs/setup/raspberry-pi-5.md) の表にあります。
+**まだ走行させていません。** 2026-08-04 に Pi 5 + Raspberry Pi Cat の HAT で、車輪を
+浮かせたまま `cmd_vel` → モータ → エンコーダの一巡を確かめ、`pulses_per_revolution`
+と `steps_per_revolution` の較正まで済ませました。Pi 4 では未確認です。残っている
+ものは機種ごとに [`docs/setup/raspberry-pi-4.md`](../../docs/setup/raspberry-pi-4.md)
+と [`docs/setup/raspberry-pi-5.md`](../../docs/setup/raspberry-pi-5.md) の表にあります。

@@ -19,9 +19,12 @@ in this workspace subscribes to /leds or /buzzer or reads /switches or
 /light_sensors -- only raspimouse's own parameters mention them.
 
 Two deliberate differences from raspimouse:
-  * pulses_per_revolution is used to convert cmd_vel to a step frequency.
-    raspimouse_component.cpp hardcodes 400.0 there and only honours the
-    parameter in the odometry path.
+  * the encoder and the stepper are counted separately.  On this robot a wheel
+    revolution is 1118 encoder pulses but only 570 motor steps (measured
+    2026-08-04), so the single number raspimouse uses cannot serve both:
+    pulses_per_revolution converts counts to metres, steps_per_revolution
+    converts cmd_vel to a step frequency.  raspimouse_component.cpp hardcodes
+    400.0 on the command side and cannot be corrected by a parameter at all.
   * with the pulse counters live, the published Twist is measured rather than
     commanded.  mid360_ekf.yaml takes vx and vyaw (and nothing else) from this
     message, so feeding it the command would close a loop on our own output.
@@ -80,7 +83,8 @@ class RaspicatDriver(LifecycleNode):
         self.declare_parameter("odometry_scale_right_wheel", 1.0)
         self.declare_parameter("wheel_diameter", 0.2)
         self.declare_parameter("wheel_tread", 0.35)
-        self.declare_parameter("pulses_per_revolution", 400.0)
+        self.declare_parameter("pulses_per_revolution", 1118.0)
+        self.declare_parameter("steps_per_revolution", 570.0)
         self.declare_parameter("odom_hz", 50.0)
         self.declare_parameter("initial_motor_power", False)
         self.declare_parameter("cmd_vel_timeout", 60.0)
@@ -255,7 +259,12 @@ class RaspicatDriver(LifecycleNode):
         )
         self._wheel_diameter = get("wheel_diameter").value
         self._wheel_tread = get("wheel_tread").value
+        # Two separate numbers, and on this robot they differ by 1.96: the
+        # encoder is not on the same shaft as the stepper.  Crossing them makes
+        # the robot travel at the wrong speed while odom reports the commanded
+        # one, which nothing but a tape measure can see.
         self._pulses_per_revolution = get("pulses_per_revolution").value
+        self._steps_per_revolution = get("steps_per_revolution").value
         self._odom_hz = get("odom_hz").value
         # Longest interval still worth integrating cmd_vel over.  Generous
         # against scheduling jitter, well under the ~1 s an I2C adapter takes
@@ -280,6 +289,8 @@ class RaspicatDriver(LifecycleNode):
             raise ValueError("wheel_diameter and wheel_tread must be positive")
         if self._pulses_per_revolution <= 0.0:
             raise ValueError("pulses_per_revolution must be positive")
+        if self._steps_per_revolution <= 0.0:
+            raise ValueError("steps_per_revolution must be positive")
 
         self._forward_level = (
             get("direction_left_forward_level").value,
@@ -359,7 +370,7 @@ class RaspicatDriver(LifecycleNode):
         radius = self._wheel_diameter / 2.0
         omega_left = (linear - angular * self._wheel_tread / 2.0) / radius
         omega_right = (linear + angular * self._wheel_tread / 2.0) / radius
-        turns_to_steps = self._pulses_per_revolution / (2.0 * math.pi)
+        turns_to_steps = self._steps_per_revolution / (2.0 * math.pi)
         self._drive(LEFT, omega_left * turns_to_steps)
         self._drive(RIGHT, omega_right * turns_to_steps)
 
@@ -575,8 +586,12 @@ class RaspicatDriver(LifecycleNode):
         # wheel turned by hand against the direction the sign is borrowed from
         # -- comes back as nearly 2**16, worth about 100 m.  The floor keeps a
         # short interval from making the bound absurdly tight.
+        # max_step is in motor steps, the delta is in encoder counts, so the
+        # ratio between the two revolutions has to come along.
+        counts_per_step = self._pulses_per_revolution / self._steps_per_revolution
         limit = max(
-            self._max_step * dt * PLAUSIBLE_DELTA_MARGIN, self._pulses_per_revolution
+            self._max_step * counts_per_step * dt * PLAUSIBLE_DELTA_MARGIN,
+            self._pulses_per_revolution,
         )
 
         travelled = []
