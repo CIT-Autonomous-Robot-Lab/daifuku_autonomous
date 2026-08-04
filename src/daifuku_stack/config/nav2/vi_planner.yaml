@@ -56,12 +56,19 @@ vi_planner:
     # idle も一緒に伸ばすこと。1 掃きの実測は起動ログの "global sweep done in" に出る。
     # compact ではこれが sink のタイル修復になる (1 回の呼び出し = タイル 1 枚)。
     # 掃き終わるまでの時間は地図の大きさではなく、変化が及ぶ範囲に比例する。
+    # **走行中は "global sweep done in" がまず出ない**。壁が窓 (±1m) に入っていれば
+    # 毎 tick penalty が塗り直されて次の伝播が積まれ続けるため。動いているかは 2 秒
+    # ごとの "tile repair running for ... (N visits, M tiles queued)" のほうで見る。
     global_sweep: true            # 既定 true: 全域掃き (compact ではタイル修復) を回すか
     global_sweep_budget_ms: 20    # 既定 20 [ms]: 1 回のロック取得で掃きに使う時間
     global_sweep_idle_ms: 60      # 既定 60 [ms]: そのあとロックを手放して待つ時間 (20:60 = 1 コアの 25%)
     # ── 可視化 (経路計算には影響しない) ──
+    # /value_function は solve のときだけでなく、**追従中も掃きスレッドが 2 秒ごとに
+    # 出し直す**。これが無いと全域スライスは solve した瞬間のまま固まり、伝播が効いて
+    # いても画面では何も起きない (追従ループが出すのは ±1m の窓だけ)。出しているのは
+    # 掃きスレッドなので、上の global_sweep を false にすると追従中は更新されない。
     publish_value_function: true  # 既定 true: /value_function を配信するか
-    value_publish_interval_ms: 500  # 既定 500 [ms]: solve 途中経過の配信間隔 (0 で完了時のみ)
+    value_publish_interval_ms: 500  # 既定 500 [ms]: solve 途中経過の配信間隔 (0 で完了時のみ。追従中の出し直しも止まる)
     # 色スケール上限 [ステップ数≒秒]。地図ごとに測り直す値だが、19F もこの 60 のまま
     # 使っている (../overrides/ で上書きしていない)。19F では到達可能セルの 66% が
     # 飽和して階調が出ないので、遠くまで見たいときは上げる。選び方は ../README.md。
