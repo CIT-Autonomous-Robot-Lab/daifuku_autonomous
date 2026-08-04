@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
-"""ゲームパッドの長押し判定と、スティック -> 速度の写像。
+"""ゲームパッドの長押し判定と、スティック -> 速度の写像と、モードを伝える音。
 
-joy_teleop.py から import される。ここに rclpy を持ち込まないのは、この 2 つが
+joy_teleop.py から import される。ここに rclpy を持ち込まないのは、ここが
 joy_teleop.py で唯一「実機に載せる前に確かめられる」部分だからである。ROS も
-ジョイスティックも要らないので、開発ホスト (Windows) で素の python から
+ジョイスティックもブザーも要らないので、開発ホスト (Windows) で素の python から
 呼んで検算できる。
 
 長押しの判定を分けてあるのは、START 単独 3 秒 (teleop 切り替え) と START+BACK
@@ -15,6 +15,94 @@ joy_teleop.py で唯一「実機に載せる前に確かめられる」部分だ
 # HoldLatch.update() の戻り値。
 TOGGLE = "toggle"
 COMBO = "combo"
+
+# モードを伝える旋律。(周波数 [Hz], 長さ [s]) の並びで、0 は無音。
+#
+# 長押しは 3 秒経つまで何も起きないうえ、切り替わった先はスティックを倒すまで
+# 見分けが付かない。手元にノート PC が無いときはログも見えないので、切り替わった
+# ことと切り替わった先を音だけで区別できるようにしてある。
+#
+# 上がりが「入・始まった」、下がりが「切・断られた」。同じ高さの繰り返し (ピピピ)
+# だけは旋律ではなくリズムで区別する。無音を挟んであるのは、同じ周波数を続けて
+# 出しても切れ目が聞こえないため (ドライバ側は周波数を保持するだけで、音は
+# 途切れない)。
+#
+# 低い音は圧電ブザーだと小さくなるので、否定側も 466 Hz より下げていない。
+# 上限はドライバの buzzer_max_frequency (既定 5000 Hz)。
+TUNE_TELEOP_ON = ((1319, 0.06), (1976, 0.10))            # ピロリ↑
+TUNE_TELEOP_OFF = ((1976, 0.06), (1319, 0.10))           # ピロリ↓
+TUNE_WAYPOINTS = (                                       # ピピピ
+    (2093, 0.06), (0, 0.05), (2093, 0.06), (0, 0.05), (2093, 0.14),
+)
+TUNE_FINISHED = ((1319, 0.08), (1760, 0.08), (2349, 0.18))   # ピロリロ↑
+TUNE_REFUSED = ((622, 0.12), (0, 0.06), (466, 0.22))         # ブッブー↓
+
+
+class TunePlayer:
+    """旋律を「いま出すべき周波数」に変える。時計は呼び出し側が渡す。
+
+    ドライバのブザーは周波数を 1 つ受け取って**そのまま鳴らし続ける**だけなので、
+    旋律にするには音の変わり目ごとに次の値を出してやる必要がある。ここはその
+    変わり目だけを教える (毎周期 publish すると、鳴っている音は同じなのに
+    トピックが 100 Hz で埋まる)。
+
+    音長は前の音の終わりからの積算で決める。update() の呼ばれ方がゆらいでも
+    旋律全体が伸びないようにするためで、周期が音長より粗ければ音は鳴らずに
+    飛ばされる (短い音が伸びて次の音を押し出すより、そのほうが分かりやすい)。
+    """
+
+    def __init__(self):
+        self._notes = []
+        self._index = 0
+        self._until = 0.0
+        self._frequency = 0
+
+    def start(self, tune, now):
+        """旋律を頭から鳴らし始める。鳴っている途中なら差し替える。
+
+        Args:
+            tune: (周波数 [Hz], 長さ [s]) の並び。
+            now: 単調増加の秒 (time.monotonic())。
+        """
+        self._notes = list(tune)
+        self._index = 0
+        # 1 音目は次の update() で拾う (start() では何も返さない)。
+        self._until = now
+
+    def stop(self):
+        """鳴らしかけを捨てる。無音そのものは呼び出し側が出す。"""
+        self._notes = []
+        self._index = 0
+        self._frequency = 0
+
+    @property
+    def playing(self):
+        return bool(self._notes)
+
+    def update(self, now):
+        """今の周波数と、それが前回から変わったかを返す。
+
+        Returns:
+            (変わったか, 周波数 [Hz])。周波数 0 は無音。旋律を鳴らし終えた回だけ
+            (True, 0) を返し、そのあとは (False, 0) を返し続ける。
+        """
+        changed = False
+        while self._index < len(self._notes) and now >= self._until:
+            frequency, seconds = self._notes[self._index]
+            self._index += 1
+            self._until += seconds
+            if frequency != self._frequency:
+                self._frequency = frequency
+                changed = True
+
+        if self._notes and self._index >= len(self._notes) and now >= self._until:
+            self._notes = []
+            self._index = 0
+            if self._frequency != 0:
+                self._frequency = 0
+                changed = True
+
+        return changed, self._frequency
 
 
 class HoldLatch:

@@ -7,12 +7,31 @@ robot_bringup.launch.py が joy:=true (既定) のとき joy_node と一緒に�
 上流の teleop_twist_joy を使わないのは、長押しと同時押しでモードを切り替える
 必要があるためで、あちらは押している間だけ速度を出す (デッドマン) しかできない。
 
-  * STARTを3秒            … teleop の入/切をトグルする
-  * START+BACKを同時に3秒  … teleop を切り、保存したウェイポイントの巡回を始める
+  * STARTを3秒            … teleop の入/切をトグルする (ピロリ↑ / ピロリ↓)
+  * START+BACKを同時に3秒  … teleop を切り、保存したウェイポイントの巡回を始める (ピピピ)
   * RB を押している間      … ブースト (上限が linear_max_speed から boost へ上がる)
 
 出す先は **/cmd_vel_teleop** (twist_mux の優先度 100 側)。/cmd_vel は自律側の
 出力なので、そちらへ出すと自律走行中に取り合いになる。
+
+## モードは音でも伝える
+
+長押しは 3 秒経つまで何も起きず、切り替わった先はスティックを倒すまで見分けが
+付かない。手元にノート PC が無ければログも見えないので、切り替わった時点で
+**/buzzer** (`std_msgs/Int16`、値は Hz・0 で停止) へ短い旋律を出す。旋律そのものは
+joy_buttons.py の TUNE_* にある。押しても効かなかったとき (巡回中にもう一度
+押した、navigation.launch.py が立っていない、YAML が読めない) にも鳴らすのは、
+そこが**今まで完全に無音だった**ためで、「長押ししたのに何も起きない」が一番
+分かりにくい。
+
+購読しているのは本体ドライバで、自前実装 (driver:=original) も公式実装
+(既定の driver:=raspimouse) も同じトピック・同じ型で受ける。**鳴らなくても
+走行には何の影響もない** — ドライバが activate されていない、`use_buzzer:=false`、
+ブザーのピンを掴めなかった、のどれでもエラーは出ずにただ無音になる。
+
+ブザーには cmd_vel のような timeout が無く、ドライバは最後に受けた周波数を
+**鳴らし続ける**。旋律の途中でこのノードが落ちると鳴りっぱなしになるので、
+stop() で 0 を出しておく。
 
 ## teleop 中は「出しっぱなし」にしてある
 
@@ -48,6 +67,7 @@ import time
 
 from ament_index_python.packages import get_package_share_directory
 
+from action_msgs.msg import GoalStatus
 from action_msgs.srv import CancelGoal
 
 from geometry_msgs.msg import PoseStamped
@@ -66,6 +86,7 @@ from rclpy.qos import QoSProfile
 from sensor_msgs.msg import Joy
 
 from std_msgs.msg import Bool
+from std_msgs.msg import Int16
 
 import yaml
 
@@ -75,7 +96,15 @@ _HERE = os.path.dirname(os.path.realpath(__file__))
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
-from joy_buttons import COMBO, HoldLatch, TOGGLE, axis, axis_to_speed, pressed  # noqa: E402
+from joy_buttons import (  # noqa: E402
+    COMBO, HoldLatch, TOGGLE, TUNE_FINISHED, TUNE_REFUSED, TUNE_TELEOP_OFF,
+    TUNE_TELEOP_ON, TUNE_WAYPOINTS, TunePlayer, axis, axis_to_speed, pressed,
+)
+
+# 旋律の音の変わり目を拾う周期 [s]。一番短い音 (60 ms) の 1/6 で、publish するのは
+# 変わり目だけなのでトピックには乗らない。_tick と分けてあるのは、あちらが
+# publish_rate (パラメータ) 次第で 50 ms 粒度になり、音長がそれに引きずられるため。
+TUNE_PERIOD = 0.01
 
 
 def load_waypoints(path):
@@ -142,6 +171,7 @@ class JoyTeleop(Node):
         self.declare_parameter("stop_tail", 1.0)
         self.declare_parameter("cancel_window", 2.0)
         self.declare_parameter("start_enabled", False)
+        self.declare_parameter("buzzer", True)
         self.declare_parameter("waypoints_file", "")
         self.declare_parameter("follow_waypoints_action", "follow_waypoints")
         self.declare_parameter("navigate_to_pose_action", "navigate_to_pose")
@@ -183,6 +213,7 @@ class JoyTeleop(Node):
         self._warned_stale = False
         self._goal_handle = None
         self._goal_pending = False
+        self._tune = TunePlayer()
 
         self._cmd_pub = self.create_publisher(Twist, "cmd_vel_teleop", 10)
         # 状態は遅れて繋いだ購読者にも見せたい (「なぜ動かない」を追うため)。
@@ -201,6 +232,13 @@ class JoyTeleop(Node):
             QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL),
         )
         self.create_subscription(Joy, "joy", self._on_joy, 10)
+
+        # ブザーは本体ドライバが購読する。買い手が居なくても publish は通るので、
+        # 立っていない・ピンを掴めていないときは黙るだけになる。
+        self._buzzer_pub = None
+        if bool(value("buzzer")):
+            self._buzzer_pub = self.create_publisher(Int16, "buzzer", 10)
+            self.create_timer(TUNE_PERIOD, self._tune_tick)
 
         self._follow_action = value("follow_waypoints_action")
         follow_action = self._follow_action
@@ -259,9 +297,11 @@ class JoyTeleop(Node):
                 pressed(self._buttons, self._button_waypoints),
             )
             if action == COMBO:
+                # 音は _start_waypoints が選ぶ (始まったか、断ったか)。
                 self._start_waypoints()
             elif action == TOGGLE:
                 self._set_enabled(not self._enabled)
+                self._play(TUNE_TELEOP_ON if self._enabled else TUNE_TELEOP_OFF)
         else:
             self._latch.reset()
             if self._enabled and not self._warned_stale:
@@ -307,6 +347,13 @@ class JoyTeleop(Node):
     # ── モード ──────────────────────────────────────────────────────────
 
     def _set_enabled(self, enabled):
+        """teleop の入/切を切り替える。**音は鳴らさない。**
+
+        _start_waypoints が「巡回を始める前に teleop を切っておく」ためにも呼ぶ
+        ので、ここで鳴らすと START+BACK が「ピロリ↓ + ピピピ」になり、そもそも
+        teleop が入っていなかったときは切ってもいないのに切った音が出る。呼び手が
+        鳴らすこと。
+        """
         self._enabled = enabled
         now = time.monotonic()
         if enabled:
@@ -327,6 +374,22 @@ class JoyTeleop(Node):
         self._state_pub.publish(message)
         self._state_at = time.monotonic()
 
+    # ── 音 ──────────────────────────────────────────────────────────────
+
+    def _play(self, tune):
+        """モードが変わったことを音で伝える。鳴らなくても走行には影響しない。"""
+        if self._buzzer_pub is None:
+            return
+        self._tune.start(tune, time.monotonic())
+
+    def _tune_tick(self):
+        """音の変わり目だけを /buzzer へ出す。"""
+        changed, frequency = self._tune.update(time.monotonic())
+        if changed:
+            message = Int16()
+            message.data = frequency
+            self._buzzer_pub.publish(message)
+
     def _cancel_goals(self):
         for client in self._cancel_clients:
             if not client.service_is_ready():
@@ -343,12 +406,14 @@ class JoyTeleop(Node):
             self.get_logger().warning(
                 "waypoints already running; hold START to take over first"
             )
+            self._play(TUNE_REFUSED)
             return
 
         # 取り消しを出しているあいだに投げると、あとから届いた取り消しが今から
         # 出すゴールを巻き込む。hold_seconds > cancel_window なら普通は来ない。
         if time.monotonic() < self._cancel_until:
             self.get_logger().warning("still cancelling the previous goal; try again")
+            self._play(TUNE_REFUSED)
             return
 
         try:
@@ -357,6 +422,7 @@ class JoyTeleop(Node):
             self.get_logger().error(
                 "cannot read %s: %s" % (self._waypoints_file, exc)
             )
+            self._play(TUNE_REFUSED)
             return
 
         if not self._follow_client.server_is_ready():
@@ -366,6 +432,7 @@ class JoyTeleop(Node):
                 "%s action server is not available; is navigation.launch.py up?"
                 % self._follow_action
             )
+            self._play(TUNE_REFUSED)
             return
 
         self._set_enabled(False)
@@ -383,6 +450,7 @@ class JoyTeleop(Node):
         self._goal_pending = True
         future = self._follow_client.send_goal_async(goal)
         future.add_done_callback(self._on_goal_response)
+        self._play(TUNE_WAYPOINTS)
         self.get_logger().info(
             "following %d waypoints in %s" % (len(poses), frame_id)
         )
@@ -406,6 +474,7 @@ class JoyTeleop(Node):
         handle = future.result()
         if not handle.accepted:
             self.get_logger().error("waypoint goal rejected")
+            self._play(TUNE_REFUSED)
             return
         self._goal_handle = handle
         handle.get_result_async().add_done_callback(self._on_goal_result)
@@ -417,16 +486,36 @@ class JoyTeleop(Node):
         self.get_logger().info(
             "waypoints finished (status %d, missed %d)" % (result.status, len(missed))
         )
+        # 走り切った音は 1 点も外さなかったときだけ。waypoint_follower は
+        # stop_on_failure: false なので、**全点が地図の外でも SUCCEEDED で返る**
+        # (地図と経路を取り違えたときがこれ)。取り消しのときは鳴らさない。取り消す
+        # のは teleop へ移ったときで、その音を出した直後にここへ来るため、鳴らすと
+        # 切り替えの音を潰してしまう (nav2_util の SimpleActionServer は
+        # is_canceling() を見て canceled() を返すので、ここは必ず CANCELED になる)。
+        if result.status == GoalStatus.STATUS_SUCCEEDED and not missed:
+            self._play(TUNE_FINISHED)
+        elif result.status != GoalStatus.STATUS_CANCELED:
+            self._play(TUNE_REFUSED)
 
     def stop(self):
-        """終了時に最後の指令をゼロにしておく。
+        """終了時に最後の指令と最後の音をゼロにしておく。
 
         ドライバは最後に受けた速度を cmd_vel_timeout (既定 60 秒) のあいだ保持
-        するので、走っている状態でノードだけ落ちると走り続ける。
+        するので、走っている状態でノードだけ落ちると走り続ける。ブザーのほうは
+        timeout が**無い**ので、旋律の途中で落ちると誰かが 0 を出すまで鳴り続ける。
         """
         try:
             self._cmd_pub.publish(Twist())
         except Exception:  # noqa: BLE001 - 落ちる途中なので何が来ても握る
+            pass
+        if self._buzzer_pub is None:
+            return
+        self._tune.stop()
+        try:
+            message = Int16()
+            message.data = 0
+            self._buzzer_pub.publish(message)
+        except Exception:  # noqa: BLE001 - 同上
             pass
 
 

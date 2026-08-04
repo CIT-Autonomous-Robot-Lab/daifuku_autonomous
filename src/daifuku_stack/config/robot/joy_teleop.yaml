@@ -50,6 +50,7 @@ joy_teleop:
     stop_tail: 1.0          # 既定 同左 [s]: teleop を切ったあとゼロを出し続ける時間。黙るだけだとドライバが最後の速度を保持する
     cancel_window: 2.0      # 既定 同左 [s]: teleop に入ったあと取り消しを出し続ける時間。1 回では waypoint_follower が次の点へ出し直す分を拾えない
     start_enabled: false    # 既定 false: 起動直後から teleop 入にするか。true にすると挿しただけで自律側を塞ぐ
+    buzzer: true            # 既定 同左: モードが切り替わったとき /buzzer へ短い旋律を出すか。旋律は src/joy_buttons.py の TUNE_*
 
     # 巡回する経路。空なら share/daifuku_stack/waypoints/waypoints_tsudanuma.yaml。
     # **地図と対で選ぶこと**。map_19f で tsudanuma の経路を投げると全点が地図の
