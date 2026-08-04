@@ -26,17 +26,39 @@ colcon build --symlink-install --packages-select daifuku_rqt
 source install/setup.bash
 ```
 
-Pi 側は `system_monitor` が新しいファイルなので、一度だけワークスペースのビルドを通します
-（イメージの再作成は不要です）。
+Pi 側は `system_monitor` が新しいファイルなので、一度だけワークスペースのビルドを通します。
+イメージの再作成は要りません（`Dockerfile` の `COPY src/daifuku_stack` は rosdep に apt 依存を
+解かせるためだけのもので、同じ `RUN` の中で捨てています。実行時のソースは `src/` の
+マウントから来るので、パッケージ名が変わってもイメージは有効なままです）。
 
 ```bash
 docker compose -f docker/raspberrypi/compose.yaml up -d
+```
+
+ただし、`autonomous_nav` という名前だった頃にビルドした Pi では、名前付きボリュームの
+`build/` と `install/` に古い成果物が残ります。`--merge-install` なので新しい名前の下に
+上書きされず、`install/setup.bash` が両方を読んで**リンク切れのパッケージが 1 つ増えた
+状態**になります。一度だけ落としてください。
+
+```bash
+docker compose -f docker/raspberrypi/compose.yaml run --rm workspace-build bash -c '
+  cd /opt/ros_ws
+  rm -rf build/autonomous_nav install/lib/autonomous_nav install/share/autonomous_nav \
+         install/share/ament_index/resource_index/packages/autonomous_nav \
+         install/share/colcon-core/packages/autonomous_nav'
 ```
 
 ## 起動
 
 ```bash
 rqt --standalone daifuku_rqt
+```
+
+Windows + Podman の dev コンテナからは、X サーバ（VcXsrv）の起動込みで切り離し起動できます
+（RViz の `rviz.ps1` と同じ形です）。
+
+```powershell
+.\docker\dev\tools\windows\rqt.ps1
 ```
 
 `rqt` を素で開いて **Plugins > Raspicat > Raspicat Control Panel** から足しても同じです。

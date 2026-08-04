@@ -29,6 +29,7 @@ Linux/WSLホスト（bash）で実行します。`tools/build-workspace.sh`だ�
 | `windows/shell.ps1` / `linux/shell.sh` | 起動済みコンテナへ入る | なし |
 | `windows/network.ps1` / `linux/network.sh` | ホストの固定IPだけを設定・解除 | あり |
 | `windows/rviz.ps1` | コンテナ内のRVizをWindows画面へ表示 | なし |
+| `windows/rqt.ps1` | コンテナ内のrqt（既定は`daifuku_rqt`の操作パネル）をWindows画面へ表示 | なし |
 | `windows/pi-ros.ps1` | SSH経由で実機の`ros2`コマンドを実行 | なし |
 | `windows/podman-network.ps1` | Podman VMを実機Ethernetへ接続（初回のみ） | あり |
 | `windows/common.ps1` | 上記が読み込む共通処理（単体では実行しない） | — |
@@ -222,10 +223,29 @@ docker compose -f docker/dev/compose.yaml up -d
 .\docker\dev\tools\windows\rviz.ps1 -Restart
 ```
 
+操作パネル（[`daifuku_rqt`](../../src/daifuku_rqt/README.md)）も同じ形で起動します。
+`build-autonomous`を一度通してから実行してください（新規パッケージなので初回はビルドが要る）。
+
+```powershell
+.\docker\dev\tools\windows\rqt.ps1
+.\docker\dev\tools\windows\rqt.ps1 -Restart
+
+# rqtはプラグイン一覧をキャッシュするので、建てたのに出てこないときに使う
+.\docker\dev\tools\windows\rqt.ps1 -ForceDiscover -Restart
+
+# 素のrqtを開いて Plugins > Raspicat から足す（他のプラグインと並べたいとき）
+.\docker\dev\tools\windows\rqt.ps1 -NoStandalone
+```
+
+`-Plugin`はプラグインIDとクラス名への**部分一致**（大文字小文字を無視）で照合されるので、
+既定のパッケージ名`daifuku_rqt`で一意に決まります。合わないときはrqtが起動せずに終了します
+（理由は`/tmp/rqt.log`）。候補はコンテナ内の`rqt --list-plugins`で確認できます。
+
 起動ログは次のコマンドで確認できます。
 
 ```powershell
 podman exec daifuku-raspicat-dev tail -n 50 /tmp/rviz.log
+podman exec daifuku-raspicat-dev tail -n 50 /tmp/rqt.log
 ```
 
 SSH経由で実機の状態だけを確認するときは、PowerShellスクリプトも使用できます。
