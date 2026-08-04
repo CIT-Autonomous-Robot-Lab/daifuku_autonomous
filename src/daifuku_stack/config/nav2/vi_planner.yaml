@@ -1,14 +1,12 @@
 # 価値反復プランナ (value_iteration3, Rust)。「既定」= 各ノードの main.rs が
-# declare_parameter で持つ値。ここはほぼ既定の書き出しで、既定と違うのは
-# map_wait_sec と dense_limit_mb と compact_ram_limit_mb と、vi_planner の
-# global_sweep_budget_ms / global_sweep_idle_ms / waypoint_prefetch と、両ノードの
-# solver (ノード既定は密、ここは compact) の 7 つだけ。
-# 地図ごとの調整は ../overrides/<地図名>.yaml に置く。合成順序と上書きは
-# ../README.md を参照。
+# declare_parameter で持つ値。既定と違うのは両ノードの solver / map_wait_sec /
+# compact_ram_limit_mb と、vi_planner だけの dense_limit_mb /
+# global_sweep_budget_ms / global_sweep_idle_ms / waypoint_prefetch の 7 つだけ。
+# 地図ごとの調整は ../overrides/<地図名>.yaml。合成順序と上書きは ../README.md を参照。
 #
 # ノードは 2 つあり、**同時には起動されない**。local_planner でどちらかが選ばれる:
-#   local_planner:=vi   (auto + planner:=vi の既定) … vi_planner 1 ノード。
-#                       1 本の価値関数で経路計画と経路追従の両方を担う。
+#   local_planner:=vi   (auto + planner:=vi の既定) … vi_planner 1 ノード。1 本の
+#                       価値関数で経路計画と経路追従の両方を担う。
 #   local_planner:=nav2 … vi_global_planner (広域のみ) + controller_server (DWB)。
 #
 # 両者で意味の同じキーは値を揃えること (どちらで起動しても挙動が変わらないように)。
@@ -17,20 +15,9 @@
 vi_planner:
   ros__parameters:
     use_sim_time: false
-    # 既定 frontier2d_sparse (密): アウトオブコアを既定にする。地図が大きくなっても
-    # 載る側で、Pi4 4GB に対する余裕がまるで違う (常駐は sink 12B/state + 追従パッチと
-    # 修復タイルで数 MB。密は states 56B + sweep_orders 24B = 80B/state)。
-    # 狭域 → 広域のフィードバックはどちらでも効く: 密は共有した states を全域
-    # Gauss–Seidel で掃き、compact は sink を共有場にしてタイル単位で修復する
-    # (同じ更新式・同じ不動点)。密が速いのは確かなので、載る地図で速さが要るなら
-    # 地図ごとの overrides で密に戻すこと (../overrides/map_19f.yaml に見積もりあり)。
-    solver: "frontier2d_sparse_compact"
-    # 下の 2 つは Pi 5 (8GB) を前提に 2048 から上げてある (2026-08-04、走行中の実測で
-    # 空き 5.6GB / swap 無し)。**Pi 4 (4GB) ではこの値は保護にならない** — 本来は
-    # 「黙って確保して OOM killer に殺されるより理由を出して止める」ための線なので、
-    # 4GB 機で使うなら 2048 以下へ戻すこと。
-    dense_limit_mb: 4096          # 既定 1500 [MB]: **上の solver が compact の間は効かない**。密に戻したときの上限 (states + sweep_orders。超えたら起動を止める)。19F は map_scale 2 で実測 655MB、scale 1 なら 2.5GB
-    compact_ram_limit_mb: 4096    # 既定 512 [MB]: sink を RAM に置ける上限 (超過分は /tmp/vi_planner_sink へ mmap 退避)。**compact_sink_dir を指定するとこの分岐に入らない** (明示指定が無条件に優先) ので、上げても効くのは未指定のときだけ。19F は map_scale 2 で 95MB なので RAM に載る
+    solver: "frontier2d_sparse_compact"  # 既定 frontier2d_sparse (密): アウトオブコア。常駐が数 MB で済むので地図の大きさに耐える (密へ戻す判断は ../README.md)
+    dense_limit_mb: 4096          # 既定 1500 [MB]: 密の常駐の上限 (超えたら起動を止める)。**compact の間は効かない**。Pi 5 前提なので 4GB 機では 2048 以下へ
+    compact_ram_limit_mb: 4096    # 既定 512 [MB]: sink を RAM に置ける上限 (超過分は /tmp/vi_planner_sink へ退避)。**compact_sink_dir を指定すると効かない**
     theta_cell_num: 60            # 既定 60: 姿勢の離散数。360 を割り切ること (t_resolution = 360/この値 が整数除算)
     safety_radius: 0.2            # 既定 0.2 [m]: 障害物近傍ペナルティの半径 (VI 内部の膨張)
     safety_radius_penalty: 30     # 既定 30 [秒/セル]: 障害物に近寄る代わりに払う迂回コスト
@@ -52,104 +39,31 @@ vi_planner:
     refine_budget_ms: 40          # 既定 40 [ms/tick]: ローカルウィンドウ価値反復に使う時間予算
     action_tolerance: 0.2         # 既定 0.2 [m]: 方策なしセルでの近傍行動探索半径
     no_action_timeout_sec: 3.0    # 既定 3.0 [s]: pose か方策が無い状態がこれだけ続いたら追従を中断
-    # ── 狭域 → 広域のフィードバック (共有価値関数の全域掃き) ──
-    # 追従が書いた local_penalty はローカルウィンドウ (±1m) の中で値を上げるだけで
-    # 外へは広がらない。これを切ると、狭域が「通れない」と判断しても広域の経路は
-    # 塞がった通路を指し続ける (それが LoopDetected と復帰行動の空回りの入口)。
-    # budget:idle の比がそのまま CPU の取り分。**ここの上限を決めているのは CPU では
-    # なく共有 Mutex のほう**。掃きは 1 スレッドで、しかも追従ループが毎 tick 最大
-    # refine_budget_ms (40ms) 握るので、コアが空いていても取り分は増やせない。
-    # 追従ループは同じ Mutex を try_lock で取り、3 tick 続けて取れないとロボットを
-    # 止めるので、budget を伸ばすときは idle も一緒に伸ばすこと。budget+idle を
-    # control_frequency の周期 (100ms) の整数倍にもしない (位相が固定されて追従の
-    # tick が毎回 budget 側に落ち得る)。60:100 でどれだけ余裕があるかは**未検証** —
-    # 走行中に ros2 topic hz /cmd_vel_mux が 20Hz を保つかで見る。落ちるなら戻すこと。
-    # 1 掃きの実測は起動ログの "global sweep done in" に出る。
-    # compact ではこれが sink のタイル修復になる (1 回の呼び出し = タイル 1 枚)。
-    # 掃き終わるまでの時間は地図の大きさではなく、変化が及ぶ範囲に比例する。
-    # **走行中は "global sweep done in" がまず出ない**。壁が窓 (±1m) に入っていれば
-    # 毎 tick penalty が塗り直されて次の伝播が積まれ続けるため。動いているかは 2 秒
-    # ごとの "tile repair running for ... (N visits, M tiles queued)" のほうで見る。
-    global_sweep: true            # 既定 true: 全域掃き (compact ではタイル修復) を回すか
-    global_sweep_budget_ms: 60    # 既定 20 [ms]: 1 回のロック取得で掃きに使う時間。Pi 5 は 4 コア中 2 コアが空いていた (2026-08-04 実測) ので既定の 3 倍
-    global_sweep_idle_ms: 100     # 既定 60 [ms]: そのあとロックを手放して待つ時間 (60:100 = 1 コアの 37%。既定の 20:60 は 25%)
-    # ── ウェイポイントの先読み ──
-    # 巡回は 1 点ずつ navigate_to_pose を呼ぶ形なので (../../../daifuku_waypoint_manager/README.md)、
-    # 点が変わるたびに新しいゴールの価値反復が丸ごと 1 回走り、その間**機体が止まる**
-    # (19F で 29 秒、津田沼 compact で 87 秒)。有効にすると、いまの点へ走っている間に次の点を
-    # 別スレッドで解いておき、着いたら solve を飛ばして受け取る。効いた回はログの
-    # "path with ... , prefetched" と "prefetched the value function for ... in Xs" に出る。
-    #
-    # **入れてあるが代償はある** (2026-08-04 に既定を反転): 価値関数が同時に 2 つ生きるので
-    # 場も 2 つ要る。密ソルバではメモリがそのまま 2 倍。compact で sink がディスクへ出るのは
-    # compact_sink_dir を指定したときと上の上限を超えたときだけで、**いまは同梱の
-    # 2 地図ともディスクへ出ない** = 2 つとも RAM に載る (津田沼 648MB x2 = 1.3GB、
-    # 19F 95MB x2)。津田沼で巡回するなら、その 1.3GB が匿名メモリで居座る。
-    # **Pi 4 (4GB) で走らせるなら false へ戻すこと** (上の dense_limit_mb / compact_ram_limit_mb と
-    # 同じ事情で、この値も Pi 5 8GB を前提にしてある)。
-    # solve の CPU も取られる — 追従の try_lock は邪魔しないが、10Hz の制御周期がずれ得る。
-    # **並びを出すものがいないと何も起きない** (下の waypoint_topic)。**未検証** — 実機でも
-    # pi4_sim でも通していない。
-    waypoint_prefetch: true       # 既定 false: 次のウェイポイントを走行中に解いておくか
+    # ── 狭域 → 広域のフィードバック (共有価値関数の全域掃き。仕組みと実測は ../README.md) ──
+    global_sweep: true            # 既定 true: 全域掃き (compact ではタイル修復) を回すか。切ると狭域が「通れない」と判断しても広域は塞がった通路を指し続ける
+    global_sweep_budget_ms: 60    # 既定 20 [ms]: 1 回のロック取得で掃きに使う時間。Pi 5 で 4 コア中 2 コアが空いていたので既定の 3 倍。**未検証**
+    global_sweep_idle_ms: 100     # 既定 60 [ms]: そのあとロックを手放して待つ時間 (60:100 = 1 コアの 37%)。budget を伸ばすときは一緒に伸ばすこと
+    # ── ウェイポイントの先読み (代償と条件は ../../../../docs/usage/navigation.md) ──
+    waypoint_prefetch: true       # 既定 false: 次のウェイポイントを走行中に解いておくか。価値関数が 2 つ生きるので場も 2 倍。**Pi 4 (4GB) では false へ**。**未検証**
     # ── 未設定 (既定のまま。上の先読みが効くかどうかを決める 2 つ) ──
-    # waypoint_topic: "waypoints" # 順路 (nav_msgs/Path、latch)。出すのは 2 か所だけ —
-    #                             # daifuku_waypoint_manager のパネル (編集のたび) と
-    #                             # ../../src/joy_teleop.py (START+BACK での巡回開始)。
-    #                             # **実機のイメージにパネルは入らない**ので、機体だけで
-    #                             # 走らせるときは後者が唯一の出どころになる。ここに並びが
-    #                             # 来ない構成 (/follow_waypoints へ直接投げる、単発ゴール)
-    #                             # では waypoint_prefetch: true でも先読みは起きない。
-    #                             # 名前を変えるならパネルの kWaypointPathTopic と
-    #                             # joy_teleop の publisher も一緒に。
-    # waypoint_prefetch_threads: 1  # 先読みの solve のスレッド数。追従は 10Hz・予算 40ms/tick
-    #                             # なので既定 1 に絞ってある。**効くのは compact だけ** —
-    #                             # 密の frontier2d_sparse はスレッド数を環境変数 VI_THREADS から
-    #                             # 読む (プロセスで 1 つ) ので、先読みだけを絞れない
-    # ── 走り出しの短縮 ──
-    # 解いているのは地図の全域ぶんの価値関数だが、走り出すのに要るのは
-    # **いまの姿勢からゴールまでの経路**だけ。true にすると、その経路が引けた
-    # 時点で solve を打ち切って走り出す (判定はロールアウトそのもの — 経路が
-    # 引けたなら plan も必ず通る)。上の先読みとは狙いが同じで手が違うだけなので
-    # (あちらは解く時刻を早める、こちらは解く量を減らす)、併用してよい。
-    #
-    # **切ってあるのは代償があるから**: 経路の外は未確定のまま残るので、機体が
-    # 経路から外れて方策が引けなくなると、打ち切った場を捨てて**最後まで解き直す**。
-    # その間**機体は走行中に止まったまま**フルの solve を待つ (津田沼で 87 秒) ので、
-    # 打ち切らなかったときより待ちは長い。ログの "dropped the truncated value function"
-    # がそれ。外れなければ解き直しは要らず、残りは走りながら埋まる (global_sweep が
-    # true のとき。密は全域掃き、compact は窓の書き戻しが積むタイル修復)。
-    # **効かない地図がある**: compact の確定は値バンド (0.1m/cell・penalty 30 で
-    # 500 ステップ ≒ 150m ぶん) 単位でしか進まないので、地図の値域が丸ごと 1 バンドに
-    # 収まると打ち切る隙が無い。**エラーも警告も出ず、ただ何も短くならない** —
-    # 19F 程度の広さはこちら側の見込み。効いたかはログの "cut short" / ", truncated"
-    # で見る。密ソルバ (上の solver を frontier2d_sparse に戻したとき) はバンドが
-    # 無いので地図の広さに依らず効き、打ち切った残りは走りながら全域掃きが詰める。
-    # **未検証** — 実機でも pi4_sim でも通していない。
-    early_start: false            # 既定 false: ゴールまで方策が繋がった時点で solve を打ち切るか
+    # waypoint_topic: "waypoints" # 順路 (nav_msgs/Path、latch)。出すのはパネルと ../../src/joy_teleop.py だけで、来なければ先読みは**黙って起きない**
+    # waypoint_prefetch_threads: 1  # 先読みの solve のスレッド数。**効くのは compact だけ** (密は VI_THREADS をプロセスで 1 つ読む)
+    # ── 走り出しの短縮 (効かない地図がある。../../../../docs/usage/navigation.md) ──
+    early_start: false            # 既定 false: ゴールまで方策が繋がった時点で solve を打ち切るか。経路から外れると場を捨てて解き直す間ずっと止まる。**未検証**
     # ── 可視化 (経路計算には影響しない) ──
-    # /value_function は solve のときだけでなく、**追従中も掃きスレッドが 2 秒ごとに
-    # 出し直す**。これが無いと全域スライスは solve した瞬間のまま固まり、伝播が効いて
-    # いても画面では何も起きない (追従ループが出すのは ±1m の窓だけ)。出しているのは
-    # 掃きスレッドなので、上の global_sweep を false にすると追従中は更新されない。
-    publish_value_function: true  # 既定 true: /value_function を配信するか
+    publish_value_function: true  # 既定 true: /value_function を配信するか。追従中の出し直しは掃きスレッドが行うので、global_sweep が false だと固まる
     value_publish_interval_ms: 500  # 既定 500 [ms]: solve 途中経過の配信間隔 (0 で完了時のみ。追従中の出し直しも止まる)
-    # 色スケール上限 [ステップ数≒秒]。地図ごとに測り直す値だが、19F もこの 60 のまま
-    # 使っている (../overrides/ で上書きしていない)。19F では到達可能セルの 66% が
-    # 飽和して階調が出ないので、遠くまで見たいときは上げる。選び方は ../README.md。
-    cost_drawing_threshold: 60    # 既定 60: /value_function の色スケール上限
+    cost_drawing_threshold: 60    # 既定 60: 色スケール上限 [ステップ数≒秒]。地図ごとに測り直す値で、19F ではこの 60 だと 66% が飽和する (../README.md)
     window_cost_drawing_threshold: 60  # 既定 60: /local_window_value (±1m 窓) の色スケール上限
-    # ── 行動集合 (前進量と回転量の組。要素数は 3 つの配列で揃えること) ──
-    # ここで決めた値がそのまま遷移表になる (起動時に作られる)。数も 6 でなくてよい。
+    # ── 行動集合 (前進量と回転量の組。3 つの配列で要素数を揃えること。6 個でなくてよい) ──
     action_names: ["forward", "back", "right", "rightfw", "left", "leftfw"]  # 既定 同左
     action_forward_m: [0.3, -0.2, 0.0, 0.2, 0.0, 0.2]      # 既定 同左 [m]: 各行動の前進量
     action_rotation_deg: [0.0, 0.0, -20.0, -20.0, 20.0, 20.0]  # 既定 同左 [deg]: 各行動の回転量
 
     # ── 未設定 (既定のまま) ──
     # map_scale: 1                # プランナ内部で地図を粗くする倍率 (1 = /map のまま)
-    # downsample_policy: "conservative"  # map_scale > 1 のときの縮小方針。conservative = 障害物優先、
-    #                             # optimistic = ブロック内に free が 1 つでもあれば free
-    # compact_sink_dir: ""        # compact 解の置き場 ("" = RAM)。追従はパッチ置き直しのたびに
-    #                             # sink を読むので、退避先が遅いと制御周期に響く
+    # downsample_policy: "conservative"  # map_scale > 1 のときの縮小方針 (障害物優先。optimistic は free 優先)
+    # compact_sink_dir: ""        # compact 解の置き場 ("" = RAM)。追従が置き直しのたびに読むので、遅い先だと制御周期に響く
     #     ▲ 上 3 つの実例は ../overrides/map_tsudanuma.yaml (scale 5 + 楽観 + ディスク退避)。
     #       map_scale だけなら ../overrides/map_19f.yaml (scale 2、保守のまま)。
     # pose_topic: "mcl_pose"      # 自己位置を読むトピック。launch が上書きする
@@ -163,7 +77,7 @@ vi_global_planner:
     solver: "frontier2d_sparse_compact"  # 既定 frontier2d_sparse (密): vi_planner と揃える (理由は上のブロック)
     map_scale: 1                  # 既定 1: プランナ内部で地図を粗くする倍率 (1 = /map のまま)。19F は ../overrides/ で 2
     compact_sink_dir: ""          # 既定 "": compact の確定出力先 ("" = RAM)
-    compact_ram_limit_mb: 4096    # 既定 512 [MB]: sink を RAM に置ける上限 (超過分は /tmp/vi_global_planner_sink へ mmap 退避)。vi_planner と揃える (Pi 4 での注意も同じ)。**上の compact_sink_dir が空でないとこの分岐に入らない**。未指定の広域地図では 4GiB を RAM に抱えたまま OOM し得る
+    compact_ram_limit_mb: 4096    # 既定 512 [MB]: sink を RAM に置ける上限 (超過分は /tmp/vi_global_planner_sink へ退避)。**上の compact_sink_dir が空でないと効かない**
     theta_cell_num: 60            # 既定 60: 姿勢の離散数。360 を割り切ること
     safety_radius: 0.2            # 既定 0.2 [m]: 障害物近傍ペナルティの半径
     safety_radius_penalty: 30     # 既定 30 [秒/セル]: 障害物に近寄る代わりに払う迂回コスト

@@ -15,32 +15,22 @@
 # 購読し、odom と odom -> base_footprint TF を出し、motor_power サービスを持つ
 # lifecycle ノード) を満たすので、この launch から下だけが入れ替わる。
 #
-#   raspimouse (既定) … 公式実装。raspimouse2 の raspimouse ノードで、rtmouse
-#                       カーネルモジュールがホストで insmod されている前提
-#                       (/dev/rt* が必要)。Pi 4 のみ。
-#   original          … 自前実装。raspicat_driver パッケージが PWM (sysfs)・gpiochip・
-#                       I2C をユーザ空間から直接叩く。Pi 4 / Pi 5 の両方に対応し、
-#                       機種は model:=auto がハード側で判定する。Pi 5 は rtmouse が
-#                       動かない (BCM2711 のレジスタを ioremap するが GPIO/PWM は RP1
-#                       側にある) ので、こちらしか選べない。
+#   raspimouse (既定) … 公式実装。rtmouse がホストで insmod されている前提
+#                       (/dev/rt* が要る)ので Pi 4 のみ。
+#   original          … 自前実装 (raspicat_driver)。PWM・gpiochip・I2C をユーザ空間
+#                       から直接叩く。Pi 5 は rtmouse が動かないのでこちらしか選べない。
 #
-# Pi 4 で original を選ぶときは rtmouse を載せないこと。両方が GPIO 16/6/5 と PWM を
+# **Pi 4 で original を選ぶときは rtmouse を載せないこと。** 両方が GPIO 16/6/5 と PWM を
 # 奪い合い、カーネルは止めてくれない (ノード側が起動時に拒否する)。詳細は
 # docs/setup/raspberry-pi-4.md と raspberry-pi-5.md。
 #
-# twist_mux:= (既定 true) はドライバの手前に cmd_vel の仲裁を挟む。自律走行
-# (/cmd_vel) と遠隔操作 (/cmd_vel_teleop) の両方が同じトピックへ書いていたのを、
-# 優先度付きで 1 本に束ねる。ドライバが購読するのは /cmd_vel ではなく
-# /cmd_vel_mux になる (両ドライバとも相対名 "cmd_vel" なので remap で効く)。
-# nav2 側の配線は変えていない。velocity_smoother の出力はそのまま /cmd_vel で、
-# それが仲裁の入力の 1 つになる。
+# twist_mux:= (既定 true) はドライバの手前に cmd_vel の仲裁を挟み、自律走行 (/cmd_vel)
+# と遠隔操作 (/cmd_vel_teleop) を優先度付きで 1 本に束ねる。ドライバが購読するのは
+# /cmd_vel ではなく /cmd_vel_mux になる。nav2 側の配線は変えていない。
 #
-# joy:= (既定 true) はゲームパッド (XInput 互換) を足す。joy_node と自前の
-# joy_teleop が上がり、START 2 秒長押しで /cmd_vel_teleop への出力を入/切、
-# BACK 単体の 2 秒長押しでモータ電源の入/切、START+BACK 同時 2 秒で保存した
-# ウェイポイントの巡回を始める。仲裁の teleop 側へ
-# 出すので、**twist_mux:=false では誰も購読しない**。詳細は
-# docs/usage/joystick.md と src/joy_teleop.py。
+# joy:= (既定 true) はゲームパッド (XInput 互換) を足す。出す先が仲裁の teleop 側なので、
+# **twist_mux:=false では誰も購読しない**。操作は docs/usage/joystick.md と
+# src/joy_teleop.py。
 
 import os
 import sys

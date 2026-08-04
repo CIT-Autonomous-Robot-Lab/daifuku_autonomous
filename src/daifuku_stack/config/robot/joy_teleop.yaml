@@ -6,10 +6,8 @@
 # 「既定」= joy_node は upstream joy パッケージ、joy_teleop は
 # src/joy_teleop.py の declare_parameter の値。
 #
-# ボタンと軸の番号は **XInput (X モード)** のときのもの。DirectInput のパッドや、
-# モード切り替えを持つ機種を D 側にしたものは総入れ替えになる。左スティックと
-# 十字キーを入れ替えるモードを持つ機種もある。合わなければ
-# `ros2 topic echo /joy` で押しながら確かめて直すこと
+# ボタンと軸の番号は **XInput (X モード)** のときのもの。DirectInput 側にすると総
+# 入れ替えになるので、合わなければ `ros2 topic echo /joy` で押しながら確かめて直すこと
 # (番号違いは**エラーにならず、ただ効かない**)。
 #
 # 速度域と操作の意味は ../../../../docs/usage/joystick.md。
@@ -17,14 +15,8 @@
 joy_node:
   ros__parameters:
     device_id: 0            # 既定 0: /dev/input の何番目のゲームパッドか。複数挿すときだけ変える
-    # 既定 0.05: **0 にしてある**。ここで切ると軸の値が切った分だけ引き伸ばされて
-    # 届くので、joy_teleop の deadzone と二重に効いて実際の不感帯が表の値とずれる。
-    # 不感帯は joy_teleop 側だけに持たせる。
-    deadzone: 0.0
-    # 既定 20.0 [Hz]: 変化が無くても再送する周期。**0 にしないこと**。joy_node は
-    # 既定では状態が変わったときしか出さないので、スティックを一定の角度で
-    # 保持すると /joy が止まり、joy_timeout に引っかかって機体が止まる。
-    autorepeat_rate: 20.0
+    deadzone: 0.0           # 既定 0.05: 不感帯は joy_teleop 側だけに持たせる。ここで切ると軸の値が引き伸ばされて届き、二重に効く
+    autorepeat_rate: 20.0   # 既定 20.0 [Hz]: 変化が無くても再送する周期。**0 にしないこと** — 傾けたまま保持すると /joy が止まって機体が止まる
     sticky_buttons: false   # 既定 false: 押すたびに ON/OFF が入れ替わる操作にするか。長押し判定が壊れるので false のまま
 
 joy_teleop:
@@ -52,10 +44,7 @@ joy_teleop:
     start_enabled: false    # 既定 false: 起動直後から teleop 入にするか。true にすると挿しただけで自律側を塞ぐ
     buzzer: true            # 既定 同左: モードが切り替わったとき /buzzer へ短い旋律を出すか。旋律は src/joy_buttons.py の TUNE_*
 
-    # 巡回する経路。空なら share/daifuku_stack/waypoints/waypoints_tsudanuma.yaml。
-    # **地図と対で選ぶこと**。map_19f で tsudanuma の経路を投げると全点が地図の
-    # 外に出て、1 点ごとに失敗しながら最後まで進む (stop_on_failure: false のため)。
-    waypoints_file: ""
+    waypoints_file: ""      # 既定 同左: 巡回する経路 (空なら waypoints/waypoints_tsudanuma.yaml)。**地図と対で選ぶこと** — 噛み合わないと全点が地図の外に出る
 
     follow_waypoints_action: "follow_waypoints"  # 既定 同左: nav2_waypoint_follower のアクション名
     navigate_to_pose_action: "navigate_to_pose"  # 既定 同左: teleop に入るときに取り消す単発ゴールのほう

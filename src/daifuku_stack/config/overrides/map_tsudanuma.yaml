@@ -5,48 +5,32 @@
 #       map:=<share>/maps/map_tsudanuma.yaml \
 #       overrides:=map_tsudanuma planner:=vi local_planner:=vi
 #
-# VI はゴールごとに nx*ny*n_theta の状態空間を扱う。この地図を 0.05m のまま解くと
-# 14.1 億状態 = 密ソルバで 79GB を確保しようとして起動と同時に死ぬ。プランナ内部
-# だけ粗くし (map_scale)、密な states を確保しない compact ソルバで解くことで通す。
-# 実測値・導出・既知の制約は ../README.md を参照。
+# 0.05m のまま解くと 14.1 億状態 = 密ソルバで 79GB を確保して起動と同時に死ぬ。
+# プランナ内部だけ粗くし (map_scale)、密な states を確保しない compact で解くことで通す。
+# 実測値・導出・既知の制約 (行動集合を変えるので value_iteration3 は ec2579d 以降が要る、
+# 全域スライスが重い、pi4_sim では BT がリカバリして ABORT する) は ../README.md を参照。
 #
-# **注意 1**: overrides は置き換えなので、既定の map_19f はこのとき外れる = emcl2 は
-# 断片の値で走る。この地図は 68.2% が未観測で占有セルが 0.4% しかなく、19F と同じ
-# alpha 崩壊が起きる余地がある。起きたら map_19f.yaml の emcl2 ブロックをここへ写す。
-# **未検証** — この地図で emcl2 のリセット挙動は測っていない。
+# **overrides は置き換えなので、既定の map_19f はこのとき外れる** = emcl2 は断片の値で
+# 走る。この地図は 68.2% が未観測で占有セルが 0.4% しかなく、19F と同じ alpha 崩壊が
+# 起きる余地がある。起きたら map_19f.yaml の emcl2 ブロックをここへ写すこと。**未検証**。
 #
-# **注意 2**: action_forward_m を既定から変えるので、value_iteration3 は
-# **ec2579d (2026-08-04)「vi_core の params を捨てて launch から行動集合を決められる
-# ようにする」以降が要る**。それより前の VI は行動集合を vi_rs のコンパイル時定数
-# (ACTION_FW = [0.3, -0.2, 0.0, 0.2, 0.0, 0.2]) と照合し、違うと **exit 1 で即死する**。
-# 落ちてもログに出るのは launch の "process has died ... exit code 1" だけなので、
-# 症状は「プランナだけ上がらず nav2 が inactive のまま」に見える (2026-08-04 に遭遇)。
+# 確定出力 (sink 648MB) は **RAM** に置く。Pi 5 (8GB) は走行中でも空きが 5.6GB あり、
+# 断片の compact_ram_limit_mb (4096MB) に収まるので自動退避も起きない。**4GB 機で使うなら
+# 両ノードに compact_sink_dir を書き戻すこと** (広域側は vi_global_planner_sink)。
+# 退避先は tmpfs でないこと (`findmnt -no FSTYPE <dir>`)。
 #
-# **注意 3**: 下の実測は BT を外した最小構成のもの。`simulator/` の pi4_sim ハーネスの枠 (0.6 コアを
-# stack 全体で共有) に BT 込みで通すと、BT が solve を待たず 3 回リカバリして ABORT
-# する。実機での通し確認は別途。
-#
-# **注意 4**: 確定出力 (sink 648MB) は 2026-08-04 から **RAM** に置く。それまでは
-# compact_sink_dir で /tmp へ mmap 退避していたが、Pi 5 (8GB) では走行中でも空きが
-# 5.6GB あり (実測)、退避する理由がなくなった。断片の compact_ram_limit_mb (4096MB) に
-# 収まるので自動退避も起きない。**4GB 機で使うなら両ノードに
-# compact_sink_dir: "/tmp/vi_planner_sink" (広域側は vi_global_planner_sink) を
-# 書き戻すこと** — RAM のままだと 648MB が匿名メモリとして居座り、Pi4 では他の
-# ノードと同居できない。退避先は tmpfs でないこと (`findmnt -no FSTYPE <dir>`)。
-#
-# 2026-08-01 実測 (Pi4 相当 = 0.6 コア枠 / メモリ 3GB, VI_THREADS=3):
+# 2026-08-01 実測 (Pi4 相当 = 0.6 コア枠 / メモリ 3GB, VI_THREADS=3、BT を外した最小構成):
 #   ソルバ単体 (bench_map): scale 3 保守 2706s / anon 2148MB、scale 5 楽観 51.9s
 #   vi_planner ノード: solve + ロールアウト 87-89s / 398 姿勢 / SUCCEEDED
 #                      ピーク RSS 1.60GB、sink 648MB、oom_kill 0
-#   ▲ この RSS はディスク退避していた頃のもの (648MB は mmap で、カーネルが
-#     追い出せた)。RAM 化した今は同じ 648MB が匿名メモリになる。**未計測**。
+#   ▲ この RSS はディスク退避していた頃のもの。RAM 化した今は**未計測**。
 
 vi_global_planner:
   ros__parameters:
     solver: "frontier2d_sparse_compact"  # 断片も同じ値: states を確保しない。この地図では必須なので明示する
-    # 以下 4 つ (map_scale / downsample_policy / action_forward_m /
-    # goal_margin_radius) はセットで効く。1 つでも欠けると波がゴール近傍で止まり、
-    # 到達列 1 で「収束」する。scale 6 は楽観でも通路のセル幅が足りず解けない。
+    # 以下 4 つ (map_scale / downsample_policy / action_forward_m / goal_margin_radius) は
+    # セットで効く。1 つでも欠けると波がゴール近傍で止まり、到達列 1 で「収束」する。
+    # scale 6 は楽観でも通路のセル幅が足りず解けない。
     map_scale: 5                         # 断片 1: 内部だけ 0.25m/cell (5650 万状態)
     downsample_policy: "optimistic"      # 既定 conservative (断片は未設定): 保守側だと通路のセル幅が死ぬ
     action_forward_m: [0.5, -0.3333, 0.0, 0.3333, 0.0, 0.3333]  # 断片の 5/3 倍 (セル比例)
@@ -54,16 +38,10 @@ vi_global_planner:
     safety_radius_penalty: 1             # 断片 30: 30 だと貪欲ロールアウトが降下できない
     max_rollout_steps: 100000            # 断片 10000: 広域では遠い start から届かない
 
-# local_planner:=vi (vi_planner 1 ノード構成) 用。解像度まわりと
-# safety_radius_penalty は vi_global_planner と同じ値にしてある。片方だけ変えると
-# 同じ地図なのに 2 構成で別の経路が出て比較にならない。理由は上のコメントを参照。
-#
-# vi_planner の狭域追従は密な states を要求するが、全域ではなくロボット近傍のパッチ
-# (±1m 窓 + 遷移到達距離 + 余裕、0.25m セルで 27x27x60 ≒ 2.5MB) だけを compact の場から
-# 起こして回す。外側は compact の値のまま凍結して境界条件にする。窓の成果は毎 tick
-# sink へ書き戻すので置き直しで失われず、広域のロールアウトからも見える。全域伝播
-# (global_sweep) も効く — 密のような全域 Gauss–Seidel ではなく、sink をタイル単位で
-# 起こして掃いて書き戻す形になる。vi_planner/src/core/compact.rs 冒頭に詳しい。
+# local_planner:=vi (vi_planner 1 ノード構成) 用。解像度まわりと safety_radius_penalty は
+# vi_global_planner と同じ値にしてある。片方だけ変えると同じ地図なのに 2 構成で別の経路が
+# 出て比較にならない。狭域追従が密な states をどう用立てるかは ../README.md と
+# vi_planner/src/core/compact.rs 冒頭。
 vi_planner:
   ros__parameters:
     solver: "frontier2d_sparse_compact"  # 断片も同じ値: 密だと 3.17GB で OOM。この地図では必須なので明示する
@@ -74,38 +52,24 @@ vi_planner:
     safety_radius_penalty: 1             # 断片 30: 30 だと貪欲ロールアウトが降下できない
     max_rollout_steps: 100000            # 断片 10000: 広域では遠い start から届かない
     # global_sweep と budget/idle は断片のまま (compact でもタイル修復として効く)。
-    # 2026-08-04 実測 (Pi 5、静止 + 走査あり): tile repair が 240 秒回っても
-    # queued は 29 のまま減らない。窓 (±1m) に壁が入っていれば毎 tick penalty が
-    # 塗り直されて次の伝播が積まれるので、**走行中に "global sweep done in" は出ない**
-    # のが設計どおり。動いているかは 2 秒ごとの "tile repair running for" で見る。
+    # **走行中に "global sweep done in" は出ない**のが設計どおりで、動いているかは
+    # 2 秒ごとの "tile repair running for" のほうで見る (../README.md)。
 
 # ── ここで上書きしていないもの ────────────────────────────────────────────
-# emcl2 は断片のまま (sensor_reset だけノード既定と違う) で走る (ヘッダの注意 1)。この地図は 68.2% が
-# 未観測なので、次も上書きが要るかもしれない。いずれも**未検証**。
+# いずれも**未検証**。次も上書きが要るかもしれない。
 #   emcl2 の 3 つ (alpha_threshold / expansion_radius_orientation / sensor_reset)
-#     … alpha 崩壊が起きたら map_19f.yaml から写す。
-#   costmaps.*.track_unknown_space / vi の unknown_as_obstacle … 未観測を通行可に
-#     するかどうか。今はどちらも「未観測 = 通れない」= 舗装路のみ通行可。
-#   compact_sink_dir … 断片のまま ("" = RAM。ヘッダの注意 4)。**指定するとそちらが
-#     無条件に勝ち、下の compact_ram_limit_mb は一切読まれない** (判定順は明示指定が
-#     先、上限による自動退避が後)。退避先を書くときは速い実ディスクにすること
-#     (`findmnt -no FSTYPE <dir>` が tmpfs だと RAM に載って無意味)。コンテナの /tmp は
-#     書き込み層 = SD カードで、vi_planner の追従はパッチ置き直しのたびに sink を
-#     読むので制御周期に響く。
-#   compact_ram_limit_mb … 断片が両ノードとも 4096MB。sink 648MB はこれに収まるので
-#     自動退避は起きない。**この地図で効いている唯一の条件が「この値 > 648MB」**で、
-#     4096 である必要はない (上げる前の 2048 でも同じ)。ただしノード既定の 512MB まで
-#     下げると黙って /tmp/vi_*_sink = SD カードへ落ちる。
-#   waypoint_prefetch … 断片が true (2026-08-04 に反転)。**この地図で効いてくるのが
-#     ヘッダの注意 4 と同じ話**で、先読み中は価値関数が 2 つ生きる = sink も 2 つ。
-#     RAM 化した今は 648MB x2 = 1.3GB が匿名メモリに居座る (どちらも
-#     compact_ram_limit_mb 4096MB に収まるので退避もしない)。Pi 5 (空き 5.6GB) なら
-#     通るが**未計測**。4GB 機で使うなら compact_sink_dir を書き戻すか、
-#     waypoint_prefetch: false をここへ足すこと。
+#     … alpha 崩壊が起きたら map_19f.yaml から写す (ヘッダ)。
+#   costmaps.*.track_unknown_space / vi の unknown_as_obstacle … 未観測を通行可にするか。
+#     今はどちらも「未観測 = 通れない」= 舗装路のみ通行可。
+#   compact_sink_dir … 断片のまま ("" = RAM。ヘッダ)。**指定するとそちらが無条件に勝ち、
+#     下の compact_ram_limit_mb は一切読まれない**。書くときは速い実ディスクにすること
+#     (コンテナの /tmp は書き込み層 = SD カードで、追従が読むたび制御周期に響く)。
+#   compact_ram_limit_mb … 断片が両ノードとも 4096MB。**この地図で効いている唯一の条件が
+#     「この値 > sink 648MB」**で、4096 である必要はない。ノード既定の 512MB まで下げると
+#     黙って /tmp/vi_*_sink = SD カードへ落ちる。
+#   waypoint_prefetch … 断片が true。先読み中は価値関数が 2 つ = sink も 2 つで、
+#     648MB x2 = 1.3GB が匿名メモリに居座る。Pi 5 なら通るが**未計測**。4GB 機で使うなら
+#     compact_sink_dir を書き戻すか、waypoint_prefetch: false をここへ足すこと。
 #   publish_value_function / value_publish_interval_ms … 断片の true / 500ms のまま。
-#     この地図の全域スライスは 94 万セル (19F の 13 万セルの 7 倍) で、しかも compact
-#     なので 1 枚作るのに sink を全走査する。作るのは掃きスレッドが**ロックを握った
-#     まま** 2 秒ごと。ここが 300ms を超えると 10Hz の追従ループが 3 tick 連続で
-#     try_lock に失敗して機体が止まる。**未計測** — 走行中に /cmd_vel_mux が 2 秒
-#     おきに途切れるようなら、まずこの 2 つを疑う (interval を 0 にすると掃き中の
-#     出し直しが止まり、solve 完了時の 1 枚だけになる)。
+#     **この地図では全域スライス 1 枚が重い** — 走行中に /cmd_vel_mux が 2 秒おきに
+#     途切れるなら、まずこの 2 つを疑う (../README.md)。
