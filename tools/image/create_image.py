@@ -997,6 +997,16 @@ def render_config_txt_block(model: str, with_rtmouse: bool) -> str:
         # （docs/setup/raspberry-pi-5.md）。
         "dtparam=i2c_baudrate=62500",
     ]
+    if model == "pi5":
+        lines += [
+            # 制御基板が40ピンヘッダから5Vを入れる構成だとUSB-CのPD交渉が
+            # 起きず、ファームウェアは供給能力を知らないままUSB全体を600mAに
+            # 絞る（LiDARを挿すと足りない）。これは「5Vは十分に取れる」と
+            # 宣言するだけで、実際に流せるかは基板側の話。USB-Cの小さな電源で
+            # 動かすときは外すこと。Pi 4のファームウェアにこの設定は無い。
+            "# 5V は制御基板から入るので PD 交渉は起きない",
+            "usb_max_current_enable=1",
+        ]
     if with_rtmouse:
         if model != "pi5":
             lines += [

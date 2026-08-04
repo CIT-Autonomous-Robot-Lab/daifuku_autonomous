@@ -93,9 +93,16 @@ sudo python3 tools/image/create_image.py all --model pi5 --device /dev/sdX \
 ```
 dtparam=i2c_arm=on
 dtparam=spi=on
-dtoverlay=pwm-2chan,pin=12,func=4,pin2=13,func2=4
 dtparam=i2c_baudrate=62500
+usb_max_current_enable=1
+dtoverlay=pwm-2chan,pin=12,func=4,pin2=13,func2=4
 ```
+
+`usb_max_current_enable=1` は Pi 5 のときだけ入ります。制御基板が 40 ピンヘッダから
+5V を入れる構成では **USB-C の PD 交渉が起きない**ので、ファームウェアは供給能力を
+知らないまま USB 全体を 600 mA に絞ります（LiDAR を挿すと足りません）。これは
+「5V は十分に取れる」と宣言するだけで、**実際に流せるかは基板側の話**です。USB-C の
+小さな電源で動かすときは外してください。
 
 これに `provision.sh` が `dtoverlay=daifuku-pwm-clk` を足します（下記）。
 
