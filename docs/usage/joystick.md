@@ -128,12 +128,21 @@ publishしているあいだと0.5秒だけ）。teleopに入っても自律側�
 ## 巡回を始める
 
 STARTとBACKを同時に2秒押すと、`waypoints_file`のYAMLを読んで
-[`nav2_waypoint_follower`](navigation.md)の`/follow_waypoints`へゴールを投げます。既定は
-`share/daifuku_stack/waypoints/waypoints_tsudanuma.yaml`です。押すたびに読み直すので、
-`daifuku_waypoint_manager`パネルで保存し直したものがそのまま反映されます（再起動は不要）。
+[`nav2_waypoint_follower`](navigation.md)の`/follow_waypoints`へゴールを投げます。押すたびに
+読み直すので、`daifuku_waypoint_manager`パネルで保存し直したものがそのまま反映されます
+（再起動は不要）。
+
+**`waypoints_file`に既定はありません。** 設定していなければブッブーが鳴って始まらず、ログに
+`waypoints_file is not set` が出ます（起動時にも同じ警告が1度出ます）。順路は地図と対でしか
+意味を持たないので、既定の1つを忍ばせると別の地図で立てたときに黙って噛み合わないものを
+走らせてしまいます。
 
 **地図と対で選んでください。** `map_19f`で津田沼の経路を投げると全点が地図の外に出ます。
-それでも`stop_on_failure: false`なので、1点ずつ失敗しながら最後まで進みます。
+それでも`stop_on_failure: false`なので、1点ずつ失敗しながら最後まで進みます。**このとき
+外から見えるのは「その場で左に回り続ける」機体だけです** — 経路が引けないので
+`navigate_to_pose`が失敗し、nav2のrecoveryが`spin`（+1.57 rad = 反時計回り、
+`max_rotational_vel` 1.0 rad/s）を点の数だけ繰り返すためです。
+[troubleshooting.md](troubleshooting.md#その場で左に回り続ける)も参照。
 
 `navigation.launch.py`が立っていないと押しても始まりません（ログに
 `follow_waypoints action server is not available`が出ます）。走行中にもう一度押しても
@@ -145,7 +154,8 @@ STARTとBACKを同時に2秒押すと、`waypoints_file`のYAMLを読んで
 向かっている点の次はどこか」を知る唯一の手立てです。同じものをRVizの
 `daifuku_waypoint_manager`パネルも出しますが、**実機のイメージにパネルは入っていない**
 ので、機体だけで巡回するときはこちらが出どころになります。起動時にYAMLを読めた時点でも
-一度出します。
+一度出します。裏を返すと、**`waypoints_file`が空だと`/waypoints`は誰も出さないので、
+先読みはエラーも警告も出さないまま働きません**。
 
 ## 確かめかた
 

@@ -81,8 +81,6 @@ import os
 import sys
 import time
 
-from ament_index_python.packages import get_package_share_directory
-
 from action_msgs.msg import GoalStatus
 from action_msgs.srv import CancelGoal
 
@@ -216,11 +214,11 @@ class JoyTeleop(Node):
         self._stop_tail = float(value("stop_tail"))
         self._cancel_window = float(value("cancel_window"))
 
-        self._waypoints_file = value("waypoints_file") or os.path.join(
-            get_package_share_directory("daifuku_stack"),
-            "waypoints",
-            "waypoints_tsudanuma.yaml",
-        )
+        # 既定値は持たせない。順路は地図と対でしか意味を持たないので、既定の 1 つを
+        # 忍ばせると別の地図で立てたときに黙って噛み合わないものを走らせてしまう
+        # (全点が地図の外に出ても plan が失敗するだけで、外からは recovery の
+        # spin が延々回っているようにしか見えない)。空なら START+BACK は断る。
+        self._waypoints_file = value("waypoints_file")
 
         self._latch = HoldLatch(float(value("hold_seconds")))
         self._enabled = bool(value("start_enabled"))
@@ -280,24 +278,34 @@ class JoyTeleop(Node):
 
         # 起動時に一度読んでおく。走らせようとした瞬間に「書式が違う」と分かるより、
         # 立ち上げのログで分かるほうがよい (読むのは押されたときに読み直す)。
-        try:
-            frame_id, poses = load_waypoints(self._waypoints_file)
-            self.get_logger().info(
-                "waypoints: %d points from %s" % (len(poses), self._waypoints_file)
-            )
-            self._publish_waypoints(frame_id, poses)
-        except (OSError, ValueError, yaml.YAMLError) as exc:
+        if not self._waypoints_file:
             self.get_logger().warning(
-                "waypoints file unusable (%s): %s" % (self._waypoints_file, exc)
+                "waypoints_file is not set; START+BACK will refuse to start a patrol"
             )
+        else:
+            try:
+                frame_id, poses = load_waypoints(self._waypoints_file)
+                self.get_logger().info(
+                    "waypoints: %d points from %s" % (len(poses), self._waypoints_file)
+                )
+                self._publish_waypoints(frame_id, poses)
+            except (OSError, ValueError, yaml.YAMLError) as exc:
+                self.get_logger().warning(
+                    "waypoints file unusable (%s): %s" % (self._waypoints_file, exc)
+                )
 
         period = 1.0 / max(float(value("publish_rate")), 1.0)
         self.create_timer(period, self._tick)
         self._publish_state()
         self.get_logger().info(
             "joy teleop %s; hold %.1fs: START toggles teleop, BACK (on release) toggles "
-            "motor power, START+BACK follows waypoints"
-            % ("on" if self._enabled else "off", self._latch.hold_seconds)
+            "motor power, START+BACK %s"
+            % (
+                "on" if self._enabled else "off",
+                self._latch.hold_seconds,
+                "follows waypoints" if self._waypoints_file
+                else "is disabled (no waypoints_file)",
+            )
         )
 
     # ── 入力 ────────────────────────────────────────────────────────────
@@ -483,6 +491,15 @@ class JoyTeleop(Node):
     # ── ウェイポイント巡回 ──────────────────────────────────────────────
 
     def _start_waypoints(self):
+        if not self._waypoints_file:
+            # 既定の順路を持たないので、設定していなければここで終わり。黙って
+            # 何かを走らせるより、押しても始まらないほうが安全側。
+            self.get_logger().error(
+                "waypoints_file is not set; pick a route that matches map:= first"
+            )
+            self._play(TUNE_REFUSED)
+            return
+
         if self._goal_pending or self._goal_handle is not None:
             self.get_logger().warning(
                 "waypoints already running; hold START to take over first"

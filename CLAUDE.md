@@ -136,15 +136,19 @@ Docker 越しに叩く形は
   順路そのものを latch する `nav_msgs/Path` だけで、これを出すのは
   `daifuku_waypoint_manager` のパネルと `joy_teleop`（START+BACK での巡回開始）の
   **2 か所しかない**。どちらも通らない経路（`/follow_waypoints` へ直接投げる、
-  単発ゴール）では**エラーも警告も出ないまま先読みだけが起きない**。トピック名は
+  単発ゴール）では**エラーも警告も出ないまま先読みだけが起きない**。実機ではパネルが
+  載らないので `joy_teleop` だけが出どころだが、そちらは **`waypoints_file` が空だと
+  巡回そのものを断る**（2026-08-04 に既定の順路を廃止。それまでは津田沼の 73 点に
+  フォールバックしていて、`map_19f` で立てると全点が地図の外に出た）。トピック名は
   パネルの `kWaypointPathTopic`、`joy_teleop` の publisher、`vi_planner` の
   `waypoint_topic` の 3 か所にあり、1 つだけ変えても同じことになる（パネルだけが
-  絶対名なので、`namespace:=` を付けた構成でも噛み合わない）。**既定は `true`**
-  （2026-08-04 に反転。ノード側の宣言は `false`。実機でも pi4_sim でも**未検証**）—
-  価値関数が同時に 2 つ生きるので、**密ソルバではメモリが 2 倍要る**。compact でも
-  同梱の 2 地図は sink が RAM なので（2026-08-04 に津田沼の `compact_sink_dir` を
-  外した）、そのまま 2 倍が匿名メモリに乗る（津田沼 648MB×2 = 1.3GB、19F 95MB×2）。
-  **Pi 4 (4GB) で走らせるなら `config/nav2/vi_planner.yaml` で `false` へ戻すこと。**
+  絶対名なので、`namespace:=` を付けた構成でも噛み合わない）。**既定は `false`**
+  （2026-08-04 に一度 `true` へ反転したが、同日の実機で走行中の固まりが出たため
+  容疑者の 1 つとして戻した。ノード側の宣言も `false`）— 価値関数が同時に 2 つ
+  生きるので、**密ソルバではメモリが 2 倍要る**。compact でも同梱の 2 地図は sink が
+  RAM なので（2026-08-04 に津田沼の `compact_sink_dir` を外した）、そのまま 2 倍が
+  匿名メモリに乗る（津田沼 648MB×2 = 1.3GB、19F 95MB×2）。**Pi 4 (4GB) では
+  `true` にしないこと。**
 - **`vi_planner` の `early_start` は compact では効かない地図がある。** ゴールまで
   方策が繋がった時点で solve を打ち切る機能だが、compact（同梱の既定 solver）の確定は
   値バンド単位でしか進まず、0.1 m/cell・`safety_radius_penalty: 30` で 1 バンドが
@@ -155,6 +159,16 @@ Docker 越しに叩く形は
   未確定**なので、機体が経路から外れて方策が引けなくなると捨てて解き直す
   （`dropped the truncated value function`）。そのとき機体は**走行中に止まったまま**
   フルの solve を待つ（津田沼で 87 秒）ので、打ち切らなかったときより待ちは長い。
+- **recovery の `spin` だけは `velocity_smoother` を通らない。** 上流 nav2 の
+  `navigation_launch.py` は `behavior_server` に `cmd_vel` → `cmd_vel_nav` を張るが、
+  `vi_global_planner` 側の複製（`local_planner:=vi` で使うほう）は張っていないので、
+  **`spin` / `backup` は生の値で直接 `/cmd_vel` → twist_mux → 車輪へ届く**。結果、
+  `velocity_smoother` が落ちていても回転だけは効く。ここで **RViz の「Navigation 2」
+  パネルの `Reset` を押すと悪化する**：停止は逆順なので `velocity_smoother` が先に
+  落ち、`waypoint_follower` の停止で（走りっぱなしのコールバックを待って）固まり、
+  `behavior_server` だけが active で残る。**自律走行は死んだまま回転だけが止まらない**
+  状態になり、`lifecycle_manager_navigation` は `is_active` にも応答しなくなる。
+  抜けるには launch を立て直すしかない。
 - **`navigation.rviz` の `2D Goal Pose` は `/goal_pose` を出さない。**
   `daifuku_waypoint_manager` へ waypoint を渡すため `/waypoint_pose` に付け替えて
   ある。単発ゴールは `Nav2 Goal` (`nav2_rviz_plugins/GoalTool`) のほうを使う。

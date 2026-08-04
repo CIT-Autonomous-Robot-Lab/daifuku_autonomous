@@ -163,6 +163,42 @@ ros2 node info /waypoint_follower
 Pi 4のCPU飽和によるゴール受理ackの取りこぼし（`bt_navigator`の
 `default_server_timeout`）を疑ってください。
 
+## その場で左に回り続ける
+
+自律走行のつもりが前へ進まず、その場で反時計回りにぐるぐる回り続ける場合です。
+**これは故障ではなくnav2のrecoveryです。** `spin`は`+1.57 rad`（反時計回り）を
+`max_rotational_vel`（`config/nav2/behaviors.yaml`、1.0 rad/s）で回すので、失敗した
+ゴールの数だけ左回りが繰り返されます。
+
+```bash
+ros2 topic echo /rosout --field msg | grep -E 'Running spin|Turning|Goal failed'
+ros2 topic echo /compute_path_to_pose/_action/status --once | grep -c 'status: 6'
+```
+
+`Turning 1.57 for spin behavior.`が繰り返し出て、`compute_path_to_pose`が軒並み
+`status: 6`（ABORTED）なら、**経路がそもそも引けていません**。まず疑うのは地図と
+ゴールの噛み合わせです。
+
+```bash
+ros2 topic echo /map --once --no-arr          # width/height/resolution/origin
+ros2 topic echo /rosout --field msg | grep 'Begin navigating'
+```
+
+`Begin navigating … to (x, y)`の座標が
+`origin`〜`origin + [width, height] × resolution`の外なら、地図の外へ投げています。
+巡回中なら順路が地図と対になっていません（[joystick.md](joystick.md#巡回を始める)）。
+`stop_on_failure: false`なので1点ずつ失敗しながら最後まで進み、**そのあいだずっと
+左回りが続きます**。
+
+止めるのはモータ電源です。**RVizの「Navigation 2」パネルの`Reset`を押してはいけません。**
+ライフサイクルマネージャは逆順に停止するので、先に`velocity_smoother`が落ち、
+`waypoint_follower`の停止で（走りっぱなしのコールバックを待って）固まります。すると
+`behavior_server`だけがactiveのまま残り、**`spin`は`velocity_smoother`を経由せず
+`/cmd_vel`へ直接出すので、回転だけが止まらなくなります**。この状態は
+`ros2 lifecycle get /velocity_smoother`が`inactive [2]`、
+`/lifecycle_manager_navigation/is_active`が無応答、で見分けられます。抜けるには
+`navigation.launch.py`を立て直してください。
+
 ## `Aborting bringup`でNav2が落ちる
 
 ログに`… unable to be reached after 4.00s by bond`と出て、ライフサイクルマネージャが
@@ -315,4 +351,18 @@ vi_planner: tile repair running for 6.0s (412 visits, 27 tiles queued) # 2秒ご
 docker compose -f docker/raspberrypi/compose.yaml logs -f ros2
 ```
 
+**これで見えるのは`compose up`が建てたぶんだけです。** `docker compose exec`から
+`ros2 launch`した場合、出力はそれを叩いたターミナルにしか出ません（コンテナのPID 1は
+`sleep infinity`なので`logs`は空のままです）。閉じてしまったあとは、コンテナ内の
+`$ROS_LOG_DIR`（`/tmp/ros/log`）にあるノードごとのログを読みます。**日付のディレクトリに
+入っているのは`launch.log`だけで、ノードのログはその1つ上に`<ノード名>_<PID>_<epoch>.log`
+の形で並びます。**
+
+```bash
+C=docker/raspberrypi/compose.yaml
+docker compose -f $C exec ros2 ls -t /tmp/ros/log | head
+docker compose -f $C exec ros2 sh -c 'cat /tmp/ros/log/lifecycle_manager_*.log'
+```
+
+生きているノードだけでよければ`/rosout`でも読めます（`ros2 topic echo /rosout`）。
 ネイティブ環境ではlaunchを起動したターミナルのログを確認します。
