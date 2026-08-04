@@ -326,6 +326,48 @@ vi_planner: path with 412 poses in 0.34s (solved_now=true, iters=0, prefetched)
 
 詳細は[`src/daifuku_waypoint_manager/README.md`](../../src/daifuku_waypoint_manager/README.md)。
 
+### 経路が引けた時点で走り出す（`early_start`）
+
+先読みが「解く時刻を早める」のに対して、こちらは**解く量を減らす**手です。解いて
+いるのは地図の全域ぶんの価値関数ですが、走り出すのに要るのは**いまの姿勢から
+ゴールまでの経路**だけなので、それが引けた時点でsolveを打ち切れます。
+
+`config/nav2/vi_planner.yaml`の`early_start`を`true`にすると打ち切ります。判定は
+ロールアウトそのもの（`compute_path_to_pose`が返すのと同じ辿り方）なので、
+**打ち切った場でも経路は必ず引けます**。先読みとは別物なので、両方同時に有効に
+できます。
+
+```
+vi_planner: value function solved in 11.40s (iters=93), cut short at the first path to the goal [follow_path]
+vi_planner: path with 388 poses in 0.31s (solved_now=true, iters=93, truncated)
+```
+
+代償は**経路の外が未確定のまま残る**ことです。機体が経路から外れて方策が引けなく
+なると、打ち切った場を捨てて最後まで解き直します。このとき**機体は走行中に止まった
+まま**フルのsolveを待つので（津田沼なら87秒）、打ち切らなかった場合より待ちは長く
+なります。
+
+```
+vi_planner: dropped the truncated value function (early_start) after 30 ticks without an action; the next request solves it to convergence
+```
+
+外れなければ解き直しは要りません。`global_sweep: true`（既定）なら、打ち切った残りは
+**走りながら**埋まっていきます（密は全域掃き、compactは追従が窓を書き戻すたびに積まれる
+タイル修復）。
+
+**効かない地図があります。** compact（同梱の既定）の確定は値バンド単位でしか進まず、
+0.1 m/cell・`safety_radius_penalty: 30`で1バンドが約500ステップ＝150 m相当です。
+地図の値域が丸ごと1バンドに収まると波2つで解き終わってしまい、打ち切る隙がありません。
+このとき**エラーも警告も出ず、ただ何も短くなりません**。建物1フロア程度の広さは
+こちら側の見込みで、効くのは津田沼のような広域地図です（`map_scale`を上げるほど
+バンドは狭くなるので効きやすくなります）。効いたかは上のログの`cut short` /
+`truncated`で判断してください。
+
+密ソルバ（`solver: "frontier2d_sparse"`に戻したとき）にはバンドが無いので、地図の
+広さに依らず効きます。
+
+**まだ実機でもpi4_simでも通していません。**
+
 ## 価値反復の表示
 
 `planner:=vi`では、新しいゴールの最初の計算で地図全体を解くため、地図サイズにより数秒から数十秒かかる場合があります。同じゴールへの再計画は価値関数キャッシュにより高速です。

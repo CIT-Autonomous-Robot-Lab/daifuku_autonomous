@@ -143,6 +143,16 @@ Docker 越しに叩く形は
   価値関数が同時に 2 つ生きるので、**密ソルバではメモリが 2 倍要る**。compact でも
   同梱の 2 地図は sink が RAM なので（2026-08-04 に津田沼の `compact_sink_dir` を
   外した）、そのまま 2 倍が匿名メモリに乗る（津田沼 648MB×2 = 1.3GB、19F 95MB×2）。
+- **`vi_planner` の `early_start` は compact では効かない地図がある。** ゴールまで
+  方策が繋がった時点で solve を打ち切る機能だが、compact（同梱の既定 solver）の確定は
+  値バンド単位でしか進まず、0.1 m/cell・`safety_radius_penalty: 30` で 1 バンドが
+  約 500 ステップ = 150m 相当。**地図の値域が丸ごと 1 バンドに収まると波 2 つで解き
+  終わって打ち切る隙が無く、エラーも警告も出ないまま何も短くならない**（建物 1 フロア
+  程度はこちら側の見込み。効くのは津田沼のような広域地図と、密ソルバ）。効いたかは
+  ログの `cut short` / `truncated` で見る。もう 1 つ、打ち切った場は**経路の外が
+  未確定**なので、機体が経路から外れて方策が引けなくなると捨てて解き直す
+  （`dropped the truncated value function`）。そのとき機体は**走行中に止まったまま**
+  フルの solve を待つ（津田沼で 87 秒）ので、打ち切らなかったときより待ちは長い。
 - **`navigation.rviz` の `2D Goal Pose` は `/goal_pose` を出さない。**
   `daifuku_waypoint_manager` へ waypoint を渡すため `/waypoint_pose` に付け替えて
   ある。単発ゴールは `Nav2 Goal` (`nav2_rviz_plugins/GoalTool`) のほうを使う。
