@@ -9,6 +9,7 @@
 調整や仕組みを確認する場合:
 
 - [操作パネル（rqt）](control-panel.md)
+- [ゲームパッドで操作する](joystick.md)
 - [設定リファレンス](configuration.md)
 - [構成とパッケージ](architecture.md)
 - [トラブルシューティング](troubleshooting.md)

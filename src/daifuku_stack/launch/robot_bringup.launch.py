@@ -34,6 +34,12 @@
 # /cmd_vel_mux になる (両ドライバとも相対名 "cmd_vel" なので remap で効く)。
 # nav2 側の配線は変えていない。velocity_smoother の出力はそのまま /cmd_vel で、
 # それが仲裁の入力の 1 つになる。
+#
+# joy:= (既定 true) はゲームパッド (XInput 互換) を足す。joy_node と自前の
+# joy_teleop が上がり、START 3 秒長押しで /cmd_vel_teleop への出力を入/切、
+# START+BACK 同時 3 秒で保存したウェイポイントの巡回を始める。仲裁の teleop 側へ
+# 出すので、**twist_mux:=false では誰も購読しない**。詳細は
+# docs/usage/joystick.md と src/joy_teleop.py。
 
 import os
 import sys
@@ -122,6 +128,61 @@ def _twist_mux(context, pkg_share, overrides_dir):
     ], logs
 
 
+def _joy_teleop(context, pkg_share, overrides_dir):
+    """ゲームパッドのドライバと、その入力をモードに変えるノードを組み立てる。
+
+    joy_node は /joy を出すだけ。速度の写像と、START 長押しでの teleop 切り替え・
+    START+BACK でのウェイポイント巡回開始は src/joy_teleop.py が持つ。上流の
+    teleop_twist_joy を使っていないのはそのため (あちらは押している間だけ速度を
+    出すデッドマンしかできない)。
+
+    出す先は /cmd_vel_teleop なので、**twist_mux:=false だと誰も購読しない**。
+
+    ゲームパッドを挿していなくても他は動く。joy_teleop は /joy が一度も来なければ
+    何も publish しないので、自律走行の邪魔をしない (start_enabled: true にした
+    ときだけは別で、そちらは受信断としてゼロを出し続ける = 自律側を塞ぐ)。
+    joy_node のほうはデバイスが無いときの挙動を実機で確かめていないので、
+    respawn を付けてある。ホットプラグに対応していれば無害で、対応して
+    いなければ 5 秒ごとに開き直して挿したときに拾う。
+
+    Returns:
+        (action の並び, ログの並び)。joy:=false なら両方とも空。
+    """
+    if not is_true(context, "joy"):
+        return [], []
+
+    params_file = LaunchConfiguration("joy_teleop_params_file").perform(context)
+    if not params_file:
+        params_file = os.path.join(pkg_share, "config", "robot", "joy_teleop.yaml")
+    if not os.path.isfile(params_file):
+        raise RuntimeError(f"joy_teleop_params_file does not exist: {params_file}")
+
+    params_file, logs = params.compose_path(
+        context, params_file,
+        name="joy_teleop_params_file",
+        overrides_dir=overrides_dir,
+    )
+
+    return [
+        Node(
+            package="joy",
+            executable="joy_node",
+            name="joy_node",
+            output="screen",
+            parameters=[params_file],
+            respawn=True,
+            respawn_delay=5.0,
+        ),
+        Node(
+            package="daifuku_stack",
+            executable="joy_teleop.py",
+            name="joy_teleop",
+            output="screen",
+            parameters=[params_file],
+        ),
+    ], logs
+
+
 def launch_setup(context, *args, **kwargs):
     """driver:= を解決してから 1 つだけノードを立てる。
 
@@ -165,6 +226,8 @@ def launch_setup(context, *args, **kwargs):
     mux_actions, mux_logs = _twist_mux(context, pkg_share, overrides_dir)
     remappings = [("cmd_vel", MUXED_CMD_VEL)] if mux_actions else []
 
+    joy_actions, joy_logs = _joy_teleop(context, pkg_share, overrides_dir)
+
     driver_node = LifecycleNode(
         namespace="",
         name=node_name,
@@ -205,7 +268,7 @@ def launch_setup(context, *args, **kwargs):
         )
     )
 
-    return override_logs + mux_logs + mux_actions + [
+    return override_logs + mux_logs + joy_logs + mux_actions + joy_actions + [
         driver_node,
         register_activating_transition,
         register_shutting_down_transition,
@@ -265,6 +328,22 @@ def generate_launch_description():
             default_value="",
             description="twist_mux のパラメータファイル。空なら "
                         "config/robot/twist_mux.yaml を使う。",
+        ),
+        DeclareLaunchArgument(
+            "joy",
+            default_value="true",
+            description="ゲームパッド (XInput 互換) での手動走行を立てるか。true なら "
+                        "joy_node と joy_teleop が上がり、START 3 秒長押しで "
+                        "/cmd_vel_teleop への出力を入/切、START+BACK 同時 3 秒で "
+                        "保存したウェイポイントの巡回を始める。挿していなくても "
+                        "他のノードは動く (joy_teleop は /joy が来なければ何も "
+                        "publish しない。joy_node は respawn 付き)。",
+        ),
+        DeclareLaunchArgument(
+            "joy_teleop_params_file",
+            default_value="",
+            description="ゲームパッドのパラメータファイル (joy_node と joy_teleop の "
+                        "両方に渡る)。空なら config/robot/joy_teleop.yaml を使う。",
         ),
         *params.declare_args(
             os.path.join(

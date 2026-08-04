@@ -16,6 +16,10 @@ install(DIRECTORY behavior_trees config launch maps rviz src waypoints
 install(PROGRAMS
   src/prepare_mid360_imu.py
   src/system_monitor.py
+  # joy_buttons.py は実行するものではないが、joy_teleop.py が隣から import する
+  # ので同じ lib/ へ入れる (share/ 側にも上の install(DIRECTORY) で入る)。
+  src/joy_buttons.py
+  src/joy_teleop.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

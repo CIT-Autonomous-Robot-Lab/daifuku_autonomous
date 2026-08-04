@@ -9,8 +9,13 @@
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
+  <exec_depend>action_msgs</exec_depend>
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>dwb_core</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <!-- robot_bringup.launch.py の joy:=true (既定) で立てるゲームパッドのドライバ。
+       src/joy_teleop.py が /joy を購読する。 -->
+  <exec_depend>joy</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>laser_filters</exec_depend>
@@ -26,6 +31,8 @@
   <exec_depend>nav2_controller</exec_depend>
   <exec_depend>nav2_lifecycle_manager</exec_depend>
   <exec_depend>nav2_map_server</exec_depend>
+  <!-- src/joy_teleop.py が FollowWaypoints のゴールを投げる。 -->
+  <exec_depend>nav2_msgs</exec_depend>
   <exec_depend>nav2_navfn_planner</exec_depend>
   <exec_depend>nav2_planner</exec_depend>
   <exec_depend>nav2_rviz_plugins</exec_depend>
@@ -33,6 +40,8 @@
   <exec_depend>nav2_velocity_smoother</exec_depend>
   <exec_depend>nav2_waypoint_follower</exec_depend>
   <exec_depend>pointcloud_to_laserscan</exec_depend>
+  <!-- src/joy_teleop.py がウェイポイントの YAML を読む。 -->
+  <exec_depend>python3-yaml</exec_depend>
   <!-- robot_bringup.launch.py の driver:=original で立てる自前ドライバ。 -->
   <exec_depend>raspicat_driver</exec_depend>
   <exec_depend>rclpy</exec_depend>
@@ -40,6 +49,7 @@
   <exec_depend>rviz2</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>slam_toolbox</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
   <exec_depend>topic_tools</exec_depend>
   <!-- robot_bringup.launch.py の twist_mux:=true (既定) で立てる cmd_vel の仲裁。 -->

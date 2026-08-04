@@ -138,6 +138,7 @@ RUN if [[ "$(dpkg --print-architecture)" == "arm64" ]]; then \
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ros-humble-grid-map-msgs \
       ros-humble-joint-state-publisher \
+      ros-humble-joy \
       ros-humble-robot-state-publisher \
       ros-humble-teleop-twist-joy \
       ros-humble-teleop-twist-keyboard \
@@ -155,8 +156,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # 次のものは意図的に入れていない。rosdep はビルドのために入れるが、実行には要らない。
 #   * rviz2 / joint_state_publisher_gui
 #                — raspicat_description の表示用 launch 専用。この機はheadless。
-#   * joy_linux  — ジョイスティック teleop 用 (teleop_twist_joy は入っている)。
-#                  使うならここに足すこと。
+#   * joy_linux  — /dev/input/js* を読む旧実装。本機が使うのは SDL 版の joy
+#                  (joy_node) のほうで、そちらは上の一覧に入れてある
+#                  (robot_bringup.launch.py の joy:=true が立てる)。
+#                  teleop_twist_joy の依存として既に入っている可能性が高いので、
+#                  焼き直す前に `ros2 pkg executables joy` で確かめてよい。
 ENV ROS_LOCALHOST_ONLY=0 \
     RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 

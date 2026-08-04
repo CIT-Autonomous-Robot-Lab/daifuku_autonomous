@@ -34,12 +34,20 @@ Mid-360は時刻同期がないためスタンプが実時計からずれてい�
 - LiDAR前処理とEKF
 - launchファイル
 - 地図とRViz設定
-- `src/`のPythonノード2本
+- `planner:=vi`用のビヘイビアツリー（`behavior_trees/`）と保存済みwaypoint（`waypoints/`）
+- `src/`のPythonノード4本
 
-Pythonノードはどちらも`lidar:=mid360`のときだけ立ちます。`restamp_scan.py`がスキャンの
+このうち2本は`lidar:=mid360`のときだけ立ちます。`restamp_scan.py`がスキャンの
 スタンプを打ち直し（実機ドライバを立てる`lidar_driver:=true`のときのみ）、
 `prepare_mid360_imu.py`が生のIMUメッセージに共分散を付けてEKFへ渡します
 （`use_mid360_imu:=true`のときのみ）。どちらの追加条件も既定は`true`です。
+
+残る2本はLiDAR構成によりません。`system_monitor.py`は`navigation.launch.py`だけが
+立てます（`use_system_monitor:=true`が既定）。`/proc`を1 Hzで読み、CPUと温度を
+`/diagnostics`へ出す役で、受け取るのは[操作パネル（rqt）](control-panel.md)です。
+`joy_teleop.py`は`robot_bringup.launch.py`が`joy:=true`（既定）で`joy_node`と一緒に
+立てます。`/joy`のボタンの長押しでteleopと自律走行を切り替える役で、詳細は
+[ゲームパッドで操作する](joystick.md)にあります。
 
 ## raspicat_driver
 

@@ -92,6 +92,7 @@ if ((SKIP_APT == 0)); then
     ros-humble-diagnostic-updater \
     ros-humble-laser-filters \
     ros-humble-nav2-bringup \
+    ros-humble-joy \
     ros-humble-navigation2 \
     ros-humble-pcl-conversions \
     ros-humble-pointcloud-to-laserscan \
