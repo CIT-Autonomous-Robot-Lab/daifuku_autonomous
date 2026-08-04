@@ -67,9 +67,10 @@ vi_planner:
 #   compact_ram_limit_mb … 断片が両ノードとも 4096MB。**この地図で効いている唯一の条件が
 #     「この値 > sink 648MB」**で、4096 である必要はない。ノード既定の 512MB まで下げると
 #     黙って /tmp/vi_*_sink = SD カードへ落ちる。
-#   waypoint_prefetch … 断片が true。先読み中は価値関数が 2 つ = sink も 2 つで、
-#     648MB x2 = 1.3GB が匿名メモリに居座る。Pi 5 なら通るが**未計測**。4GB 機で使うなら
-#     compact_sink_dir を書き戻すか、waypoint_prefetch: false をここへ足すこと。
-#   publish_value_function / value_publish_interval_ms … 断片の true / 500ms のまま。
-#     **この地図では全域スライス 1 枚が重い** — 走行中に /cmd_vel_mux が 2 秒おきに
-#     途切れるなら、まずこの 2 つを疑う (../README.md)。
+#   waypoint_prefetch … 断片が false へ戻った (2026-08-04 の固まりの容疑者の 1 つ)。
+#     true にすると先読み中は価値関数が 2 つ = sink も 2 つで、648MB x2 = 1.3GB が
+#     匿名メモリに居座る。Pi 5 なら通るが**未計測**。4GB 機では足さないこと。
+#   publish_value_function / value_publish_interval_ms … 断片が true / 0ms へ戻った。
+#     **この地図では全域スライス 1 枚 (94 万セル) が重い**。500ms に戻すと掃きスレッドが
+#     それをロックを握ったまま 2 秒ごとに作るので、走行中に /cmd_vel_mux が 2 秒おきに
+#     途切れる。2026-08-04 の実機はまさにこの止まり方だった (../README.md)。

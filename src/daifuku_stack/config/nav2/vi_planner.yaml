@@ -1,8 +1,7 @@
 # 価値反復プランナ (value_iteration3, Rust)。「既定」= 各ノードの main.rs が
 # declare_parameter で持つ値。既定と違うのは両ノードの solver / map_wait_sec /
 # compact_ram_limit_mb と、vi_planner だけの dense_limit_mb /
-# no_action_timeout_sec / global_sweep_budget_ms / global_sweep_idle_ms /
-# waypoint_prefetch / window_cost_drawing_threshold の 9 つだけ。
+# window_cost_drawing_threshold の 5 つだけ。
 # 地図ごとの調整は ../overrides/<地図名>.yaml。合成順序と上書きは ../README.md を参照。
 #
 # ノードは 2 つあり、**同時には起動されない**。local_planner でどちらかが選ばれる:
@@ -39,13 +38,13 @@ vi_planner:
     control_frequency: 10.0       # 既定 10.0 [Hz]: cmd_vel を出す周期
     refine_budget_ms: 40          # 既定 40 [ms/tick]: ローカルウィンドウ価値反復に使う時間予算
     action_tolerance: 0.2         # 既定 0.2 [m]: 方策なしセルでの近傍行動探索半径
-    no_action_timeout_sec: 15.0   # 既定 3.0 [s]: pose か方策が無い状態がこれだけ続いたら追従を中断。狭隘空間で粘るための時間はここにしか無い (リカバリ中は observe_scan が止まる)。自己位置喪失に気づくのも同じだけ遅れる。**未検証**
+    no_action_timeout_sec: 3.0    # 既定 3.0 [s]: pose か方策が無い状態がこれだけ続いたら追従を中断。15 へ延ばしても粘れず、1 点飛ばすまでが 2 分に伸びただけだったので戻した (2026-08-04 実機)
     # ── 狭域 → 広域のフィードバック (共有価値関数の全域掃き。仕組みと実測は ../README.md) ──
     global_sweep: true            # 既定 true: 全域掃き (compact ではタイル修復) を回すか。切ると狭域が「通れない」と判断しても広域は塞がった通路を指し続ける
-    global_sweep_budget_ms: 60    # 既定 20 [ms]: 1 回のロック取得で掃きに使う時間。Pi 5 で 4 コア中 2 コアが空いていたので既定の 3 倍。**未検証**
-    global_sweep_idle_ms: 100     # 既定 60 [ms]: そのあとロックを手放して待つ時間 (60:100 = 1 コアの 37%)。budget を伸ばすときは一緒に伸ばすこと
+    global_sweep_budget_ms: 20    # 既定 20 [ms]: 1 回のロック取得で掃きに使う時間。60 へ上げたら機体が 1〜2 秒おきに固まったので戻した (2026-08-04 実機。犯人の切り分けは未了)
+    global_sweep_idle_ms: 60      # 既定 60 [ms]: そのあとロックを手放して待つ時間 (20:60 = 1 コアの 25%)。budget を伸ばすときは一緒に伸ばすこと
     # ── ウェイポイントの先読み (代償と条件は ../../../../docs/usage/navigation.md) ──
-    waypoint_prefetch: true       # 既定 false: 次のウェイポイントを走行中に解いておくか。価値関数が 2 つ生きるので場も 2 倍。**Pi 4 (4GB) では false へ**。**未検証**
+    waypoint_prefetch: false      # 既定 false: 次のウェイポイントを走行中に解いておくか。価値関数が 2 つ生きるので場も 2 倍。走行中ずっと 1 コアを使うので、固まりの容疑者として一度戻してある (2026-08-04 実機)
     # ── 未設定 (既定のまま。上の先読みが効くかどうかを決める 2 つ) ──
     # waypoint_topic: "waypoints" # 順路 (nav_msgs/Path、latch)。出すのはパネルと ../../src/joy_teleop.py だけで、来なければ先読みは**黙って起きない**
     # waypoint_prefetch_threads: 1  # 先読みの solve のスレッド数。**効くのは compact だけ** (密は VI_THREADS をプロセスで 1 つ読む)
@@ -53,7 +52,7 @@ vi_planner:
     early_start: false            # 既定 false: ゴールまで方策が繋がった時点で solve を打ち切るか。経路から外れると場を捨てて解き直す間ずっと止まる。**未検証**
     # ── 可視化 (経路計算には影響しない) ──
     publish_value_function: true  # 既定 true: /value_function を配信するか。追従中の出し直しは掃きスレッドが行うので、global_sweep が false だと固まる
-    value_publish_interval_ms: 500  # 既定 500 [ms]: solve 途中経過の配信間隔 (0 で完了時のみ。追従中の出し直しも止まる)
+    value_publish_interval_ms: 500  # 既定 500 [ms]: solve 途中経過の配信間隔 (0 で完了時のみ。追従中の出し直しも止まる)。掃きスレッドが全域スライス (19F 13 万 / 津田沼 94 万セル) をロック内で 2 秒ごとに作るので、2026-08-04 の「2 秒おきに固まる」の容疑者。0 が戻し方
     cost_drawing_threshold: 60    # 既定 60: 色スケール上限 [ステップ数≒秒]。地図ごとに測り直す値で、19F ではこの 60 だと 66% が飽和する (../README.md)
     window_cost_drawing_threshold: 10  # 既定 60: /local_window_value (±1m 窓) の色スケール上限
     # ── 行動集合 (前進量と回転量の組。3 つの配列で要素数を揃えること。6 個でなくてよい) ──
