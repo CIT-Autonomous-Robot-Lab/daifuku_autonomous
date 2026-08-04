@@ -138,10 +138,11 @@ Docker 越しに叩く形は
   **2 か所しかない**。どちらも通らない経路（`/follow_waypoints` へ直接投げる、
   単発ゴール）では**エラーも警告も出ないまま先読みだけが起きない**。トピック名は
   パネルの `kWaypointPathTopic`、`joy_teleop` の publisher、`vi_planner` の
-  `waypoint_topic` の 3 か所にあり、1 つだけ変えても同じことになる。既定は
-  `false` — 価値関数が同時に 2 つ生きるので、**密ソルバではメモリが 2 倍要る**
-  （compact なら sink はディスクなので、32GB の SD には収まる。津田沼で
-  648MB×2 = 1.3GB）。
+  `waypoint_topic` の 3 か所にあり、1 つだけ変えても同じことになる（パネルだけが
+  絶対名なので、`namespace:=` を付けた構成でも噛み合わない）。既定は `false` —
+  価値関数が同時に 2 つ生きるので、**密ソルバではメモリが 2 倍要る**。compact でも
+  同梱の 2 地図は sink が RAM なので（2026-08-04 に津田沼の `compact_sink_dir` を
+  外した）、そのまま 2 倍が匿名メモリに乗る（津田沼 648MB×2 = 1.3GB、19F 95MB×2）。
 - **`navigation.rviz` の `2D Goal Pose` は `/goal_pose` を出さない。**
   `daifuku_waypoint_manager` へ waypoint を渡すため `/waypoint_pose` に付け替えて
   ある。単発ゴールは `Nav2 Goal` (`nav2_rviz_plugins/GoalTool`) のほうを使う。

@@ -7,7 +7,7 @@
 #
 # VI はゴールごとに nx*ny*n_theta の状態空間を扱う。この地図を 0.05m のまま解くと
 # 14.1 億状態 = 密ソルバで 79GB を確保しようとして起動と同時に死ぬ。プランナ内部
-# だけ粗くし (map_scale)、確定出力をディスクへ逃がす (compact) ことで通す。
+# だけ粗くし (map_scale)、密な states を確保しない compact ソルバで解くことで通す。
 # 実測値・導出・既知の制約は ../README.md を参照。
 #
 # **注意 1**: overrides は置き換えなので、既定の map_19f はこのとき外れる = emcl2 は
@@ -26,10 +26,20 @@
 # stack 全体で共有) に BT 込みで通すと、BT が solve を待たず 3 回リカバリして ABORT
 # する。実機での通し確認は別途。
 #
+# **注意 4**: 確定出力 (sink 648MB) は 2026-08-04 から **RAM** に置く。それまでは
+# compact_sink_dir で /tmp へ mmap 退避していたが、Pi 5 (8GB) では走行中でも空きが
+# 5.6GB あり (実測)、退避する理由がなくなった。断片の compact_ram_limit_mb (4096MB) に
+# 収まるので自動退避も起きない。**4GB 機で使うなら両ノードに
+# compact_sink_dir: "/tmp/vi_planner_sink" (広域側は vi_global_planner_sink) を
+# 書き戻すこと** — RAM のままだと 648MB が匿名メモリとして居座り、Pi4 では他の
+# ノードと同居できない。退避先は tmpfs でないこと (`findmnt -no FSTYPE <dir>`)。
+#
 # 2026-08-01 実測 (Pi4 相当 = 0.6 コア枠 / メモリ 3GB, VI_THREADS=3):
 #   ソルバ単体 (bench_map): scale 3 保守 2706s / anon 2148MB、scale 5 楽観 51.9s
 #   vi_planner ノード: solve + ロールアウト 87-89s / 398 姿勢 / SUCCEEDED
 #                      ピーク RSS 1.60GB、sink 648MB、oom_kill 0
+#   ▲ この RSS はディスク退避していた頃のもの (648MB は mmap で、カーネルが
+#     追い出せた)。RAM 化した今は同じ 648MB が匿名メモリになる。**未計測**。
 
 vi_global_planner:
   ros__parameters:
@@ -41,8 +51,6 @@ vi_global_planner:
     downsample_policy: "optimistic"      # 既定 conservative (断片は未設定): 保守側だと通路のセル幅が死ぬ
     action_forward_m: [0.5, -0.3333, 0.0, 0.3333, 0.0, 0.3333]  # 断片の 5/3 倍 (セル比例)
     goal_margin_radius: 0.5              # 断片 0.3: ゴールセル数を 7 に保つ (セル比例)
-    # tmpfs でないこと (`findmnt -no FSTYPE /tmp`)。tmpfs だと RAM に載って無意味。
-    compact_sink_dir: "/tmp/vi_global_planner_sink"   # 断片 "" (= RAM): 実測 648MB を退避
     safety_radius_penalty: 1             # 断片 30: 30 だと貪欲ロールアウトが降下できない
     max_rollout_steps: 100000            # 断片 10000: 広域では遠い start から届かない
 
@@ -65,9 +73,6 @@ vi_planner:
     goal_margin_radius: 0.5              # 断片 0.3: ゴールセル数を 7 に保つ (セル比例)
     safety_radius_penalty: 1             # 断片 30: 30 だと貪欲ロールアウトが降下できない
     max_rollout_steps: 100000            # 断片 10000: 広域では遠い start から届かない
-    # vi_global_planner とは別ディレクトリにして、2 構成を続けて試すときに互いの出力を
-    # 踏まないようにする。追従はパッチ置き直しのたびに読むので SD カード上は避けたい。
-    compact_sink_dir: "/tmp/vi_planner_sink"          # 既定 "" (= RAM、断片は未設定): 実測 648MB を退避
     # global_sweep と budget/idle は断片のまま (compact でもタイル修復として効く)。
     # 2026-08-04 実測 (Pi 5、静止 + 走査あり): tile repair が 240 秒回っても
     # queued は 29 のまま減らない。窓 (±1m) に壁が入っていれば毎 tick penalty が
@@ -81,9 +86,16 @@ vi_planner:
 #     … alpha 崩壊が起きたら map_19f.yaml から写す。
 #   costmaps.*.track_unknown_space / vi の unknown_as_obstacle … 未観測を通行可に
 #     するかどうか。今はどちらも「未観測 = 通れない」= 舗装路のみ通行可。
-#   compact_ram_limit_mb … 断片が両ノードとも 2048MB だが、compact_sink_dir を指定
-#     しているので効かない。RAM 出力に戻すときだけ意味を持つ (sink 648MB なので
-#     2048MB には収まってしまい、退避されない)。
+#   compact_sink_dir … 断片のまま ("" = RAM。ヘッダの注意 4)。**指定するとそちらが
+#     無条件に勝ち、下の compact_ram_limit_mb は一切読まれない** (判定順は明示指定が
+#     先、上限による自動退避が後)。退避先を書くときは速い実ディスクにすること
+#     (`findmnt -no FSTYPE <dir>` が tmpfs だと RAM に載って無意味)。コンテナの /tmp は
+#     書き込み層 = SD カードで、vi_planner の追従はパッチ置き直しのたびに sink を
+#     読むので制御周期に響く。
+#   compact_ram_limit_mb … 断片が両ノードとも 4096MB。sink 648MB はこれに収まるので
+#     自動退避は起きない。**この地図で効いている唯一の条件が「この値 > 648MB」**で、
+#     4096 である必要はない (上げる前の 2048 でも同じ)。ただしノード既定の 512MB まで
+#     下げると黙って /tmp/vi_*_sink = SD カードへ落ちる。
 #   publish_value_function / value_publish_interval_ms … 断片の true / 500ms のまま。
 #     この地図の全域スライスは 94 万セル (19F の 13 万セルの 7 倍) で、しかも compact
 #     なので 1 枚作るのに sink を全走査する。作るのは掃きスレッドが**ロックを握った

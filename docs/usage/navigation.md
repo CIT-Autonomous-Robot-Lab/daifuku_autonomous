@@ -170,9 +170,16 @@ ros2 launch daifuku_stack navigation.launch.py \
 
 `config/overrides/map_tsudanuma.yaml`を`overrides:=map_tsudanuma`で重ねると、プランナ内部だけが
 0.25 m/セル（`map_scale: 5`、1178×800×60＝5650万状態）に粗くなり、状態配列を確保しない
-アウトオブコアソルバ（`frontier2d_sparse_compact`）へ切り替わります。確定した価値関数と方策は
-`compact_sink_dir`のmmapファイル（実測648 MB）に置かれます。地図サーバ、コストマップ、
-自己位置推定は0.05 mのままです。
+アウトオブコアソルバ（`frontier2d_sparse_compact`）へ切り替わります。確定した価値関数と方策
+（実測648 MB）はRAMに置かれます。地図サーバ、コストマップ、自己位置推定は0.05 mのままです。
+
+置き場を決めるのは`compact_sink_dir`と`compact_ram_limit_mb`で、**判定は明示指定が
+無条件に優先**です。`compact_sink_dir`が空でなければそのディレクトリへmmapし、上限は
+読みません。空のときだけ上限と比べ、超えていれば`/tmp/vi_planner_sink`へ逃がします。
+この地図は2026-08-04まで`compact_sink_dir`を明示していましたが、Raspberry Pi 5（8 GB、
+走行中の実測で空き5.6 GB）では逃がす理由がないため外しました。いまは断片の
+`compact_ram_limit_mb: 4096`に648 MBが収まることでRAMに載っています。**4 GB機で使うなら
+`compact_sink_dir`を戻してください。**
 
 ```bash
 ros2 launch daifuku_stack navigation.launch.py \
@@ -184,7 +191,7 @@ ros2 launch daifuku_stack navigation.launch.py \
 `local_planner`は既定の`auto`（`planner:=vi`なので`vi`）でも`nav2`でも動きます。`vi_planner`と
 `vi_global_planner`のどちらも`map_scale`とアウトオブコア経路を持つためです。`vi_planner`の
 狭域追従だけは密な状態配列を必要とします。ただし全域ではなく、ロボット近傍のパッチだけを
-`compact_sink_dir`のmmapファイルから起こして回します（±1 mウィンドウ＋遷移到達距離＋余裕。
+確定出力（sink）から起こして回します（±1 mウィンドウ＋遷移到達距離＋余裕。
 0.25 mセルで27×27×60≒2.5 MB）。
 
 狭域→広域のフィードバック（`global_sweep`）もこの地図で効きます。compactでは共有場が
@@ -227,6 +234,11 @@ ros2 launch daifuku_stack navigation.launch.py \
   `map_scale: 3`＋保守的プーリングだった頃の`vi_global_planner`の3.98 GBから下がり、
   Raspberry Pi 4の4 GBに収まります。`vi_global_planner`をこの`map_scale: 5`で
   測ってはいませんが、解像度もソルバも同じなので同程度になるはずです（**未計測**）。
+  **ただしこれはsinkをディスクへ逃がしていた頃の値です。** RAM出力にした2026-08-04
+  以降は同じ648 MBが匿名メモリになり、カーネルが追い出せません。上の「Pi 4の4 GBに
+  収まる」はもう成り立たない前提です（RAM化後のピークは**未計測**）。
+  Pi 5では走行中の実測で`vi_planner`のRSSが931 MB、コンテナのピークが2.12 GiB、
+  `oom_kill`は0でした。
 - 新しいゴールを与えると、まず地図全体を解きます。BTを外した最小構成をPi 4相当の枠
   （0.6コア、`vi_threads: 3`）で回した実測では、solveとロールアウトに87〜89秒かかりました。
   返した経路は398姿勢で、結果はSUCCEEDEDです。同じゴールへの再計画はキャッシュヒットで
@@ -303,10 +315,13 @@ vi_planner: path with 412 poses in 0.34s (solved_now=true, iters=0, prefetched)
 `/follow_waypoints`へ直接投げる経路と単発ゴールは順路が無いので対象外で、そのときも
 **エラーは出ません**。効いているかは上のログで判断してください。
 
-既定が`false`なのは代償があるためです。価値関数が同時に2つ生きるので、密ソルバでは
-メモリが2倍要ります（compactならsinkはディスクなので、32GBのSDには収まります。
-津田沼は648MB×2＝1.3GB、19Fはsink 95MB）。solveのCPUも取られ
-ます（追従の`try_lock`は邪魔しませんが、10Hzの制御周期がずれ得ます）。
+既定が`false`なのは代償があるためです。価値関数が同時に2つ生きるので、場も2つ要ります。
+密ソルバではメモリがそのまま2倍です。compactでsinkがディスクへ出るのは
+`compact_sink_dir`を指定したときと`compact_ram_limit_mb`を超えたときだけで、
+**同梱の2地図はいまどちらも出ません**。したがって2つとも丸ごとRAMに載ります
+（津田沼648 MB×2＝1.3 GB、19F 95 MB×2）。津田沼で先読みを使うなら、その1.3 GBが
+匿名メモリとして居座ることになります。solveのCPUも取られます（追従の`try_lock`は
+邪魔しませんが、10Hzの制御周期がずれ得ます）。
 **まだ実機でもpi4_simでも通していません。**
 
 詳細は[`src/daifuku_waypoint_manager/README.md`](../../src/daifuku_waypoint_manager/README.md)。

@@ -37,7 +37,8 @@ emcl2:
 # 密に戻すなら**この scale 2 とセット**。密の常駐は 80 B/state — states 56 +
 # sweep_orders 24 — で、scale 1 なら 2.5GB、**2 なら実測 654.8MB** (states 444.7 +
 # sweep_orders 210.1)。4GB の Pi4 で他のノードと同居できるのは後者だけ。上限を見るのは
-# ノード側の dense_limit_mb (断片で 2048MB にしてある)。かつてここには「scale > 1 は
+# ノード側の dense_limit_mb (断片で 4096MB にしてある = Pi 5 前提。scale 1 の 2.5GB も
+# 通ってしまうので、4GB 機ではここが止めてくれない)。かつてここには「scale > 1 は
 # 密ソルバでは通らない」と書いてあったが前提が逆で、scale は密を**載せるための**手段。
 #
 # **未検証** — この地図・この scale での solve 時間と経路、および狭域 → 広域の伝播に
@@ -67,7 +68,7 @@ vi_global_planner:
 #   vi_planner.safety_radius_penalty … 通路が細くて貪欲ロールアウトが固着する
 #     とき。map_tsudanuma では 1 まで下げている。
 #   vi_planner/vi_global_planner.compact_sink_dir … sink を RAM から追い出すとき。
-#     断片の compact_ram_limit_mb (2048MB) による自動退避先は /tmp/vi_*_sink (コンテナの
+#     断片の compact_ram_limit_mb (4096MB) による自動退避先は /tmp/vi_*_sink (コンテナの
 #     書き込み層 = SD カード) なので、逃がすなら速い場所を明示するほうがよい。vi_planner の
 #     追従はパッチ置き直しのたびに sink を読むので、遅い先だと制御周期に響く。
 #     19F は scale 2 で sink 0.095GB なので、そもそも退避しない。

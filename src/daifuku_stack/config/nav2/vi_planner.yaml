@@ -25,8 +25,12 @@ vi_planner:
     # (同じ更新式・同じ不動点)。密が速いのは確かなので、載る地図で速さが要るなら
     # 地図ごとの overrides で密に戻すこと (../overrides/map_19f.yaml に見積もりあり)。
     solver: "frontier2d_sparse_compact"
-    dense_limit_mb: 2048          # 既定 1500 [MB]: **上の solver が compact の間は効かない**。密に戻したときの上限 (states + sweep_orders。超えたら起動を止める)。19F は map_scale 2 で実測 655MB
-    compact_ram_limit_mb: 2048    # 既定 512 [MB]: sink を RAM に置ける上限 (超過分は /tmp/vi_planner_sink へ mmap 退避)。19F は map_scale 2 で 95MB なので RAM に載る
+    # 下の 2 つは Pi 5 (8GB) を前提に 2048 から上げてある (2026-08-04、走行中の実測で
+    # 空き 5.6GB / swap 無し)。**Pi 4 (4GB) ではこの値は保護にならない** — 本来は
+    # 「黙って確保して OOM killer に殺されるより理由を出して止める」ための線なので、
+    # 4GB 機で使うなら 2048 以下へ戻すこと。
+    dense_limit_mb: 4096          # 既定 1500 [MB]: **上の solver が compact の間は効かない**。密に戻したときの上限 (states + sweep_orders。超えたら起動を止める)。19F は map_scale 2 で実測 655MB、scale 1 なら 2.5GB
+    compact_ram_limit_mb: 4096    # 既定 512 [MB]: sink を RAM に置ける上限 (超過分は /tmp/vi_planner_sink へ mmap 退避)。**compact_sink_dir を指定するとこの分岐に入らない** (明示指定が無条件に優先) ので、上げても効くのは未指定のときだけ。19F は map_scale 2 で 95MB なので RAM に載る
     theta_cell_num: 60            # 既定 60: 姿勢の離散数。360 を割り切ること (t_resolution = 360/この値 が整数除算)
     safety_radius: 0.2            # 既定 0.2 [m]: 障害物近傍ペナルティの半径 (VI 内部の膨張)
     safety_radius_penalty: 30     # 既定 30 [秒/セル]: 障害物に近寄る代わりに払う迂回コスト
@@ -76,9 +80,11 @@ vi_planner:
     # 別スレッドで解いておき、着いたら solve を飛ばして受け取る。効いた回はログの
     # "path with ... , prefetched" と "prefetched the value function for ... in Xs" に出る。
     #
-    # **切ってあるのは代償があるから**: 価値関数が同時に 2 つ生きるので、密ソルバでは
-    # メモリが 2 倍要る (compact なら sink はディスクなので、32GB の SD には収まる。
-    # 津田沼は 648MB x2 = 1.3GB、19F は sink 95MB)。
+    # **切ってあるのは代償があるから**: 価値関数が同時に 2 つ生きるので場も 2 つ要る。
+    # 密ソルバではメモリがそのまま 2 倍。compact で sink がディスクへ出るのは
+    # compact_sink_dir を指定したときと上の上限を超えたときだけで、**いまは同梱の
+    # 2 地図ともディスクへ出ない** = 2 つとも RAM に載る (津田沼 648MB x2 = 1.3GB、
+    # 19F 95MB x2)。津田沼で先読みを使うなら、その 1.3GB が匿名メモリで居座る。
     # solve の CPU も取られる — 追従の try_lock は邪魔しないが、10Hz の制御周期がずれ得る。
     # **並びを出すものがいないと何も起きない** (下の waypoint_topic)。**未検証** — 実機でも
     # pi4_sim でも通していない。
@@ -134,7 +140,7 @@ vi_global_planner:
     solver: "frontier2d_sparse_compact"  # 既定 frontier2d_sparse (密): vi_planner と揃える (理由は上のブロック)
     map_scale: 1                  # 既定 1: プランナ内部で地図を粗くする倍率 (1 = /map のまま)。19F は ../overrides/ で 2
     compact_sink_dir: ""          # 既定 "": compact の確定出力先 ("" = RAM)
-    compact_ram_limit_mb: 2048    # 既定 512 [MB]: sink を RAM に置ける上限 (超過分は /tmp/vi_global_planner_sink へ mmap 退避)。vi_planner と揃える。compact_sink_dir 無しの広域地図では 2GiB を RAM に抱えたまま OOM し得る
+    compact_ram_limit_mb: 4096    # 既定 512 [MB]: sink を RAM に置ける上限 (超過分は /tmp/vi_global_planner_sink へ mmap 退避)。vi_planner と揃える (Pi 4 での注意も同じ)。**上の compact_sink_dir が空でないとこの分岐に入らない**。未指定の広域地図では 4GiB を RAM に抱えたまま OOM し得る
     theta_cell_num: 60            # 既定 60: 姿勢の離散数。360 を割り切ること
     safety_radius: 0.2            # 既定 0.2 [m]: 障害物近傍ペナルティの半径
     safety_radius_penalty: 30     # 既定 30 [秒/セル]: 障害物に近寄る代わりに払う迂回コスト

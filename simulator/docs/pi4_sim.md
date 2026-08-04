@@ -530,6 +530,21 @@ start (53.07,-21.62,90°) → goal (44.08,-5.12,0°)、`planner:=vi local_planne
 `overrides:=map_tsudanuma` (map_scale 3 / compact / sink はコンテナの overlayfs
 = 実ディスク。`findmnt -no FSTYPE /tmp` が `overlayfs` であることは確認済み)。
 
+> **2026-08-04 以降、この再現には `VI_COMPACT_SINK_DIR` を明示すること。**
+> 当時の `overrides/map_tsudanuma.yaml` は `compact_sink_dir` を持っていたが、Pi 5
+> (8GB) 前提で外した (RAM 出力になった)。そのまま回すと sink が **匿名メモリ**に
+> なり、3GB の枠では回収できるページキャッシュだった 1.8GB がそのまま常駐に変わる
+> = 上の「C. 本命」の OOM kill を踏む。`run_case.sh` の overlay は
+> `vi_global_planner` にしか効かないので、`LOCAL_PLANNER=vi` (= `vi_planner`) で
+> 測るときは `config/overrides/map_tsudanuma.yaml` に `compact_sink_dir` を書き戻す
+> ほうが確実。
+>
+> ```bash
+> VI_COMPACT_SINK_DIR=/tmp/vi_global_planner_sink \
+> CASE=tsuda_vi MAP_NAME=map_tsudanuma PLANNER=vi LOCAL_PLANNER=nav2 \
+> OVERRIDES=map_tsudanuma ... bash /opt/sim/run_case.sh
+> ```
+
 **結論: 解けるし、走破もする。ただし初回 solve に 45 分かかり、メモリは 3GB の
 上限に貼り付いたまま。同じ地図・同じゴールを navfn なら 111 秒・1.3GB で走る。**
 
