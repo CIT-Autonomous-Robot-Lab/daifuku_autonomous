@@ -251,6 +251,29 @@ RVizで次の順に操作します。
 
 自律移動中は緊急停止をすぐ操作できる状態を保ってください。
 
+**「2D Goal Pose」ではゴールを出せません。** waypoint を足すための`/waypoint_pose`へ
+付け替えてあります（次節）。押しても機体は動かず、エラーも出ません。単発のゴールは
+上の「Nav2 Goal」を使ってください。
+
+## Waypointを並べて巡回する
+
+`WaypointManagerPanel`（`daifuku_waypoint_manager`）で、複数の通過点を並べて
+`/navigate_through_poses`へ投げられます。RVizの左に出ていない場合は
+**Panels → Add New Panel**から追加します。
+
+1. 「2D Goal Pose」で地図上をクリック＋ドラッグ。クリック位置が座標、ドラッグ方向が
+   向きになり、パネルの一覧に1点ずつ増える
+2. 「Move Up」「Move Down」で順番を、「Delete Selected」などで不要な点を整理
+3. 「Start」で巡回開始、「Cancel」で停止
+
+`daifuku_stack/waypoints/waypoints_tsudanuma.yaml`に津田沼の73点を置いてあります。
+パネルの「Load YAML」で読みます（`map_19f`では座標が地図の外に出るため使えません）。
+
+RVizのFixed Frameとwaypointの`frame_id`が一致している必要があります。ずれていると
+追加も追加読み込みも拒否され、パネルのステータス行にだけ理由が出ます。
+
+詳細は[`src/daifuku_waypoint_manager/README.md`](../../src/daifuku_waypoint_manager/README.md)。
+
 ## 価値反復の表示
 
 `planner:=vi`では、新しいゴールの最初の計算で地図全体を解くため、地図サイズにより数秒から数十秒かかる場合があります。同じゴールへの再計画は価値関数キャッシュにより高速です。

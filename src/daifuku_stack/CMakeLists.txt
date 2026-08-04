@@ -8,7 +8,7 @@ find_package(ament_cmake REQUIRED)
 # (lidar:=mid360 のときのみ)。
 # launch/daifuku_stack_launch/ を import すると launch/ の下に __pycache__ が
 # できる。install には要らないので落とす。
-install(DIRECTORY behavior_trees config launch maps rviz src
+install(DIRECTORY behavior_trees config launch maps rviz src waypoints
   DESTINATION share/${PROJECT_NAME}
   PATTERN "__pycache__" EXCLUDE
 )

@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>daifuku_waypoint_manager</name>
+  <version>0.1.0</version>
+  <description>Waypoint の作成・保存・巡回を行う RViz2 パネルプラグイン</description>
+  <maintainer email="noplab90@gmail.com">Keita Sekiguchi / nop</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>geometry_msgs</depend>
+  <depend>nav2_msgs</depend>
+  <depend>pluginlib</depend>
+  <depend>qtbase5-dev</depend>
+  <depend>rclcpp</depend>
+  <depend>rclcpp_action</depend>
+  <depend>rviz_common</depend>
+  <depend>visualization_msgs</depend>
+  <depend>yaml-cpp</depend>
+
+  <!-- ament_lint_common は入れない。C++ 一式 (copyright / uncrustify / cpplint) が
+       走り、上流から移植したコードがライセンスヘッダ無しで即落ちるため。 -->
+  <test_depend>ament_lint_auto</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+    <rviz_common plugin="${prefix}/plugin_description.xml"/>
+  </export>
+</package>

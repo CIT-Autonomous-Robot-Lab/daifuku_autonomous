@@ -39,14 +39,14 @@ rosdep install \
 # VI packages require the separate ros2_rust toolchain. Navfn is the supported
 # development fallback here and matches the currently working Humble setup.
 #
-# daifuku_rqt is built here but deliberately not in the Raspberry Pi
-# image: it needs rqt, which ros:humble-ros-base does not carry. The Pi's
-# build-workspace.sh selects packages by name, so leaving it out of that list
-# is all it takes.
+# daifuku_rqt and daifuku_waypoint_manager are built here but deliberately not
+# in the Raspberry Pi image: they need rqt and RViz, which ros:humble-ros-base
+# does not carry. The Pi's build-workspace.sh selects packages by name, so
+# leaving them out of that list is all it takes.
 colcon build \
   --symlink-install \
   --parallel-workers "${BUILD_JOBS}" \
-  --packages-select daifuku_stack daifuku_rqt emcl2 livox_ros_driver2 \
+  --packages-select daifuku_stack daifuku_rqt daifuku_waypoint_manager emcl2 livox_ros_driver2 \
   --cmake-args \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DROS_EDITION=ROS2 \

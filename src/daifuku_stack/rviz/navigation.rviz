@@ -29,6 +29,8 @@ Panels:
     Splitter Ratio: 0.5
   - Class: nav2_rviz_plugins/Navigation 2
     Name: Navigation 2
+  - Class: daifuku_waypoint_manager/WaypointManagerPanel
+    Name: WaypointManagerPanel
 Visualization Manager:
   Class: ""
   Displays:
@@ -290,6 +292,18 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /waypoints
       Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Waypoint Manager
+      Namespaces:
+        {}
+      Topic:
+        Depth: 5
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /waypoint_markers
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 35; 35; 38
@@ -320,7 +334,7 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /goal_pose
+        Value: /waypoint_pose
     - Class: rviz_default_plugins/PublishPoint
       Single click: true
       Topic:
@@ -364,6 +378,8 @@ Window Geometry:
   Hide Left Dock: false
   Hide Right Dock: false
   Navigation 2:
+    collapsed: false
+  WaypointManagerPanel:
     collapsed: false
   QMainWindow State: 000000ff00000000fd00000002000000000000025a00000734fc0200000003fb000000100044006900730070006c006100790073010000006e000002e70000018200fffffffb0000001200530065006c0065006300740069006f006e0000000228000000c3000000b000fffffffb00000018004e0061007600690067006100740069006f006e002000320100000361000004410000023a00ffffff000000010000031600000734fc0200000002fb0000001e0054006f006f006c002000500072006f0070006500720074006900650073010000006e00000364000000b000fffffffb0000000a0056006900650077007301000003de000003c40000013200ffffff000009580000073400000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Selection:

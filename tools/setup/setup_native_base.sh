@@ -135,13 +135,14 @@ if ((SKIP_BUILD == 1)); then
   exit 0
 fi
 
-echo "[4/4] Building daifuku_stack, daifuku_rqt, raspicat_driver and emcl2"
+echo "[4/4] Building daifuku_stack, daifuku_rqt, daifuku_waypoint_manager, raspicat_driver and emcl2"
 cd "${WORKSPACE}"
-# daifuku_rqt はここでは建てる。ネイティブ環境は RViz と rqt を動かす PC 側の
-# 構成であり、rqt が無いのは docker/raspberrypi/ のイメージだけ。
+# daifuku_rqt と daifuku_waypoint_manager はここでは建てる。ネイティブ環境は RViz と
+# rqt を動かす PC 側の構成であり、rqt と RViz が無いのは docker/raspberrypi/ の
+# イメージだけ。
 colcon build --symlink-install \
   --parallel-workers "${BUILD_JOBS}" \
-  --packages-select daifuku_rqt daifuku_stack emcl2 raspicat_driver \
+  --packages-select daifuku_rqt daifuku_stack daifuku_waypoint_manager emcl2 raspicat_driver \
   --cmake-args -DCMAKE_BUILD_TYPE=Release
 
 cat <<EOF

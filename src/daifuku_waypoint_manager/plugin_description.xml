@@ -1,0 +1,7 @@
+<library path="daifuku_waypoint_manager">
+  <class name="daifuku_waypoint_manager/WaypointManagerPanel"
+         type="daifuku_waypoint_manager::WaypointManagerPanel"
+         base_class_type="rviz_common::Panel">
+    <description>Creates, saves, and sends ordered waypoints to Nav2 NavigateThroughPoses.</description>
+  </class>
+</library>

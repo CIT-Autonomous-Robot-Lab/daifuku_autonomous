@@ -19,7 +19,8 @@ Raspberry Pi Cat を ROS 2 Humble / Nav2 で自律移動させる colcon ワー�
 
 ## リポジトリの範囲
 
-`src/` の下で自前なのは `daifuku_stack` と `raspicat_driver` と `daifuku_rqt` だけで、
+`src/` の下で自前なのは `daifuku_stack` と `raspicat_driver` と `daifuku_rqt` と
+`daifuku_waypoint_manager` だけで、
 残りは `autonomous_bot.repos` からの `vcs import` です。`vcs import` で入るものを直しても本
 リポジトリのコミットには入らないので、上流を直す必要があれば向こうで作業してください。
 
@@ -112,9 +113,14 @@ Docker 越しに叩く形は
   （[`docs/setup/raspberry-pi-4.md`](docs/setup/raspberry-pi-4.md)）。
 - `use_composition` の既定 `False` は意図的（Pi 4 でディスカバリ不能 + bond 心拍途絶）。
   `config/lifecycle_bond.yaml` の `bond_timeout: 60.0` も同じ事情。
-- **`daifuku_rqt` は Pi では建てない。** 実機イメージ (`ros:humble-ros-base`) に
-  rqt が無いため。両方の `build-workspace.sh` が `--packages-select` で名前を並べて
-  いるので、Pi 側の一覧に足すと**ビルドが通らなくなる**。
+- **`daifuku_rqt` と `daifuku_waypoint_manager` は Pi では建てない。** 実機イメージ
+  (`ros:humble-ros-base`) に rqt と RViz が無いため。両方の `build-workspace.sh` が
+  `--packages-select` で名前を並べているので、Pi 側の一覧に足すと**ビルドが通らなく
+  なる**。
+- **`navigation.rviz` の `2D Goal Pose` は `/goal_pose` を出さない。**
+  `daifuku_waypoint_manager` へ waypoint を渡すため `/waypoint_pose` に付け替えて
+  ある。単発ゴールは `Nav2 Goal` (`nav2_rviz_plugins/GoalTool`) のほうを使う。
+  間違えても**エラーは出ず、ただ機体が動かない**（パネルに点が増えるだけ）。
 - **teleop を出すものは自分で 0 を出して止める。** ドライバの `cmd_vel_timeout` は
   既定 60 秒で、指令が途切れてもその間は**走り続ける**。
 - TF は区間ごとに所有者を 1 つだけにする（`map→odom` は emcl2/amcl、
@@ -144,6 +150,7 @@ Docker 越しに叩く形は
 | `docker/` | [`docker/README.md`](docker/README.md)（実機用と開発用の 2 環境） |
 | `src/raspicat_driver/` / `tools/image/udev/` | [`src/raspicat_driver/README.md`](src/raspicat_driver/README.md)、次に [`docs/setup/raspberry-pi-4.md`](docs/setup/raspberry-pi-4.md) と [`raspberry-pi-5.md`](docs/setup/raspberry-pi-5.md)（未検証の項目付き） |
 | `src/daifuku_rqt/` | [`src/daifuku_rqt/README.md`](src/daifuku_rqt/README.md)、次に [`docs/usage/control-panel.md`](docs/usage/control-panel.md) |
+| `src/daifuku_waypoint_manager/` / `daifuku_stack/waypoints/` | [`src/daifuku_waypoint_manager/README.md`](src/daifuku_waypoint_manager/README.md) |
 | `src/value_iteration3/` | 同ディレクトリの `CLAUDE.md` |
 | 実機の症状を追う | [`docs/usage/troubleshooting.md`](docs/usage/troubleshooting.md) |
 
