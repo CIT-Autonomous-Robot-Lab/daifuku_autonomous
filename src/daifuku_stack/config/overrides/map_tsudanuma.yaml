@@ -96,6 +96,12 @@ vi_planner:
 #     自動退避は起きない。**この地図で効いている唯一の条件が「この値 > 648MB」**で、
 #     4096 である必要はない (上げる前の 2048 でも同じ)。ただしノード既定の 512MB まで
 #     下げると黙って /tmp/vi_*_sink = SD カードへ落ちる。
+#   waypoint_prefetch … 断片が true (2026-08-04 に反転)。**この地図で効いてくるのが
+#     ヘッダの注意 4 と同じ話**で、先読み中は価値関数が 2 つ生きる = sink も 2 つ。
+#     RAM 化した今は 648MB x2 = 1.3GB が匿名メモリに居座る (どちらも
+#     compact_ram_limit_mb 4096MB に収まるので退避もしない)。Pi 5 (空き 5.6GB) なら
+#     通るが**未計測**。4GB 機で使うなら compact_sink_dir を書き戻すか、
+#     waypoint_prefetch: false をここへ足すこと。
 #   publish_value_function / value_publish_interval_ms … 断片の true / 500ms のまま。
 #     この地図の全域スライスは 94 万セル (19F の 13 万セルの 7 倍) で、しかも compact
 #     なので 1 枚作るのに sink を全走査する。作るのは掃きスレッドが**ロックを握った

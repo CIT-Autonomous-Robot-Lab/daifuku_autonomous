@@ -139,10 +139,12 @@ Docker 越しに叩く形は
   単発ゴール）では**エラーも警告も出ないまま先読みだけが起きない**。トピック名は
   パネルの `kWaypointPathTopic`、`joy_teleop` の publisher、`vi_planner` の
   `waypoint_topic` の 3 か所にあり、1 つだけ変えても同じことになる（パネルだけが
-  絶対名なので、`namespace:=` を付けた構成でも噛み合わない）。既定は `false` —
+  絶対名なので、`namespace:=` を付けた構成でも噛み合わない）。**既定は `true`**
+  （2026-08-04 に反転。ノード側の宣言は `false`。実機でも pi4_sim でも**未検証**）—
   価値関数が同時に 2 つ生きるので、**密ソルバではメモリが 2 倍要る**。compact でも
   同梱の 2 地図は sink が RAM なので（2026-08-04 に津田沼の `compact_sink_dir` を
   外した）、そのまま 2 倍が匿名メモリに乗る（津田沼 648MB×2 = 1.3GB、19F 95MB×2）。
+  **Pi 4 (4GB) で走らせるなら `config/nav2/vi_planner.yaml` で `false` へ戻すこと。**
 - **`vi_planner` の `early_start` は compact では効かない地図がある。** ゴールまで
   方策が繋がった時点で solve を打ち切る機能だが、compact（同梱の既定 solver）の確定は
   値バンド単位でしか進まず、0.1 m/cell・`safety_radius_penalty: 30` で 1 バンドが

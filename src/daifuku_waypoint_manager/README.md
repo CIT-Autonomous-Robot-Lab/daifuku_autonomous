@@ -98,9 +98,10 @@ latch して出す。**これは他ノードが読むためのもの**で、い�
 変更と機体からの線の引き直しでは出さない — 走行中に毎秒飛ばすと購読側が並びを
 受け取り直し続けるため。
 
-`vi_planner` 側は既定でトピック名が `waypoints`・`waypoint_prefetch: false` なので、
-**このパネルだけを更新しても挙動は変わらない**。有効にするのは
-`daifuku_stack/config/nav2/vi_planner.yaml`（そこに代償と一緒に書いてある）。
+`vi_planner` 側はトピック名が `waypoints`、`waypoint_prefetch` は
+`daifuku_stack/config/nav2/vi_planner.yaml` が **`true`** にしている（2026-08-04 に反転。
+ノードの宣言は `false`）。**つまりこのパネルが出す順路がそのまま先読みを動かす**ので、
+ここを直すと `planner:=vi` の挙動が変わる。代償（メモリ 2 倍）は上の yaml 側に書いてある。
 
 同じものを `daifuku_stack/src/joy_teleop.py`（START+BACK での巡回開始）も出す。
 **実機のイメージにこのパネルは入らない**ので、機体だけで走らせるときはあちらが

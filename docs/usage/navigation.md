@@ -301,9 +301,9 @@ RVizのFixed Frameとwaypointの`frame_id`が一致している必要があり�
 ゴールごとに価値関数を解き直すので、**点が変わるたびに丸ごと1回のsolveが入り、その
 間ずっと機体が止まっています**（実測で19Fが29秒、津田沼が87秒）。
 
-`config/nav2/vi_planner.yaml`の`waypoint_prefetch`を`true`にすると、いまの点へ走って
-いるあいだに次の点を別スレッドで解いておき、着いたらsolveを飛ばして受け取ります。
-効いた回はログに出ます。
+`config/nav2/vi_planner.yaml`の`waypoint_prefetch`が**既定で`true`**なので（2026-08-04に
+反転。ノード側の宣言は`false`のまま）、いまの点へ走っているあいだに次の点を別スレッドで
+解いておき、着いたらsolveを飛ばして受け取ります。効いた回はログに出ます。
 
 ```
 vi_planner: prefetched the value function for (12.30, -4.50) in 31.20s
@@ -315,13 +315,15 @@ vi_planner: path with 412 poses in 0.34s (solved_now=true, iters=0, prefetched)
 `/follow_waypoints`へ直接投げる経路と単発ゴールは順路が無いので対象外で、そのときも
 **エラーは出ません**。効いているかは上のログで判断してください。
 
-既定が`false`なのは代償があるためです。価値関数が同時に2つ生きるので、場も2つ要ります。
+有効なぶん代償も常時払います。価値関数が同時に2つ生きるので、場も2つ要ります。
 密ソルバではメモリがそのまま2倍です。compactでsinkがディスクへ出るのは
 `compact_sink_dir`を指定したときと`compact_ram_limit_mb`を超えたときだけで、
 **同梱の2地図はいまどちらも出ません**。したがって2つとも丸ごとRAMに載ります
-（津田沼648 MB×2＝1.3 GB、19F 95 MB×2）。津田沼で先読みを使うなら、その1.3 GBが
+（津田沼648 MB×2＝1.3 GB、19F 95 MB×2）。津田沼を巡回するなら、その1.3 GBが
 匿名メモリとして居座ることになります。solveのCPUも取られます（追従の`try_lock`は
-邪魔しませんが、10Hzの制御周期がずれ得ます）。
+邪魔しませんが、10Hzの制御周期がずれ得ます）。**Pi 4（4 GB）で走らせるなら
+`waypoint_prefetch`を`false`へ戻してください**（この既定はPi 5の8 GBを前提にした
+`dense_limit_mb`・`compact_ram_limit_mb`と同じ事情です）。
 **まだ実機でもpi4_simでも通していません。**
 
 詳細は[`src/daifuku_waypoint_manager/README.md`](../../src/daifuku_waypoint_manager/README.md)。

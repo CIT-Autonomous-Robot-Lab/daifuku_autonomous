@@ -1,8 +1,8 @@
 # 価値反復プランナ (value_iteration3, Rust)。「既定」= 各ノードの main.rs が
 # declare_parameter で持つ値。ここはほぼ既定の書き出しで、既定と違うのは
 # map_wait_sec と dense_limit_mb と compact_ram_limit_mb と、vi_planner の
-# global_sweep_budget_ms / global_sweep_idle_ms と、両ノードの
-# solver (ノード既定は密、ここは compact) の 6 つだけ。
+# global_sweep_budget_ms / global_sweep_idle_ms / waypoint_prefetch と、両ノードの
+# solver (ノード既定は密、ここは compact) の 7 つだけ。
 # 地図ごとの調整は ../overrides/<地図名>.yaml に置く。合成順序と上書きは
 # ../README.md を参照。
 #
@@ -76,20 +76,22 @@ vi_planner:
     # ── ウェイポイントの先読み ──
     # 巡回は 1 点ずつ navigate_to_pose を呼ぶ形なので (../../../daifuku_waypoint_manager/README.md)、
     # 点が変わるたびに新しいゴールの価値反復が丸ごと 1 回走り、その間**機体が止まる**
-    # (19F で 29 秒、津田沼 compact で 87 秒)。true にすると、いまの点へ走っている間に次の点を
+    # (19F で 29 秒、津田沼 compact で 87 秒)。有効にすると、いまの点へ走っている間に次の点を
     # 別スレッドで解いておき、着いたら solve を飛ばして受け取る。効いた回はログの
     # "path with ... , prefetched" と "prefetched the value function for ... in Xs" に出る。
     #
-    # **切ってあるのは代償があるから**: 価値関数が同時に 2 つ生きるので場も 2 つ要る。
-    # 密ソルバではメモリがそのまま 2 倍。compact で sink がディスクへ出るのは
+    # **入れてあるが代償はある** (2026-08-04 に既定を反転): 価値関数が同時に 2 つ生きるので
+    # 場も 2 つ要る。密ソルバではメモリがそのまま 2 倍。compact で sink がディスクへ出るのは
     # compact_sink_dir を指定したときと上の上限を超えたときだけで、**いまは同梱の
     # 2 地図ともディスクへ出ない** = 2 つとも RAM に載る (津田沼 648MB x2 = 1.3GB、
-    # 19F 95MB x2)。津田沼で先読みを使うなら、その 1.3GB が匿名メモリで居座る。
+    # 19F 95MB x2)。津田沼で巡回するなら、その 1.3GB が匿名メモリで居座る。
+    # **Pi 4 (4GB) で走らせるなら false へ戻すこと** (上の dense_limit_mb / compact_ram_limit_mb と
+    # 同じ事情で、この値も Pi 5 8GB を前提にしてある)。
     # solve の CPU も取られる — 追従の try_lock は邪魔しないが、10Hz の制御周期がずれ得る。
     # **並びを出すものがいないと何も起きない** (下の waypoint_topic)。**未検証** — 実機でも
     # pi4_sim でも通していない。
-    waypoint_prefetch: false      # 既定 false: 次のウェイポイントを走行中に解いておくか
-    # ── 未設定 (既定のまま。先読みを使うときだけ意味を持つ) ──
+    waypoint_prefetch: true       # 既定 false: 次のウェイポイントを走行中に解いておくか
+    # ── 未設定 (既定のまま。上の先読みが効くかどうかを決める 2 つ) ──
     # waypoint_topic: "waypoints" # 順路 (nav_msgs/Path、latch)。出すのは 2 か所だけ —
     #                             # daifuku_waypoint_manager のパネル (編集のたび) と
     #                             # ../../src/joy_teleop.py (START+BACK での巡回開始)。
