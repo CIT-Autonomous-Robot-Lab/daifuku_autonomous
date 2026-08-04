@@ -105,7 +105,16 @@ dtparam=i2c_baudrate=62500
 `provision.sh` は `tools/image/udev/99-daifuku-raspicat.rules` を
 `/etc/udev/rules.d/` へ入れます。コンテナは `user: "1000:1000"` で走り、補助
 グループを引き継がないので、`/sys/class/pwm` 配下と `/dev/gpiochip*` と
-`/dev/i2c-1` の所有者を 1000:1000 にしています。
+`/dev/i2c-1` の所有者を 1000:1000 にしています。**ルールが入るのは起動後なので、
+`/sys/class/pwm` は再起動するまで root のままです**（udev はデバイスの add でしか
+発火しない）。プロビジョニング後の再起動はグループ反映だけの話ではありません。
+
+ロボット LAN にルータが無い構成では、`--gateway none` と `--wifi-ssid` が要ります
+（[`tools/image/README.md`](../../tools/image/README.md#2-カードを作る)）。あわせて、
+**Pi 5 は RTC のバックアップ電池が無いと過去の時刻で起動します**。NTP が効く前に
+apt が走ると全リポジトリが `Release file ... is not valid yet` で拒否されるので、
+疎通が戻ったら `timedatectl set-ntp true` で時刻を合わせてから
+`sudo bash tools/image/provision.sh` をやり直してください。
 
 ### 2. 起動する
 
@@ -137,19 +146,24 @@ ros2 topic pub --times 20 /cmd_vel geometry_msgs/msg/Twist \
 
 ## 実機で確かめること
 
-ハードウェアで走らせた実績はまだありません。以下は机上の値なので、最初のベンチで
-確認してください。ピン・チャネル・アドレス・デバイスパスはすべてパラメータに
-出してあるので、`config/robot/raspicat_driver.yaml` を直せばコードは触らずに済みます。
+**まだ走らせていません。** チップの同定だけは 2026-08-04 に Pi 5 Model B Rev 1.1
+（8GB・Ubuntu 24.04.4・6.8.0-1047-raspi）で確かめました。モータを回す側は未確認です。
+ピン・チャネル・アドレス・デバイスパスはすべてパラメータに出してあるので、
+`config/robot/raspicat_driver.yaml` を直せばコードは触らずに済みます。
 
-まず `ls /boot/firmware/overlays | grep pwm` で、`config.txt` に書いたオーバレイが
-実在することを確かめてください。無いオーバレイは黙って無視され、症状は
-「`/sys/class/pwm` に RP1 の pwmchip が無い」として出ます。
+確認済み（上の 3 つは黙って失敗するので、ノードを立てる前に見ること）:
+
+| 項目 | 実測 |
+| --- | --- |
+| PWM のオーバレイ | `pwm-2chan.dtbo` は実在。`pwm-pi5.dtbo` は無い（`ls /boot/firmware/overlays \| grep pwm`） |
+| PWM の出どころ | `pwmchip0` → `.../1f00098000.pwm`（RP1・npwm=4）。`pwmchip_match` の `98000.pwm` は `find_pwmchip` が部分一致で拾う。`pwmchip1` は SoC 側の `107d517a80.pwm` |
+| gpiochip | `/dev/gpiochip4` が `pinctrl-rp1`（54 本）。`gpiochip0`〜`3` は `gpio-brcmstb@...` |
+| 所有者 | udev ルールはデバイスの add でしか発火しないので、`provision.sh` を流した直後は `/sys/class/pwm` が root のまま。**再起動すると `ubuntu:ubuntu` になる** |
+
+未確認:
 
 | 項目 | 見かた | 直す場所 |
 | --- | --- | --- |
-| PWM のオーバレイ | `ls /boot/firmware/overlays \| grep pwm` で `pwm-2chan.dtbo` があること。`func` 番号が違うようなら `drivers/pinctrl/pinctrl-rp1.c` のピンテーブルで確認 | `config.txt` |
-| PWM の出どころ | `ls /sys/class/pwm` と `readlink -f /sys/class/pwm/pwmchipN` | `pwmchip_match` / `pwmchip_path` |
-| gpiochip | ノードが `configured: gpiochip=... pwmchip=...` とログに出す解決結果 | `gpiochip_label` / `gpiochip_device` |
 | 方向の極性 | 前進を指令して両輪が同じ向きに回るか | `direction_*_forward_level` |
 | ステップ周波数と実速度 | 0.1 m/s を指令して実測。`wheel_diameter` は 200 mm 実測値 | `pulses_per_revolution` |
 | I2C ボーレート | RP1 の I2C は DesignWare 系でタイミング生成が Pi 4 と違う。62.5 kHz が効くか | `config.txt` |
