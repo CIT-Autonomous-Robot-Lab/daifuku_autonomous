@@ -4,7 +4,7 @@
   <name>daifuku_stack</name>
   <version>0.1.0</version>
   <description>Raspberry Pi Cat向けのNav2自律移動設定パッケージ</description>
-  <maintainer email="user@example.com">autonomous_bot maintainer</maintainer>
+  <maintainer email="noplab90@gmail.com">Keita Sekiguchi / nop</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

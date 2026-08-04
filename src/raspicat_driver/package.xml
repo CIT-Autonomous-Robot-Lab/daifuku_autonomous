@@ -4,7 +4,7 @@
   <name>raspicat_driver</name>
   <version>0.1.0</version>
   <description>Raspberry Pi Cat の本体ドライバ (Pi 4 / Pi 5 のユーザ空間実装)</description>
-  <maintainer email="user@example.com">autonomous_bot maintainer</maintainer>
+  <maintainer email="noplab90@gmail.com">Keita Sekiguchi / nop</maintainer>
   <license>Apache-2.0</license>
 
   <exec_depend>geometry_msgs</exec_depend>
