@@ -43,6 +43,7 @@ private Q_SLOTS:
   void loadYaml();
   void startFollowing();
   void cancelFollowing();
+  void selectionChanged();
   void setStatus(const QString & status);
   void handleResult(int result_code, int missed_count);
 
@@ -88,6 +89,10 @@ private:
   bool lead_drawn_{false};
   geometry_msgs::msg::Point lead_origin_;
   QString lead_reason_;
+
+  // refreshList() の clear() / setCurrentRow() でも currentRowChanged が飛ぶので、その間は
+  // selectionChanged() からの出し直しを止める (呼び出し元が直後に publishMarkers() する)。
+  bool suppress_selection_publish_{false};
 
   QListWidget * waypoint_list_{nullptr};
   QLabel * status_label_{nullptr};

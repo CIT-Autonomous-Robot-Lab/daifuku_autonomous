@@ -110,6 +110,9 @@ void WaypointManagerPanel::buildUi()
   layout->addWidget(new QLabel("Waypoint List", this));
   waypoint_list_ = new QListWidget(this);
   waypoint_list_->setSelectionMode(QAbstractItemView::SingleSelection);
+  connect(
+    waypoint_list_, &QListWidget::currentRowChanged, this,
+    &WaypointManagerPanel::selectionChanged);
   layout->addWidget(waypoint_list_);
 
   auto * reorder_row = new QHBoxLayout();
@@ -251,6 +254,7 @@ QString WaypointManagerPanel::formatWaypoint(
 void WaypointManagerPanel::refreshList()
 {
   const int selected = waypoint_list_->currentRow();
+  suppress_selection_publish_ = true;
   waypoint_list_->clear();
   for (size_t i = 0; i < waypoints_.size(); ++i) {
     waypoint_list_->addItem(formatWaypoint(static_cast<int>(i), waypoints_[i]));
@@ -258,7 +262,17 @@ void WaypointManagerPanel::refreshList()
   if (selected >= 0 && selected < waypoint_list_->count()) {
     waypoint_list_->setCurrentRow(selected);
   }
+  suppress_selection_publish_ = false;
   updateButtons();
+}
+
+void WaypointManagerPanel::selectionChanged()
+{
+  if (suppress_selection_publish_) {
+    return;
+  }
+  // 色と ns/id は変わらないので DELETEALL は要らない (付けると全マーカが作り直されて瞬く)。
+  publishMarkers(false);
 }
 
 void WaypointManagerPanel::publishMarkers(bool reset)
@@ -327,8 +341,38 @@ void WaypointManagerPanel::publishMarkers(bool reset)
     markers.markers.push_back(route);
   }
 
+  // リストで選んでいる 1 点。73 点あると番号のラベルだけでは地図上のどれか分からない。
+  const int selected = waypoint_list_ ? waypoint_list_->currentRow() : -1;
+  if (selected >= 0 && selected < static_cast<int>(waypoints_.size())) {
+    visualization_msgs::msg::Marker highlight;
+    highlight.header.frame_id = frame_id_;
+    highlight.header.stamp = stamp;
+    highlight.ns = "waypoint_selected";
+    highlight.id = 0;
+    highlight.type = visualization_msgs::msg::Marker::CYLINDER;
+    highlight.action = visualization_msgs::msg::Marker::ADD;
+    highlight.pose.position = waypoints_[selected].pose.position;
+    highlight.pose.orientation.w = 1.0;
+    highlight.scale.x = 0.9;
+    highlight.scale.y = 0.9;
+    highlight.scale.z = 0.02;
+    highlight.color.r = 1.0F;
+    highlight.color.g = 0.95F;
+    highlight.color.b = 0.2F;
+    highlight.color.a = 0.45F;
+    markers.markers.push_back(highlight);
+  } else {
+    // 選択が外れたとき。DELETEALL を付けない出し直しでは明示的に消さないと残る。
+    visualization_msgs::msg::Marker highlight;
+    highlight.ns = "waypoint_selected";
+    highlight.id = 0;
+    highlight.action = visualization_msgs::msg::Marker::DELETE;
+    markers.markers.push_back(highlight);
+  }
+
   for (size_t i = 0; i < waypoints_.size(); ++i) {
     const auto & waypoint = waypoints_[i];
+    const bool is_selected = static_cast<int>(i) == selected;
     visualization_msgs::msg::Marker arrow;
     arrow.header = waypoint.header;
     arrow.header.stamp = stamp;
@@ -337,12 +381,12 @@ void WaypointManagerPanel::publishMarkers(bool reset)
     arrow.type = visualization_msgs::msg::Marker::ARROW;
     arrow.action = visualization_msgs::msg::Marker::ADD;
     arrow.pose = waypoint.pose;
-    arrow.scale.x = 0.55;
-    arrow.scale.y = 0.12;
-    arrow.scale.z = 0.12;
-    arrow.color.r = 0.1F;
-    arrow.color.g = 0.8F;
-    arrow.color.b = 1.0F;
+    arrow.scale.x = is_selected ? 0.75 : 0.55;
+    arrow.scale.y = is_selected ? 0.18 : 0.12;
+    arrow.scale.z = is_selected ? 0.18 : 0.12;
+    arrow.color.r = is_selected ? 1.0F : 0.1F;
+    arrow.color.g = is_selected ? 0.95F : 0.8F;
+    arrow.color.b = is_selected ? 0.2F : 1.0F;
     arrow.color.a = 1.0F;
     markers.markers.push_back(arrow);
 
