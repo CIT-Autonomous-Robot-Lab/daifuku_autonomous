@@ -47,18 +47,13 @@ emcl2:
 # goal_margin_radius とセットだが、2 では 1 手 3 セル・ゴール半径 3 セル・
 # safety_radius 2 セルが残るので断片のまま。両ノードに同じ map_scale を置くのは、
 # 片方だけだと同じ地図なのに 2 構成で別の経路が出るため。
-#
-# cost_drawing_threshold は value_function の色スケール上限 [ステップ数≒秒] で、
-# **表示専用**。導出は ../README.md。地図ごとに測り直すこと。
 vi_planner:
   ros__parameters:
     map_scale: 2                       # 既定 1 (断片は未設定): 内部だけ 0.10m/cell (794 万状態)。密を載せるため
-    cost_drawing_threshold: 60         # 断片 60: 19F の到達ステップ分布に合わせた
 
 vi_global_planner:
   ros__parameters:
     map_scale: 2                       # 断片 1: 同上 (vi_planner と揃える)
-    cost_drawing_threshold: 60         # 断片 60: 同上
 
 # ── ここで上書きしていないもの ────────────────────────────────────────────
 # この地図では断片 (= ほぼノード既定) のままで足りている。上書きが要るとしたら
@@ -77,3 +72,7 @@ vi_global_planner:
 #   vi_planner/vi_global_planner.downsample_policy … 通路のセル幅が足りず波が
 #     ゴール近傍で止まるとき。map_scale >= 4 では optimistic が必須だが、2 では
 #     保守側でも通路が片側 0.05m しか細らないので既定のまま。
+#   vi_planner/vi_global_planner.cost_drawing_threshold … value_function の色が
+#     潰れて読めないとき。**表示専用**なので経路には影響しない。断片の 60 のままだと
+#     19F では到達可能セルの 66% が飽和する (2026-07-29 実測、導出は ../README.md)。
+#     遠くまで階調が要るなら 180 (p90-p99 間) に上げること。

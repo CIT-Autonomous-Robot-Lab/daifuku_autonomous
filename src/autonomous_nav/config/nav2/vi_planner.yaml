@@ -1,6 +1,7 @@
 # 価値反復プランナ (value_iteration3, Rust)。「既定」= 各ノードの main.rs が
 # declare_parameter で持つ値。ここはほぼ既定の書き出しで、既定と違うのは
-# map_wait_sec と compact_ram_limit_mb と vi_global_planner.solver の 3 つだけ。
+# map_wait_sec と dense_limit_mb と compact_ram_limit_mb と
+# vi_global_planner.solver の 4 つだけ。
 # 地図ごとの調整は ../overrides/<地図名>.yaml に置く。合成順序と上書きは
 # ../README.md を参照。
 #
@@ -59,8 +60,9 @@ vi_planner:
     # ── 可視化 (経路計算には影響しない) ──
     publish_value_function: true  # 既定 true: /value_function を配信するか
     value_publish_interval_ms: 500  # 既定 500 [ms]: solve 途中経過の配信間隔 (0 で完了時のみ)
-    # 色スケール上限 [ステップ数≒秒]。地図ごとに測り直す値なので、ここは地図非依存の
-    # 既定のまま。19F の 180 は ../overrides/map_19f.yaml、選び方は ../README.md。
+    # 色スケール上限 [ステップ数≒秒]。地図ごとに測り直す値だが、19F もこの 60 のまま
+    # 使っている (../overrides/ で上書きしていない)。19F では到達可能セルの 66% が
+    # 飽和して階調が出ないので、遠くまで見たいときは上げる。選び方は ../README.md。
     cost_drawing_threshold: 60    # 既定 60: /value_function の色スケール上限
     window_cost_drawing_threshold: 60  # 既定 60: /local_window_value (±1m 窓) の色スケール上限
     # ── 行動集合 (前進量と回転量の組。要素数は 3 つの配列で揃えること) ──
