@@ -97,9 +97,14 @@ def include_lidar_bringup(pkg_share):
     共通引数はすべて素通しする。素通しの一覧を人手で書くと引数を足したときに
     片方の親へ入れ忘れるので、引数表からそのまま作る。use_sim_time は共通引数の
     表には無い (親も子もそれぞれの意味で宣言している) ので明示的に足す。
+
+    overrides / extra_params_file も素通しする。親と同じ overrides で、子が読む
+    設定ファイル (scan_filter / mid360_scan / mid360_ekf / urg) も上書きできる
+    ようにするため。表に入れずここで足しているのは、親 (navigation) が
+    params.declare_args で先に宣言しているから (二重宣言になる)。
     """
     names = [name for name, _, _ in _shared_arg_specs(pkg_share)]
-    names.append("use_sim_time")
+    names += ["use_sim_time", "overrides", "extra_params_file"]
     return IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(pkg_share, "launch", "lidar_bringup.launch.py")

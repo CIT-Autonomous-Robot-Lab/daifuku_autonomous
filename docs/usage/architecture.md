@@ -66,7 +66,7 @@ Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。
 
 | モジュール | 内容 |
 | --- | --- |
-| `params.py` | nav2とEMCL2のパラメータ合成（`params_dir` → `overrides` → `extra_params_file`） |
+| `params.py` | 設定ファイルへの上書きの合成（土台 → `overrides` → `extra_params_file`）。4つのlaunchすべてが使う |
 | `backends.py` | `localization`／`planner`／`local_planner`の解決と起動前チェック |
 | `lidar.py` | LiDAR構成の共通引数と`lidar_bringup`の`include` |
 

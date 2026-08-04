@@ -29,6 +29,7 @@
 # docs/setup/raspberry-pi-4.md と raspberry-pi-5.md。
 
 import os
+import sys
 
 from ament_index_python.packages import get_package_share_directory
 
@@ -48,6 +49,13 @@ from launch_ros.event_handlers import OnStateTransition
 from launch_ros.events import lifecycle
 
 from lifecycle_msgs.msg import Transition
+
+# 共通部品はこの launch ディレクトリの直下 (autonomous_nav_launch/) にある。
+_LAUNCH_DIR = os.path.dirname(os.path.realpath(__file__))
+if _LAUNCH_DIR not in sys.path:
+    sys.path.insert(0, _LAUNCH_DIR)
+
+from autonomous_nav_launch import params  # noqa: E402
 
 
 # driver:= の値ごとの (ノード名, パッケージ, 実行ファイル, 既定パラメータファイル)。
@@ -81,6 +89,14 @@ def launch_setup(context, *args, **kwargs):
     params_file = LaunchConfiguration("params_file").perform(context)
     if not params_file:
         params_file = os.path.join(pkg_share, "config", "robot", default_params_name)
+
+    # overrides を重ねる。行き先はノード名で決まるので、driver:= で選ばなかった
+    # ほうの節 (raspimouse: / raspicat_driver:) は自動的に外れる。
+    params_file, override_logs = params.compose_path(
+        context, params_file,
+        name="params_file",
+        overrides_dir=os.path.join(pkg_share, "config", "overrides"),
+    )
 
     parameters = [params_file]
     # model:= は自前実装にしか無いパラメータ。raspimouse に渡すと未宣言で落ちる。
@@ -129,7 +145,7 @@ def launch_setup(context, *args, **kwargs):
         )
     )
 
-    return [
+    return override_logs + [
         driver_node,
         register_activating_transition,
         register_shutting_down_transition,
@@ -174,6 +190,11 @@ def generate_launch_description():
             default_value="",
             description="ドライバのパラメータファイル。空なら driver:= に応じて "
                         "config/robot/raspicat.yaml か raspicat_driver.yaml を使う。",
+        ),
+        *params.declare_args(
+            os.path.join(
+                get_package_share_directory("autonomous_nav"), "config", "overrides"
+            )
         ),
         DeclareLaunchArgument("lidar_frame", default_value="lidar_link"),
         DeclareLaunchArgument("use_joint_state_publisher", default_value="True"),

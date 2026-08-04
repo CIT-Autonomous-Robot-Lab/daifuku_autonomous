@@ -133,6 +133,25 @@ ros2 launch autonomous_nav mapping.launch.py \
   lidar:=2d scan_filter_enabled:=false
 ```
 
+角度だけを変えたいならファイルごと渡さずに済みます。`overrides:=`は`sensors/`の
+パラメータファイルにも重なるので、変えたいキーだけを書けます。行き先はノード名で
+決まるので、節の名前はファイル名ではなくノード名です。
+
+```yaml
+scan_to_scan_filter_chain:   # -> config/sensors/scan_filter.yaml
+  ros__parameters:
+    filter1:
+      params:
+        angle_min: 2.617993878
+        angle_max: -2.617993878
+```
+
+`pointcloud_to_laserscan`（`mid360_scan.yaml`）、`ekf_filter_node`
+（`mid360_ekf.yaml`）、`urg_node`（`urg_params_file`が指すファイル）も同じです。
+JSONの`MID360_config.json`だけは対象外で、こちらは`mid360_config:=`でファイルごと
+差し替えます。行き先の決まりかたは[設定](../usage/configuration.md)の
+「上書き（overrides）の行き先」にあります。
+
 ## 確認コマンド
 
 ```bash

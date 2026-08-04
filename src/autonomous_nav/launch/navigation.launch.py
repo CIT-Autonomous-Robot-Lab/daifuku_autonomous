@@ -59,7 +59,7 @@ def generate_launch_description():
     # Pi4 高負荷時の bond 4 秒タイムアウト対策 (詳細はファイル内コメント参照)。
     # nav2 の navigation_launch.py はマネージャに bond_timeout を渡せないため、
     # SetParametersFromFile でグループスコープ内の全ノードに注入する。
-    bond_params = os.path.join(pkg_share, "config", "lifecycle_bond.yaml")
+    default_bond_params = os.path.join(pkg_share, "config", "lifecycle_bond.yaml")
     default_emcl2_params = os.path.join(pkg_share, "config", "localization", "emcl2.yaml")
     default_rviz_config = os.path.join(pkg_share, "rviz", "navigation.rviz")
     default_map = os.path.join(pkg_share, "maps", "map_19f.yaml")
@@ -82,6 +82,7 @@ def generate_launch_description():
     map_yaml = LaunchConfiguration("map")
     params_file = LaunchConfiguration("params_file")
     emcl2_params_file = LaunchConfiguration("emcl2_params_file")
+    bond_params_file = LaunchConfiguration("bond_params_file")
     rviz_config = LaunchConfiguration("rviz_config")
     use_sim_time = LaunchConfiguration("use_sim_time")
     autostart = LaunchConfiguration("autostart")
@@ -187,7 +188,7 @@ def generate_launch_description():
                 condition=IfCondition(use_namespace),
                 namespace=namespace,
             ),
-            SetParametersFromFile(bond_params),
+            SetParametersFromFile(bond_params_file),
             vi_behavior_tree_params(),
             Node(
                 condition=IfCondition(use_composition),
@@ -363,26 +364,9 @@ def generate_launch_description():
             description="合成する nav2 パラメータ断片のディレクトリ。"
                         "*.yaml をファイル名順に深くマージする (config/README.md)。",
         ),
-        DeclareLaunchArgument(
-            "overrides",
-            # 既定の地図 (map_19f) に対応する override を既定で載せる。地図を
-            # 変えるときは overrides:=map_tsudanuma のように**置き換える** —
-            # 追加ではないので、19F 用の調整は自動的に外れる。
-            # 地図を渡し替えて overrides を放置すると別の地図の調整が載るので注意。
-            default_value="map_19f",
-            description="config/overrides/<名前>.yaml を上に重ねる (カンマ区切りで複数可)。"
-                        "既定は map_19f (既定の地図に対応)。別の地図では"
-                        "overrides:=map_tsudanuma のように置き換える。"
-                        "何も重ねないなら overrides:=none "
-                        "(ros2 launch は値が空の overrides:= を受け付けない)。",
-        ),
-        DeclareLaunchArgument(
-            "extra_params_file",
-            default_value="",
-            description="overrides の後にさらに重ねる任意パスのファイル (カンマ区切りで"
-                        "複数可)。config/overrides/ に置けない一時的な上書き用。",
-        ),
+        *params.declare_args(overrides_dir),
         DeclareLaunchArgument("emcl2_params_file", default_value=default_emcl2_params),
+        DeclareLaunchArgument("bond_params_file", default_value=default_bond_params),
 
         # --- バックエンドの選択 (autonomous_nav_launch/backends.py) ---
         DeclareLaunchArgument(
@@ -435,9 +419,16 @@ def generate_launch_description():
 
         *declare_args,
 
-        # params_file / emcl2_params_file を合成して差し替える。以降の参照
-        # (RewrittenYaml / 各 include / 下の検証) はこの合成結果を見る。
-        OpaqueFunction(function=params.compose, kwargs={"overrides_dir": overrides_dir}),
+        # このスタックが読む設定ファイルへ overrides を重ね、差し替える。以降の
+        # 参照 (RewrittenYaml / 各 include / 下の検証) はこの合成結果を見る。
+        # どの節がどのファイルへ行くかはノード名で決まる (params.py)。
+        OpaqueFunction(
+            function=params.compose,
+            kwargs={
+                "overrides_dir": overrides_dir,
+                "targets": ["params_file", "emcl2_params_file", "bond_params_file"],
+            },
+        ),
         OpaqueFunction(function=params.validate_map_file),
         OpaqueFunction(function=backends.validate_localization),
         OpaqueFunction(function=backends.validate_planner),

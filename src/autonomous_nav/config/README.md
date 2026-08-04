@@ -1,14 +1,16 @@
 # config/
 
-ディレクトリは**どの launch がどう読むか**で分かれています。
+ディレクトリは**どの launch がどう読むか**で分かれています。`overrides/*.yaml` は
+このうち `MID360_config.json` を除く全部に重ねられます（下の「上書き」）。
 
 | 場所 | 読む launch | 渡し方 |
 | --- | --- | --- |
 | `nav2/*.yaml` | `navigation.launch.py` | 起動時に 1 つへ合成して `params_file` に渡る |
-| `overrides/*.yaml` | `navigation.launch.py` | 合成結果へ重ねる（`overrides:=`） |
+| `overrides/*.yaml` | 4 つすべて | 下のどれかへ重ねる（`overrides:=`）。行き先はノード名で決まる |
 | `localization/emcl2.yaml` | `navigation.launch.py` | `emcl2_params_file` でノードへ直接 |
-| `lifecycle_bond.yaml` | `navigation.launch.py` | `SetParametersFromFile` でグループ内の全ノードへ注入 |
-| `sensors/*` | `lidar_bringup.launch.py` | 各ノードへ直接（`scan_filter_params_file` など） |
+| `lifecycle_bond.yaml` | `navigation.launch.py` | `bond_params_file` を `SetParametersFromFile` でグループ内の全ノードへ注入 |
+| `sensors/*.yaml` | `lidar_bringup.launch.py` | 各ノードへ直接（`scan_filter_params_file` など） |
+| `sensors/MID360_config.json` | `lidar_bringup.launch.py` | `livox_ros_driver2` へ直接。**ROS のパラメータファイルではない**ので上書きの対象外 |
 | `mapping/slam_toolbox.yaml` | `mapping.launch.py` | `slam_params_file` でノードへ直接 |
 | `robot/raspicat.yaml` | `robot_bringup.launch.py` | `raspimouse` (LifecycleNode) へ直接。`driver:=raspimouse` (既定 / 公式実装 / Pi 4) |
 | `robot/raspicat_driver.yaml` | `robot_bringup.launch.py` | `raspicat_driver` (LifecycleNode) へ直接。`driver:=original` (自前実装 / Pi 4・Pi 5) |
@@ -56,7 +58,7 @@ resample_interval: 1         # 既定 1: 何回の更新ごとにリサンプル
 | `sensors/scan_filter.yaml` | `laser_filters` の `sector_filter.h`（既定なし＝全項目必須） |
 | `robot/raspicat.yaml` | 上流 `raspicat_ros` の `raspicat/config/raspicat.param.yaml` |
 | `robot/raspicat_driver.yaml` | `src/raspicat_driver` の `src/raspicat_driver/node.py` |
-| `overrides/*.yaml` | 重ねる先の断片の値（「断片 60:」のように書きます） |
+| `overrides/*.yaml` | 重ねる先の設定ファイルの値（「断片 60:」のように書きます） |
 
 見ているブランチは、`robot_localization` が `humble-devel`、`laser_filters` が
 `ros2`（Humble ブランチが無いため）、それ以外はすべて `humble` です。
@@ -87,7 +89,7 @@ resample_interval: 1         # 既定 1: 何回の更新ごとにリサンプル
 そのパスは起動ログに出ます。
 
 ```
-[INFO] [launch.user]: params: composed 8 fragments from .../config/nav2 -> /tmp/nav2_params_xxxx.yaml
+[INFO] [launch.user]: params: params_file: 8 fragments from .../config/nav2 -> /tmp/params_file_xxxx.yaml
 ```
 
 分割は「ノード単位で重複なし」が前提です。同じノードの同じキーが 2 つの断片に
@@ -112,13 +114,34 @@ resample_interval: 1         # 既定 1: 何回の更新ごとにリサンプル
 
 優先順位は下ほど強く、**後勝ち**です。
 
-1. `nav2/*.yaml` の合成結果（`params_file:=` を明示した場合はそのファイル）
+1. 土台 = その launch が渡している設定ファイル（`navigation` の `params_file` だけは
+   `nav2/*.yaml` の合成結果。`params_file:=` を明示した場合はそのファイル）
 2. `overrides:=<名前>` → `overrides/<名前>.yaml`（カンマ区切りで複数可）
 3. `extra_params_file:=<パス>` → 任意のファイル（リポジトリ外の一時的な上書き用）
 
-`overrides` の既定値は **`map_19f`** です。既定の地図（`maps/map_19f.yaml`）に
-対応する調整を、素の起動でも載せるためです。地図を変えるときは**置き換え**に
-なります（追加ではありません）。
+**行き先はノード名だけで決まります。** override に書いた `emcl2:` の節は
+`localization/emcl2.yaml` へ、`slam_toolbox:` は `mapping/slam_toolbox.yaml` へ、
+`raspicat_driver:` は `robot/raspicat_driver.yaml` へ、というように、同じノード名を
+宣言している設定ファイルの上に深くマージされます。書きかたと重ね方は 3 つとも
+同じで、`extra_params_file` も同じ規則で配られます。
+
+そのため、1 つの override ファイルに全部書いておけば、どの launch でも同じ名前で
+通ります。その launch が読まない設定ファイル宛の節は何も起こしません
+（`mapping.launch.py` に `overrides:=map_19f` を渡しても、`emcl2:` と `vi_planner:` は
+単に行き先が無いだけで害はありません）。
+
+`params_file:=` で土台を差し替えても行き先は変わりません。渡したファイルに
+書かれていなくても、`nav2/*.yaml` が宣言しているノードの節はそこへ載ります
+（土台を替えた途端に nav2 宛の節が黙って消えると、探しようがないため）。
+
+上書きできるのは、上の表のうち `MID360_config.json` を除く全部です。
+`livox_ros_driver2` の設定は ROS のパラメータファイルではない（ノード名も
+`ros__parameters` も無い）ので、この仕組みに乗りません。`mid360_config:=<パス>` で
+ファイルごと差し替えてください。
+
+`overrides` の既定値は 4 つの launch すべてで **`map_19f`** です。既定の地図
+（`maps/map_19f.yaml`）に対応する調整を、素の起動でも載せるためです。地図を
+変えるときは**置き換え**になります（追加ではありません）。
 
 ```bash
 ros2 launch autonomous_nav navigation.launch.py \
@@ -138,42 +161,63 @@ EMCL2 調整（リセット閾値など）が載ったまま走ります。対�
 `MAP_NAME` と同名の override があればそれを、無ければ `none` を**必ず明示的に**
 渡します（`OVERRIDES=` で上書き可）。既定任せにすると同じ取り違えが起きるためです。
 
-### emcl2 は params_file を通らない
+### 何がどこへ行ったかを見る
 
-emcl2 は nav2 のノードではないので、合成結果（`params_file`）ではなく
-`emcl2_params_file` がノードへ直接渡ります。そのため `navigation.launch.py` は
-**emcl2 用の合成も別に行い**、同じ `overrides` / `extra_params_file` の
-`emcl2:` セクションだけを `localization/emcl2.yaml` の上に重ねて
-`emcl2_params_file` を差し替えます。
-
-この配線が無いと、`overrides/<地図>.yaml` に `emcl2:` を書いても**エラーも警告も
-出さずに無視されます**。起動ログの次の行で差し替えを確認できます。
+重なった設定ファイルは一時ファイルに書き出され、起動ログにその 1 行が出ます。
+`(+ ...)` が「どの override のどの節を重ねたか」です。
 
 ```
-[INFO] [launch.user]: params: composed emcl2 .../config/localization/emcl2.yaml -> /tmp/emcl2_params_xxxx.yaml (+ overrides:map_19f)
+[INFO] [launch.user]: params: params_file: 8 fragments from .../config/nav2 -> /tmp/params_file_xxxx.yaml (+ overrides:map_19f -> vi_planner, vi_global_planner)
+[INFO] [launch.user]: params: emcl2_params_file: .../config/localization/emcl2.yaml -> /tmp/emcl2_params_file_xxxx.yaml (+ overrides:map_19f -> emcl2)
 ```
+
+行が出ないファイルは、重なるものが無かったので土台がそのままノードへ渡っています
+（`params_file` だけは断片の合成が要るので必ず出ます）。書いたのに行が出ないなら、
+その launch がその設定ファイルを読んでいません。
 
 ### 新しい override を足す
 
 `overrides/<地図名や状況>.yaml` を作り、**変えたいキーだけ**を書きます。
-ノード名と `ros__parameters` の 2 段は必要です。
+ノード名と `ros__parameters` の 2 段は必要です。ノード名が行き先を決めるので、
+`nav2` 以外を狙うときも書きかたは同じです。
 
 ```yaml
-vi_global_planner:
+vi_global_planner:        # -> nav2/vi_planner.yaml (params_file の合成結果)
   ros__parameters:
     safety_radius_penalty: 1
+
+emcl2:                    # -> localization/emcl2.yaml
+  ros__parameters:
+    alpha_threshold: 0.2
+
+local_costmap:            # -> nav2/costmaps.yaml (1 段深い形もそのまま書く)
+  local_costmap:
+    ros__parameters:
+      inflation_layer:
+        inflation_radius: 0.45
 ```
+
+ノード名を間違えると、どの設定ファイルにも行き先が無いので**起動時にエラーで
+止まります**（近い名前を出します）。黙って消えると「書いたのに効かない」を
+探せないためで、その launch が読まないだけの節（`mapping` での `emcl2:`）は
+エラーにしません。
 
 `nav2/*.yaml` を丸ごと複製しないでください。既定値が変わったときに追従できません。
 
 ### 効かないときに疑うところ
 
-`SetParameter` / `SetParametersFromFile` は、`params_file` に**既にあるキー**を
+`SetParameter` / `SetParametersFromFile` は、設定ファイルに**既にあるキー**を
 上書きできません（launch_ros はグローバルパラメータを先に、ノード個別の
 `parameters=` を後に渡すため、後勝ちでノード側が勝つ）。
-そのため override は `params_file` そのものをマージして作っています。
+そのため override は設定ファイルそのものをマージして作っています。
 逆に `lifecycle_bond.yaml` の `bond_timeout` が `SetParametersFromFile` で効くのは、
 そのキーが `nav2/*.yaml` のどこにも無いからです。
+
+上書きが効かないときに見るのは順に、起動ログの `params:` の行（上の節）、
+ノード名の綴り、`ros__parameters` の段（1 段忘れると節ごと無視されます。
+`costmaps.yaml` のようにノード名が 2 段のものはその形のまま書く）、
+そのキーがノード側で `declare_parameter` されているか（宣言されていないキーは
+ROS 2 が黙って捨てます）です。
 
 ## 値の由来
 

@@ -7,7 +7,7 @@ import os
 import sys
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -19,12 +19,13 @@ _LAUNCH_DIR = os.path.dirname(os.path.realpath(__file__))
 if _LAUNCH_DIR not in sys.path:
     sys.path.insert(0, _LAUNCH_DIR)
 
-from autonomous_nav_launch import lidar as lidar_common  # noqa: E402
+from autonomous_nav_launch import lidar as lidar_common, params  # noqa: E402
 
 
 def generate_launch_description():
     pkg_share = get_package_share_directory("autonomous_nav")
 
+    overrides_dir = os.path.join(pkg_share, "config", "overrides")
     default_slam_params = os.path.join(pkg_share, "config", "mapping", "slam_toolbox.yaml")
     default_rviz_config = os.path.join(pkg_share, "rviz", "mapping.rviz")
 
@@ -45,6 +46,18 @@ def generate_launch_description():
         # LiDAR 構成の引数 (lidar / lidar_driver / scan_filter_* / mid360_* /
         # publish_lidar_tf / lidar_x..yaw / wheel_odom_topic / urg_*)。
         *lidar_common.declare_shared_args(pkg_share),
+        *params.declare_args(overrides_dir),
+
+        # slam_params_file へ overrides を重ねる (slam_toolbox: の節を持つものだけ
+        # 効く)。LiDAR 側の設定ファイルは lidar_bringup.launch.py が同じ overrides で
+        # 重ねるので、ここでは対象にしない。
+        OpaqueFunction(
+            function=params.compose,
+            kwargs={
+                "overrides_dir": overrides_dir,
+                "targets": ["slam_params_file"],
+            },
+        ),
 
         lidar_common.include_lidar_bringup(pkg_share),
 

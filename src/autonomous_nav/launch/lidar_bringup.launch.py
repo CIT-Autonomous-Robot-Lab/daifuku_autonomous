@@ -32,12 +32,13 @@ _LAUNCH_DIR = os.path.dirname(os.path.realpath(__file__))
 if _LAUNCH_DIR not in sys.path:
     sys.path.insert(0, _LAUNCH_DIR)
 
-from autonomous_nav_launch import lidar as lidar_common  # noqa: E402
+from autonomous_nav_launch import lidar as lidar_common, params  # noqa: E402
 
 
 def generate_launch_description():
     pkg_share = get_package_share_directory("autonomous_nav")
     sensors_dir = os.path.join(pkg_share, "config", "sensors")
+    overrides_dir = os.path.join(pkg_share, "config", "overrides")
 
     lidar = LaunchConfiguration("lidar")
     lidar_driver = LaunchConfiguration("lidar_driver")
@@ -96,6 +97,8 @@ def generate_launch_description():
     # ここで宣言するのは、親が素通ししない (このファイルの中だけで完結する) 分。
     # ------------------------------------------------------------------
     declare_args = lidar_common.declare_shared_args(pkg_share) + [
+        # 親 (navigation / mapping) から素通しされる。単独起動でも同じ既定。
+        *params.declare_args(overrides_dir),
         DeclareLaunchArgument("use_sim_time", default_value="false"),
         DeclareLaunchArgument(
             "scan_raw_topic",
@@ -280,6 +283,21 @@ def generate_launch_description():
 
         # 選んだ構成で実際に読むファイルの存在確認と、URG パラメータの解決。
         OpaqueFunction(function=lidar_common.validate),
+        # 上の解決が済んでから overrides を重ねる (urg_params_file は lidar:=2d の
+        # ときだけ、validate が値を入れるまで空)。mid360_config は JSON =
+        # ROS のパラメータファイルではないので対象にできない。
+        OpaqueFunction(
+            function=params.compose,
+            kwargs={
+                "overrides_dir": overrides_dir,
+                "targets": [
+                    "scan_filter_params_file",
+                    "mid360_scan_params_file",
+                    "mid360_ekf_params_file",
+                    "urg_params_file",
+                ],
+            },
+        ),
 
         urg_driver,
         livox_driver,

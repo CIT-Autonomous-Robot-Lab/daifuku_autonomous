@@ -5,7 +5,7 @@
 | ファイル | 内容 |
 |---|---|
 | `config/nav2/*.yaml` | Nav2、価値反復プランナ、コストマップ、速度、ゴール判定（起動時に1つへ合成） |
-| `config/overrides/*.yaml` | 地図・環境ごとの上書き（`overrides:=`で重ねる） |
+| `config/overrides/*.yaml` | 地図・環境ごとの上書き（`overrides:=`で重ねる）。行き先はノード名で決まるので、この表の`MID360_config.json`以外すべてを上書きできる |
 | `behavior_trees/*.xml` | `planner:=vi`用のビヘイビアツリー（起動時に自動で選択） |
 | `config/localization/emcl2.yaml` | EMCL2のフレーム、初期姿勢、粒子数、オドメトリモデル |
 | `config/robot/raspicat.yaml` | 公式実装（`driver:=raspimouse`）のパラメータ。車輪径、トレッド、オドメトリ源 |
@@ -31,9 +31,10 @@
 | `map` | パッケージ内`maps/map_19f.yaml` | 使用する地図YAMLのフルパス |
 | `params_dir` | `config/nav2` | 合成するNav2パラメータ断片のディレクトリ |
 | `params_file` | 空（`params_dir`を合成） | Nav2パラメータを1ファイルで与える。指定すると`params_dir`は無視 |
-| `overrides` | `map_19f`（既定の地図に対応） | `config/overrides/<名前>.yaml`を重ねる。カンマ区切りで複数可。**置き換え**なので`overrides:=map_tsudanuma`とすると19F用の調整は外れる。何も重ねないなら`overrides:=none` |
+| `overrides` | `map_19f`（既定の地図に対応） | `config/overrides/<名前>.yaml`を重ねる。カンマ区切りで複数可。**置き換え**なので`overrides:=map_tsudanuma`とすると19F用の調整は外れる。何も重ねないなら`overrides:=none`。行き先はノード名で決まる（下） |
 | `extra_params_file` | 空（無効） | `overrides`の後に重ねる任意パスのファイル。カンマ区切りで複数可 |
 | `emcl2_params_file` | `config/localization/emcl2.yaml` | EMCL2パラメータ |
+| `bond_params_file` | `config/lifecycle_bond.yaml` | ライフサイクルマネージャのbondタイムアウト |
 | `localization` | `emcl2` | `emcl2` / `emcl` / `amcl` |
 | `planner` | `vi` | `vi` / `navfn` |
 | `local_planner` | `auto` | `auto` / `vi` / `nav2` |
@@ -116,9 +117,43 @@ EMCL2のリセット関連は、19Fの地図に合わせた**暫定値**です�
 地図を取り直したあとは、この3つを`overrides/map_19f.yaml`から削除してください。
 
 EMCL2はNav2のノードではないため、合成後の`params_file`ではなく
-`emcl2_params_file`がノードへ直接渡ります。`overrides`をEMCL2にも効かせるために、
-`navigation.launch.py`はEMCL2用の合成を別に行っています。詳しくは
-`src/autonomous_nav/config/README.md`を参照してください。
+`emcl2_params_file`がノードへ直接渡ります。それでも`overrides`が効くのは、
+上書きの行き先が**ノード名だけで決まる**ためです（次節）。
+
+## 上書き（overrides）の行き先
+
+`config/overrides/<名前>.yaml`に書いた節は、**同じノード名を宣言している設定ファイル**の
+上に重なります。行き先を決めるのはノード名だけなので、Nav2のパラメータもEMCL2も
+SLAM Toolboxも機体ドライバも、1つのファイルにまとめて書けます。
+
+```yaml
+vi_global_planner:        # -> config/nav2/vi_planner.yaml（params_fileの合成結果）
+  ros__parameters:
+    safety_radius_penalty: 1
+
+emcl2:                    # -> config/localization/emcl2.yaml
+  ros__parameters:
+    alpha_threshold: 0.2
+
+slam_toolbox:             # -> config/mapping/slam_toolbox.yaml
+  ros__parameters:
+    resolution: 0.03
+```
+
+`overrides`と`extra_params_file`は`navigation` / `mapping` / `lidar_bringup` /
+`robot_bringup`の4つが同じ既定（`map_19f`）で受けます。その launch が読まない
+設定ファイル宛の節は、何も起こしません（`mapping.launch.py`に`emcl2:`を渡しても
+害はない）。上書きできないのは`config/sensors/MID360_config.json`だけで、これは
+ROSのパラメータファイルではないためです。
+
+ノード名を間違えると、どの設定ファイルにも行き先が無いので起動時にエラーで止まります。
+何がどこへ重なったかは起動ログの`params:`の行に出ます。
+
+```
+[INFO] [launch.user]: params: emcl2_params_file: .../emcl2.yaml -> /tmp/emcl2_params_file_xxxx.yaml (+ overrides:map_19f -> emcl2)
+```
+
+書きかたと優先順位の詳細は`src/autonomous_nav/config/README.md`にあります。
 
 ## 機体固有の調整
 

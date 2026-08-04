@@ -86,10 +86,13 @@ Docker 越しに叩く形は
   なる。同じノードの同じキーが 2 つの断片にあると**起動時にエラーで止まる**。
 - `overrides` の既定は **`map_19f`** で、**置き換え**（追加ではない）。`map:=` を
   変えたら `overrides:=` も必ず変える。重ねないときは `overrides:=none`（空文字は
-  `ros2 launch` が弾く）。
-- **emcl2 は `params_file` を通らない。** `navigation.launch.py` が
-  `localization/emcl2.yaml` に override の `emcl2:` セクションだけを重ねて
-  `emcl2_params_file` を作る。この経路が無いと `emcl2:` は**警告も出ずに無視される**。
+  `ros2 launch` が弾く）。4 つの launch すべてが同じ既定で受ける。
+- **`overrides/*.yaml` の行き先はノード名だけで決まる。** 同じノード名を宣言して
+  いる設定ファイル（`config/` の下のどれか）に重なるので、`emcl2:` も
+  `slam_toolbox:` も `raspicat_driver:` も 1 つの override に書ける。どの設定
+  ファイルにも無いノード名は**起動時にエラーで止まる**（綴り違いが黙って消えると
+  探せないため）。ノード名を持たない `sensors/MID360_config.json` だけは上書き
+  できない。
 - `vi_planner`（`local_planner:=auto|vi`）と `vi_global_planner`（`local_planner:=nav2`）は
   **排他**。両方立てると `compute_path_to_pose` にサーバが 2 つ載る。
 - **Pi 5 では rtmouse が動かない。** `robot_bringup.launch.py` の `driver:=` は既定が
@@ -114,7 +117,9 @@ Docker 越しに叩く形は
   入れてよいが、導出や背景は `config/README.md` / `docs/` / 実装 (例:
   `vi_planner/src/core.rs` 冒頭) に置いて参照で済ませる。
 - 「既定」= 各ノードの `main.rs` などが持つ宣言時の値、`overrides/` での「断片」=
-  `config/nav2/*.yaml` の値。値を変えたら `既定 同左` や `# 断片 <値>:`、ファイル冒頭の
+  重ねる先の設定ファイル（そのノードを宣言している `config/nav2/*.yaml` や
+  `config/localization/emcl2.yaml` など）の値。値を変えたら `既定 同左` や
+  `# 断片 <値>:`、ファイル冒頭の
   「変えてあるのは○○だけ」といった要約も同じ変更で追随させる。
 
 ## 触る前に読むもの

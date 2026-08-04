@@ -125,6 +125,12 @@ ros2 launch autonomous_nav mapping.launch.py \
 
 地図の様子をその場で見るなら`use_rviz:=true`を足します（既定は`false`）。
 
+SLAM Toolboxの値を差し替えるなら、`slam_params_file:=`でファイルごと渡すほかに、
+`overrides:=`で一部のキーだけを重ねられます（`slam_toolbox:`の節を書きます。
+`mapping.launch.py`も既定で`overrides:=map_19f`を受けるので、別の場所を測るときは
+`overrides:=none`か、その場所用の名前を渡してください）。書きかたは
+[設定](configuration.md)の「上書き（overrides）の行き先」にあります。
+
 軽量Docker環境:
 
 ```bash
