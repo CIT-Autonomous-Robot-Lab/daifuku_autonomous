@@ -19,7 +19,8 @@ Aborted になる (`plan=0`)」を手元の Podman で切り分けるための�
 ```powershell
 cd simulator\scripts
 
-# 実機と同じ設定 (地図 free_thresh 0.25 / solver frontier2d_sparse / planner vi)
+# 実機と同じ設定 (地図 free_thresh 0.25 / planner vi。solver はリポジトリの
+# config のまま = 2026-08-04 以降 frontier2d_sparse_compact。VI_SOLVER で上書き可)
 .\run_pi4_sim.ps1 -Case baseline
 
 # 制限なし (全速) との対照
@@ -391,8 +392,9 @@ goal (4.28,-2.92)) だけで、これは観測済み領域内の 120,753 セル�
 
 `maps/map_tsudanuma.yaml` は 5888x4000 @0.05m (294.4m x 200m)。占有 0.75% /
 自由 31.1% / **未観測 68.2%**。VI の状態数は 5888*4000*60 = **14.1 億**で、
-`State` 56B/state の密配列だけで 79GB。既定の `frontier2d_sparse` では
-起動と同時に死ぬ。
+`State` 56B/state の密配列だけで 79GB。密ソルバ (`frontier2d_sparse`、ノードの
+既定値) では起動と同時に死ぬ。リポジトリの config は 2026-08-04 に compact を
+既定にしたので、いまは上書きなしでもここには落ちない。
 
 ### 実装したもの (value_iteration3 側)
 
