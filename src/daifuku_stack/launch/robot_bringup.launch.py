@@ -36,8 +36,9 @@
 # それが仲裁の入力の 1 つになる。
 #
 # joy:= (既定 true) はゲームパッド (XInput 互換) を足す。joy_node と自前の
-# joy_teleop が上がり、START 3 秒長押しで /cmd_vel_teleop への出力を入/切、
-# START+BACK 同時 3 秒で保存したウェイポイントの巡回を始める。仲裁の teleop 側へ
+# joy_teleop が上がり、START 2 秒長押しで /cmd_vel_teleop への出力を入/切、
+# BACK 単体の 2 秒長押しでモータ電源の入/切、START+BACK 同時 2 秒で保存した
+# ウェイポイントの巡回を始める。仲裁の teleop 側へ
 # 出すので、**twist_mux:=false では誰も購読しない**。詳細は
 # docs/usage/joystick.md と src/joy_teleop.py。
 
@@ -333,8 +334,9 @@ def generate_launch_description():
             "joy",
             default_value="true",
             description="ゲームパッド (XInput 互換) での手動走行を立てるか。true なら "
-                        "joy_node と joy_teleop が上がり、START 3 秒長押しで "
-                        "/cmd_vel_teleop への出力を入/切、START+BACK 同時 3 秒で "
+                        "joy_node と joy_teleop が上がり、START 2 秒長押しで "
+                        "/cmd_vel_teleop への出力を入/切、BACK 単体の 2 秒長押しで "
+                        "モータ電源の入/切、START+BACK 同時 2 秒で "
                         "保存したウェイポイントの巡回を始める。挿していなくても "
                         "他のノードは動く (joy_teleop は /joy が来なければ何も "
                         "publish しない。joy_node は respawn 付き)。",

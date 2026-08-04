@@ -158,7 +158,7 @@ ros2 topic pub --once /buzzer std_msgs/msg/Int16 "{data: 0}"
   無音ならピン番号かハードの側。`pwm channel N` なら番号が違う（Pi 5 でオーバレイを
   入れた場合）。
 
-ブザーだけは `joy:=true`（既定）ならゲームパッドからも鳴ります。START を 3 秒押して
+ブザーだけは `joy:=true`（既定）ならゲームパッドからも鳴ります。START を 2 秒押して
 teleop を入れると `joy_teleop` が `/buzzer` へ旋律を出すので
 （[joystick.md](../../docs/usage/joystick.md#モードは音で分かります)）、`topic pub` より
 手早く確かめられます。

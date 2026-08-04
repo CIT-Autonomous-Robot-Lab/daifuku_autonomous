@@ -7,16 +7,32 @@ robot_bringup.launch.py が joy:=true (既定) のとき joy_node と一緒に�
 上流の teleop_twist_joy を使わないのは、長押しと同時押しでモードを切り替える
 必要があるためで、あちらは押している間だけ速度を出す (デッドマン) しかできない。
 
-  * STARTを3秒            … teleop の入/切をトグルする (ピロリ↑ / ピロリ↓)
-  * START+BACKを同時に3秒  … teleop を切り、保存したウェイポイントの巡回を始める (ピピピ)
+  * STARTを長押し          … teleop の入/切をトグルする (ピロリ↑ / ピロリ↓)
+  * BACKを長押しして離す    … モータ電源の入/切をトグルする (ピロリピロリ↑ / ↓)
+  * START+BACKを同時に長押し … teleop を切り、保存したウェイポイントの巡回を始める (ピピピ)
   * RB を押している間      … ブースト (上限が linear_max_speed から boost へ上がる)
+
+長押しの時間はどれも hold_seconds (既定 2 秒)。BACK 単独だけ**離した時点**で決まる
+のは joy_buttons.HoldLatch の docstring のとおり。
 
 出す先は **/cmd_vel_teleop** (twist_mux の優先度 100 側)。/cmd_vel は自律側の
 出力なので、そちらへ出すと自律走行中に取り合いになる。
 
+## モータ電源は「切る」ほうが本命
+
+twist_mux の優先度は非常停止ではない。実際に止めるのはモータ電源で、これまでは
+`control.sh motor off` (= /motor_power サービス) しか手が無かった。BACK 単独の
+長押しは**その手をパッドに出したもの**である。切れば twist_mux も自律側も関係なく
+車輪が止まる。
+
+いま入っているかどうかは**こちらでは分からない** (ドライバは状態を出さない) ので、
+自分が投げた要求だけを数えている。起点は motor_power_start_state で、ドライバの
+initial_motor_power と合わせておくこと。`control.sh motor` など外から変えられると
+1 回ぶんずれる (次の長押しが空振りして、その次で揃う)。
+
 ## モードは音でも伝える
 
-長押しは 3 秒経つまで何も起きず、切り替わった先はスティックを倒すまで見分けが
+長押しは hold_seconds (既定 2 秒) 経つまで何も起きず、切り替わった先はスティックを倒すまで見分けが
 付かない。手元にノート PC が無ければログも見えないので、切り替わった時点で
 **/buzzer** (`std_msgs/Int16`、値は Hz・0 で停止) へ短い旋律を出す。旋律そのものは
 joy_buttons.py の TUNE_* にある。押しても効かなかったとき (巡回中にもう一度
@@ -53,7 +69,7 @@ teleop を切るとき (と巡回を始めるとき) は、ゼロを stop_tail �
 
 無線のゲームパッドは、受信機を抜かれても電池が切れても /joy が来なくなるだけで
 エラーは出ない。joy_timeout 秒来なければゼロを出し、長押しの計測も捨てる
-(押しっぱなしのまま切れたのを 3 秒後の切り替えとして拾わないため)。
+(押しっぱなしのまま切れたのを長押しの成立として拾わないため)。
 
 ボタンと軸の番号は **XInput (X モード)** のときのもの。DirectInput のパッドや、
 モード切り替えを持つ機種を D 側にしたものは総入れ替えになるので、パラメータで
@@ -88,6 +104,8 @@ from sensor_msgs.msg import Joy
 from std_msgs.msg import Bool
 from std_msgs.msg import Int16
 
+from std_srvs.srv import SetBool
+
 import yaml
 
 # joy_buttons.py は同じ lib/daifuku_stack に入る (CMakeLists.txt の install(PROGRAMS))。
@@ -97,8 +115,9 @@ if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
 from joy_buttons import (  # noqa: E402
-    COMBO, HoldLatch, TOGGLE, TUNE_FINISHED, TUNE_REFUSED, TUNE_TELEOP_OFF,
-    TUNE_TELEOP_ON, TUNE_WAYPOINTS, TunePlayer, axis, axis_to_speed, pressed,
+    COMBO, HoldLatch, MOTOR, TOGGLE, TUNE_FINISHED, TUNE_MOTOR_OFF, TUNE_MOTOR_ON,
+    TUNE_REFUSED, TUNE_TELEOP_OFF, TUNE_TELEOP_ON, TUNE_WAYPOINTS, TunePlayer, axis,
+    axis_to_speed, pressed,
 )
 
 # 旋律の音の変わり目を拾う周期 [s]。一番短い音 (60 ms) の 1/6 で、publish するのは
@@ -165,13 +184,15 @@ class JoyTeleop(Node):
         self.declare_parameter("button_toggle", 7)
         self.declare_parameter("button_waypoints", 6)
         self.declare_parameter("button_boost", 5)
-        self.declare_parameter("hold_seconds", 3.0)
+        self.declare_parameter("hold_seconds", 2.0)
         self.declare_parameter("publish_rate", 20.0)
         self.declare_parameter("joy_timeout", 0.5)
         self.declare_parameter("stop_tail", 1.0)
         self.declare_parameter("cancel_window", 2.0)
         self.declare_parameter("start_enabled", False)
         self.declare_parameter("buzzer", True)
+        self.declare_parameter("motor_power_service", "motor_power")
+        self.declare_parameter("motor_power_start_state", False)
         self.declare_parameter("waypoints_file", "")
         self.declare_parameter("follow_waypoints_action", "follow_waypoints")
         self.declare_parameter("navigate_to_pose_action", "navigate_to_pose")
@@ -214,6 +235,9 @@ class JoyTeleop(Node):
         self._goal_handle = None
         self._goal_pending = False
         self._tune = TunePlayer()
+        # ドライバは電源の状態を出さないので、自分が投げた要求だけを数える。
+        self._motor_power = bool(value("motor_power_start_state"))
+        self._motor_pending = False
 
         self._cmd_pub = self.create_publisher(Twist, "cmd_vel_teleop", 10)
         # 状態は遅れて繋いだ購読者にも見せたい (「なぜ動かない」を追うため)。
@@ -239,6 +263,9 @@ class JoyTeleop(Node):
         if bool(value("buzzer")):
             self._buzzer_pub = self.create_publisher(Int16, "buzzer", 10)
             self.create_timer(TUNE_PERIOD, self._tune_tick)
+
+        self._motor_service = value("motor_power_service")
+        self._motor_client = self.create_client(SetBool, self._motor_service)
 
         self._follow_action = value("follow_waypoints_action")
         follow_action = self._follow_action
@@ -268,9 +295,9 @@ class JoyTeleop(Node):
         self.create_timer(period, self._tick)
         self._publish_state()
         self.get_logger().info(
-            "joy teleop %s; hold START %.0fs to toggle, START+BACK %.0fs to follow waypoints"
-            % ("on" if self._enabled else "off", self._latch.hold_seconds,
-               self._latch.hold_seconds)
+            "joy teleop %s; hold %.1fs: START toggles teleop, BACK (on release) toggles "
+            "motor power, START+BACK follows waypoints"
+            % ("on" if self._enabled else "off", self._latch.hold_seconds)
         )
 
     # ── 入力 ────────────────────────────────────────────────────────────
@@ -299,6 +326,8 @@ class JoyTeleop(Node):
             if action == COMBO:
                 # 音は _start_waypoints が選ぶ (始まったか、断ったか)。
                 self._start_waypoints()
+            elif action == MOTOR:
+                self._toggle_motor_power()
             elif action == TOGGLE:
                 self._set_enabled(not self._enabled)
                 self._play(TUNE_TELEOP_ON if self._enabled else TUNE_TELEOP_OFF)
@@ -373,6 +402,58 @@ class JoyTeleop(Node):
         message.data = self._enabled
         self._state_pub.publish(message)
         self._state_at = time.monotonic()
+
+    # ── モータ電源 ──────────────────────────────────────────────────────
+
+    def _toggle_motor_power(self):
+        """モータ電源を入/切する。切るほうは非常停止として使われる。
+
+        いま入っているかは分からない (ドライバは状態を出さない) ので、自分が
+        投げた要求だけを数えている。外から変えられると 1 回ぶんずれる。
+        """
+        if self._motor_pending:
+            # 前の要求がまだ返っていない。二度押しで往復させない。
+            self.get_logger().warning("motor power request still in flight")
+            self._play(TUNE_REFUSED)
+            return
+
+        if not self._motor_client.service_is_ready():
+            self.get_logger().error(
+                "%s service is not available; is the driver up and activated?"
+                % self._motor_service
+            )
+            self._play(TUNE_REFUSED)
+            return
+
+        wanted = not self._motor_power
+        request = SetBool.Request()
+        request.data = wanted
+        # 要求を先に投げる。切るほうは非常停止なので、音 (最長 0.41 秒) を
+        # ボタンとサービス呼び出しのあいだに挟まない。
+        self._motor_pending = True
+        future = self._motor_client.call_async(request)
+        future.add_done_callback(self._on_motor_power_response)
+        self._motor_power = wanted
+        self._play(TUNE_MOTOR_ON if wanted else TUNE_MOTOR_OFF)
+        self.get_logger().info("motor power %s" % ("on" if wanted else "off"))
+
+    def _on_motor_power_response(self, future):
+        self._motor_pending = False
+        try:
+            response = future.result()
+        except Exception as exc:  # noqa: BLE001 - サービス側の失敗は何でも拾う
+            response = None
+            self.get_logger().error("motor power call failed: %s" % exc)
+        if response is not None and response.success:
+            return
+        # 通らなかったのなら数えた側を戻す。戻さないと、次の長押しが「切る」
+        # つもりで「入れる」になる。
+        self._motor_power = not self._motor_power
+        if response is not None:
+            self.get_logger().error(
+                "motor power refused: %s" % (response.message or "(no message)")
+            )
+        self._play(TUNE_REFUSED)
 
     # ── 音 ──────────────────────────────────────────────────────────────
 

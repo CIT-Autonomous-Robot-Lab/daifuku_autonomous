@@ -41,9 +41,9 @@ joy_teleop:
     angular_boost_speed: 1.5 # 既定 同左 [rad/s]: ブースト時の旋回の上限
 
     button_toggle: 7        # 既定 7: START。hold_seconds 長押しで teleop の入/切
-    button_waypoints: 6     # 既定 6: BACK。START と同時に hold_seconds でウェイポイント巡回を開始
+    button_waypoints: 6     # 既定 6: BACK。単体で長押しして離すとモータ電源の入/切、START と同時ならウェイポイント巡回を開始
     button_boost: 5         # 既定 5: RB。押しているあいだだけ上限が boost 側になる
-    hold_seconds: 3.0       # 既定 同左 [s]: 長押しと判定するまでの時間
+    hold_seconds: 2.0       # 既定 同左 [s]: 長押しと判定するまでの時間。BACK 単体だけはこれを超えて「離した」時点で成立する
 
     publish_rate: 20.0      # 既定 同左 [Hz]: /cmd_vel_teleop を出す周期。twist_mux の timeout 0.5 s より十分速く
     joy_timeout: 0.5        # 既定 同左 [s]: /joy がこれだけ途切れたら受信断とみなしてゼロを出す
@@ -59,3 +59,5 @@ joy_teleop:
 
     follow_waypoints_action: "follow_waypoints"  # 既定 同左: nav2_waypoint_follower のアクション名
     navigate_to_pose_action: "navigate_to_pose"  # 既定 同左: teleop に入るときに取り消す単発ゴールのほう
+    motor_power_service: "motor_power"           # 既定 同左: BACK 単体長押しで叩く本体ドライバのサービス (std_srvs/SetBool)
+    motor_power_start_state: false               # 既定 同左: 起動時に電源が入っているとみなすか。ドライバの initial_motor_power と合わせる (外から変えられると 1 回ぶんずれる)
