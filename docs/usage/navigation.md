@@ -146,6 +146,17 @@ ros2 launch autonomous_nav navigation.launch.py \
 
 `local_planner:=auto`（既定）は、`planner:=vi`なら`vi`、`planner:=navfn`なら`nav2`を選びます。
 
+`map_19f`では`vi_planner`は密ソルバで解きます。経路計画と経路追従が1本の状態配列を
+共有し、追従がスキャンから書いたペナルティを全域掃き（`global_sweep`、既定で有効）が
+広域の経路まで広げるからです。
+
+密は状態1つあたり80バイト要るので、プランナ内部だけを0.10 m/セルに粗くして実測655 MBに
+収めています（`map_scale: 2`。地図、コストマップ、自己位置推定は0.05 mのままです）。
+掃きは追従中もバックグラウンドで回り、1コアの25%を使います。1掃きの実時間は起動ログの
+`global sweep done in ...`に出ます。`dense_limit_mb`を超える地図では、確保してから
+OOMされる代わりに起動を止めます。値の導出は
+[`config/README.md`](../../src/autonomous_nav/config/README.md)にあります。
+
 ## 広域地図（map_tsudanuma）で動かす
 
 `maps/map_tsudanuma.yaml`は5888×4000セル（0.05 m/セル、294.4 m×200 m）の広域地図です。
@@ -172,8 +183,12 @@ ros2 launch autonomous_nav navigation.launch.py \
 `compact_sink_dir`のmmapファイルから起こして回します（±1 mウィンドウ＋遷移到達距離＋余裕。
 0.25 mセルで27×27×60≒2.5 MB）。
 
-`local_planner:=vi`で`map_scale > 1`のまま密ソルバを指定すると、全域の状態配列を確保して
-しまいます。この組み合わせはlaunchが起動前に弾きます。
+ただし**この地図では`vi_planner`の`global_sweep`を`false`にしてください**。この掃きは
+経路計画と経路追従が共有する密な状態配列の上でしか動かず、compactにはその共有場が
+ありません。`true`のままだと、機体は目の前の障害物を避けるのに
+`compute_path_to_pose`は塞がった通路を返し続けます。黙って効かない設定なので、この
+組み合わせはlaunchが起動前に弾きます。`overrides:=map_tsudanuma`には
+`global_sweep: false`が入っています。
 
 NavFnとDWBで動かす場合、`map_tsudanuma`の価値反復向け設定は要りませんが、
 `overrides:=none`を渡してください。省略すると既定の`map_19f`が載り、この地図には
