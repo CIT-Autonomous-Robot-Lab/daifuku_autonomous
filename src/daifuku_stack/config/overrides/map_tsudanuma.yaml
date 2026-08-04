@@ -70,7 +70,8 @@ vi_planner:
 #   waypoint_prefetch … 断片が false へ戻った (2026-08-04 の固まりの容疑者の 1 つ)。
 #     true にすると先読み中は価値関数が 2 つ = sink も 2 つで、648MB x2 = 1.3GB が
 #     匿名メモリに居座る。Pi 5 なら通るが**未計測**。4GB 機では足さないこと。
-#   publish_value_function / value_publish_interval_ms … 断片が true / 0ms へ戻った。
-#     **この地図では全域スライス 1 枚 (94 万セル) が重い**。500ms に戻すと掃きスレッドが
-#     それをロックを握ったまま 2 秒ごとに作るので、走行中に /cmd_vel_mux が 2 秒おきに
-#     途切れる。2026-08-04 の実機はまさにこの止まり方だった (../README.md)。
+#   publish_value_function / value_publish_interval_ms … 断片の true / 500ms のまま。
+#     **この地図では全域スライス 1 枚 (94 万セル) が重い**。掃きスレッドがそれをロックを
+#     握ったまま 2 秒ごとに作るので、走行中に /cmd_vel_mux が 2 秒おきに途切れる恐れが
+#     ある。2026-08-04 の実機はまさにこの止まり方だったが、犯人の切り分けは未了 —
+#     再発したら value_publish_interval_ms: 0 をここへ足すのが戻し方 (../README.md)。
