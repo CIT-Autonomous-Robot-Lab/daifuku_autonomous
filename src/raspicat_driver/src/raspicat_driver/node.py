@@ -59,6 +59,13 @@ from .backend import create_backend
 # direction lines, so LEFT/RIGHT double as their indices.
 MOTOR_ENABLE = 2
 
+SIDE_NAMES = ("left", "right")
+
+# How far past "max_step_frequency for the whole interval" a pulse delta may
+# land before it is treated as noise rather than motion.  Only has to separate
+# real travel from the ~2**16 a bad delta carries, so it is deliberately loose.
+PLAUSIBLE_DELTA_MARGIN = 4.0
+
 
 class RaspicatDriver(LifecycleNode):
     """cmd_vel in, odom out, with the hardware hidden behind a backend."""
@@ -456,7 +463,7 @@ class RaspicatDriver(LifecycleNode):
         self._last_odom_time = now
         if dt <= 0.0:
             return
-        travelled = self._read_counters() if self._use_pulse_counters else None
+        travelled = self._read_counters(dt) if self._use_pulse_counters else None
         if travelled is not None:
             left, right = travelled
             # Same order as raspimouse_component.cpp: heading first, then the
@@ -513,11 +520,12 @@ class RaspicatDriver(LifecycleNode):
         transform.transform.rotation.w = qw
         self._tf_broadcaster.sendTransform(transform)
 
-    def _read_counters(self):
+    def _read_counters(self, dt):
         """Distance travelled by each wheel since the last call, in metres.
 
         Returns None when the counters are unavailable, which tells the caller
-        to fall back to integrating cmd_vel for this tick.
+        to fall back to integrating cmd_vel for this tick.  `dt` is the length
+        of the interval, used only to bound how far a wheel could have gone.
         """
         counters = self._hardware.counters
         if counters[LEFT] is None or counters[RIGHT] is None:
@@ -561,12 +569,32 @@ class RaspicatDriver(LifecycleNode):
         with self._state_lock:
             forward = list(self._forward)
 
+        # Widest delta a wheel could really produce over this interval.  A
+        # delta past it is not travel: the counters cannot report a decrease,
+        # so anything that looks like one -- a read torn across a carry, or a
+        # wheel turned by hand against the direction the sign is borrowed from
+        # -- comes back as nearly 2**16, worth about 100 m.  The floor keeps a
+        # short interval from making the bound absurdly tight.
+        limit = max(
+            self._max_step * dt * PLAUSIBLE_DELTA_MARGIN, self._pulses_per_revolution
+        )
+
         travelled = []
         for side in (LEFT, RIGHT):
             # The counters are 16-bit up-counters that do not know direction,
             # so the wrap is exact modulo 2**16 and the sign comes from the
             # command that produced the pulses.
             delta = (raw[side] - self._last_raw[side]) & 0xFFFF
+            if delta > limit:
+                # Resync on the value we just read rather than integrating it;
+                # the interval's real travel is lost, which is worth far less
+                # than the pose.
+                self.get_logger().warning(
+                    "%s pulse delta %d exceeds the %d possible in %.3f s; "
+                    "dropping the interval" % (SIDE_NAMES[side], delta, int(limit), dt),
+                    throttle_duration_sec=5.0,
+                )
+                delta = 0
             if not forward[side]:
                 delta = -delta
             revolutions = delta / self._pulses_per_revolution

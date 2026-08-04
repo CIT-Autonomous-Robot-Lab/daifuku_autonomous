@@ -38,15 +38,40 @@ class PulseCounter:
     REG_MSB = 0x10
     REG_LSB = 0x11
 
+    # How many times read() re-reads the high byte looking for a carry-free
+    # pair.  Two carries inside the three transactions this takes would need a
+    # wheel spinning far past max_step_frequency, so it never runs out.
+    READ_ATTEMPTS = 3
+
     def __init__(self, bus_path, address):
         self._fd = os.open(bus_path, os.O_RDWR | os.O_CLOEXEC)
         self._address = address
 
     def read(self):
-        """Return the raw 16-bit count.  Raises OSError if the bus does not answer."""
-        lsb = self._read_register(self.REG_LSB)
+        """Return the raw 16-bit count.  Raises OSError if the bus does not answer.
+
+        The two bytes come from two transactions and the counter keeps running
+        between them, so a carry landing in the gap tears the value: read the
+        low byte as 0xff just before the count reaches 0x0500 and the high byte
+        as 0x05 just after, and the pair reads 0x05ff -- 255 counts high.  The
+        next honest read then looks like the counter went *backwards*, which
+        node.py resolves modulo 2**16 into most of a revolution of travel that
+        never happened (measured 2026-08-04 on the Pi 5: one tear while a wheel
+        was turned by hand moved odom 45 m).
+
+        So bracket the low byte with the high one and start over if it moved.
+        """
         msb = self._read_register(self.REG_MSB)
-        return ((msb << 8) | lsb) & 0xFFFF
+        for _ in range(self.READ_ATTEMPTS):
+            lsb = self._read_register(self.REG_LSB)
+            again = self._read_register(self.REG_MSB)
+            if again == msb:
+                return (msb << 8) | lsb
+            msb = again
+        # Every attempt straddled a carry, which no reachable wheel speed can
+        # do.  Hand back the freshest pair anyway: the caller bounds the delta,
+        # so a wrong value here costs one interval rather than the pose.
+        return (msb << 8) | lsb
 
     def close(self):
         """Close the bus handle.  Safe to call twice."""
