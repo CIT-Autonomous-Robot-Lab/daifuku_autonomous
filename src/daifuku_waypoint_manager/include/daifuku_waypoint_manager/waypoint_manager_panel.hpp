@@ -18,6 +18,7 @@
 class QLabel;
 class QListWidget;
 class QPushButton;
+class QTimer;
 
 namespace daifuku_waypoint_manager
 {
@@ -54,7 +55,11 @@ private:
 
   void buildUi();
   void refreshList();
-  void publishMarkers();
+  // reset=false のときは DELETEALL を付けない。同じ ns/id は ADD で上書きされるので、
+  // タイマからの出し直し (updateLead) で全マーカが作り直されて瞬くのを避ける。
+  void publishMarkers(bool reset = true);
+  bool leadPoint(geometry_msgs::msg::Point * point, QString * reason) const;
+  void updateLead();
   void updateButtons();
   void addClickedPoint(const geometry_msgs::msg::PointStamped & point);
   void addClickedPose(const geometry_msgs::msg::PoseStamped & pose);
@@ -75,6 +80,14 @@ private:
   // まだ空なので、waypoint の編集 (refreshList 経由の updateButtons) が Start を
   // 押せる状態に戻してしまい、二重にゴールを送れる。
   bool goal_pending_{false};
+
+  // 機体から 1 点目へ引く線。この区間だけ機体に追随して動くので、編集のたびに出す
+  // publishMarkers() とは別にタイマで出し直す。lead_drawn_ / lead_origin_ は前回どこに
+  // 引いたかで、動いていなければ出し直さない (73 点あると全マーカの再送になるため)。
+  QTimer * lead_timer_{nullptr};
+  bool lead_drawn_{false};
+  geometry_msgs::msg::Point lead_origin_;
+  QString lead_reason_;
 
   QListWidget * waypoint_list_{nullptr};
   QLabel * status_label_{nullptr};

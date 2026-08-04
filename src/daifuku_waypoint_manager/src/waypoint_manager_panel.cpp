@@ -13,10 +13,12 @@
 #include <QPointer>
 #include <QPushButton>
 #include <QSaveFile>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include <pluginlib/class_list_macros.hpp>
 #include <rviz_common/display_context.hpp>
+#include <rviz_common/frame_manager_iface.hpp>
 #include <rviz_common/ros_integration/ros_node_abstraction.hpp>
 #include <yaml-cpp/yaml.h>
 
@@ -29,6 +31,13 @@ constexpr char kMarkerTopic[] = "/waypoint_markers";
 constexpr char kActionName[] = "/follow_waypoints";
 constexpr char kClickedPointTopic[] = "/clicked_point";
 constexpr char kWaypointPoseTopic[] = "/waypoint_pose";
+// 機体の位置を取る TF フレーム。本リポジトリの約束は base_footprint だが、それを出さない
+// 構成でも線が消えないよう base_link まで見る。
+constexpr char kRobotFrame[] = "base_footprint";
+constexpr char kRobotFrameFallback[] = "base_link";
+constexpr int kLeadIntervalMs = 500;
+// これ未満しか機体が動いていなければマーカを出し直さない。
+constexpr double kLeadMoveThreshold = 0.05;
 
 }  // namespace
 
@@ -67,6 +76,9 @@ void WaypointManagerPanel::onInitialize()
       QMetaObject::invokeMethod(this, [this, pose]() {addClickedPose(*pose);}, Qt::QueuedConnection);
     });
   action_client_ = rclcpp_action::create_client<FollowWaypoints>(node_, kActionName);
+  lead_timer_ = new QTimer(this);
+  connect(lead_timer_, &QTimer::timeout, this, &WaypointManagerPanel::updateLead);
+  lead_timer_->start(kLeadIntervalMs);
   publishMarkers();
   setStatus("Waiting");
   updateButtons();
@@ -249,17 +261,52 @@ void WaypointManagerPanel::refreshList()
   updateButtons();
 }
 
-void WaypointManagerPanel::publishMarkers()
+void WaypointManagerPanel::publishMarkers(bool reset)
 {
   if (!marker_publisher_) {
     return;
   }
   visualization_msgs::msg::MarkerArray markers;
-  visualization_msgs::msg::Marker clear;
-  clear.action = visualization_msgs::msg::Marker::DELETEALL;
-  markers.markers.push_back(clear);
+  if (reset) {
+    visualization_msgs::msg::Marker clear;
+    clear.action = visualization_msgs::msg::Marker::DELETEALL;
+    markers.markers.push_back(clear);
+  }
 
   const auto stamp = node_->now();
+
+  // 機体から 1 点目までの区間。巡回中は引かない (1 点目はもう後ろにあるため。いま
+  // どこへ向かっているかは Nav2 の Path 表示に出る)。
+  geometry_msgs::msg::Point lead;
+  QString lead_reason;
+  const bool draw_lead = !active_goal_ && !goal_pending_ && leadPoint(&lead, &lead_reason);
+  if (draw_lead) {
+    visualization_msgs::msg::Marker lead_marker;
+    lead_marker.header.frame_id = frame_id_;
+    lead_marker.header.stamp = stamp;
+    lead_marker.ns = "waypoint_lead";
+    lead_marker.id = 0;
+    lead_marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
+    lead_marker.action = visualization_msgs::msg::Marker::ADD;
+    lead_marker.scale.x = 0.06;
+    lead_marker.color.r = 1.0F;
+    lead_marker.color.g = 0.7F;
+    lead_marker.color.b = 0.0F;
+    lead_marker.color.a = 0.5F;
+    lead_marker.points.push_back(lead);
+    lead_marker.points.push_back(waypoints_.front().pose.position);
+    markers.markers.push_back(lead_marker);
+    lead_origin_ = lead;
+  } else if (lead_drawn_ && !reset) {
+    // DELETEALL を付けない出し直しでは、消えた区間を明示的に消す。
+    visualization_msgs::msg::Marker lead_marker;
+    lead_marker.ns = "waypoint_lead";
+    lead_marker.id = 0;
+    lead_marker.action = visualization_msgs::msg::Marker::DELETE;
+    markers.markers.push_back(lead_marker);
+  }
+  lead_drawn_ = draw_lead;
+
   if (waypoints_.size() >= 2) {
     visualization_msgs::msg::Marker route;
     route.header.frame_id = frame_id_;
@@ -317,6 +364,72 @@ void WaypointManagerPanel::publishMarkers()
     markers.markers.push_back(label);
   }
   marker_publisher_->publish(markers);
+}
+
+bool WaypointManagerPanel::leadPoint(geometry_msgs::msg::Point * point, QString * reason) const
+{
+  if (waypoints_.empty()) {
+    *reason = QString();
+    return false;
+  }
+  auto * context = getDisplayContext();
+  auto * frame_manager = context ? context->getFrameManager() : nullptr;
+  if (!frame_manager) {
+    *reason = QString();
+    return false;
+  }
+  // FrameManager が返すのは Fixed Frame から見た姿勢なので、waypoint と同じ座標系で
+  // ないと線がずれる。
+  const QString fixed_frame = context->getFixedFrame();
+  if (fixed_frame.toStdString() != frame_id_) {
+    *reason = QString("Fixed Frame (%1) differs from waypoint frame (%2) - no line from the robot")
+      .arg(fixed_frame).arg(QString::fromStdString(frame_id_));
+    return false;
+  }
+
+  Ogre::Vector3 position;
+  Ogre::Quaternion orientation;
+  // std::string に包む。const char[] のままだと Header を取るテンプレート側に持って
+  // いかれてコンパイルが通らない。
+  if (!frame_manager->getTransform(std::string(kRobotFrame), position, orientation) &&
+    !frame_manager->getTransform(std::string(kRobotFrameFallback), position, orientation))
+  {
+    *reason = QString("No TF for %1 - no line from the robot").arg(kRobotFrame);
+    return false;
+  }
+  point->x = position.x;
+  point->y = position.y;
+  point->z = position.z;
+  *reason = QString();
+  return true;
+}
+
+void WaypointManagerPanel::updateLead()
+{
+  if (!marker_publisher_ || waypoints_.empty()) {
+    return;
+  }
+  geometry_msgs::msg::Point lead;
+  QString reason;
+  const bool draw_lead = !active_goal_ && !goal_pending_ && leadPoint(&lead, &reason);
+  if (reason != lead_reason_) {
+    lead_reason_ = reason;
+    // 線が出ない理由は 1 度だけ出す。毎回書くとステータス行が編集の結果を上書きし続ける。
+    if (!reason.isEmpty()) {
+      setStatus(reason);
+    }
+  }
+  if (draw_lead == lead_drawn_) {
+    if (!draw_lead) {
+      return;
+    }
+    const double moved = std::hypot(
+      lead.x - lead_origin_.x, lead.y - lead_origin_.y, lead.z - lead_origin_.z);
+    if (moved < kLeadMoveThreshold) {
+      return;
+    }
+  }
+  publishMarkers(false);
 }
 
 bool WaypointManagerPanel::writeYamlFile(const QString & filename, QString * error) const
