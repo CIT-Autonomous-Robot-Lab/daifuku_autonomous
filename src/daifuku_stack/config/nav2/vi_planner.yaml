@@ -76,9 +76,9 @@ vi_planner:
     # 別スレッドで解いておき、着いたら solve を飛ばして受け取る。効いた回はログの
     # "path with ... , prefetched" と "prefetched the value function for ... in Xs" に出る。
     #
-    # **切ってあるのは代償があるから**: 価値関数が同時に 2 つ生きるので、密ならメモリが、
-    # compact なら sink のディスクが 2 倍要る (津田沼は 648MB x2 = 1.3GB。Pi の空きは
-    # 1.5GB しかない)。19F は sink 95MB なので余裕がある。
+    # **切ってあるのは代償があるから**: 価値関数が同時に 2 つ生きるので、密ソルバでは
+    # メモリが 2 倍要る (compact なら sink はディスクなので、32GB の SD には収まる。
+    # 津田沼は 648MB x2 = 1.3GB、19F は sink 95MB)。
     # solve の CPU も取られる — 追従の try_lock は邪魔しないが、10Hz の制御周期がずれ得る。
     # **並びを出すものがいないと何も起きない** (下の waypoint_topic)。**未検証** — 実機でも
     # pi4_sim でも通していない。
