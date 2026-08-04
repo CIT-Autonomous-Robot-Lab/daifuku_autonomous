@@ -9,15 +9,15 @@ pointcloud_to_laserscan:
     transform_tolerance: 0.05       # 既定 0.01 [s]: TF 待ちの許容遅延
     # Mid-360 の搭載高の実測値 (2026-08-03)。センサ面より下の戻り (床や低い反射) を
     # 捨てる。下げると床が壁として載る。lidar_z と対なので機体を変えたら両方直す。
-    min_height: 0.275               # 既定 DBL_MIN (≒0): 採用する点の高さの下限 [m]
-    max_height: 0.50                # 既定 DBL_MAX: 同上限。天井や高所の反射を捨てる
+    min_height: 0.5               # 既定 DBL_MIN (≒0): 採用する点の高さの下限 [m]
+    max_height: 3.00                # 既定 DBL_MAX: 同上限。天井や高所の反射を捨てる
     angle_min: -3.141592654         # 既定 -pi [rad]: 出力スキャンの開始角
     angle_max: 3.141592654          # 既定 +pi [rad]: 同終了角 (全周)
     angle_increment: 0.008726646    # 既定 pi/180 (0.01745) [rad]: 角度分解能 (0.5 度)
     queue_size: 4                   # 既定 論理コア数: 点群購読キュー長
     scan_time: 0.10                 # 既定 1/30 (0.0333) [s]: 出力に載せる 1 スキャン所要時間
     range_min: 0.23                 # 既定 0.0 [m]: これより近い点を捨てる (機体の自己反射よけ)
-    range_max: 10.0                 # 既定 DBL_MAX [m]: これより遠い点を捨てる
+    range_max: 60.0                 # 既定 DBL_MAX [m]: これより遠い点を捨てる
     use_inf: true                   # 既定 true: 範囲外を inf にする (false なら range_max + inf_epsilon)
 
     # ── 未設定 (既定のまま) ──

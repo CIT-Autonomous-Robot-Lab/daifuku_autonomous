@@ -25,6 +25,12 @@
 #                      ピーク RSS 1.60GB、sink 648MB、oom_kill 0
 #   ▲ この RSS はディスク退避していた頃のもの。RAM 化した今は**未計測**。
 
+emcl2:
+  ros__parameters:
+    alpha_threshold: 0.2                # 断片 0.5 (EMCL2 既定 0.5): alpha が 0.0-0.4 に張り付くため
+    expansion_radius_orientation: 0.05  # 断片 0.2 (EMCL2 既定 0.2): リセット時の姿勢の飛びを抑える
+    sensor_reset: false                 # 断片 true (EMCL2 既定 false): 貫通粒子の引き戻しを止める
+
 vi_global_planner:
   ros__parameters:
     solver: "frontier2d_sparse_compact"  # 断片も同じ値: states を確保しない。この地図では必須なので明示する
