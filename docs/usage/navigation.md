@@ -150,8 +150,9 @@ ros2 launch daifuku_stack navigation.launch.py \
 状態配列を確保せず、確定した価値関数と方策だけを12バイト/状態で持つので、地図が
 大きくなっても載ります。経路計画と経路追従はその確定出力を共有場として使い、追従が
 スキャンから書いたペナルティを全域掃き（`global_sweep`、既定で有効）が広域の経路まで
-広げます。掃きは追従中もバックグラウンドで回り、1コアの25%を使います。実時間は起動
-ログの`global sweep done in ...`に出ます。
+広げます。掃きは追従中もバックグラウンドで回り、1コアの37%を使います（`config/nav2/`の
+60:100。ノード既定の20:60なら25%）。実時間は起動ログの`global sweep done in ...`に
+出ます。
 
 `map_19f`では`map_scale: 2`でプランナ内部だけを0.10 m/セルに粗くしています（地図、
 コストマップ、自己位置推定は0.05 mのままです）。solveと伝播を軽くするためで、必須では
@@ -190,9 +191,13 @@ ros2 launch daifuku_stack navigation.launch.py \
 状態配列ではなくmmapの確定出力なので、掃きは全域Gauss–Seidelではなく、そこを
 タイル単位（更新する16セル角＋遷移到達距離だけの凍結境界）で起こして掃いて書き戻す
 形になります。仕事量は地図の大きさではなく、値が実際に動く範囲に比例します。
-**この地図で伝播にどれだけかかるかは未計測**です。起動ログの
-`global sweep done in ...`を見て、長すぎるようなら
-`global_sweep_budget_ms`と`global_sweep_idle_ms`の比を変えてください。
+**この地図で伝播にどれだけかかるかは未計測**です。2026-08-04にPi 5で見た限りでは、
+静止したままでもタイル修復は240秒回ってなお`queued 29`のまま減りませんでした。窓に壁が
+入っていれば毎tickペナルティが塗り直されるので、**走行中に`global sweep done in ...`は
+出ません**（設計どおり）。動いているかは2秒ごとの`tile repair running for ...`のほうで
+見てください。長すぎるようなら`global_sweep_budget_ms`と`global_sweep_idle_ms`の比を
+変えますが、**上限を決めているのはCPUではなく追従ループと共有するMutex**です
+（[`config/README.md`](../../src/daifuku_stack/config/README.md)の`global_sweep`の節）。
 
 NavFnとDWBで動かす場合、`map_tsudanuma`の価値反復向け設定は要りませんが、
 `overrides:=none`を渡してください。省略すると既定の`map_19f`が載り、この地図には

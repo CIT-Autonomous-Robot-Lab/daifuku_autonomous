@@ -42,10 +42,9 @@ vi_global_planner:
     action_forward_m: [0.5, -0.3333, 0.0, 0.3333, 0.0, 0.3333]  # 断片の 5/3 倍 (セル比例)
     goal_margin_radius: 0.5              # 断片 0.3: ゴールセル数を 7 に保つ (セル比例)
     # tmpfs でないこと (`findmnt -no FSTYPE /tmp`)。tmpfs だと RAM に載って無意味。
-    compact_sink_dir: "/tmp/vi_global_planner_sink"   # 断片 "" (= RAM): 0.68GB を退避
+    compact_sink_dir: "/tmp/vi_global_planner_sink"   # 断片 "" (= RAM): 実測 648MB を退避
     safety_radius_penalty: 1             # 断片 30: 30 だと貪欲ロールアウトが降下できない
     max_rollout_steps: 100000            # 断片 10000: 広域では遠い start から届かない
-    publish_value_function: false        # 断片 true: 2.6MB の grid を繰り返し配信するため
 
 # local_planner:=vi (vi_planner 1 ノード構成) 用。解像度まわりと
 # safety_radius_penalty は vi_global_planner と同じ値にしてある。片方だけ変えると
@@ -68,11 +67,12 @@ vi_planner:
     max_rollout_steps: 100000            # 断片 10000: 広域では遠い start から届かない
     # vi_global_planner とは別ディレクトリにして、2 構成を続けて試すときに互いの出力を
     # 踏まないようにする。追従はパッチ置き直しのたびに読むので SD カード上は避けたい。
-    compact_sink_dir: "/tmp/vi_planner_sink"          # 既定 "" (= RAM、断片は未設定): 0.68GB を退避
-    publish_value_function: false        # 断片 true: 配信のたび sink を全走査するため
-    # global_sweep は断片の true のまま (compact でもタイル修復として効く)。この
-    # 地図で伝播にどれだけかかるかは**未計測** — 起動ログの "global sweep done in"
-    # を見て、長すぎるなら global_sweep_budget_ms / idle_ms の比を変えること。
+    compact_sink_dir: "/tmp/vi_planner_sink"          # 既定 "" (= RAM、断片は未設定): 実測 648MB を退避
+    # global_sweep と budget/idle は断片のまま (compact でもタイル修復として効く)。
+    # 2026-08-04 実測 (Pi 5、静止 + 走査あり): tile repair が 240 秒回っても
+    # queued は 29 のまま減らない。窓 (±1m) に壁が入っていれば毎 tick penalty が
+    # 塗り直されて次の伝播が積まれるので、**走行中に "global sweep done in" は出ない**
+    # のが設計どおり。動いているかは 2 秒ごとの "tile repair running for" で見る。
 
 # ── ここで上書きしていないもの ────────────────────────────────────────────
 # emcl2 は断片のまま (sensor_reset だけノード既定と違う) で走る (ヘッダの注意 1)。この地図は 68.2% が
@@ -82,5 +82,12 @@ vi_planner:
 #   costmaps.*.track_unknown_space / vi の unknown_as_obstacle … 未観測を通行可に
 #     するかどうか。今はどちらも「未観測 = 通れない」= 舗装路のみ通行可。
 #   compact_ram_limit_mb … 断片が両ノードとも 2048MB だが、compact_sink_dir を指定
-#     しているので効かない。RAM 出力に戻すときだけ意味を持つ (sink 0.68GB なので
+#     しているので効かない。RAM 出力に戻すときだけ意味を持つ (sink 648MB なので
 #     2048MB には収まってしまい、退避されない)。
+#   publish_value_function / value_publish_interval_ms … 断片の true / 500ms のまま。
+#     この地図の全域スライスは 94 万セル (19F の 13 万セルの 7 倍) で、しかも compact
+#     なので 1 枚作るのに sink を全走査する。作るのは掃きスレッドが**ロックを握った
+#     まま** 2 秒ごと。ここが 300ms を超えると 10Hz の追従ループが 3 tick 連続で
+#     try_lock に失敗して機体が止まる。**未計測** — 走行中に /cmd_vel_mux が 2 秒
+#     おきに途切れるようなら、まずこの 2 つを疑う (interval を 0 にすると掃き中の
+#     出し直しが止まり、solve 完了時の 1 枚だけになる)。

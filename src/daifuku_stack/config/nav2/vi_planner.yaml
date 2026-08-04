@@ -1,7 +1,8 @@
 # 価値反復プランナ (value_iteration3, Rust)。「既定」= 各ノードの main.rs が
 # declare_parameter で持つ値。ここはほぼ既定の書き出しで、既定と違うのは
-# map_wait_sec と dense_limit_mb と compact_ram_limit_mb と、両ノードの
-# solver (ノード既定は密、ここは compact) の 4 つだけ。
+# map_wait_sec と dense_limit_mb と compact_ram_limit_mb と、vi_planner の
+# global_sweep_budget_ms / global_sweep_idle_ms と、両ノードの
+# solver (ノード既定は密、ここは compact) の 6 つだけ。
 # 地図ごとの調整は ../overrides/<地図名>.yaml に置く。合成順序と上書きは
 # ../README.md を参照。
 #
@@ -51,17 +52,23 @@ vi_planner:
     # 追従が書いた local_penalty はローカルウィンドウ (±1m) の中で値を上げるだけで
     # 外へは広がらない。これを切ると、狭域が「通れない」と判断しても広域の経路は
     # 塞がった通路を指し続ける (それが LoopDetected と復帰行動の空回りの入口)。
-    # budget:idle の比がそのまま CPU の取り分。追従ループは同じ Mutex を try_lock で
-    # 取り、3 tick 続けて取れないとロボットを止めるので、budget を伸ばすときは
-    # idle も一緒に伸ばすこと。1 掃きの実測は起動ログの "global sweep done in" に出る。
+    # budget:idle の比がそのまま CPU の取り分。**ここの上限を決めているのは CPU では
+    # なく共有 Mutex のほう**。掃きは 1 スレッドで、しかも追従ループが毎 tick 最大
+    # refine_budget_ms (40ms) 握るので、コアが空いていても取り分は増やせない。
+    # 追従ループは同じ Mutex を try_lock で取り、3 tick 続けて取れないとロボットを
+    # 止めるので、budget を伸ばすときは idle も一緒に伸ばすこと。budget+idle を
+    # control_frequency の周期 (100ms) の整数倍にもしない (位相が固定されて追従の
+    # tick が毎回 budget 側に落ち得る)。60:100 でどれだけ余裕があるかは**未検証** —
+    # 走行中に ros2 topic hz /cmd_vel_mux が 20Hz を保つかで見る。落ちるなら戻すこと。
+    # 1 掃きの実測は起動ログの "global sweep done in" に出る。
     # compact ではこれが sink のタイル修復になる (1 回の呼び出し = タイル 1 枚)。
     # 掃き終わるまでの時間は地図の大きさではなく、変化が及ぶ範囲に比例する。
     # **走行中は "global sweep done in" がまず出ない**。壁が窓 (±1m) に入っていれば
     # 毎 tick penalty が塗り直されて次の伝播が積まれ続けるため。動いているかは 2 秒
     # ごとの "tile repair running for ... (N visits, M tiles queued)" のほうで見る。
     global_sweep: true            # 既定 true: 全域掃き (compact ではタイル修復) を回すか
-    global_sweep_budget_ms: 20    # 既定 20 [ms]: 1 回のロック取得で掃きに使う時間
-    global_sweep_idle_ms: 60      # 既定 60 [ms]: そのあとロックを手放して待つ時間 (20:60 = 1 コアの 25%)
+    global_sweep_budget_ms: 60    # 既定 20 [ms]: 1 回のロック取得で掃きに使う時間。Pi 5 は 4 コア中 2 コアが空いていた (2026-08-04 実測) ので既定の 3 倍
+    global_sweep_idle_ms: 100     # 既定 60 [ms]: そのあとロックを手放して待つ時間 (60:100 = 1 コアの 37%。既定の 20:60 は 25%)
     # ── 可視化 (経路計算には影響しない) ──
     # /value_function は solve のときだけでなく、**追従中も掃きスレッドが 2 秒ごとに
     # 出し直す**。これが無いと全域スライスは solve した瞬間のまま固まり、伝播が効いて

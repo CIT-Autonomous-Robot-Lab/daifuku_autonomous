@@ -15,6 +15,7 @@
 | `robot/raspicat.yaml` | `robot_bringup.launch.py` | `raspimouse` (LifecycleNode) へ直接。`driver:=raspimouse` (既定 / 公式実装 / Pi 4) |
 | `robot/raspicat_driver.yaml` | `robot_bringup.launch.py` | `raspicat_driver` (LifecycleNode) へ直接。`driver:=original` (自前実装 / Pi 4・Pi 5) |
 | `robot/twist_mux.yaml` | `robot_bringup.launch.py` | `twist_mux` へ直接。`twist_mux:=true` (既定) のときだけ |
+| `robot/joy_teleop.yaml` | `robot_bringup.launch.py` | `joy_node` と `joy_teleop` の**両方**へ直接（1 ファイルに 2 ノード分）。`joy:=true` (既定) のときだけ |
 
 `robot/raspicat.yaml` だけは**上流ファイルの完全なコピー**で、差分ではありません。
 launch_ros はノード自身の `parameters=` をグローバル (`SetParametersFromFile`) より
@@ -60,6 +61,7 @@ resample_interval: 1         # 既定 1: 何回の更新ごとにリサンプル
 | `robot/raspicat.yaml` | 上流 `raspicat_ros` の `raspicat/config/raspicat.param.yaml` |
 | `robot/raspicat_driver.yaml` | `src/raspicat_driver` の `src/raspicat_driver/node.py` |
 | `robot/twist_mux.yaml` | `twist_mux` の `twist_mux.cpp`（既定なし＝書いた値がすべて） |
+| `robot/joy_teleop.yaml` | `joy` の `joy_node.cpp` と、`src/joy_teleop.py` の `declare_parameter` |
 | `overrides/*.yaml` | 重ねる先の設定ファイルの値（「断片 60:」のように書きます） |
 
 見ているブランチは、`robot_localization` が `humble-devel`、`laser_filters` が
@@ -621,13 +623,24 @@ RSS 833 MB で通っています）。状態数が 1/4 になるぶん solve も
   Δ=0 に達しました。
 * **密の 1 掃きの実時間**: 掃き速度の host 実測は 5.23 M cells/s なので、19F の scale 2
   （794 万状態）なら 1.5 秒。Pi4 は同種の処理で 5〜8 倍遅いので **8〜11 秒**の見込み
-  です。既定の `global_sweep_budget_ms: 20` / `global_sweep_idle_ms: 60`（1 コアの
-  25%）だとその 4 倍かかります。**実測値は起動ログの `global sweep done in ...` に
-  出る**ので、そこから詰めてください。**未検証** — 実機での 1 掃きは測っていません。
+  です。ノード既定の `global_sweep_budget_ms: 20` / `global_sweep_idle_ms: 60`（1 コアの
+  25%）だとその 4 倍かかります。`nav2/vi_planner.yaml` は **60 / 100（37%）** に上げて
+  あります（2026-08-04、Pi 5 で 4 コア中 2 コアが空いていたため）。**実測値は起動ログの
+  `global sweep done in ...` に出る**ので、そこから詰めてください。**未検証** — 実機での
+  1 掃きは測っていません。
 * **ロックの持ち方**が肝です。10 Hz の追従ループは同じ `Mutex<PlannerCore>` を
   `try_lock` で取り、3 tick 続けて取れないとロボットを止めます。掃きは
   `global_sweep_budget_ms` だけ掃いてロックを手放し、`global_sweep_idle_ms` 待ちます。
   budget を伸ばすときは idle も一緒に伸ばさないと、走行がぎくしゃくします。
+  **上限を決めているのは CPU ではなくこの Mutex です。** 掃きは 1 スレッドで、しかも
+  追従ループが毎 tick 最大 `refine_budget_ms`（40ms）握ります。10 Hz なら追従だけで
+  この 1 本のロックの 40% を先に取っているので、掃きを 60:100（37%）にすると 2 つで
+  8 割方を取り合う計算になります。コアが空いていても増やせないのはこのためです。
+  加えて **budget + idle を追従の周期（`control_frequency: 10.0` = 100ms）の整数倍に
+  しないこと** — 位相が固定されて、追従の tick が毎回 budget 側に落ち得ます。
+  60:100 でどれだけ余裕があるかは**未検証**です。掃きは `lock()`（`try_lock` では
+  なく）なので追従の解放ごとに位相がずれ直し、机上で連続失敗数を数えても当たりません。
+  観測すべきは走行中の `ros2 topic hz /cmd_vel_mux` が 20 Hz を保つかどうかです。
 * **止まるとき**: 密は 1 掃き丸ごとで Δ=0 になったら、compact は待ち行列が空に
   なったら、新しい不動点に達したので次に狭域が場を動かすまで止まります（CPU を
   焼き続けません）。ただし**走行中はまず止まりません** — 壁が窓（±1m）に入って
