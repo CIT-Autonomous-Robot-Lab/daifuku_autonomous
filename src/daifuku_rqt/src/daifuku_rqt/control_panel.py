@@ -40,6 +40,7 @@ from python_qt_binding.QtWidgets import QComboBox
 from python_qt_binding.QtWidgets import QDoubleSpinBox
 from python_qt_binding.QtWidgets import QGridLayout
 from python_qt_binding.QtWidgets import QGroupBox
+from python_qt_binding.QtWidgets import QHBoxLayout
 from python_qt_binding.QtWidgets import QHeaderView
 from python_qt_binding.QtWidgets import QLabel
 from python_qt_binding.QtWidgets import QProgressBar
@@ -76,6 +77,21 @@ LIFECYCLE_LABELS = {
     State.PRIMARY_STATE_ACTIVE: "active",
     State.PRIMARY_STATE_FINALIZED: "finalized",
 }
+
+
+class _SquareButton(QPushButton):
+    """A button that keeps its height equal to its width.
+
+    QGridLayout ignores heightForWidth, so the aspect ratio has to be enforced
+    from resizeEvent instead.  Column widths do not depend on row heights, so
+    the extra layout pass this triggers settles immediately; the guard keeps it
+    from looping.
+    """
+
+    def resizeEvent(self, event):
+        super(_SquareButton, self).resizeEvent(event)
+        if self.height() != self.width():
+            self.setFixedHeight(self.width())
 
 
 def _yaw_to_quaternion(yaw_degrees):
@@ -174,13 +190,25 @@ class ControlPanelWidget(QWidget):
 
         self._node_table = QTableWidget(0, 2)
         self._node_table.setHorizontalHeaderLabels(["プロセス", "CPU"])
-        self._node_table.verticalHeader().setVisible(False)
+        rows = self._node_table.verticalHeader()
+        rows.setVisible(False)
+        # Two thirds of the style's row height, and twice the box: three times
+        # as many processes fit.  minimumSectionSize is style-derived and would
+        # otherwise clamp the shorter rows straight back, and Fixed keeps
+        # _show_node_table's items from growing them again.
+        rows.setMinimumSectionSize(rows.defaultSectionSize() * 2 // 3)
+        rows.setDefaultSectionSize(rows.defaultSectionSize() * 2 // 3)
+        rows.setSectionResizeMode(QHeaderView.Fixed)
         self._node_table.horizontalHeader().setStretchLastSection(True)
         self._node_table.horizontalHeader().setSectionResizeMode(
             0, QHeaderView.Stretch
         )
         self._node_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self._node_table.setMaximumHeight(160)
+        # Fixed, not a maximum: QAbstractScrollArea hands out a 192 px size hint
+        # and the layout's trailing stretch swallows everything above it, so a
+        # raised maximum alone would leave the box at 192 whatever the panel
+        # height.  The old maximum of 160 was reached for the same reason.
+        self._node_table.setFixedHeight(320)
         layout.addWidget(self._node_table)
         return group
 
@@ -279,17 +307,26 @@ class ControlPanelWidget(QWidget):
         layout.addWidget(QLabel("旋回"), 0, 2)
         layout.addWidget(self._angular_speed, 0, 3)
 
+        # The pad gets a grid of its own.  Sharing the group's columns would tie
+        # the arrows to the label and spinbox widths above, so the left and right
+        # ones would come out narrower -- and squares of a different size.
+        pad = QWidget()
+        pad_layout = QGridLayout(pad)
+        pad_layout.setContentsMargins(0, 0, 0, 0)
+        for column in range(3):
+            pad_layout.setColumnStretch(column, 1)
+
         # Press and hold.  A click that only fired once would leave the robot
         # driving until the driver's 60 s cmd_vel_timeout expired.
         directions = [
-            ("▲", 1, 1, 1.0, 0.0),
-            ("◀", 2, 0, 0.0, 1.0),
-            ("■", 2, 1, 0.0, 0.0),
-            ("▶", 2, 2, 0.0, -1.0),
-            ("▼", 3, 1, -1.0, 0.0),
+            ("▲", 0, 1, 1.0, 0.0),
+            ("◀", 1, 0, 0.0, 1.0),
+            ("■", 1, 1, 0.0, 0.0),
+            ("▶", 1, 2, 0.0, -1.0),
+            ("▼", 2, 1, -1.0, 0.0),
         ]
         for label, row, column, linear, angular in directions:
-            button = QPushButton(label)
+            button = _SquareButton(label)
             button.setAutoRepeat(False)
             if linear == 0.0 and angular == 0.0:
                 button.clicked.connect(self._stop_teleop)
@@ -298,14 +335,24 @@ class ControlPanelWidget(QWidget):
                     lambda ln=linear, an=angular: self._start_teleop(ln, an)
                 )
                 button.released.connect(self._stop_teleop)
-            layout.addWidget(button, row, column)
+            pad_layout.addWidget(button, row, column)
+
+        # The pad gets half the group's width and sits in the middle of it;
+        # squares a third of the panel wide were too big to aim at.
+        pad_row = QWidget()
+        pad_row_layout = QHBoxLayout(pad_row)
+        pad_row_layout.setContentsMargins(0, 0, 0, 0)
+        pad_row_layout.addStretch(1)
+        pad_row_layout.addWidget(pad, 2)
+        pad_row_layout.addStretch(1)
+        layout.addWidget(pad_row, 1, 0, 1, 4)
 
         self._keyboard_checkbox = QCheckBox("矢印キーで操作 (このパネルに入力があるとき)")
         self._keyboard_checkbox.toggled.connect(self._on_keyboard_toggled)
-        layout.addWidget(self._keyboard_checkbox, 4, 0, 1, 4)
+        layout.addWidget(self._keyboard_checkbox, 2, 0, 1, 4)
 
         self._teleop_label = QLabel("停止中")
-        layout.addWidget(self._teleop_label, 5, 0, 1, 4)
+        layout.addWidget(self._teleop_label, 3, 0, 1, 4)
         return self._teleop_group
 
     # -- diagnostics -------------------------------------------------------
