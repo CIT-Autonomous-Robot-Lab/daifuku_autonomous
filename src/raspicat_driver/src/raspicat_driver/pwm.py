@@ -52,6 +52,15 @@ def pwmchips():
 class StepClock:
     """One PWM channel driving a stepper step clock at 50% duty."""
 
+    # A freshly exported channel has period 0, and the kernel's PWM core
+    # rejects any apply with a zero period -- so writing duty_cycle before a
+    # period fails with EINVAL, whatever the value.  Claim a period up front;
+    # the value only has to be legal, since set_frequency() replaces it.
+    # (Only used when the channel really is fresh: a channel left configured by
+    # a previous run must be collapsed to duty 0 first, or shrinking the period
+    # under a still-large duty fails with the same EINVAL.)
+    INITIAL_PERIOD_NS = 1000000
+
     def __init__(self, chip_dir, channel, settle_timeout=2.0):
         self._dir = os.path.join(chip_dir, "pwm%d" % channel)
         self._chip_dir = chip_dir
@@ -67,7 +76,15 @@ class StepClock:
                 time.sleep(0.01)
         # udev has to chown the attributes that export just created, and it may
         # not have run yet, so the first write tolerates EACCES for a moment.
-        self._write("duty_cycle", 0, tolerate_eacces=settle_timeout)
+        # (Reading needs no ownership -- the attributes are world-readable.)
+        period_ns = self._read("period")
+        if period_ns:
+            self._write("duty_cycle", 0, tolerate_eacces=settle_timeout)
+        else:
+            period_ns = self.INITIAL_PERIOD_NS
+            self._write("period", period_ns, tolerate_eacces=settle_timeout)
+            self._write("duty_cycle", 0)
+        self._period_ns = period_ns
 
     def set_frequency(self, freq_hz):
         """Set the step frequency.  0 or less stops the clock (duty 0)."""
@@ -104,6 +121,10 @@ class StepClock:
     def _write(self, attribute, value, tolerate_eacces=0.0):
         sysfs_write(os.path.join(self._dir, attribute), value, tolerate_eacces)
 
+    def _read(self, attribute):
+        with open(os.path.join(self._dir, attribute)) as handle:
+            return int(handle.read().strip())
+
 
 def sysfs_write(path, value, tolerate_eacces=0.0):
     """Write an integer to a sysfs attribute, optionally waiting out EACCES."""
@@ -117,3 +138,11 @@ def sysfs_write(path, value, tolerate_eacces=0.0):
             if time.monotonic() >= deadline:
                 raise
             time.sleep(0.05)
+        except OSError as error:
+            # The kernel rejects a sysfs write in write(), not open(), so the
+            # exception carries no filename and the caller only sees "[Errno
+            # 22] Invalid argument".  Every one of these attributes fails that
+            # way for its own reason, so say which one it was.
+            raise OSError(
+                error.errno, "%s (wrote %d)" % (error.strerror, value), path
+            ) from error

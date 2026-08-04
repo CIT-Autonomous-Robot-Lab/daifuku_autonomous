@@ -1,0 +1,34 @@
+// Pi 5 (RP1) のステップクロックを出せるようにするための親クロック指定。
+//
+// pwm-2chan は「ピンを PWM 機能に切り替える」だけで、クロックは設定しない
+// (/boot/firmware/overlays/README の pwm-2chan の項に "Currently the clock must
+// have been enabled and configured by other means" とある)。RP1 側の clk_pwm0 は
+// マルチプレクサで、Ubuntu 24.04 の raspi カーネル (6.8.0-1047 / -1060 の両方で
+// 実測) では既定の選択が clksrc_gp0..5 のいずれか = ドライバが登録していない
+// クロックなので、clk_pwm0 は親なしの孤児のままレート 0 になる。すると
+// rpi-pwm が "failed to get clock rate" を出し、period の書き込みが EINVAL で
+// 弾かれる (機体は 1 歩も動かない)。
+//
+// そこで親を xosc (固定 50MHz) に名指しする。もう 1 つの候補 pll_video_sec も
+// レート 0 だが、そちらを起こすと vc4-kms-v3d が使う pll_video 系に触ることに
+// なるので選ばない。50MHz あれば分解能 20ns で、ステップクロックには十分。
+//
+// assigned-clock-rates も一緒に書き直す。元の DT は 100MHz を要求しているが、
+// clk_pwm0 は分周器なので 50MHz の親からは届かない。3 つのプロパティは
+// of_clk_set_defaults() が添字を揃えて読むので、まとめて書く。
+//
+//   dtc -@ -I dts -O dtb -o daifuku-pwm-clk.dtbo daifuku-pwm-clk.dts
+//
+// -@ は必須 (&clk_xosc などのラベル参照を __fixups__ として残すため)。
+// config.txt では pwm-2chan の**後**に置く。
+
+/dts-v1/;
+/plugin/;
+
+&pwm0 {
+	// 0x11 = RP1 のクロック番号 17 (clk_pwm0)。pwm@98000 の clocks
+	// プロパティが元から持っている値と同じ。
+	assigned-clocks = <&rp1_clocks 0x11>;
+	assigned-clock-parents = <&clk_xosc>;
+	assigned-clock-rates = <50000000>;
+};

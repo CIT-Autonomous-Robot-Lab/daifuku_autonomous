@@ -148,6 +148,7 @@ apt_install \
   ca-certificates \
   chrony \
   curl \
+  device-tree-compiler \
   git \
   gnupg \
   i2c-tools \
@@ -398,6 +399,47 @@ if [[ -f "${RULES_SRC}" ]]; then
   rm -f /etc/udev/rules.d/99-daifuku-pi5.rules
 else
   soft_fail "${RULES_SRC} が見つかりません（リポジトリの取得に失敗している）"
+fi
+
+# Pi 5 だけ。RP1 の clk_pwm0 は親クロックが選ばれておらずレート 0 のままなので、
+# pwm-2chan を当てただけでは period の書き込みが EINVAL で弾かれる。親を xosc に
+# 名指しするオーバレイを足す（理由は tools/image/overlays/daifuku-pwm-clk.dts）。
+# config.txt 側の dtoverlay= 行は create_image.py が書く。
+#
+# .dtbo は**ここで作る**。dtc はホストにあるとは限らない（開発ホストは Windows）
+# ので、リポジトリには .dts だけを置き、コンパイルは機体でやる。効き始めるのは
+# プロビジョニング後の再起動から（udev ルールと同じ）。
+#
+# config.txt の dtoverlay= 行も**ここで足す**。create_image.py に書かせると、初回
+# 起動のあいだだけ「実体の無いオーバレイを指す config.txt」ができてしまう。
+# ファームウェアがそれを飛ばすのか止まるのかは確かめていないので、.dtbo を置いた
+# 直後に足して、行とファイルが別々に存在する瞬間を作らない。
+if [[ "${DAIFUKU_MODEL}" == "pi5" ]]; then
+  step "PWM親クロックのDTオーバレイを導入"
+  DTS_SRC="${WORKSPACE}/tools/image/overlays/daifuku-pwm-clk.dts"
+  BOOT_DIR="/boot/firmware"
+  [[ -d "${BOOT_DIR}/overlays" ]] || BOOT_DIR="/boot"
+  if [[ -f "${DTS_SRC}" ]]; then
+    # -@ が要る（&pwm0 / &rp1_clocks / &clk_xosc のラベル参照を __fixups__ として
+    # 残さないと、オーバレイの適用時に解決できない）。
+    if dtc -@ -I dts -O dtb -o /tmp/daifuku-pwm-clk.dtbo "${DTS_SRC}" &&
+      install -m 0644 /tmp/daifuku-pwm-clk.dtbo "${BOOT_DIR}/overlays/daifuku-pwm-clk.dtbo"; then
+      if ! grep -q '^dtoverlay=daifuku-pwm-clk' "${BOOT_DIR}/config.txt"; then
+        # pwm-2chan の直後に置く（順序が逆でも当たるが、読む側が追えるように）。
+        if grep -q '^dtoverlay=pwm-2chan' "${BOOT_DIR}/config.txt"; then
+          sed -i '/^dtoverlay=pwm-2chan/a dtoverlay=daifuku-pwm-clk' "${BOOT_DIR}/config.txt"
+        else
+          echo 'dtoverlay=daifuku-pwm-clk' >>"${BOOT_DIR}/config.txt"
+        fi
+        echo "  ${BOOT_DIR}/config.txt に dtoverlay=daifuku-pwm-clk を足しました"
+      fi
+    else
+      soft_fail "PWM親クロックのオーバレイのコンパイル"
+    fi
+    rm -f /tmp/daifuku-pwm-clk.dtbo
+  else
+    soft_fail "${DTS_SRC} が見つかりません（リポジトリの取得に失敗している）"
+  fi
 fi
 
 # ---------------------------------------------------------------------------

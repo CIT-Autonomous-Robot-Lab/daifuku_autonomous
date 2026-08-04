@@ -93,6 +93,8 @@ dtoverlay=pwm-2chan,pin=12,func=4,pin2=13,func2=4
 dtparam=i2c_baudrate=62500
 ```
 
+これに `provision.sh` が `dtoverlay=daifuku-pwm-clk` を足します（下記）。
+
 `pwm-2chan` は bcm2835 向けのオーバレイですが、`bcm2712-rpi.dtsi` が
 `pwm: &pwm0` → `pwm0: &rp1_pwm0` と付け替えているので Pi 5 でも RP1 の PWM に
 当たります。`func=4` は `pwm-2chan-overlay.dts` 自身が挙げる正当な組み合わせ
@@ -103,14 +105,19 @@ dtparam=i2c_baudrate=62500
 「Currently the clock must have been enabled and configured by other means」と
 あり、`clock` パラメータは informational）。Pi 4 ではファームウェアが PWM クロックを
 立てるので露見しませんが、Pi 5 では RP1 のクロックを誰かが設定する必要があります。
-**Ubuntu 24.04 の raspi カーネルでは `clk_pwm0` が孤児クロックのままレート 0 で、
-`rpi-pwm 1f00098000.pwm: failed to get clock rate` になり、`period` の書き込みが
-EINVAL で弾かれます**（2026-08-04 実測。`6.8.0-1047` と `6.8.0-1060` の両方で同じ。
-noble の `linux-raspi` は 6.8 系しか無く、`linux-firmware-raspi` も
+**Ubuntu 24.04 の raspi カーネルでは `clk_pwm0` が親の決まらない孤児クロックのまま
+レート 0 で、`rpi-pwm 1f00098000.pwm: failed to get clock rate` になり、`period` の
+書き込みが EINVAL で弾かれます**（2026-08-04 実測。`6.8.0-1047` と `6.8.0-1060` の
+両方で同じ。noble の `linux-raspi` は 6.8 系しか無く、`linux-firmware-raspi` も
 `12-0ubuntu1.1` が最新で上げようがない）。
 
-デバイスツリー側は `assigned-clock-rates = <100000000>` を要求しているので、
-効いていないのはカーネルの RP1 クロックドライバです。切り分けは debugfs で:
+そこで自前のオーバレイ `daifuku-pwm-clk` で親を名指しします
+（[`tools/image/overlays/daifuku-pwm-clk.dts`](../../tools/image/overlays/daifuku-pwm-clk.dts)）。
+`.dtbo` も `config.txt` の `dtoverlay=` 行も `provision.sh` が入れるので、**効き始めるのは
+プロビジョニング後の再起動から**です（udev ルールと同じ）。`dtc` が開発ホストにあるとは
+限らずコンパイルは機体でしかできないため、`create_image.py` は行を書きません（先に
+書くと、初回起動のあいだだけ実体の無いオーバレイを指すことになる）。当たっていれば
+`clk_pwm0` が `xosc` の下に 50 MHz でぶら下がります:
 
 ```bash
 sudo grep clk_pwm0 /sys/kernel/debug/clk/clk_summary   # xosc の下でレート≠0 か
@@ -118,10 +125,30 @@ sudo cat /sys/kernel/debug/clk/clk_pwm0/clk_parent     # 空なら親が選ば�
 sudo cat /sys/kernel/debug/clk/clk_pwm0/clk_possible_parents
 ```
 
-実測では `clk_parent` が**空**で、候補は
-`pll_video_sec xosc clksrc_gp0..gp5`。このうち `xosc`（50 MHz）と `pll_video_sec` は
-登録されているので、親を DT の `assigned-clock-parents` で名指しすれば通る見込みは
-あります（未検証）。同じ理由で `clk_audio_in` / `clk_audio_out` も孤児です。
+素の状態では `clk_parent` が**空**で、候補は `pll_video_sec xosc clksrc_gp0..gp5`。
+既定の選択は登録されていない `clksrc_gpN` のどれかなので孤児になります。`pll_video_sec`
+も選べますが、こちらはレート 0 で、起こすと `vc4-kms-v3d` が使う `pll_video` 系に触る
+ことになるので `xosc` にしてあります。同じ理由で `clk_audio_in` / `clk_audio_out` も
+孤児のままです（音声を使うなら同じ手が要る）。
+
+オーバレイを書き換えるときは、`config.txt` に足す前に机上で合成を検算できます
+（壊れた `.dtbo` を積んだまま再起動すると SSH で戻れません）:
+
+```bash
+dtmerge /boot/firmware/bcm2712-rpi-5-b.dtb /tmp/a.dtb \
+  /boot/firmware/overlays/pwm-2chan.dtbo pin=12 func=4 pin2=13 func2=4
+dtmerge /tmp/a.dtb /tmp/b.dtb /boot/firmware/overlays/daifuku-pwm-clk.dtbo
+dtc -I dtb -O dts /tmp/b.dtb 2>/dev/null | grep -A16 'pwm@98000 {'
+```
+
+再起動せずに試すこともできます（`sudo dtoverlay daifuku-pwm-clk` で当ててから
+`rpi-pwm` を bind し直すと `of_clk_set_defaults()` が走り直す）:
+
+```bash
+sudo dtoverlay daifuku-pwm-clk
+echo 1f00098000.pwm | sudo tee /sys/bus/platform/drivers/rpi-pwm/unbind
+echo 1f00098000.pwm | sudo tee /sys/bus/platform/drivers/rpi-pwm/bind
+```
 
 ネット上でよく見る `dtoverlay=pwm-pi5` は**使えません**。`rpi-6.12.y` の
 `overlays/Makefile` に無く（あるのは `pwm` / `pwm-2chan` / `pwm-gpio` /
@@ -166,31 +193,42 @@ ros2 topic pub --times 20 /cmd_vel geometry_msgs/msg/Twist \
   '{linear: {x: 0.05}, angular: {z: 0.0}}'
 ```
 
+配線していなくてもここまでは通ります。`/sys/class/pwm/pwmchip0/pwm0/{period,duty_cycle}`
+を直接読めば、指令どおりの値が出ているかをオシロなしで確かめられます。
+
 エンコーダが効いているかは、**モータ OFF のまま回転を指令して `odom` が動かない
-こと**で見ます。ノードのログは「カウンタが読めた」ことまでしか保証しません。
+こと**で見ます。ノードのログは「カウンタが読めた」ことまでしか保証しません。カウンタが
+答えないあいだドライバは `cmd_vel` の積分に落ちるので、配線していなければこの確認は
+必ず「動いてしまう」側に出ます（それが正しい答えです）。
+
+`ros2` コマンドは `--once` や `--times` を付けて自分で終わらせてください。`Ctrl-C` や
+`timeout` で落とすことを繰り返すと、グラフは正常に見えるのにそのノードだけデータが
+届かなくなることがあります（[トラブルシューティング](../usage/troubleshooting.md#ros2コマンドを何度か中断したあとそのノードだけ届かなくなる)）。
 
 ## 実機で確かめること
 
-**まだ走らせていません。** チップの同定だけは 2026-08-04 に Pi 5 Model B Rev 1.1
-（8GB・Ubuntu 24.04.4・6.8.0-1047-raspi）で確かめました。モータを回す側は未確認です。
-ピン・チャネル・アドレス・デバイスパスはすべてパラメータに出してあるので、
+**まだ走らせていません（配線していないため）。** 2026-08-04 に Pi 5 Model B Rev 1.1
+（8GB・Ubuntu 24.04.4・6.8.0-1060-raspi）で、チップの同定と**`/cmd_vel` から PWM
+出力までの一本の経路**は確かめました。モータを回した先は未確認です。ピン・チャネル・
+アドレス・デバイスパスはすべてパラメータに出してあるので、
 `config/robot/raspicat_driver.yaml` を直せばコードは触らずに済みます。
 
-**現時点で PWM は出せません。** `clk_pwm0` のレートが 0 のままで、`period` の書き込みが
-EINVAL になります（上の「1. SD カードを作る」を参照）。ここが解けるまで、モータ経路の
-検証はどれも始められません。
+`/cmd_vel` に `linear.x = 0.1` を投げたときの実測は左右とも
+`period = 15707963 ns`（63.66 Hz）・`duty_cycle` はその半分・`enable = 1` で、
+`pulses_per_revolution = 400` から計算した値と一致しました。odom も出ます。
 
 同定と権限まわりは確認済み（どれも黙って失敗するので、ノードを立てる前に見ること）:
 
 | 項目 | 実測 |
 | --- | --- |
-| PWM のオーバレイ | `pwm-2chan.dtbo` は実在（`pwm-pi5.dtbo` は無い）。ただし**存在することと PWM が出ることは別**で、このオーバレイはクロックを設定しない |
+| PWM のオーバレイ | `pwm-2chan.dtbo` は実在（`pwm-pi5.dtbo` は無い）。ただし**存在することと PWM が出ることは別**で、このオーバレイはクロックを設定しない。親クロックは `daifuku-pwm-clk` で名指しする |
+| PWM のクロック | `clk_pwm0` が `xosc` の下に 50 MHz でぶら下がっていること。孤児（親が空・レート 0）だと `period` の書き込みが EINVAL |
 | PWM の出どころ | `pwmchip0` → `.../1f00098000.pwm`（RP1・npwm=4）。`pwmchip_match` の `98000.pwm` は `find_pwmchip` が部分一致で拾う。`pwmchip1` は SoC 側の `107d517a80.pwm` |
 | gpiochip | `/dev/gpiochip4` が `pinctrl-rp1`（54 本）。`gpiochip0`〜`3` は `gpio-brcmstb@...` |
 | 所有者 | `provision.sh` を流した直後は `/sys/class/pwm` が root のまま。**再起動で `ubuntu:ubuntu` になる**。またチャネルの export は子デバイスの `add` ではなく `pwmchip` への `change` で飛ぶので、udev ルールは両方を見る必要がある |
 | AppArmor | Docker 既定の `docker-default` は `/sys/fs` 以外の `/sys/**` への書き込みを拒否する。所有者が合っていても export が EACCES になり、監査ログにも残らない。`compose.original.yaml` の `security_opt: apparmor=unconfined` で外してある |
 
-未確認（PWM が出るようになってから）:
+未確認（配線してから）:
 
 | 項目 | 見かた | 直す場所 |
 | --- | --- | --- |

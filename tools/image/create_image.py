@@ -1028,6 +1028,19 @@ def render_config_txt_block(model: str, with_rtmouse: bool) -> str:
             # pwm-pio / pwm1 だけ）。
             "dtoverlay=pwm-2chan,pin=12,func=4,pin2=13,func2=4",
         ]
+        if model == "pi5":
+            lines += [
+                # Pi 5ではもう1枚、親クロックを名指しするdaifuku-pwm-clkが要る
+                # （pwm-2chanはピンを切り替えるだけでクロックを設定せず、RP1の
+                # clk_pwm0は親なしのレート0のままになるのでperiodの書き込みが
+                # EINVALになる）。ここでは足さない。開発ホストにdtcがあるとは
+                # 限らずコンパイルは機体でしかできないので、dtoverlay=の行は
+                # .dtboを作ったprovision.shが自分で足す。ここで先に書くと、
+                # 初回起動だけ「実体の無いオーバレイを指す config.txt」になる
+                # ——ファームウェアがそれを飛ばすのか止まるのかは確かめて
+                # いないので、賭けないでおく。
+                "# dtoverlay=daifuku-pwm-clk は provision.sh が足す",
+            ]
     lines.append(END_MARK)
     return "\n".join(lines) + "\n"
 

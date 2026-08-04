@@ -224,6 +224,13 @@ SDカードリーダーによっては内蔵ディスク扱いになります。
 `udev/99-daifuku-raspicat.rules`（PWM・gpiochip・i2c-devの所有者を1000:1000にする）は
 `provision.sh`が機種によらず導入します。公式実装では使われないだけで害はありません。
 
+**Pi 5ではもう1枚オーバレイが要ります。** `pwm-2chan`はピンを切り替えるだけで
+クロックを設定せず、RP1の`clk_pwm0`は親の決まらないレート0のままになるので、
+そのままでは`period`の書き込みがEINVALで弾かれます。`overlays/daifuku-pwm-clk.dts`が
+親を`xosc`に名指しします。`dtc`が開発ホストにあるとは限らないので、コンパイルと
+`config.txt`への`dtoverlay=`行の追記はどちらも`provision.sh`が機体で行います
+（[`docs/setup/raspberry-pi-5.md`](../../docs/setup/raspberry-pi-5.md)）。
+
 ROS 2 Humbleのネイティブ環境（[`tools/setup/`](../setup/)）はUbuntu 22.04が
 前提なので、Pi 5では使えません。Pi 5ではDockerを使ってください。
 
