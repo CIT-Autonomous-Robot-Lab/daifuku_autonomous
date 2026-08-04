@@ -46,9 +46,9 @@ vi_global_planner:
 #
 # vi_planner の狭域追従は密な states を要求するが、全域ではなくロボット近傍のパッチ
 # (±1m 窓 + 遷移到達距離 + 余裕、0.25m セルで 27x27x60 ≒ 2.5MB) だけを compact の場から
-# 起こして回す。外側は compact の値のまま凍結して境界条件にする。compact 経路の既知の
-# 差異 (ロールアウトが静的解を読む / パッチ置き直しで局所精密化が捨てられる) は
-# vi_planner/src/core.rs 冒頭に詳しい。
+# 起こして回す。外側は compact の値のまま凍結して境界条件にする。窓の成果は毎 tick
+# sink へ書き戻すので置き直しで失われず、広域のロールアウトからも見える。残る差異は
+# 全域伝播 (global_sweep) が compact に無いことだけ。vi_planner/src/core.rs 冒頭に詳しい。
 vi_planner:
   ros__parameters:
     solver: "frontier2d_sparse_compact"  # 断片も同じ値: 密だと 3.17GB で OOM。この地図では必須なので明示する
