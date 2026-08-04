@@ -19,6 +19,9 @@
 ## ドキュメント
 
 - [セットアップ](docs/setup/README.md)
+  - [Raspberry Pi 4で動かす](docs/setup/raspberry-pi-4.md)
+  - [Raspberry Pi 5で動かす](docs/setup/raspberry-pi-5.md)
+  - [SDカードを作る](tools/image/README.md)
   - [Docker環境](docs/setup/docker.md)
   - [ネイティブ環境](docs/setup/native.md)
   - [ROS 2ネットワーク](docs/setup/network.md)

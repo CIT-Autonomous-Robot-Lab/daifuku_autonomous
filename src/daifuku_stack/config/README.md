@@ -14,6 +14,7 @@
 | `mapping/slam_toolbox.yaml` | `mapping.launch.py` | `slam_params_file` でノードへ直接 |
 | `robot/raspicat.yaml` | `robot_bringup.launch.py` | `raspimouse` (LifecycleNode) へ直接。`driver:=raspimouse` (既定 / 公式実装 / Pi 4) |
 | `robot/raspicat_driver.yaml` | `robot_bringup.launch.py` | `raspicat_driver` (LifecycleNode) へ直接。`driver:=original` (自前実装 / Pi 4・Pi 5) |
+| `robot/twist_mux.yaml` | `robot_bringup.launch.py` | `twist_mux` へ直接。`twist_mux:=true` (既定) のときだけ |
 
 `robot/raspicat.yaml` だけは**上流ファイルの完全なコピー**で、差分ではありません。
 launch_ros はノード自身の `parameters=` をグローバル (`SetParametersFromFile`) より
@@ -58,6 +59,7 @@ resample_interval: 1         # 既定 1: 何回の更新ごとにリサンプル
 | `sensors/scan_filter.yaml` | `laser_filters` の `sector_filter.h`（既定なし＝全項目必須） |
 | `robot/raspicat.yaml` | 上流 `raspicat_ros` の `raspicat/config/raspicat.param.yaml` |
 | `robot/raspicat_driver.yaml` | `src/raspicat_driver` の `src/raspicat_driver/node.py` |
+| `robot/twist_mux.yaml` | `twist_mux` の `twist_mux.cpp`（既定なし＝書いた値がすべて） |
 | `overrides/*.yaml` | 重ねる先の設定ファイルの値（「断片 60:」のように書きます） |
 
 見ているブランチは、`robot_localization` が `humble-devel`、`laser_filters` が
@@ -85,16 +87,18 @@ resample_interval: 1         # 既定 1: 何回の更新ごとにリサンプル
 
 ## nav2/ の合成
 
-`nav2/*.yaml` はファイル名順に読まれ、**深くマージ**されて 1 つの一時ファイルになります。
+`nav2/*.yaml` はファイル名順に読まれ、1 つの一時ファイルへ束ねられます。
 そのパスは起動ログに出ます。
 
 ```
 [INFO] [launch.user]: params: params_file: 8 fragments from .../config/nav2 -> /tmp/params_file_xxxx.yaml
 ```
 
-分割は「ノード単位で重複なし」が前提です。同じノードの同じキーが 2 つの断片に
-書かれていると、起動時にエラーで止まります（どちらが勝つか分からない状態を
-作らないため）。
+分割は「ノード単位で重複なし」が前提です。同じノード名が 2 つの断片にあると、
+キーが重なっていなくても起動時にエラーで止まります。束ねる前にノード名だけを見て
+弾くので、1 つのノードの設定を 2 ファイルに割れません（どちらが勝つか分からない
+状態を作らないため）。断片どうしは深くマージしません。深いマージが効くのは
+次節の override を重ねるときだけです。
 
 | ファイル | 含むノード |
 | --- | --- |
@@ -144,8 +148,8 @@ resample_interval: 1         # 既定 1: 何回の更新ごとにリサンプル
 変えるときは**置き換え**になります（追加ではありません）。
 
 ```bash
-ros2 launch autonomous_nav navigation.launch.py \
-    map:=$PWD/src/autonomous_nav/maps/map_tsudanuma.yaml \
+ros2 launch daifuku_stack navigation.launch.py \
+    map:=$PWD/src/daifuku_stack/maps/map_tsudanuma.yaml \
     overrides:=map_tsudanuma planner:=vi local_planner:=nav2
 ```
 
@@ -276,9 +280,12 @@ i2c_counter_read: Failed reading from i2c counter device, addr=0x10 / 0x11
 `false` のあいだの運用として、nav2 を止めた直後に必ずゼロ Twist を投げてください。
 
 ```bash
-ros2 topic pub --times 5 /cmd_vel geometry_msgs/msg/Twist \
+ros2 topic pub --times 5 /cmd_vel_teleop geometry_msgs/msg/Twist \
   '{linear: {x: 0.0}, angular: {z: 0.0}}'
 ```
+
+`/cmd_vel` ではなく `/cmd_vel_teleop` なのは、仲裁（`twist_mux.yaml`）で優先度が
+高い側だからです。`twist_mux:=false` で立てているなら `/cmd_vel` へ投げてください。
 
 ノードの自己診断はあてになりません。`raspimouse_component.cpp` の「Testing
 counters」は `ifstream::is_open()` を見るだけで `read` を試さないので、
@@ -337,6 +344,47 @@ Pi 4 と Pi 5 で 1 ファイルです。機種差は `model: auto` が device-t
 配線に関わるキー（`gpio_*` / `pwm*` / `i2c_*` / `direction_*_forward_level`）は
 すべて rtmouse の `rtmouse.h` から写した値で、**実機で確認していません**。
 確認項目と直しかたは上の 2 つのドキュメントの表にあります。
+
+### `twist_mux.yaml` の配線と優先度
+
+**入れた理由は書き手が 2 つあったからです。** 自律側は `velocity_smoother` が
+`cmd_vel_smoothed -> cmd_vel` の remap で `/cmd_vel` へ出し（nav2 の
+`navigation_launch.py` と `vi_global_planner` のそれ、どちらも同じ）、手動側は
+`control.sh teleop` の `teleop_twist_keyboard` / `teleop_twist_joy` が同じ
+`/cmd_vel` へ直接出していました。仲裁が無いので、自律走行中に遠隔操作を開くと
+両者のメッセージがそのまま交互にドライバへ届きます。
+
+配線は次のとおりで、**ドライバの購読先だけを変えてあります**。
+
+```text
+controller_server / vi_planner ─ /cmd_vel_nav ─ velocity_smoother ─ /cmd_vel ─┐
+                                                                              ├→ twist_mux → /cmd_vel_mux → ドライバ
+teleop / control.sh stop ─────────────────────── /cmd_vel_teleop ─────────────┘
+```
+
+nav2 側の remap には触れていません（include している上流の launch の中にあるので
+外から差し替えられない）。そのぶん `/cmd_vel` は「自律側の出力」の意味になり、
+ドライバが購読するのは `/cmd_vel_mux` です。両ドライバとも相対名 `cmd_vel` で
+購読しているので、`robot_bringup.launch.py` の remap 1 行で両方に効きます。
+
+**これは非常停止ではありません。** twist_mux が中継するのは、その時点で優先度が
+最大のトピックが**メッセージを受けたとき**だけです。teleop が勝つのは publish して
+いる間と `timeout`（0.5 秒）のあいだだけで、キーを離せば自律側へ戻ります
+（`teleop_twist_keyboard` はキー入力のたびに 1 通出すので、押しっぱなしで初めて
+勝ち続けます）。確実に止める手段は今までどおりモータ電源（`motor_power` /
+`control.sh motor off`）です。`control.sh stop` も 0.5 秒ぶんの停止指令であって、
+仲裁を入れる前より強くはなっていません。
+
+一方で、**中継が止まると指令も止まります**。twist_mux が落ちるとドライバには何も
+届かず、ドライバは最後の指令を `cmd_vel_timeout`（既定 60 秒）まで保持します。
+アクチュエータ経路にノードを 1 つ増やした代償で、この変更で新しく増えた失敗の形は
+これです。仲裁ごと外すなら `twist_mux:=false`（ドライバの購読先は `/cmd_vel` に
+戻り、`control.sh` には `CMD_VEL_TOPIC=/cmd_vel` を渡す）。
+
+`locks`（`std_msgs/Bool` で下位のトピックをまとめて塞ぐ層）は書いていません。
+`isLocked()` が `hasExpired() || data` で、受信前のスタンプは 0.0 = 期限切れ扱い
+なので、**配信元を用意せずに書くと塞がったまま**になり、その優先度未満の指令が
+すべて止まります。非常停止スイッチを足すときにセットで入れるものです。
 
 ### `lifecycle_bond.yaml` の `bond_timeout: 60.0`
 

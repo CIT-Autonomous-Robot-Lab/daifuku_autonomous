@@ -1,0 +1,20 @@
+<library path="src">
+  <class name="ControlPanel"
+         type="daifuku_rqt.control_panel.ControlPanel"
+         base_class_type="rqt_gui_py::Plugin">
+    <description>
+      Raspberry Pi Cat の操作パネル。ゴール送信、モータとライフサイクルの操作、
+      teleop、CPU 表示をまとめたもの。
+    </description>
+    <qtgui>
+      <group>
+        <label>Raspicat</label>
+        <icon type="theme">folder</icon>
+        <statustip>Raspberry Pi Cat 向けのプラグイン。</statustip>
+      </group>
+      <label>Raspicat Control Panel</label>
+      <icon type="theme">applications-system</icon>
+      <statustip>ゴール送信・モータ操作・teleop・CPU 表示。</statustip>
+    </qtgui>
+  </class>
+</library>

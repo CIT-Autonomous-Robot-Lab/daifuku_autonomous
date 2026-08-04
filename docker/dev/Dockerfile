@@ -45,6 +45,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ros-humble-rosbag2 \
       ros-humble-slam-toolbox \
       ros-humble-topic-tools \
+      ros-humble-twist-mux \
       sudo \
       tmux \
       xterm \

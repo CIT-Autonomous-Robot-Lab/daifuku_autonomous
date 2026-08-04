@@ -75,7 +75,7 @@ rtmouse は out-of-tree モジュールで、キャラクタデバイスのメ�
 同じで、確認のつもりで打つと機体ごと道連れになります。
 
 運用に効く帰結が 2 つあります。天秤と経緯は
-[`config/README.md`](../../src/autonomous_nav/config/README.md) にあります。
+[`config/README.md`](../../src/daifuku_stack/config/README.md) にあります。
 
 - **モータ OFF の dry-run が成立しません。** `odom` は指令値の積分なので、モータ
   電源を切ったまま指令を出しても自己位置だけがゴールまで「走り」ます（自前実装は
@@ -259,14 +259,14 @@ Pi 4 でも Pi 5 でも走らせた実績はまだありません。見る順に
 
 | 項目 | 分かっていること | 出どころ |
 | --- | --- | --- |
-| 寸法 | 車輪径 200 mm / トレッド 350 mm（2026-08-03 の実測値）。上流 raspicat の既定 152.4 / 279.18 mm に戻すと並進が 1.31 倍ずれる | [`config/README.md`](../../src/autonomous_nav/config/README.md) |
+| 寸法 | 車輪径 200 mm / トレッド 350 mm（2026-08-03 の実測値）。上流 raspicat の既定 152.4 / 279.18 mm に戻すと並進が 1.31 倍ずれる | [`config/README.md`](../../src/daifuku_stack/config/README.md) |
 | オドメトリの検算 | モータ ON で 0.1 m/s を 10 秒指令し、巻尺の実移動距離と `/odom` の変位を比べる。ずれる場合は補正係数ではなく寸法側で詰める | 同上 |
 | パルスカウンタ | I2C タイムアウト → mutex 固着 → リブートでしか戻らない。切ってある側（`false`）の実害も 2026-07-29 の実機で確認済み | 同上 |
 | DDS とライフサイクル | UDP のみでは TF が 20 秒以上遅れる。bond は既定 4 秒では間に合わない | [`troubleshooting.md`](../usage/troubleshooting.md) |
 
 ## 関連
 
-- [`src/autonomous_nav/config/README.md`](../../src/autonomous_nav/config/README.md) — 設定値の由来
+- [`src/daifuku_stack/config/README.md`](../../src/daifuku_stack/config/README.md) — 設定値の由来
 - [`tools/image/README.md`](../../tools/image/README.md) — SD カードの作成
 - [`docker/raspberrypi/README.md`](../../docker/raspberrypi/README.md) — コンテナ構成
 - [Raspberry Pi 5 で動かす](raspberry-pi-5.md) — Pi 5 での差分

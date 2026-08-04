@@ -303,6 +303,6 @@ def validate_map_file(context, *args, **kwargs):
         raise RuntimeError(
             f"Map YAML file does not exist: {map_path}\n"
             "Pass a real map path, for example: "
-            "map:=$PWD/src/autonomous_nav/maps/map_19f.yaml"
+            "map:=$PWD/src/daifuku_stack/maps/map_19f.yaml"
         )
     return []

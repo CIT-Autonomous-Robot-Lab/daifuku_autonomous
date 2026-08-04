@@ -32,7 +32,7 @@ Python でしか読めない形式を避けることで、GPU の無い開発機
 
 使い方:
 
-    python3 map_to_usd.py src/autonomous_nav/maps/map_19f.yaml -o worlds/map.usda
+    python3 map_to_usd.py src/daifuku_stack/maps/map_19f.yaml -o worlds/map.usda
     python3 map_to_usd.py .../map.yaml -o w.usda --unknown wall   # 未観測も壁
     python3 map_to_usd.py .../turtlebot3.yaml -o w.usda --wall-height 1.0
 

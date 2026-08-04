@@ -27,16 +27,16 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 from ament_index_python.packages import get_package_share_directory
 
-# 共通部品はこの launch ディレクトリの直下 (autonomous_nav_launch/) にある。
+# 共通部品はこの launch ディレクトリの直下 (daifuku_stack_launch/) にある。
 _LAUNCH_DIR = os.path.dirname(os.path.realpath(__file__))
 if _LAUNCH_DIR not in sys.path:
     sys.path.insert(0, _LAUNCH_DIR)
 
-from autonomous_nav_launch import lidar as lidar_common, params  # noqa: E402
+from daifuku_stack_launch import lidar as lidar_common, params  # noqa: E402
 
 
 def generate_launch_description():
-    pkg_share = get_package_share_directory("autonomous_nav")
+    pkg_share = get_package_share_directory("daifuku_stack")
     sensors_dir = os.path.join(pkg_share, "config", "sensors")
     overrides_dir = os.path.join(pkg_share, "config", "overrides")
 
@@ -93,7 +93,7 @@ def generate_launch_description():
     # ------------------------------------------------------------------
     # 起動引数
     #
-    # navigation / mapping と共有するものは autonomous_nav_launch.lidar が持つ。
+    # navigation / mapping と共有するものは daifuku_stack_launch.lidar が持つ。
     # ここで宣言するのは、親が素通ししない (このファイルの中だけで完結する) 分。
     # ------------------------------------------------------------------
     declare_args = lidar_common.declare_shared_args(pkg_share) + [
@@ -253,7 +253,7 @@ def generate_launch_description():
     # ------------------------------------------------------------------
     prepare_imu = Node(
         condition=IfCondition(use_mid360_ekf),
-        package="autonomous_nav",
+        package="daifuku_stack",
         executable="prepare_mid360_imu.py",
         name="prepare_mid360_imu",
         output="screen",

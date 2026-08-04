@@ -110,7 +110,7 @@ services:
       - /ros_entrypoint.sh
       - ros2
       - launch
-      - autonomous_nav
+      - daifuku_stack
       - robot_bringup.launch.py
     # 再起動してよいのは install/ が名前付きボリュームに残るから。Docker デーモン
     # の再起動でこのコンテナだけ先に上がっても、前回のビルド成果物がそのまま見える。

@@ -1,7 +1,7 @@
-"""autonomous_nav の launch ファイルが共有する部品。
+"""daifuku_stack の launch ファイルが共有する部品。
 
 launch/ の直下に置いてあるので、CMakeLists.txt の
-`install(DIRECTORY launch ...)` でそのまま share/autonomous_nav/launch/ へ入る。
+`install(DIRECTORY launch ...)` でそのまま share/daifuku_stack/launch/ へ入る。
 colcon の --symlink-install では src/ への symlink になるため、ここを直しても
 再ビルドは要らない (launch / config と同じ扱い)。
 

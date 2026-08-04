@@ -13,8 +13,8 @@
 # emcl2 は nav2 のノードではないので、標準の bringup には乗らない。map_server と
 # lifecycle_manager_localization をここで立てているのはそのため。
 #
-# パラメータの合成規則は autonomous_nav_launch/params.py と config/README.md、
-# バックエンドの選択規則は autonomous_nav_launch/backends.py を参照。
+# パラメータの合成規則は daifuku_stack_launch/params.py と config/README.md、
+# バックエンドの選択規則は daifuku_stack_launch/backends.py を参照。
 
 import os
 import sys
@@ -41,17 +41,17 @@ from nav2_common.launch import RewrittenYaml
 
 from ament_index_python.packages import get_package_share_directory
 
-# 共通部品はこの launch ディレクトリの直下 (autonomous_nav_launch/) にある。
+# 共通部品はこの launch ディレクトリの直下 (daifuku_stack_launch/) にある。
 _LAUNCH_DIR = os.path.dirname(os.path.realpath(__file__))
 if _LAUNCH_DIR not in sys.path:
     sys.path.insert(0, _LAUNCH_DIR)
 
-from autonomous_nav_launch import backends, params  # noqa: E402
-from autonomous_nav_launch import lidar as lidar_common  # noqa: E402
+from daifuku_stack_launch import backends, params  # noqa: E402
+from daifuku_stack_launch import lidar as lidar_common  # noqa: E402
 
 
 def generate_launch_description():
-    pkg_share = get_package_share_directory("autonomous_nav")
+    pkg_share = get_package_share_directory("daifuku_stack")
     nav2_share = get_package_share_directory("nav2_bringup")
 
     default_params_dir = os.path.join(pkg_share, "config", "nav2")
@@ -90,6 +90,7 @@ def generate_launch_description():
     use_respawn = LaunchConfiguration("use_respawn")
     log_level = LaunchConfiguration("log_level")
     use_rviz = LaunchConfiguration("use_rviz")
+    use_system_monitor = LaunchConfiguration("use_system_monitor")
     localization = LaunchConfiguration("localization")
     planner = LaunchConfiguration("planner")
     local_planner = LaunchConfiguration("local_planner")
@@ -161,7 +162,7 @@ def generate_launch_description():
         extra_params_file の上書きが効かないのはこれが理由なので、あちらは
         params.compose で params_file 自体をマージして解決する。
         """
-        bt_dir = PathJoinSubstitution([FindPackageShare("autonomous_nav"), "behavior_trees"])
+        bt_dir = PathJoinSubstitution([FindPackageShare("daifuku_stack"), "behavior_trees"])
         return GroupAction(
             condition=IfCondition(use_vi),
             scoped=False,
@@ -328,6 +329,19 @@ def generate_launch_description():
         ],
     )
 
+    # CPU を /diagnostics に出す。ここ (ros2 コンテナ) に置くのは、プロセス別の
+    # 内訳が同じ PID 名前空間の中しか見えないため。robot_bringup 側へ移すと
+    # nav2 と VI が見えなくなる。
+    system_monitor = Node(
+        condition=IfCondition(use_system_monitor),
+        package="daifuku_stack",
+        executable="system_monitor.py",
+        name="system_monitor",
+        namespace=namespace,
+        output="screen",
+        parameters=[{"use_sim_time": use_sim_time}],
+    )
+
     rviz = Node(
         condition=IfCondition(use_rviz),
         package="rviz2",
@@ -351,7 +365,7 @@ def generate_launch_description():
             description="Full path to the map yaml file.",
         ),
 
-        # --- パラメータの合成 (autonomous_nav_launch/params.py) ---
+        # --- パラメータの合成 (daifuku_stack_launch/params.py) ---
         DeclareLaunchArgument(
             "params_file",
             default_value="",
@@ -368,7 +382,7 @@ def generate_launch_description():
         DeclareLaunchArgument("emcl2_params_file", default_value=default_emcl2_params),
         DeclareLaunchArgument("bond_params_file", default_value=default_bond_params),
 
-        # --- バックエンドの選択 (autonomous_nav_launch/backends.py) ---
+        # --- バックエンドの選択 (daifuku_stack_launch/backends.py) ---
         DeclareLaunchArgument(
             "localization",
             default_value="emcl2",
@@ -410,7 +424,12 @@ def generate_launch_description():
         # RViz は入っていない。表示は同じ ROS_DOMAIN_ID の PC 側から開く。
         DeclareLaunchArgument("use_rviz", default_value="false"),
 
-        # --- LiDAR (autonomous_nav_launch/lidar.py。lidar_bringup と共通) ---
+        # --- 監視 ---
+        # 1Hz で /proc を読むだけなので CPU は無視できるが、DDS 参加者は 1 つ
+        # 増える。ディスカバリが不安定なときはここを false にして切り分ける。
+        DeclareLaunchArgument("use_system_monitor", default_value="true"),
+
+        # --- LiDAR (daifuku_stack_launch/lidar.py。lidar_bringup と共通) ---
         *lidar_common.declare_shared_args(pkg_share),
     ]
 
@@ -443,5 +462,6 @@ def generate_launch_description():
         amcl_vi_stack,
         emcl2_stack,
 
+        system_monitor,
         rviz,
     ])

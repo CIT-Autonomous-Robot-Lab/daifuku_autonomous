@@ -60,7 +60,7 @@ cleanup_ros() {
     pkill -f '/opt/ros/humble/lib/' 2>/dev/null
     pkill -f '/opt/ros_ws/install/lib/' 2>/dev/null
     pkill -f 'fake_robot.py' 2>/dev/null
-    pkill -f 'ros2 launch autonomous_nav' 2>/dev/null
+    pkill -f 'ros2 launch daifuku_stack' 2>/dev/null
     sleep 2
     pkill -9 -f '/opt/ros/humble/lib/' 2>/dev/null
     pkill -9 -f '/opt/ros_ws/install/lib/' 2>/dev/null
@@ -70,7 +70,7 @@ cleanup_ros() {
 cleanup_ros
 ros2 daemon stop >/dev/null 2>&1
 
-SHARE=/opt/ros_ws/install/share/autonomous_nav
+SHARE=/opt/ros_ws/install/share/daifuku_stack
 RUN=/tmp/pi4_sim/$CASE
 rm -rf "$RUN"; mkdir -p "$RUN"
 export ROS_LOG_DIR=$RUN/log
@@ -153,7 +153,7 @@ if overlay:
 PY
 
 [ -f "$RUN/map.yaml" ] && MAP=$RUN/map.yaml
-# overlay と EXTRA_PARAMS は compose_params が後勝ちで重ねる (カンマ区切り)。
+# overlay と EXTRA_PARAMS は params.compose が後勝ちで重ねる (カンマ区切り)。
 # ros2 launch は `arg:=` (値が空) を malformed として弾くので、値があるときだけ渡す。
 EXTRA=""
 [ -f "$RUN/overlay.yaml" ] && EXTRA=$RUN/overlay.yaml
@@ -204,7 +204,7 @@ sleep 3
 
 # lidar_driver:=false: /scan_raw は fake_robot.py が出すので、lidar:=2d の
 # 実機ドライバ (urg_node) は立てない。
-ros2 launch autonomous_nav navigation.launch.py \
+ros2 launch daifuku_stack navigation.launch.py \
     lidar:=2d lidar_driver:=false use_rviz:=false \
     map:="$MAP" "${params_arg[@]}" \
     planner:="$PLANNER" local_planner:="$LOCAL_PLANNER" \

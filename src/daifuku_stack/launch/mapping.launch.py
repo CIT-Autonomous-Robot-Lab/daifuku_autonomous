@@ -14,16 +14,16 @@ from launch_ros.actions import Node
 
 from ament_index_python.packages import get_package_share_directory
 
-# 共通部品はこの launch ディレクトリの直下 (autonomous_nav_launch/) にある。
+# 共通部品はこの launch ディレクトリの直下 (daifuku_stack_launch/) にある。
 _LAUNCH_DIR = os.path.dirname(os.path.realpath(__file__))
 if _LAUNCH_DIR not in sys.path:
     sys.path.insert(0, _LAUNCH_DIR)
 
-from autonomous_nav_launch import lidar as lidar_common, params  # noqa: E402
+from daifuku_stack_launch import lidar as lidar_common, params  # noqa: E402
 
 
 def generate_launch_description():
-    pkg_share = get_package_share_directory("autonomous_nav")
+    pkg_share = get_package_share_directory("daifuku_stack")
 
     overrides_dir = os.path.join(pkg_share, "config", "overrides")
     default_slam_params = os.path.join(pkg_share, "config", "mapping", "slam_toolbox.yaml")

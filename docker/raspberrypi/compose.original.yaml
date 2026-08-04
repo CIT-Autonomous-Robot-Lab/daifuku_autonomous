@@ -28,6 +28,13 @@
 #
 # コンテナは user: "1000:1000" で動くので、ホスト側で sysfs と /dev の所有権を
 # 渡しておく必要がある。tools/image/udev/99-daifuku-raspicat.rules を参照。
+#
+# マウントと所有権だけでは足りない。Docker 既定の AppArmor プロファイル
+# (docker-default) は /sys/fs 以外の /sys/** への書き込みを一律で拒否するので、
+# 所有者が合っていても export が EACCES になる (Pi 5 実機 2026-08-04:
+# "configure failed: [Errno 13] Permission denied: /sys/class/pwm/pwmchip0/export")。
+# deny ルールは既定で監査ログを出さないため dmesg にも残らない。security_opt で
+# 外す。上の /dev 丸渡しと同じ範囲の話で、これ以上広げてはいない。
 
 services:
   raspicat:
@@ -35,9 +42,11 @@ services:
       - /ros_entrypoint.sh
       - ros2
       - launch
-      - autonomous_nav
+      - daifuku_stack
       - robot_bringup.launch.py
       - driver:=original
+    security_opt:
+      - apparmor=unconfined
     # Compose はマウント先をキーにして重ねるので、ここは追加分だけでよい
     # (compose.yaml 側の /dev などはそのまま残る)。
     volumes:

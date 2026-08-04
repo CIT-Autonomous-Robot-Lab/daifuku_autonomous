@@ -1,7 +1,7 @@
 # map_19f.yaml (19F、915x577 @0.05m = 45.8m x 28.9m) 用の上書き。
 # 「断片」= config/localization/emcl2.yaml と config/nav2/vi_planner.yaml の値。
 #
-#   ros2 launch autonomous_nav navigation.launch.py    # map も overrides も既定
+#   ros2 launch daifuku_stack navigation.launch.py    # map も overrides も既定
 #
 # **overrides の既定値**。別の地図では `overrides:=map_tsudanuma` のように
 # **置き換わる** (足されない) ので、19F 用の調整は自動的に外れる。

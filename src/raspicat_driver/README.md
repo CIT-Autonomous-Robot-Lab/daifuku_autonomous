@@ -8,8 +8,8 @@ Raspberry Pi Cat の本体ドライバの**自前実装**。Pi 4 と Pi 5 の両
 （`driver:=raspimouse`）のままです。
 
 ```bash
-ros2 launch autonomous_nav robot_bringup.launch.py driver:=original
-ros2 launch autonomous_nav robot_bringup.launch.py driver:=original model:=pi4
+ros2 launch daifuku_stack robot_bringup.launch.py driver:=original
+ros2 launch daifuku_stack robot_bringup.launch.py driver:=original model:=pi4
 ```
 
 ## 公式実装との関係
@@ -61,7 +61,7 @@ LED・ブザー・スイッチ・測距センサを持たないのは、この�
 
 ## パラメータと前提
 
-パラメータは `src/autonomous_nav/config/robot/raspicat_driver.yaml`（全キーを既定値の
+パラメータは `src/daifuku_stack/config/robot/raspicat_driver.yaml`（全キーを既定値の
 まま列挙。値の由来は同ディレクトリの `README.md`）。
 
 ホスト側に要るものは 2 つです。どちらも `tools/image/` が入れます。
@@ -79,7 +79,7 @@ LED・ブザー・スイッチ・測距センサを持たないのは、この�
 
 rtmouse は I2C が 1 回タイムアウトするとカーネルの mutex を握ったままになり、
 `/dev/rtcounter_*` を読む者が全員 D 状態で固着してリブートでしか復旧しません
-（`src/autonomous_nav/config/README.md`）。
+（`src/daifuku_stack/config/README.md`）。
 
 ここではユーザ空間の `ioctl` がエラーを返して戻るだけです。カウンタの読み出しは
 専用のコールバックグループで走り、連続 `counter_error_limit` 回失敗すると `cmd_vel`

@@ -85,8 +85,8 @@ bash docker/raspberrypi/tools/control.sh help
 | サブコマンド | 動作 |
 |---|---|
 | `motor on` | モーター電源を入れる |
-| `motor off` | `/cmd_vel`へ停止指令を送ってからモーター電源を切る |
-| `stop` | `/cmd_vel`へ停止指令を1回送る |
+| `motor off` | `CMD_VEL_TOPIC`へ停止指令を送ってからモーター電源を切る |
+| `stop` | `CMD_VEL_TOPIC`へ停止指令を1回送る |
 | `teleop keyboard` | キーボードで操作する（Ctrl-Cで終了） |
 | `teleop joystick` | ジョイスティックで操作する（Ctrl-Cで終了） |
 | `status` | コンテナ、ROSノード、モーターサービスを確認する |
@@ -100,7 +100,7 @@ bash docker/raspberrypi/tools/control.sh help
 |---|---|---|
 | `CONTROL_SERVICE` | `ros2` | Composeサービス名 |
 | `MOTOR_SERVICE` | `/motor_power` | モーター電源サービス |
-| `CMD_VEL_TOPIC` | `/cmd_vel` | 速度指令トピック |
+| `CMD_VEL_TOPIC` | `/cmd_vel_teleop` | 速度指令トピック。仲裁（`twist_mux`）の優先度が高い側。`twist_mux:=false`で起動したなら`/cmd_vel` |
 | `ROS_TIMEOUT` | `10` | ROS操作のタイムアウト秒数 |
 | `TELEOP_LINEAR_SPEED` | `0.2` | キーボード操作の並進速度 m/s |
 | `TELEOP_ANGULAR_SPEED` | `1.0` | キーボード操作の旋回速度 rad/s |
@@ -125,7 +125,7 @@ TELEOP_LINEAR_SPEED=0.1 bash docker/raspberrypi/tools/control.sh teleop keyboard
 
 | 変更したもの | やること |
 |---|---|
-| `src/autonomous_nav`配下のlaunch、config、behavior_trees、maps、rviz、src | 何もしない。`--symlink-install`なのでノードを再起動するだけで反映される |
+| `src/daifuku_stack`配下のlaunch、config、behavior_trees、maps、rviz、src | 何もしない。`--symlink-install`なのでノードを再起動するだけで反映される |
 | `src/raspicat_driver`のPython | 同上。ただし`setup.py`の`entry_points`を増やしたときはビルドが要る |
 | C++やRustのコード、`CMakeLists.txt`、外部パッケージのソース | `docker compose up`で差分ビルドする |
 | aptの依存、`Dockerfile`、`package.xml`の依存、`docker/`配下のスクリプト | `docker compose build`からやり直す |

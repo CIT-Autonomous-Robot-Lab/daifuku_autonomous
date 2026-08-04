@@ -46,6 +46,26 @@ rtmouseもMCP3204を自前で叩くので、両者が同じデバイスを取り
 **oopsが出た後はリブートしてください。** ロックを握ったままプロセスが死ぬので
 （`preempt_count`が漏れ、`lsmod`の参照数が戻らない）、`rmmod`も効きません。
 
+## 遠隔操作しても機体が動かない
+
+`twist_mux`（`robot_bringup.launch.py`の`twist_mux:=true`が既定）を挟むと、ドライバが
+購読するのは`/cmd_vel`ではなく`/cmd_vel_mux`です。`/cmd_vel`へ直接投げても、仲裁を
+経由しないので**エラーも警告も出ないまま無視されます**。
+
+```bash
+ros2 node list | grep twist_mux
+ros2 topic hz /cmd_vel_mux          # 指令を出しているあいだだけ流れる
+```
+
+人が出す指令は`/cmd_vel_teleop`（優先度100）です。`control.sh`の`CMD_VEL_TOPIC`は
+これが既定なので、`twist_mux:=false`で起動しているときだけ`CMD_VEL_TOPIC=/cmd_vel`を
+渡してください。逆に`twist_mux`ノードが立っていない（イメージを焼き直していない）
+場合は、`ros2 launch`が`package 'twist_mux' not found`で止まります。
+
+自律走行中に遠隔操作が効くのは、**publishしているあいだと0.5秒だけ**です。キーを
+離せば自律側（`/cmd_vel`）へ戻ります。確実に止めるのはモーター電源
+（`control.sh motor off`）で、優先度は非常停止ではありません。
+
 ## 機体のトピックが見つからない
 
 1. 機体とPC／コンテナの`ROS_DOMAIN_ID`を一致させる
@@ -136,18 +156,18 @@ ros2 topic hz /scan_raw
 ```
 
 `/scan_mid360_prestamp`だけが流れて`/scan_raw`が止まっている場合は、中継ノードが
-起動していません。中継は`share/autonomous_nav/src/restamp_scan.py`を
+起動していません。中継は`share/daifuku_stack/src/restamp_scan.py`を
 `ExecuteProcess`で直接起動します。`ExecuteProcess`は失敗しても他のノードを止めないため、
 エラーが出ないまま`/scan_raw`だけが欠けた状態になります。まずファイルの有無を
 確認してください。
 
 ```bash
-ros2 pkg prefix autonomous_nav
-ls $(ros2 pkg prefix autonomous_nav)/share/autonomous_nav/src/
+ros2 pkg prefix daifuku_stack
+ls $(ros2 pkg prefix daifuku_stack)/share/daifuku_stack/src/
 ```
 
 見つからなければ、`src`をインストールする前の`install/`が残っています（`scripts/`から
-`src/`へ移す前の`install/`も同じで、古い`share/autonomous_nav/scripts/`だけが残ります）。
+`src/`へ移す前の`install/`も同じで、古い`share/daifuku_stack/scripts/`だけが残ります）。
 `colcon build`を
 やり直してください（`docker/raspberrypi/`では`docker compose up`）。
 
@@ -210,7 +230,8 @@ GUI付き環境では次を確認します。
 
 ## コンテナ内で`ros2`が見つからない
 
-Compose経由でシェルを開きます。`docker/raspberrypi/entrypoint.sh`が環境を読み込みます。
+Compose経由でシェルを開きます。`docker/common/entrypoint.sh`（イメージへは
+`/ros_entrypoint.sh`として入ります）が環境を読み込みます。
 
 ```bash
 docker compose -f docker/raspberrypi/compose.yaml exec ros2 \

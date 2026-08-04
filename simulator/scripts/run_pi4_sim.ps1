@@ -59,8 +59,8 @@ param(
 $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $proj = Join-Path $repo "simulator"
-$pkg = Join-Path $repo "src\autonomous_nav"
-$share = "/opt/ros_ws/install/share/autonomous_nav"
+$pkg = Join-Path $repo "src\daifuku_stack"
+$share = "/opt/ros_ws/install/share/daifuku_stack"
 
 $c = @()
 if ($Connection) { $c = @("-c", $Connection) }

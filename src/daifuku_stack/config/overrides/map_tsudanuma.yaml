@@ -1,7 +1,7 @@
 # map_tsudanuma.yaml (5888x4000 @0.05m = 294.4m x 200m) 用の上書き。
 # 「断片」= config/nav2/vi_planner.yaml の値 (= ノードの既定)。
 #
-#   ros2 launch autonomous_nav navigation.launch.py \
+#   ros2 launch daifuku_stack navigation.launch.py \
 #       map:=<share>/maps/map_tsudanuma.yaml \
 #       overrides:=map_tsudanuma planner:=vi local_planner:=vi
 #

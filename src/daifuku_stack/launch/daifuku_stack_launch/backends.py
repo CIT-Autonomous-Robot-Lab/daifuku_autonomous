@@ -109,7 +109,7 @@ def _validate_vi_solver(context):
             "the global value function: the robot would avoid obstacles locally "
             "while compute_path_to_pose keeps returning a path through them.\n"
             'Either use a dense solver ("frontier2d_sparse" — 19F at map_scale 2 '
-            "measures 655 MB, see src/autonomous_nav/config/README.md), or set "
+            "measures 655 MB, see src/daifuku_stack/config/README.md), or set "
             "vi_planner.global_sweep: false to accept the old behaviour."
         )
 

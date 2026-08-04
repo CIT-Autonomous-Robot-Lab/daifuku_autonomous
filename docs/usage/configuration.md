@@ -20,7 +20,7 @@
 | `rviz/navigation.rviz` | 自律移動用RViz |
 | `maps/*.yaml`, `maps/*.pgm` | 保存済み地図 |
 
-すべて`src/autonomous_nav/`以下にあります。`config/`の分け方と合成順序は`src/autonomous_nav/config/README.md`にまとめてあります。
+すべて`src/daifuku_stack/`以下にあります。`config/`の分け方と合成順序は`src/daifuku_stack/config/README.md`にまとめてあります。
 
 ## navigation.launch.py
 
@@ -40,6 +40,7 @@
 | `local_planner` | `auto` | `auto` / `vi` / `nav2` |
 | `lidar` | `mid360` | `mid360` / `2d`（`2d`ではraspicatのURG（`urg_node`）を起動する） |
 | `use_rviz` | `false` | RVizを起動するか。実機はheadlessのため既定は`false`で、表示はPC側から開く |
+| `use_system_monitor` | `true` | CPUを`/diagnostics`へ出す`system_monitor`を起動するか。1Hzで`/proc`を読むだけだがDDS参加者が1つ増えるので、ディスカバリの切り分け時は`false`にする |
 | `use_sim_time` | `false` | シミュレーション時刻を使うか |
 | `use_composition` | `False` | Nav2ノードを1プロセスへ合成するか（Pi 4では既定の分離を推奨） |
 | `scan_filter_enabled` | `true` | 角度フィルタを使うか |
@@ -53,7 +54,7 @@
 このほかに`namespace`、`use_namespace`、`autostart`、`use_respawn`、`log_level`と、LiDARの搭載姿勢を指定する各種引数があります。全件は次のコマンドで確認できます。
 
 ```bash
-ros2 launch autonomous_nav navigation.launch.py --show-args
+ros2 launch daifuku_stack navigation.launch.py --show-args
 ```
 
 ## mapping.launch.py
@@ -61,7 +62,7 @@ ros2 launch autonomous_nav navigation.launch.py --show-args
 主な引数は`slam_params_file`、`rviz_config`、`use_sim_time`、`use_rviz`、`lidar`と、スキャンフィルタおよびMid-360関連の設定です。
 
 ```bash
-ros2 launch autonomous_nav mapping.launch.py --show-args
+ros2 launch daifuku_stack mapping.launch.py --show-args
 ```
 
 ## robot_bringup.launch.py
@@ -109,7 +110,7 @@ EMCL2のリセット関連は、19Fの地図に合わせた**暫定値**です�
 
 `sensor_reset`だけは断片側もEMCL2の既定と違います（上流READMEの表が`true`と
 書いているのに、コードの`declare_parameter`は`false`。経緯は
-`src/autonomous_nav/config/README.md`の「値の由来」）。
+`src/daifuku_stack/config/README.md`の「値の由来」）。
 
 有効ビームの28%が地図上の壁を貫通しており、非貫通率（alpha）が0.0〜0.4に張り付く
 状態でした。閾値0.5のままでは膨張リセットとセンサーリセットが毎スキャン発動し、
@@ -153,7 +154,7 @@ ROSのパラメータファイルではないためです。
 [INFO] [launch.user]: params: emcl2_params_file: .../emcl2.yaml -> /tmp/emcl2_params_file_xxxx.yaml (+ overrides:map_19f -> emcl2)
 ```
 
-書きかたと優先順位の詳細は`src/autonomous_nav/config/README.md`にあります。
+書きかたと優先順位の詳細は`src/daifuku_stack/config/README.md`にあります。
 
 ## 機体固有の調整
 

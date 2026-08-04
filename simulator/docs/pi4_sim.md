@@ -175,7 +175,7 @@ controller_server) を提供する何かが同時に生きていた**ことを�
 `compute_path_to_pose` を提供するため vi_global_planner と衝突し、
 どちらにゴールが行くかは不定になる。
 
-回避策として `src/autonomous_nav/behavior_trees/navigate_to_pose_vi.xml` /
+回避策として `src/daifuku_stack/behavior_trees/navigate_to_pose_vi.xml` /
 `nav_through_poses_stub.xml` を置いた (コストマップクリアを外し、リカバリは
 behavior_server の Spin/Wait/BackUp のみ)。2026-07-29 に `navigation.launch.py` が
 `planner:=vi` のとき自動でこの 2 本を選ぶようにしたので、手作業の差し替えは不要。
@@ -323,7 +323,7 @@ Pi には触れていないので、以下は**提案**であって適用済み�
 
    ```bash
    uv run --project simulator downsample-map \
-       src/autonomous_nav/maps/map_19f.yaml /tmp/map_10cm.yaml \
+       src/daifuku_stack/maps/map_19f.yaml /tmp/map_10cm.yaml \
        --scale 2 --free-thresh 0.15
    ```
 
@@ -338,8 +338,8 @@ Pi には触れていないので、以下は**提案**であって適用済み�
 ```yaml
 bt_navigator:
   ros__parameters:
-    default_nav_to_pose_bt_xml: "<share>/autonomous_nav/behavior_trees/navigate_to_pose_vi.xml"
-    default_nav_through_poses_bt_xml: "<share>/autonomous_nav/behavior_trees/nav_through_poses_stub.xml"
+    default_nav_to_pose_bt_xml: "<share>/daifuku_stack/behavior_trees/navigate_to_pose_vi.xml"
+    default_nav_through_poses_bt_xml: "<share>/daifuku_stack/behavior_trees/nav_through_poses_stub.xml"
 ```
 
 `verify_repo` が検証したのは「リポジトリに入れた `default_server_timeout: 500`
@@ -488,9 +488,9 @@ launch_ros は global params (SetParameter / SetParametersFromFile) を先に、
 **`params_file` に既にあるキーは上書きできない**。`bond_timeout` が効くのは
 `config/nav2/*.yaml` のどこにも無いキーだからで、`solver` や `map_scale` は効かない
 (実測: overlay を書いても `map_scale=1` のまま起動した)。
-`navigation.launch.py` は `compose_params` で YAML の段階でマージし、
-`params_file` 自体を作っている (`overrides:=` / `extra_params_file:=` の両方が
-この経路)。BT XML の 2 キーは `config/nav2/*.yaml` に無いので `SetParameter` で
+`navigation.launch.py` は `daifuku_stack_launch/params.py` の `compose` で YAML の
+段階でマージし、`params_file` 自体を作っている (`overrides:=` / `extra_params_file:=`
+の両方がこの経路)。BT XML の 2 キーは `config/nav2/*.yaml` に無いので `SetParameter` で
 足りる (`planner:=vi` の bringup はこれで通る)。
 
 ### 罠 3: `bt_navigator` の `wait_for_service_timeout` (既定 1000ms)

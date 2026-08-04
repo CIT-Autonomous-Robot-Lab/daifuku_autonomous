@@ -28,7 +28,8 @@ done < <(find src/livox_ros_driver2/launch_ROS2 -maxdepth 1 -type f -print0)
 apt-get update
 rosdep install \
   --from-paths \
-    src/autonomous_nav \
+    src/daifuku_stack \
+    src/daifuku_rqt \
     src/emcl2_ros2 \
     src/livox_ros_driver2 \
   --ignore-src \
@@ -37,10 +38,15 @@ rosdep install \
 
 # VI packages require the separate ros2_rust toolchain. Navfn is the supported
 # development fallback here and matches the currently working Humble setup.
+#
+# daifuku_rqt is built here but deliberately not in the Raspberry Pi
+# image: it needs rqt, which ros:humble-ros-base does not carry. The Pi's
+# build-workspace.sh selects packages by name, so leaving it out of that list
+# is all it takes.
 colcon build \
   --symlink-install \
   --parallel-workers "${BUILD_JOBS}" \
-  --packages-select autonomous_nav emcl2 livox_ros_driver2 \
+  --packages-select daifuku_stack daifuku_rqt emcl2 livox_ros_driver2 \
   --cmake-args \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DROS_EDITION=ROS2 \

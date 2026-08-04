@@ -1,7 +1,7 @@
 [project]
 name = "daifuku-sim"
 version = "0.1.0"
-description = "Isaac Sim harness for the autonomous_nav stack (Raspberry Pi 4 speed emulation)"
+description = "Isaac Sim harness for the daifuku_stack stack (Raspberry Pi 4 speed emulation)"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

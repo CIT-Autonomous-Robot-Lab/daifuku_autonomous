@@ -21,7 +21,7 @@ Mid-360       : /livox/lidar → pointcloud_to_laserscan
 `/scan_raw`へremapされます。
 
 ```bash
-ros2 launch autonomous_nav navigation.launch.py lidar:=2d
+ros2 launch daifuku_stack navigation.launch.py lidar:=2d
 ```
 
 Ethernet接続のURGでは`urg_interface:=ethernet`を指定します。別のパラメータファイルを
@@ -58,7 +58,7 @@ ros2 run <2d_lidar_package> <2d_lidar_node> \
 
 ### IPアドレス
 
-`src/autonomous_nav/config/sensors/MID360_config.json`を実ネットワークに合わせます。
+`src/daifuku_stack/config/sensors/MID360_config.json`を実ネットワークに合わせます。
 
 - `host_net_info`内の4個の`*_data_ip`: ドライバを動かすPCの固定IP
 - `lidar_configs[0].ip`: Mid-360本体のIP
@@ -78,7 +78,7 @@ Nav2コストマップのメッセージフィルタが、起動から数分で�
 挟まず、`pointcloud_to_laserscan`が`/scan_raw`へ直接出します。センサー側をPTP同期
 できるようになれば、この中継は不要になります。
 
-中継は`share/autonomous_nav/src/restamp_scan.py`を`ExecuteProcess`で直接起動する形
+中継は`share/daifuku_stack/src/restamp_scan.py`を`ExecuteProcess`で直接起動する形
 なので、`CMakeLists.txt`が`src`ディレクトリを`share`へインストールしています
 （通常のノードとして起動する`prepare_mid360_imu.py`のほうは、これに加えて`lib`へも
 入ります）。`ExecuteProcess`は失敗しても他のノードを止めません。そのため、古い`install/`が
@@ -119,17 +119,17 @@ IMU融合を無効にする場合は`use_mid360_imu:=false`を指定します。
 
 ## スキャンフィルタを変更する
 
-恒久的に除外角度を変える場合は`src/autonomous_nav/config/sensors/scan_filter.yaml`の`angle_min`と`angle_max`をラジアンで編集します。別ファイルを使う場合:
+恒久的に除外角度を変える場合は`src/daifuku_stack/config/sensors/scan_filter.yaml`の`angle_min`と`angle_max`をラジアンで編集します。別ファイルを使う場合:
 
 ```bash
-ros2 launch autonomous_nav mapping.launch.py \
+ros2 launch daifuku_stack mapping.launch.py \
   lidar:=2d scan_filter_params_file:=/path/to/scan_filter.yaml
 ```
 
 一時的に無効化する場合:
 
 ```bash
-ros2 launch autonomous_nav mapping.launch.py \
+ros2 launch daifuku_stack mapping.launch.py \
   lidar:=2d scan_filter_enabled:=false
 ```
 

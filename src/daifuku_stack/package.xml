@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>autonomous_nav</name>
+  <name>daifuku_stack</name>
   <version>0.1.0</version>
   <description>Raspberry Pi Cat向けのNav2自律移動設定パッケージ</description>
   <maintainer email="user@example.com">autonomous_bot maintainer</maintainer>
@@ -42,6 +42,8 @@
   <exec_depend>slam_toolbox</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
   <exec_depend>topic_tools</exec_depend>
+  <!-- robot_bringup.launch.py の twist_mux:=true (既定) で立てる cmd_vel の仲裁。 -->
+  <exec_depend>twist_mux</exec_depend>
   <!-- lidar:=2d のときだけ使う。既定パラメータは raspicat_bringup の
        config/urg_<urg_interface>.param.yaml (ワークスペース内のパッケージ)。 -->
   <exec_depend>urg_node</exec_depend>

@@ -1,6 +1,6 @@
 # セットアップガイド
 
-Raspberry Pi CatとナビゲーションPCを同じROS 2ネットワークへ接続し、`autonomous_nav`を起動できる状態にするまでの手順です。
+Raspberry Pi CatとナビゲーションPCを同じROS 2ネットワークへ接続し、`daifuku_stack`を起動できる状態にするまでの手順です。
 
 ## 1. 実行環境を選ぶ
 

@@ -12,7 +12,7 @@ SKIP_BUILD=0
 
 usage() {
   cat <<'EOF'
-Ubuntu 22.04 / ROS 2 HumbleへNav2などの共通依存を導入し、autonomous_navと
+Ubuntu 22.04 / ROS 2 HumbleへNav2などの共通依存を導入し、daifuku_stackと
 raspicat_driver、emcl2をビルドします。他のsetup_native_*.shより先に実行してください。
 
 Usage:
@@ -101,7 +101,8 @@ if ((SKIP_APT == 0)); then
     ros-humble-slam-toolbox \
     ros-humble-teleop-twist-joy \
     ros-humble-teleop-twist-keyboard \
-    ros-humble-topic-tools
+    ros-humble-topic-tools \
+    ros-humble-twist-mux
 else
   echo "[1/4] Skipping apt dependencies"
 fi
@@ -134,11 +135,13 @@ if ((SKIP_BUILD == 1)); then
   exit 0
 fi
 
-echo "[4/4] Building autonomous_nav, raspicat_driver and emcl2"
+echo "[4/4] Building daifuku_stack, daifuku_rqt, raspicat_driver and emcl2"
 cd "${WORKSPACE}"
+# daifuku_rqt はここでは建てる。ネイティブ環境は RViz と rqt を動かす PC 側の
+# 構成であり、rqt が無いのは docker/raspberrypi/ のイメージだけ。
 colcon build --symlink-install \
   --parallel-workers "${BUILD_JOBS}" \
-  --packages-select autonomous_nav emcl2 raspicat_driver \
+  --packages-select daifuku_rqt daifuku_stack emcl2 raspicat_driver \
   --cmake-args -DCMAKE_BUILD_TYPE=Release
 
 cat <<EOF
@@ -148,7 +151,7 @@ Load the workspace with:
   source ${WORKSPACE}/install/setup.bash
 
 Verify with:
-  ros2 pkg prefix autonomous_nav
+  ros2 pkg prefix daifuku_stack
   ros2 pkg prefix emcl2
 
 Next steps:

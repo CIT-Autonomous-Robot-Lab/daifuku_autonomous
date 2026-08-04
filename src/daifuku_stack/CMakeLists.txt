@@ -1,12 +1,12 @@
 cmake_minimum_required(VERSION 3.8)
-project(autonomous_nav)
+project(daifuku_stack)
 
 find_package(ament_cmake REQUIRED)
 
 # src も share へ入れる: lidar_bringup.launch.py が
-# share/autonomous_nav/src/restamp_scan.py を ExecuteProcess で直接叩く
+# share/daifuku_stack/src/restamp_scan.py を ExecuteProcess で直接叩く
 # (lidar:=mid360 のときのみ)。
-# launch/autonomous_nav_launch/ を import すると launch/ の下に __pycache__ が
+# launch/daifuku_stack_launch/ を import すると launch/ の下に __pycache__ が
 # できる。install には要らないので落とす。
 install(DIRECTORY behavior_trees config launch maps rviz src
   DESTINATION share/${PROJECT_NAME}
@@ -15,6 +15,7 @@ install(DIRECTORY behavior_trees config launch maps rviz src
 
 install(PROGRAMS
   src/prepare_mid360_imu.py
+  src/system_monitor.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

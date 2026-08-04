@@ -59,7 +59,7 @@ ros2 topic hz /scan
 NavFn構成のデバッグ起動例:
 
 ```bash
-ros2 launch autonomous_nav navigation.launch.py \
+ros2 launch daifuku_stack navigation.launch.py \
   planner:=navfn use_mid360_imu:=false use_rviz:=true
 ```
 

@@ -5,7 +5,8 @@
 ```text
 Raspberry Pi Cat                         Docker / ネイティブPC
 ────────────────────                    ──────────────────────
-モータードライバ  ←── /cmd_vel ─────── 経路追従 / 遠隔操作
+モータードライバ  ←─ /cmd_vel_mux ── twist_mux ←┬ /cmd_vel        ← 経路追従
+                                                └ /cmd_vel_teleop ← 遠隔操作
 車輪オドメトリ    ─── /odom ─────────→ Nav2 / SLAM / 自己位置推定
 2D LiDAR ─ urg_node ─ /scan_raw ───────────────────┐
 Mid-360 ─ /livox/lidar ─ 3D→2D ─ スタンプ打ち直し ─┴→ 角度フィルタ → /scan
@@ -14,12 +15,18 @@ TF                ─── odom → base_footprint → センサーフレーム
 
 Mid-360 + IMUの場合、車輪入力は`/wheel/odom`となり、EKFが最終的な`/odom`と`odom -> base_footprint`を生成します。
 
+速度指令は`twist_mux`が優先度で1本に束ねます（`robot_bringup.launch.py`の
+`twist_mux:=true`が既定）。自律側は`/cmd_vel`（優先度10）、遠隔操作は
+`/cmd_vel_teleop`（100）で、勝っている側が出しているあいだだけ`/cmd_vel_mux`へ
+中継されます。**優先度は非常停止ではありません**（止めるのはモーター電源）。
+配線と設定は[`config/README.md`](../../src/daifuku_stack/config/README.md#twist_muxyaml-の配線と優先度)。
+
 Mid-360は時刻同期がないためスタンプが実時計からずれていきます。`restamp_scan.py`が
 `/scan_mid360_prestamp`を受信時刻で打ち直して`/scan_raw`へ流し、以降は2D LiDARと同じ
 経路になります。詳細は[LiDARとオドメトリ](../setup/lidar.md#タイムスタンプの打ち直し)を
 参照してください。
 
-## autonomous_nav
+## daifuku_stack
 
 このリポジトリの設定パッケージです。独自のC++ノードは持たず、次のものをまとめています。
 
@@ -41,7 +48,8 @@ Pythonノードはどちらも`lidar:=mid360`のときだけ立ちます。`rest
 `/dev/gpiochip*`、パルスカウンタを`/dev/i2c-1`から、いずれもユーザ空間で直接扱います。
 rtmouseカーネルモジュールは使いません。
 
-ROSに見える契約は既定の`driver:=raspimouse`（公式実装）と同じです。`/cmd_vel`を購読し、
+ROSに見える契約は既定の`driver:=raspimouse`（公式実装）と同じです。相対名`cmd_vel`を購読し
+（`twist_mux:=true`なら`/cmd_vel_mux`へremapされる）、
 `/odom`と`odom -> base_footprint` TFを配信し、`motor_power`サービスを持つlifecycleノード
 なので、Nav2・EKF・EMCL2の設定は変わりません。LED、ブザー、スイッチ、測距センサは
 持ちません。
@@ -52,7 +60,7 @@ Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。
 
 ## launchファイルの構成
 
-`src/autonomous_nav/launch/`の中身です。
+`src/daifuku_stack/launch/`の中身です。
 
 | ファイル | 役割 |
 | --- | --- |
@@ -62,7 +70,7 @@ Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。
 | `robot_bringup.launch.py` | 機体ドライバとURDF。`driver:=raspimouse`（既定 / 公式実装 / Pi 4のみ）または`driver:=original`（自前実装 / [Pi 4](../setup/raspberry-pi-4.md)・[Pi 5](../setup/raspberry-pi-5.md)） |
 
 引数の合成やチェックといった補助的な処理は、launchファイル本体から
-`launch/autonomous_nav_launch/`へ切り出しています。
+`launch/daifuku_stack_launch/`へ切り出しています。
 
 | モジュール | 内容 |
 | --- | --- |
@@ -90,9 +98,14 @@ Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。
 
 - `local_planner:=auto`（既定）では`vi_planner`**1ノード**が`planner_server`と
   `controller_server`の両方を置き換え、`compute_path_to_pose`と`follow_path`を提供する
-- 静的地図から(x, y, θ)の価値関数を**ゴールにつき1回だけ**計算する。経路はその価値
+- 静的地図から(x, y, θ)の価値関数を**ゴールにつき1回だけ**全域で解く。経路はその価値
   関数をロールアウトして求め、追従では同じ価値関数を±1 mのウィンドウで精密化する
 - ウィンドウへ`/scan`由来のペナルティを加え、貪欲行動を`cmd_vel`として出力する
+- 密ソルバで解く地図（既定の`map_19f`）では、経路計画と追従が**1本の状態配列を共有する**。
+  追従がウィンドウへ書いたペナルティを全域掃き（`global_sweep`）が広域へ広げるので、
+  避けた障害物が次の`compute_path_to_pose`にも効く。掃きは追従中もバックグラウンドで
+  回り続ける。アウトオブコアソルバで解く広域地図には共有する場が無いため、そちらでは
+  `global_sweep`を`false`にする（下）
 - 同一ゴールへの再計画ではキャッシュを使う（ロールアウトのみ実行する）
 - `local_planner:=nav2`では`vi_global_planner`（広域のみ）とNav2標準`controller_server`
   の組み合わせになる。`map_scale`とアウトオブコアソルバが要る広域地図は、どちらの構成

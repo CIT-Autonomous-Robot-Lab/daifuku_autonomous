@@ -22,7 +22,7 @@ docker compose -f docker/raspberrypi/compose.yaml up -d
 ```bash
 cd ~/daifuku_autonomous
 tmux new-session -d -s nav -c "$PWD" -n nav
-tmux send-keys -t nav:nav 'docker compose -f docker/raspberrypi/compose.yaml exec ros2 /ros_entrypoint.sh ros2 launch autonomous_nav navigation.launch.py map:=/opt/ros_ws/install/share/autonomous_nav/maps/map_19f.yaml use_sim_time:=false localization:=emcl2 planner:=vi use_mid360_imu:=false' Enter
+tmux send-keys -t nav:nav 'docker compose -f docker/raspberrypi/compose.yaml exec ros2 /ros_entrypoint.sh ros2 launch daifuku_stack navigation.launch.py map:=/opt/ros_ws/install/share/daifuku_stack/maps/map_19f.yaml use_sim_time:=false localization:=emcl2 planner:=vi use_mid360_imu:=false' Enter
 
 tmux new-window -t nav -c "$PWD" -n motor
 tmux send-keys -t nav:motor 'bash docker/raspberrypi/tools/control.sh motor on'
@@ -88,16 +88,16 @@ EMCL2、価値反復グローバル／ローカルプランナ、Mid-360が既�
 Mid-360 + IMU（既定）:
 
 ```bash
-ros2 launch autonomous_nav navigation.launch.py \
-  map:=$PWD/src/autonomous_nav/maps/map_19f.yaml \
+ros2 launch daifuku_stack navigation.launch.py \
+  map:=$PWD/src/daifuku_stack/maps/map_19f.yaml \
   use_sim_time:=false localization:=emcl2
 ```
 
 2D LiDAR（raspicatのURGが起動します）:
 
 ```bash
-ros2 launch autonomous_nav navigation.launch.py \
-  map:=$PWD/src/autonomous_nav/maps/map_19f.yaml \
+ros2 launch daifuku_stack navigation.launch.py \
+  map:=$PWD/src/daifuku_stack/maps/map_19f.yaml \
   use_sim_time:=false localization:=emcl2 lidar:=2d
 ```
 
@@ -107,8 +107,8 @@ RVizを同じ端末から開く場合は`use_rviz:=true`を渡します。
 
 ```bash
 docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
-  /ros_entrypoint.sh ros2 launch autonomous_nav navigation.launch.py \
-  map:=/opt/ros_ws/install/share/autonomous_nav/maps/map_19f.yaml \
+  /ros_entrypoint.sh ros2 launch daifuku_stack navigation.launch.py \
+  map:=/opt/ros_ws/install/share/daifuku_stack/maps/map_19f.yaml \
   use_sim_time:=false localization:=emcl2
 ```
 
@@ -117,8 +117,8 @@ docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
 Nav2標準AMCLへ変更する場合:
 
 ```bash
-ros2 launch autonomous_nav navigation.launch.py \
-  map:=$PWD/src/autonomous_nav/maps/map_19f.yaml \
+ros2 launch daifuku_stack navigation.launch.py \
+  map:=$PWD/src/daifuku_stack/maps/map_19f.yaml \
   localization:=amcl
 ```
 
@@ -131,16 +131,16 @@ ros2 launch autonomous_nav navigation.launch.py \
 NavFnとNav2 DWBへ切り替える場合:
 
 ```bash
-ros2 launch autonomous_nav navigation.launch.py \
-  map:=$PWD/src/autonomous_nav/maps/map_19f.yaml \
+ros2 launch daifuku_stack navigation.launch.py \
+  map:=$PWD/src/daifuku_stack/maps/map_19f.yaml \
   planner:=navfn
 ```
 
 グローバルは価値反復のまま、ローカルだけDWBへ変更する場合:
 
 ```bash
-ros2 launch autonomous_nav navigation.launch.py \
-  map:=$PWD/src/autonomous_nav/maps/map_19f.yaml \
+ros2 launch daifuku_stack navigation.launch.py \
+  map:=$PWD/src/daifuku_stack/maps/map_19f.yaml \
   planner:=vi local_planner:=nav2
 ```
 
@@ -155,7 +155,7 @@ ros2 launch autonomous_nav navigation.launch.py \
 掃きは追従中もバックグラウンドで回り、1コアの25%を使います。1掃きの実時間は起動ログの
 `global sweep done in ...`に出ます。`dense_limit_mb`を超える地図では、確保してから
 OOMされる代わりに起動を止めます。値の導出は
-[`config/README.md`](../../src/autonomous_nav/config/README.md)にあります。
+[`config/README.md`](../../src/daifuku_stack/config/README.md)にあります。
 
 ## 広域地図（map_tsudanuma）で動かす
 
@@ -171,8 +171,8 @@ OOMされる代わりに起動を止めます。値の導出は
 自己位置推定は0.05 mのままです。
 
 ```bash
-ros2 launch autonomous_nav navigation.launch.py \
-  map:=$PWD/src/autonomous_nav/maps/map_tsudanuma.yaml \
+ros2 launch daifuku_stack navigation.launch.py \
+  map:=$PWD/src/daifuku_stack/maps/map_tsudanuma.yaml \
   overrides:=map_tsudanuma \
   planner:=vi
 ```
@@ -195,8 +195,8 @@ NavFnとDWBで動かす場合、`map_tsudanuma`の価値反復向け設定は要
 合わない19F用のEMCL2調整が適用されます。
 
 ```bash
-ros2 launch autonomous_nav navigation.launch.py \
-  map:=$PWD/src/autonomous_nav/maps/map_tsudanuma.yaml \
+ros2 launch daifuku_stack navigation.launch.py \
+  map:=$PWD/src/daifuku_stack/maps/map_tsudanuma.yaml \
   overrides:=none \
   planner:=navfn
 ```
@@ -233,7 +233,7 @@ ros2 launch autonomous_nav navigation.launch.py \
   拠り所がほとんどありません（経路計画とは別の課題です）。
 
 実測値の出どころは`config/overrides/map_tsudanuma.yaml`のヘッダ（2026-08-01）と
-`src/autonomous_nav/config/README.md`です。`simulator/docs/pi4_sim.md`にもPi 4相当での
+`src/daifuku_stack/config/README.md`です。`simulator/docs/pi4_sim.md`にもPi 4相当での
 走行記録がありますが、そちらは`map_scale: 3`＋保守的プーリングだった頃のものなので、
 所要時間もメモリもここの値とは一致しません。
 

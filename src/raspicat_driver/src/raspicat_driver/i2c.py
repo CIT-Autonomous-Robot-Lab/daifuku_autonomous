@@ -5,7 +5,7 @@ repeated START matches what i2c_smbus_read_byte_data() issues in rtmouse.
 Every failure surfaces as OSError -- that is the whole point of doing this from
 userspace.  rtmouse holds a kernel mutex across the transfer, so one timeout
 leaves every reader of /dev/rtcounter_* in permanent D state and only a reboot
-recovers it (see src/autonomous_nav/config/README.md).
+recovers it (see src/daifuku_stack/config/README.md).
 
 The counters hang off the control board, not off the SoC, so this module is
 the same on both models; only the I2C controller behind /dev/i2c-1 differs.

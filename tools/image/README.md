@@ -61,7 +61,7 @@ sudo python3 tools/image/create_image.py all \
 Windowsでは管理者権限のPowerShellから実行します。
 
 ```powershell
-python scripts\image\create_image.py all --model pi4 --device 2 --ssh-key $HOME\.ssh\id_ed25519.pub
+python tools\image\create_image.py all --model pi4 --device 2 --ssh-key $HOME\.ssh\id_ed25519.pub
 ```
 
 > **Windowsでは書き込む前にカードのボリュームを外します。**マウント中のボリュームに

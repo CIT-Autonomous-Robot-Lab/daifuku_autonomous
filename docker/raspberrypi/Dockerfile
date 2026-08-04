@@ -107,7 +107,7 @@ RUN if [[ ! -d "/opt/ros/${ROS_DISTRO}/share/nav2_msgs/rust" ]]; then \
 # vcs import から rosdep までを1つの RUN にまとめてあるのは、途中の層に
 # ソースを残さないため。層を分けると、あとで rm -rf しても実体は残る。
 COPY autonomous_bot.repos /tmp/rosdep_ws/autonomous_bot.repos
-COPY src/autonomous_nav /tmp/rosdep_ws/src/autonomous_nav
+COPY src/daifuku_stack /tmp/rosdep_ws/src/daifuku_stack
 RUN source /opt/ros/${ROS_DISTRO}/setup.bash \
     && cd /tmp/rosdep_ws \
     && vcs import . < autonomous_bot.repos \
@@ -141,6 +141,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ros-humble-robot-state-publisher \
       ros-humble-teleop-twist-joy \
       ros-humble-teleop-twist-keyboard \
+      ros-humble-twist-mux \
       ros-humble-urdf \
       ros-humble-urg-node \
       ros-humble-xacro \

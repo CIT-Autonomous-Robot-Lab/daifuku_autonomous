@@ -19,8 +19,8 @@ Raspberry Pi Cat を ROS 2 Humble / Nav2 で自律移動させる colcon ワー�
 
 ## リポジトリの範囲
 
-`src/` の下で自前なのは `autonomous_nav` と `raspicat_driver` だけで、残りは
-`autonomous_bot.repos` からの `vcs import` です。`vcs import` で入るものを直しても本
+`src/` の下で自前なのは `daifuku_stack` と `raspicat_driver` と `daifuku_rqt` だけで、
+残りは `autonomous_bot.repos` からの `vcs import` です。`vcs import` で入るものを直しても本
 リポジトリのコミットには入らないので、上流を直す必要があれば向こうで作業してください。
 
 罠が 2 つあります。`raspicat_ros` / `raspicat_description` / `raspimouse2` は
@@ -49,7 +49,7 @@ bash tools/setup/setup_native.sh              # --jobs 1 / --no-livox / --no-vi
 
 | 変えたもの | やること |
 | --- | --- |
-| `autonomous_nav` / `raspicat_driver` の Python・launch・config・地図など | 何もしない。ノード再起動だけで反映される（`--symlink-install` のため）。ただし `raspicat_driver` の `setup.py` に `entry_points` を足したときはビルドが要る |
+| `daifuku_stack` / `raspicat_driver` の Python・launch・config・地図など | 何もしない。ノード再起動だけで反映される（`--symlink-install` のため）。ただし `raspicat_driver` の `setup.py` に `entry_points` を足したときはビルドが要る |
 | C++ / Rust のコード、`CMakeLists.txt`、外部パッケージのソース | `docker compose up`（差分ビルド） |
 | apt 依存、`Dockerfile`、`package.xml`、`docker/` 配下のスクリプト | `docker compose build` からやり直す |
 
@@ -70,8 +70,8 @@ cd simulator && uv run python tests/verify_usda.py <map.yaml> <world.usda> free
 ```
 
 ```bash
-ros2 launch autonomous_nav navigation.launch.py   # 自律移動（引数は --show-args）
-ros2 launch autonomous_nav mapping.launch.py      # 地図作成（SLAM Toolbox）
+ros2 launch daifuku_stack navigation.launch.py   # 自律移動（引数は --show-args）
+ros2 launch daifuku_stack mapping.launch.py      # 地図作成（SLAM Toolbox）
 ```
 
 Docker 越しに叩く形は
@@ -82,8 +82,10 @@ Docker 越しに叩く形は
 
 理由と実測は各ドキュメント側にあります。ここは「知らずに壊す」ものだけ。
 
-- `config/nav2/*.yaml` はファイル名順に**深くマージ**されて 1 つの `params_file` に
-  なる。同じノードの同じキーが 2 つの断片にあると**起動時にエラーで止まる**。
+- `config/nav2/*.yaml` はファイル名順に 1 つの `params_file` へ束ねられる。ノード単位で
+  分けるのが前提で、**同じノード名が 2 つの断片にあると起動時にエラーで止まる**。
+  キーが重なっていなくても止まるので、1 つのノードの設定を 2 ファイルに割れない。
+  断片どうしは深くマージしない（深いマージが効くのは `overrides` を重ねるときだけ）。
 - `overrides` の既定は **`map_19f`** で、**置き換え**（追加ではない）。`map:=` を
   変えたら `overrides:=` も必ず変える。重ねないときは `overrides:=none`（空文字は
   `ros2 launch` が弾く）。4 つの launch すべてが同じ既定で受ける。
@@ -95,6 +97,11 @@ Docker 越しに叩く形は
   できない。
 - `vi_planner`（`local_planner:=auto|vi`）と `vi_global_planner`（`local_planner:=nav2`）は
   **排他**。両方立てると `compute_path_to_pose` にサーバが 2 つ載る。
+- **`twist_mux:=true`（既定）だと、機体が動くのは `/cmd_vel` ではなく
+  `/cmd_vel_mux`。** 人が出す指令は `/cmd_vel_teleop`（優先度 100）へ。`/cmd_vel`
+  （優先度 10）は自律側の出力で、そちらへ投げると自律走行中は取り合いになる。
+  トピックを間違えても**エラーは出ず、ただ機体が動かない**。優先度は非常停止では
+  ない（出しているあいだ + 0.5 秒だけ勝つ）ので、止めるのはモータ電源。
 - **Pi 5 では rtmouse が動かない。** `robot_bringup.launch.py` の `driver:=` は既定が
   公式実装の `raspimouse`（`/dev/rt*` が要る）なので、Pi 5 でそのままだと configure で
   落ちる。自前実装の `original`（`src/raspicat_driver`）を指定すること。
@@ -105,12 +112,17 @@ Docker 越しに叩く形は
   （[`docs/setup/raspberry-pi-4.md`](docs/setup/raspberry-pi-4.md)）。
 - `use_composition` の既定 `False` は意図的（Pi 4 でディスカバリ不能 + bond 心拍途絶）。
   `config/lifecycle_bond.yaml` の `bond_timeout: 60.0` も同じ事情。
+- **`daifuku_rqt` は Pi では建てない。** 実機イメージ (`ros:humble-ros-base`) に
+  rqt が無いため。両方の `build-workspace.sh` が `--packages-select` で名前を並べて
+  いるので、Pi 側の一覧に足すと**ビルドが通らなくなる**。
+- **teleop を出すものは自分で 0 を出して止める。** ドライバの `cmd_vel_timeout` は
+  既定 60 秒で、指令が途切れてもその間は**走り続ける**。
 - TF は区間ごとに所有者を 1 つだけにする（`map→odom` は emcl2/amcl、
   `odom→base_footprint` は本体ドライバ（raspimouse / raspicat_driver）または EKF、
   リンク間は robot_state_publisher）。
   二重に出すと**自己位置だけが静かに壊れる**。
 
-## 設定ファイル (`src/autonomous_nav/config/**/*.yaml`) のコメント
+## 設定ファイル (`src/daifuku_stack/config/**/*.yaml`) のコメント
 
 - **1 行でまとめる。** キーの右に `# 既定 <ノード既定値>: <説明>` の形で書き、既存の行と
   同じ書式・同じ語彙にそろえる。キーの上に段落を積まない。実測値は 1 行に収まる範囲で
@@ -126,11 +138,12 @@ Docker 越しに叩く形は
 
 | 触るもの | 先に読む |
 | --- | --- |
-| `config/` の yaml の値 | [`src/autonomous_nav/config/README.md`](src/autonomous_nav/config/README.md)（合成・override の仕組みと、各値の由来） |
+| `config/` の yaml の値 | [`src/daifuku_stack/config/README.md`](src/daifuku_stack/config/README.md)（合成・override の仕組みと、各値の由来） |
 | `launch/` | [`docs/usage/architecture.md`](docs/usage/architecture.md#launchファイルの構成) |
 | `simulator/`（Isaac 版 / pi4_sim 版） | [`simulator/docs/pi4_sim.md`](simulator/docs/pi4_sim.md) を先に、次に [`simulator/README.md`](simulator/README.md) |
 | `docker/` | [`docker/README.md`](docker/README.md)（実機用と開発用の 2 環境） |
 | `src/raspicat_driver/` / `tools/image/udev/` | [`src/raspicat_driver/README.md`](src/raspicat_driver/README.md)、次に [`docs/setup/raspberry-pi-4.md`](docs/setup/raspberry-pi-4.md) と [`raspberry-pi-5.md`](docs/setup/raspberry-pi-5.md)（未検証の項目付き） |
+| `src/daifuku_rqt/` | [`src/daifuku_rqt/README.md`](src/daifuku_rqt/README.md)、次に [`docs/usage/control-panel.md`](docs/usage/control-panel.md) |
 | `src/value_iteration3/` | 同ディレクトリの `CLAUDE.md` |
 | 実機の症状を追う | [`docs/usage/troubleshooting.md`](docs/usage/troubleshooting.md) |
 

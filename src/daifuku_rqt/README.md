@@ -1,0 +1,75 @@
+# daifuku_rqt
+
+Raspberry Pi Cat の操作パネル（rqt プラグイン）。ゴール送信、ドライバのライフサイクルと
+モータ、teleop、CPU 表示を 1 つのウィジェットにまとめたものです。
+
+**PC 側だけで動きます。** 実機の `docker/raspberrypi/` イメージには rqt が入っていないため、
+`docker/raspberrypi/scripts/build-workspace.sh` の `--packages-select` にこのパッケージは
+入れていません（あちらは名前で選ぶので、書かなければ建ちません）。ビルドされるのは
+`docker/dev/` とネイティブ環境です。
+
+## 起動
+
+```bash
+rqt --standalone daifuku_rqt          # 単独ウィンドウ
+ros2 run daifuku_rqt daifuku_rqt   # 同じもの
+rqt                                          # Plugins > Raspicat > Raspicat Control Panel
+```
+
+`rqt` から開いた場合、ゴール座標とドライバ名は perspective に保存されます。
+
+## つながる先
+
+| パネルの操作 | 相手 |
+| --- | --- |
+| 稼働状況 | `/diagnostics`（`daifuku_stack` の `system_monitor` が出す） |
+| ゴール送信・中断 | `navigate_to_pose` アクション（`bt_navigator`） |
+| configure / activate / deactivate | `/<ドライバ名>/change_state`、状態表示は `/get_state` を 2 秒ごと |
+| モータ ON/OFF | `/motor_power`（`std_srvs/SetBool`） |
+| teleop | `/cmd_vel_teleop` を 10 Hz で publish（`twist_mux` の優先度 100 側） |
+
+`motor_power` が**ノード名の下ではなく `/motor_power`** にいるのは、ドライバが相対名で
+`create_service` しているためです（相対名は名前空間に対して解決され、ノード名は入りません）。
+ライフサイクルのサービスだけはノード名の下にいます。
+
+## 止まり方（ここが一番重要）
+
+`config/robot/raspicat_driver.yaml` の `cmd_vel_timeout` は **60 秒**です。つまり
+「`cmd_vel` が途切れたから止まる」までに 1 分かかります。teleop の停止をドライバ側の
+タイムアウトに任せることはできないので、パネルが自分で 0 の `Twist` を出します。
+
+出す条件は次のとおりです。
+
+- ボタンを離したとき・矢印キーを離したとき
+- 5 秒（`HOLD_LIMIT`）押しっぱなしになったとき（押し続けている最中でも止めます）
+- パネルが隠れたとき、ウィンドウが非アクティブになったとき
+- プラグインを閉じるとき（3 回まとめて出します）
+
+それでも、**パネルのプロセスごと落ちた場合は 60 秒動き続けます。** teleop を常用するなら
+`cmd_vel_timeout` を 1 秒程度へ下げることを検討してください（既定 60.0 は上流の値です）。
+
+## teleop とナビゲーションの排他
+
+出す先は `/cmd_vel` ではなく **`/cmd_vel_teleop`** です。`/cmd_vel` は自律側
+（nav2 のコントローラと `vi_planner`）の出力で、機体の手前には `twist_mux` が入って
+います（`robot_bringup.launch.py` の `twist_mux:=true` が既定）。優先度は teleop 100 /
+自律 10 なので、**publish しているあいだはこちらが勝ちます**。配線は
+[`config/README.md`](../daifuku_stack/config/README.md#twist_muxyaml-の配線と優先度)。
+
+それでも**ゴールが走っている間は teleop グループを無効化**しています。勝てるのは
+publish している間と 0.5 秒だけで、指を離せば自律側が動き出すためです。手動に戻すには
+「中断」を押してください。
+
+`twist_mux:=false` で立てた機体では、`/cmd_vel_teleop` を誰も購読しません。
+パネルは何事もなく動いているように見えて**機体だけが動かない**ので、そのときは
+`TELEOP_CMD_VEL_TOPIC` を `/cmd_vel` に戻してください。
+
+## 実装のきまり
+
+- ROS のコールバックは rqt のスピンスレッドから来ます。ウィジェットを直接触ると
+  「たまに落ちる」形で壊れるので、コールバックは Qt シグナルを emit するだけにし、
+  スロット側でウィジェットを触ります。
+- サービスとアクションはすべて非同期（`call_async` + `add_done_callback`）です。スロットの
+  中で `spin_until_future_complete` を呼ぶと GUI が固まります。
+- done-callback から例外が漏れるとスピンスレッドごと死に、パネル中の購読が全部止まります。
+  `_result_or_none()` で握って UI に出す形にしてあります。

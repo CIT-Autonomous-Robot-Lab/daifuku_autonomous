@@ -183,7 +183,7 @@ bash docker/dev/tools/linux/shell.sh
 build-autonomous
 source install/setup.bash
 ros2 pkg list | grep raspicat
-ros2 pkg prefix autonomous_nav
+ros2 pkg prefix daifuku_stack
 ros2 topic list
 ```
 
@@ -254,7 +254,7 @@ Windows側でDDSを起動せず、固定IP`192.168.1.50`へSSHして`ros2`を実
 現在のROS 2 Humbleで動作確認済みのNavFn構成をデバッグ起動する例:
 
 ```bash
-ros2 launch autonomous_nav navigation.launch.py \
+ros2 launch daifuku_stack navigation.launch.py \
   planner:=navfn use_mid360_imu:=false use_rviz:=true
 ```
 
@@ -263,8 +263,8 @@ ros2 launch autonomous_nav navigation.launch.py \
 実測し直してください。`use_rviz`の既定は`false`なので、表示するここでは明示します。
 モーター電源は、この起動確認だけでは有効にしません。
 
-`docker/dev/`は`autonomous_nav`をcolconでビルドするため、
-`share/autonomous_nav/src/`がインストールされず、Mid-360のスタンプ打ち直しが
+`docker/dev/`は`daifuku_stack`をcolconでビルドするため、
+`share/daifuku_stack/src/`がインストールされず、Mid-360のスタンプ打ち直しが
 起動しません（`/scan_raw`が配信されません）。詳細と対処は
 [LiDARとオドメトリ](../../docs/setup/lidar.md#タイムスタンプの打ち直し)を参照して
 ください。
@@ -273,7 +273,7 @@ ros2 launch autonomous_nav navigation.launch.py \
 
 ```bash
 gdb --args install/emcl2/lib/emcl2/emcl2_node \
-  --ros-args --params-file src/autonomous_nav/config/localization/emcl2.yaml
+  --ros-args --params-file src/daifuku_stack/config/localization/emcl2.yaml
 ```
 
 キーボード操作の例:

@@ -10,11 +10,13 @@
 #   sudo udevadm control --reload && sudo udevadm trigger
 # または再起動。
 
-# ステップクロック。/sys/class/pwm/pwmchipN/export を書くと pwmN/ が新しい
-# デバイスとして生えるので、同じ ACTION=="add" がもう一度飛ぶ。そのたびに属性
-# ファイルの所有権を直す。%p は devpath で、/sys%p が実体のディレクトリ
-# (/sys/class/pwm/ の下はシンボリックリンクなので chown -R では辿らない)。
-SUBSYSTEM=="pwm", ACTION=="add", RUN+="/bin/sh -c 'chown -R 1000:1000 /sys%p'"
+# ステップクロック。/sys/class/pwm/pwmchipN/export を書くと pwmN/ が生えるが、
+# これは子デバイスの add では飛ばず、pwmchipN 自身への ACTION=="change" として
+# 飛ぶ (Pi 5 実機 2026-08-04、udevadm monitor で実測)。add だけを見ていると
+# pwmN/ は root のまま残り、ドライバが period / duty_cycle を書けない。
+# %p は devpath で、/sys%p が実体のディレクトリ (/sys/class/pwm/ の下は
+# シンボリックリンクなので chown -R では辿らない)。
+SUBSYSTEM=="pwm", ACTION=="add|change", RUN+="/bin/sh -c 'chown -R 1000:1000 /sys%p'"
 
 # モータの方向線と電源線。Pi 4 の pinctrl-bcm2835 と Pi 5 の pinctrl-rp1 の
 # どちらも拾えるよう全 gpiochip を対象にする (番号はカーネル版で動くうえ、

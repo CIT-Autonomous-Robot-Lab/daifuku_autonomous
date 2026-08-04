@@ -21,7 +21,7 @@ docker compose -f docker/raspberrypi/compose.yaml up -d
 ```bash
 cd ~/daifuku_autonomous
 tmux new-session -d -s mapping -c "$PWD" -n slam
-tmux send-keys -t mapping:slam 'docker compose -f docker/raspberrypi/compose.yaml exec ros2 /ros_entrypoint.sh ros2 launch autonomous_nav mapping.launch.py use_mid360_imu:=false use_sim_time:=false' Enter
+tmux send-keys -t mapping:slam 'docker compose -f docker/raspberrypi/compose.yaml exec ros2 /ros_entrypoint.sh ros2 launch daifuku_stack mapping.launch.py use_mid360_imu:=false use_sim_time:=false' Enter
 
 tmux new-window -t mapping -c "$PWD" -n teleop
 tmux send-keys -t mapping:teleop 'bash docker/raspberrypi/tools/control.sh motor on'
@@ -50,7 +50,7 @@ TELEOP_LINEAR_SPEED=0.1 bash docker/raspberrypi/tools/control.sh teleop keyboard
 ```bash
 docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
   /ros_entrypoint.sh ros2 run nav2_map_server map_saver_cli \
-  -f /opt/ros_ws/install/share/autonomous_nav/maps/map_19f
+  -f /opt/ros_ws/install/share/daifuku_stack/maps/map_19f
 ```
 
 保存を確認してから片付けます。`kill-session`はセッション内のノードもまとめて止めるため、
@@ -111,7 +111,7 @@ Mid-360 + IMUの場合:
 Mid-360（既定）:
 
 ```bash
-ros2 launch autonomous_nav mapping.launch.py use_sim_time:=false
+ros2 launch daifuku_stack mapping.launch.py use_sim_time:=false
 ```
 
 `lidar_z`の既定0.275はこの機体の実測値です。別の機体では`lidar_z:=<実測値>`を渡します。
@@ -119,7 +119,7 @@ ros2 launch autonomous_nav mapping.launch.py use_sim_time:=false
 2D LiDAR（raspicatのURGが起動します）:
 
 ```bash
-ros2 launch autonomous_nav mapping.launch.py \
+ros2 launch daifuku_stack mapping.launch.py \
   lidar:=2d use_sim_time:=false
 ```
 
@@ -135,13 +135,13 @@ SLAM Toolboxの値を差し替えるなら、`slam_params_file:=`でファイル
 
 ```bash
 docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
-  /ros_entrypoint.sh ros2 launch autonomous_nav mapping.launch.py \
+  /ros_entrypoint.sh ros2 launch daifuku_stack mapping.launch.py \
   lidar:=2d use_sim_time:=false
 ```
 
 ## 3. 地図を作る
 
-地図を作成する範囲をゆっくり走行します。操作ノードは`/cmd_vel`へ`geometry_msgs/msg/Twist`を配信する必要があります。
+地図を作成する範囲をゆっくり走行します。操作ノードは`/cmd_vel_teleop`へ`geometry_msgs/msg/Twist`を配信する必要があります（`twist_mux`の優先度が高い側。`twist_mux:=false`で起動したなら`/cmd_vel`）。
 
 軽量Docker環境では、モーター電源を入れてから`control.sh`で操作できます。SLAMを
 起動したターミナルとは別のターミナルで実行してください。
@@ -172,7 +172,7 @@ RVizを使える環境では、次を確認しながら走行します。
 
 ```bash
 ros2 run nav2_map_server map_saver_cli \
-  -f src/autonomous_nav/maps/map_19f
+  -f src/daifuku_stack/maps/map_19f
 ```
 
 軽量Docker環境:
@@ -180,19 +180,19 @@ ros2 run nav2_map_server map_saver_cli \
 ```bash
 docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
   /ros_entrypoint.sh ros2 run nav2_map_server map_saver_cli \
-  -f /opt/ros_ws/install/share/autonomous_nav/maps/map_19f
+  -f /opt/ros_ws/install/share/daifuku_stack/maps/map_19f
 ```
 
-`src/autonomous_nav`はコンテナへマウントされているため、次のファイルがホスト側にも残ります。
+`src/daifuku_stack`はコンテナへマウントされているため、次のファイルがホスト側にも残ります。
 
-- `src/autonomous_nav/maps/map_19f.yaml`
-- `src/autonomous_nav/maps/map_19f.pgm`
+- `src/daifuku_stack/maps/map_19f.yaml`
+- `src/daifuku_stack/maps/map_19f.pgm`
 
 `map_19f`は19Fの地図の名前で、`navigation.launch.py`の`map`の既定値です。別の場所の
 地図を作るときは名前を変えてください。その場合、自律移動では`map:=`と一緒に
 `overrides:=`も指定し直します（既定の`overrides:=map_19f`が載ったままになると、
 19F向けのEMCL2調整が別の地図に適用されます）。詳細は
-[設定](configuration.md)と`src/autonomous_nav/config/README.md`を参照してください。
+[設定](configuration.md)と`src/daifuku_stack/config/README.md`を参照してください。
 
 保存が終わったらモーター電源を切ります。
 

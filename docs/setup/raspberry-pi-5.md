@@ -98,6 +98,31 @@ dtparam=i2c_baudrate=62500
 当たります。`func=4` は `pwm-2chan-overlay.dts` 自身が挙げる正当な組み合わせ
 （PWM0: 12,4(Alt0) / PWM1: 13,4(Alt0)）です。
 
+**ただしノードが当たることと、PWM が出ることは別です。** このオーバレイは
+クロックを設定しません（`/boot/firmware/overlays/README` の pwm-2chan に
+「Currently the clock must have been enabled and configured by other means」と
+あり、`clock` パラメータは informational）。Pi 4 ではファームウェアが PWM クロックを
+立てるので露見しませんが、Pi 5 では RP1 のクロックを誰かが設定する必要があります。
+**Ubuntu 24.04 の raspi カーネルでは `clk_pwm0` が孤児クロックのままレート 0 で、
+`rpi-pwm 1f00098000.pwm: failed to get clock rate` になり、`period` の書き込みが
+EINVAL で弾かれます**（2026-08-04 実測。`6.8.0-1047` と `6.8.0-1060` の両方で同じ。
+noble の `linux-raspi` は 6.8 系しか無く、`linux-firmware-raspi` も
+`12-0ubuntu1.1` が最新で上げようがない）。
+
+デバイスツリー側は `assigned-clock-rates = <100000000>` を要求しているので、
+効いていないのはカーネルの RP1 クロックドライバです。切り分けは debugfs で:
+
+```bash
+sudo grep clk_pwm0 /sys/kernel/debug/clk/clk_summary   # xosc の下でレート≠0 か
+sudo cat /sys/kernel/debug/clk/clk_pwm0/clk_parent     # 空なら親が選ばれていない
+sudo cat /sys/kernel/debug/clk/clk_pwm0/clk_possible_parents
+```
+
+実測では `clk_parent` が**空**で、候補は
+`pll_video_sec xosc clksrc_gp0..gp5`。このうち `xosc`（50 MHz）と `pll_video_sec` は
+登録されているので、親を DT の `assigned-clock-parents` で名指しすれば通る見込みは
+あります（未検証）。同じ理由で `clk_audio_in` / `clk_audio_out` も孤児です。
+
 ネット上でよく見る `dtoverlay=pwm-pi5` は**使えません**。`rpi-6.12.y` の
 `overlays/Makefile` に無く（あるのは `pwm` / `pwm-2chan` / `pwm-gpio` /
 `pwm-gpio-fan` / `pwm-ir-tx` / `pwm-pio` / `pwm1`）、書いても無視されます。
@@ -151,16 +176,21 @@ ros2 topic pub --times 20 /cmd_vel geometry_msgs/msg/Twist \
 ピン・チャネル・アドレス・デバイスパスはすべてパラメータに出してあるので、
 `config/robot/raspicat_driver.yaml` を直せばコードは触らずに済みます。
 
-確認済み（上の 3 つは黙って失敗するので、ノードを立てる前に見ること）:
+**現時点で PWM は出せません。** `clk_pwm0` のレートが 0 のままで、`period` の書き込みが
+EINVAL になります（上の「1. SD カードを作る」を参照）。ここが解けるまで、モータ経路の
+検証はどれも始められません。
+
+同定と権限まわりは確認済み（どれも黙って失敗するので、ノードを立てる前に見ること）:
 
 | 項目 | 実測 |
 | --- | --- |
-| PWM のオーバレイ | `pwm-2chan.dtbo` は実在。`pwm-pi5.dtbo` は無い（`ls /boot/firmware/overlays \| grep pwm`） |
+| PWM のオーバレイ | `pwm-2chan.dtbo` は実在（`pwm-pi5.dtbo` は無い）。ただし**存在することと PWM が出ることは別**で、このオーバレイはクロックを設定しない |
 | PWM の出どころ | `pwmchip0` → `.../1f00098000.pwm`（RP1・npwm=4）。`pwmchip_match` の `98000.pwm` は `find_pwmchip` が部分一致で拾う。`pwmchip1` は SoC 側の `107d517a80.pwm` |
 | gpiochip | `/dev/gpiochip4` が `pinctrl-rp1`（54 本）。`gpiochip0`〜`3` は `gpio-brcmstb@...` |
-| 所有者 | udev ルールはデバイスの add でしか発火しないので、`provision.sh` を流した直後は `/sys/class/pwm` が root のまま。**再起動すると `ubuntu:ubuntu` になる** |
+| 所有者 | `provision.sh` を流した直後は `/sys/class/pwm` が root のまま。**再起動で `ubuntu:ubuntu` になる**。またチャネルの export は子デバイスの `add` ではなく `pwmchip` への `change` で飛ぶので、udev ルールは両方を見る必要がある |
+| AppArmor | Docker 既定の `docker-default` は `/sys/fs` 以外の `/sys/**` への書き込みを拒否する。所有者が合っていても export が EACCES になり、監査ログにも残らない。`compose.original.yaml` の `security_opt: apparmor=unconfined` で外してある |
 
-未確認:
+未確認（PWM が出るようになってから）:
 
 | 項目 | 見かた | 直す場所 |
 | --- | --- | --- |
@@ -172,7 +202,7 @@ ros2 topic pub --times 20 /cmd_vel geometry_msgs/msg/Twist \
 
 ## 関連
 
-- [`src/autonomous_nav/config/README.md`](../../src/autonomous_nav/config/README.md) — 設定値の由来
+- [`src/daifuku_stack/config/README.md`](../../src/daifuku_stack/config/README.md) — 設定値の由来
 - [`tools/image/README.md`](../../tools/image/README.md) — SD カードの作成
 - [`docker/raspberrypi/README.md`](../../docker/raspberrypi/README.md) — コンテナ構成
 - [Raspberry Pi 4 で動かす](raspberry-pi-4.md) — 既定の構成（rtmouse）

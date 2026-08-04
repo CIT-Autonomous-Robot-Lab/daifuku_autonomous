@@ -88,10 +88,10 @@ echo "=== [1/4] ワールド USD を生成 ==="
 # 粗い地図で回したい場合は `uv run downsample-map` の出力を maps/ に置いて
 # MAP_NAME で指す (WORLD_MAP_YAML だけ差し替えるのは意図的なずれの注入なので、
 # 明示的に指定したときだけ許す)。
-MAP_YAML=$REPO/src/autonomous_nav/maps/$MAP_NAME.yaml
+MAP_YAML=$REPO/src/daifuku_stack/maps/$MAP_NAME.yaml
 if [ ! -f "$MAP_YAML" ]; then
     echo "map not found: $MAP_YAML" >&2
-    echo "  MAP_NAME は src/autonomous_nav/maps/<name>.yaml を指す。" >&2
+    echo "  MAP_NAME は src/daifuku_stack/maps/<name>.yaml を指す。" >&2
     echo "  downsample した地図を使うなら、その出力を maps/ に置いてから指すこと。" >&2
     exit 2
 fi
@@ -223,7 +223,7 @@ if ! $ENGINE ps -a --format '{{.Names}}' | grep -qx "$CONTAINER"; then
         "$IMAGE" -lc "sleep infinity" >/dev/null || exit $?
 fi
 
-SHARE=/opt/ros_ws/install/share/autonomous_nav
+SHARE=/opt/ros_ws/install/share/daifuku_stack
 # コンテナ内で走るものは simulator/container/ にまとまっている。probe.py は
 # pi4_sim ハーネスと共有 (ゴール投入と計数のロジックは同じ)。配り先の /opt/sim も
 # run_pi4_sim.ps1 と共通で、nav_container.sh がそこから probe.py を呼ぶ。
@@ -238,8 +238,8 @@ fi
 # 編集中の launch / config をコンテナへ反映する (pi4_sim 側と同じ理由で bind mount しない)。
 $ENGINE exec "$CONTAINER" bash -lc "rm -rf $SHARE/config $SHARE/scripts"
 for d in behavior_trees config launch maps rviz src; do
-    [ -d "$REPO/src/autonomous_nav/$d" ] && \
-        $ENGINE cp "$REPO/src/autonomous_nav/$d" "$CONTAINER:$SHARE/"
+    [ -d "$REPO/src/daifuku_stack/$d" ] && \
+        $ENGINE cp "$REPO/src/daifuku_stack/$d" "$CONTAINER:$SHARE/"
 done
 $ENGINE exec "$CONTAINER" bash -lc \
     'for f in /opt/sim/*.py /opt/sim/*.sh; do [ -e "$f" ] && sed -i "s/\r$//" "$f"; done

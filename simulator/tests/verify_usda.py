@@ -7,7 +7,7 @@ README の「`map_to_usd.py` は実測検証済み」はこのスクリプトの
 という前提だけなので、目視では絶対に気づけない。
 
     cd simulator
-    uv run python tests/verify_usda.py ../src/autonomous_nav/maps/map_19f.yaml /tmp/world.usda free
+    uv run python tests/verify_usda.py ../src/daifuku_stack/maps/map_19f.yaml /tmp/world.usda free
 
 終了コード: 0 = 一致、1 = 不一致。
 """

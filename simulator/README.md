@@ -15,7 +15,7 @@ pi4_sim 版のほうが先にあり、Pi4 相当の cgroup 値・キャリブレ
 
 以下はこのうち Isaac 版の話。`rt-net/raspicat_sim` (Gazebo) の Isaac Sim 版だが
 **移植ではなく作り直し**で、動かすナビゲーションスタックは
-`rt-net/raspicat_slam_navigation` ではなく **本リポジトリの `autonomous_nav`**
+`rt-net/raspicat_slam_navigation` ではなく **本リポジトリの `daifuku_stack`**
 (emcl2 + value_iteration3)。
 
 Raspberry Pi 4 の遅さは pi4_sim ハーネスと同じく cgroup の CPU quota で再現する。
@@ -67,9 +67,9 @@ nav2 側の構成・制約・キャリブレーションはそのまま引き継
 > `map_to_usd` の出力を見ても分からない**。上の「実測検証済み」を維持する条件は:
 >
 > ```bash
-> uv run --no-sync map-to-usd ../src/autonomous_nav/maps/map_19f.yaml -o /tmp/w.usda
+> uv run --no-sync map-to-usd ../src/daifuku_stack/maps/map_19f.yaml -o /tmp/w.usda
 > uv run --no-sync python tests/verify_usda.py \
->     ../src/autonomous_nav/maps/map_19f.yaml /tmp/w.usda free    # -> MATCH
+>     ../src/daifuku_stack/maps/map_19f.yaml /tmp/w.usda free    # -> MATCH
 > ```
 
 ## 構成
@@ -123,8 +123,8 @@ uv run map-to-usd --help
 uv run rtf-gate --help
 
 # 生成した world.usda が元の地図と一致しているか検算する
-uv run map-to-usd ../src/autonomous_nav/maps/map_19f.yaml -o /tmp/world.usda
-uv run python tests/verify_usda.py ../src/autonomous_nav/maps/map_19f.yaml /tmp/world.usda free
+uv run map-to-usd ../src/daifuku_stack/maps/map_19f.yaml -o /tmp/world.usda
+uv run python tests/verify_usda.py ../src/daifuku_stack/maps/map_19f.yaml /tmp/world.usda free
 # -> walls parsed: 3373 / missing 0 / extra 0 / MATCH
 ```
 
@@ -224,7 +224,7 @@ Gazebo 版のワールド (`empty.world` / `iscas_museum.world` / `turtlebot3_ho
 
 ```bash
 uv run --project simulator map-to-usd \
-    src/autonomous_nav/maps/map_19f.yaml -o /tmp/world.usda
+    src/daifuku_stack/maps/map_19f.yaml -o /tmp/world.usda
 ```
 
 利点は依存が無いことだけではない。地図とシミュレータ環境が**定義上ずれない**。
@@ -252,7 +252,7 @@ uv run --project simulator map-to-usd \
 
 ```bash
 uv run --project simulator downsample-map \
-    src/autonomous_nav/maps/map_tsudanuma.yaml /tmp/ts4.yaml --scale 4
+    src/daifuku_stack/maps/map_tsudanuma.yaml /tmp/ts4.yaml --scale 4
 uv run --project simulator map-to-usd /tmp/ts4.yaml -o /tmp/ts4.usda
 # 1472x1000 @0.2m -> 12,011 矩形 / 5.8 MiB
 ```
@@ -334,7 +334,7 @@ NO_LIMITS=1 CONTAINER=isaacsim_full bash simulator/scripts/run_isaac_case.sh nol
 |---|---|---|
 | `ISAAC_RUNTIME` | `binary` | `binary` (`$ISAACSIM/python.sh`) / `pip` (`uv --extra isaac`) |
 | `LIDAR` | `2d` | `2d` / `mid360` |
-| `MAP_NAME` | `map` | `src/autonomous_nav/maps/<name>.yaml` |
+| `MAP_NAME` | `map` | `src/daifuku_stack/maps/<name>.yaml` |
 | `PLANNER` | `vi` | `vi` / `navfn` |
 | `LOCAL_PLANNER` | `auto` | `auto` / `nav2` / `vi` |
 | `LOCALIZATION` | `emcl2` | `emcl2` / `amcl` |
