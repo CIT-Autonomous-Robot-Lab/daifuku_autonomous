@@ -82,7 +82,9 @@ rtmouse は out-of-tree モジュールで、キャラクタデバイスのメ�
   エンコーダが生きているので、この確認ができます）。
 - Nav2 を回転中に止めるとゼロ速度が届かず、`odom` が回り続けます。その幻の回転を
   emcl2 が打ち消そうとして `map->odom` まで振り回されます。止めるときは
-  `/cmd_vel` へゼロを投げてください（`control.sh stop`）。
+  `/cmd_vel_teleop` へゼロを投げてください（`control.sh stop`）。仲裁
+  （`twist_mux:=true` が既定）で優先度が高いのはそちらで、`/cmd_vel` は自律側の
+  出力です。`twist_mux:=false` で立てているなら `/cmd_vel` が宛先になります。
 
 ## 4 GB の制約
 

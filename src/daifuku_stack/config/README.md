@@ -531,10 +531,12 @@ p99 300 でした。遠くまで階調が要るときは 180 にしてくださ�
   `unknown_as_obstacle: true`（既定）だと未観測が全て壁になる＝舗装路のみ通行可。
   一方 emcl2/AMCL のスキャンマッチングは占有セルの尤度場を使うので、この地図では
   拠り所がほとんどありません（別途要検討）。
-* メモリは `map_scale: 5` + compact で `vi_global_planner` / `vi_planner` とも
-  ピーク RSS 約 1.5GB（匿名 0.83GB + sink の mmap 0.66GB）。`map_scale: 3` +
-  保守的プーリングだった頃の 3.98GB（匿名 2.16GB + mmap 1.81GB）から下がり、
-  Pi4 4GB の枠には収まります。実測の詳細は `simulator/docs/pi4_sim.md`。
+* メモリは `map_scale: 5` + compact で、`vi_planner` のピーク RSS が **実測 1.60GB**
+  （うち sink の mmap が 648MB）。`map_scale: 3` + 保守的プーリングだった頃の
+  `vi_global_planner` の 3.98GB（匿名 2.16GB + mmap 1.81GB）から下がり、Pi4 4GB の枠には
+  収まります。`vi_global_planner` をこの scale で測ってはいませんが、解像度もソルバも
+  同じなので同程度になるはずです（**未計測**）。実測の詳細は
+  `simulator/docs/pi4_sim.md` と `overrides/map_tsudanuma.yaml` のヘッダ。
 * 一方 **`simulator/` の pi4_sim ハーネスの枠（0.6 コアを stack 全体で共有）では、solve 中に
   emcl2 まで巻き込んで 900 秒でも `/plan` が出ません**。実機 Pi4 は 4 コアあるので
   同じにはなりませんが、`vi_threads: 3` を明示して 1 コアを stack に残すのは

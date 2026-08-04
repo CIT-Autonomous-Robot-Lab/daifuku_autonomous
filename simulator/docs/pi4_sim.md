@@ -97,6 +97,9 @@ CPU quota のキャリブレーションは、実機で取れている数少な�
 - `theta_cell_num` は実行時に減らせない。`vi_global_planner` の `validate()` が
   `theta_cell_num != N_THETA` を弾く (`N_THETA` は `vi_core` のコンパイル時定数)。
   減らすには `vi_core` を作り直してイメージを再ビルドする必要がある。
+  → **2026-08-04 に解消** (value_iteration3 の `ec2579d`)。`vi_core` の
+  `params` ごと捨てたのでこの照合は無くなり、`theta_cell_num` も行動集合も launch から
+  渡せる (360 を割り切ること)。
 - `vi_global_planner` と `vi_local_planner` は**別プロセスで同じ全地図の価値関数を
   それぞれ解く**。つまり所要メモリは 2 倍。→ **2026-07-29 に解消**: 両アクションを
   1 ノード・1 価値関数で提供する `vi_planner` に統合し、`local_planner:=vi` では
@@ -136,9 +139,15 @@ Pi4 は 4GB でスワップ無し。プランナ 1 プロセスのピークだ�
 (value_iteration3 側の変更、下の「広域地図 (map_tsudanuma) 対応」節)。
 `solver: frontier2d_sparse_compact` を選ぶと `solve_compact_mapped` を直接呼び、
 `states` を一切確保しない。ロールアウトは確定出力 (sink) を方策ビューとして
-読む (`vi_reference::planner::CompactPolicy`)。統合ノードの `vi_planner` は
-compact 非対応 (追従ループが `states` に書き戻すため) なので、広域地図では
-`local_planner:=nav2` = `vi_global_planner` + `controller_server` を使う。
+読む (`vi_reference::planner::CompactPolicy`)。この時点では統合ノードの `vi_planner` が
+compact 非対応 (追従ループが `states` に書き戻すため) だったので、広域地図では
+`local_planner:=nav2` = `vi_global_planner` + `controller_server` に限られた。
+
+**2026-08-01 に解消**: `vi_planner` も compact を扱う。追従はロボット近傍のパッチ
+だけを sink から起こして回し、狭域 → 広域の伝播 (`global_sweep`) は sink のタイル修復
+になる (2026-08-04)。広域地図は `local_planner:=vi` でも `nav2` でも通る。詳細は
+[`config/README.md`](../../src/daifuku_stack/config/README.md) の
+「`map_tsudanuma` で `planner:=vi` を使うときの制約」。
 
 ### 4. 地図を切り詰めても効かない
 
@@ -384,9 +393,10 @@ goal (4.28,-2.92)) だけで、これは観測済み領域内の 120,753 セル�
 205 の p は 0.19607843… で、0.196 との比較は浮動小数の境界に乗っており、
 実装によって free 側に転ぶ危険がある。
 
-`theta_cell_num` を 60 から下げられればメモリは線形に落ちるが、
-`vi_core` の `N_THETA` とのコンパイル時一致チェックがあるためイメージの
-再ビルドが必要。地図解像度を下げる方が今すぐできる。
+`theta_cell_num` を 60 から下げられればメモリは線形に落ちる。当時は `vi_core` の
+`N_THETA` とのコンパイル時一致チェックがあってイメージの再ビルドが要ったが、
+2026-08-04 の `ec2579d` でその照合は無くなり、いまは launch から渡せる
+(360 を割り切ること)。
 
 ## 広域地図 (map_tsudanuma) 対応 (2026-07-29)
 

@@ -47,6 +47,7 @@ WSLから`tools/linux/up.sh`を実行した場合のみ、Windows側の固定IP�
 |---|---|
 | Windows / Linuxホスト | `192.168.1.3/24` |
 | Podman Hyper-V VM | `192.168.1.2/24` |
+| WSL2（bridged。下の「Docker Desktop / WSL2」） | `192.168.1.4/24` |
 | Raspberry Pi Cat | `192.168.1.50/24` |
 | Livox Mid-360 | `192.168.1.108/24` |
 
@@ -288,11 +289,23 @@ ros2 launch daifuku_stack navigation.launch.py \
 実測し直してください。`use_rviz`の既定は`false`なので、表示するここでは明示します。
 モーター電源は、この起動確認だけでは有効にしません。
 
-`docker/dev/`は`daifuku_stack`をcolconでビルドするため、
-`share/daifuku_stack/src/`がインストールされず、Mid-360のスタンプ打ち直しが
-起動しません（`/scan_raw`が配信されません）。詳細と対処は
-[LiDARとオドメトリ](../../docs/setup/lidar.md#タイムスタンプの打ち直し)を参照して
-ください。
+`/scan_raw`が来ないときは、まず`/livox/lidar`が届いているか見てください。この環境は
+PC側なので、Mid-360を繋いでもいないしバッグも再生していないなら、空なのが正常です。
+
+`/livox/lidar`は来ているのに`/scan_raw`だけが無いなら、スタンプ打ち直しを疑います。
+中継は`share/daifuku_stack/src/restamp_scan.py`を`ExecuteProcess`で直接叩く形です。
+`CMakeLists.txt`が`src`ディレクトリを`share`へ入れているので普通は揃っていますが、
+`build-autonomous`を一度も通していない場合や、`scripts/`から`src/`へ移す前の
+`install/`ボリュームが残っている場合は、**エラーが出ないまま`/scan_raw`だけが配信
+されません**。置き場を見てください。
+
+```bash
+ls $(ros2 pkg prefix daifuku_stack)/share/daifuku_stack/src/
+```
+
+詳細は[LiDARとオドメトリ](../../docs/setup/lidar.md#タイムスタンプの打ち直し)と
+[トラブルシューティング](../../docs/usage/troubleshooting.md#mid-360のスキャンが古すぎると拒否される)に
+あります。
 
 ネイティブノードをGDBで起動する場合は、例えば次のようにします。
 

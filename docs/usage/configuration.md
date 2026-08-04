@@ -75,11 +75,14 @@ ros2 launch daifuku_stack mapping.launch.py --show-args
 | `driver` | `raspimouse` | 本体ドライバ。`raspimouse`（公式実装。rtmouseが要る。Pi 4のみ）または`original`（自前実装。Pi 4 / Pi 5） |
 | `model` | 空（`raspicat_driver.yaml`の`model`に従う。既定は`auto`） | `driver:=original`のときの機種。`pi4` / `pi5` / `auto`。`driver:=raspimouse`に渡すとエラーになる |
 | `params_file` | 空（`driver:=`に応じて`config/robot/`から選ぶ） | ドライバのパラメータファイル |
+| `twist_mux` | `true` | 速度指令の仲裁を挟むか。`true`だと**ドライバが購読するのは`/cmd_vel`ではなく`/cmd_vel_mux`**になり、人が出す指令は`/cmd_vel_teleop`（優先度100）へ。`false`で全員が`/cmd_vel`へ書く従来の配線に戻る |
+| `twist_mux_params_file` | 空（`config/robot/twist_mux.yaml`） | `twist_mux`のパラメータファイル |
 | `lidar_frame` | `lidar_link` | URDFへ渡すLiDARのフレーム名 |
 | `use_joint_state_publisher` | `True` | `joint_state_publisher`を起動するか |
 
-どちらのドライバも、`/cmd_vel`を購読し`/odom`と`odom -> base_footprint` TFを配信する
-lifecycleノードという同じ契約です。切り替えの前提と確認手順は
+どちらのドライバも、相対名`cmd_vel`を購読し`/odom`と`odom -> base_footprint` TFを配信する
+lifecycleノードという同じ契約です（`twist_mux:=true`なら購読先が`/cmd_vel_mux`へ
+remapされます）。切り替えの前提と確認手順は
 [Raspberry Pi 4](../setup/raspberry-pi-4.md)と[Raspberry Pi 5](../setup/raspberry-pi-5.md)を
 参照してください。
 

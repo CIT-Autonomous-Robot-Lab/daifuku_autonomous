@@ -97,8 +97,10 @@ deactivate と、モータ ON/OFF。状態は 2 秒ごとに `get_state` で取�
 **publish している間と 0.5 秒だけ**こちらが勝ちます。指を離せば自律側に戻ります。
 
 `twist_mux:=false` で立てた機体では `/cmd_vel_teleop` を誰も購読しません。パネルは正常に
-見えて**機体だけが動かない**ので、そのときは `TELEOP_CMD_VEL_TOPIC` を `/cmd_vel` に
-戻してください。
+見えて**機体だけが動かない**ので、そのときは宛先を `/cmd_vel` に戻してください。宛先は
+`src/daifuku_rqt/src/daifuku_rqt/control_panel.py` の `TELEOP_CMD_VEL_TOPIC` という
+**モジュール先頭の定数**です（ROSパラメータでも環境変数でもないので、直したらパネルを
+開き直します）。
 
 ## 停止の設計と、残る危険
 

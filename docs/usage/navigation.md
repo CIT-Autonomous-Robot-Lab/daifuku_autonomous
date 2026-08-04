@@ -170,7 +170,7 @@ ros2 launch daifuku_stack navigation.launch.py \
 `config/overrides/map_tsudanuma.yaml`を`overrides:=map_tsudanuma`で重ねると、プランナ内部だけが
 0.25 m/セル（`map_scale: 5`、1178×800×60＝5650万状態）に粗くなり、状態配列を確保しない
 アウトオブコアソルバ（`frontier2d_sparse_compact`）へ切り替わります。確定した価値関数と方策は
-`compact_sink_dir`のmmapファイル（約0.66 GB）に置かれます。地図サーバ、コストマップ、
+`compact_sink_dir`のmmapファイル（実測648 MB）に置かれます。地図サーバ、コストマップ、
 自己位置推定は0.05 mのままです。
 
 ```bash
@@ -218,9 +218,10 @@ ros2 launch daifuku_stack navigation.launch.py \
   経路ごとに確認してください。`map_scale: 5`で解けることを確かめた当時のコストマップは
   `robot_radius: 0.22`（`nav2_bringup`のyamlのまま）だったため、実機の条件はこれより
   厳しくなります。
-- ピークRSSは`vi_planner`と`vi_global_planner`のどちらも約1.5 GB（匿名0.83 GB＋mmap
-  0.66 GB）です。`map_scale: 3`＋保守的プーリングだった頃の3.98 GBから下がり、
-  Raspberry Pi 4の4 GBに収まります。
+- ピークRSSは`vi_planner`で実測1.60 GB（うちsinkのmmapが648 MB）です。
+  `map_scale: 3`＋保守的プーリングだった頃の`vi_global_planner`の3.98 GBから下がり、
+  Raspberry Pi 4の4 GBに収まります。`vi_global_planner`をこの`map_scale: 5`で
+  測ってはいませんが、解像度もソルバも同じなので同程度になるはずです（**未計測**）。
 - 新しいゴールを与えると、まず地図全体を解きます。BTを外した最小構成をPi 4相当の枠
   （0.6コア、`vi_threads: 3`）で回した実測では、solveとロールアウトに87〜89秒かかりました。
   返した経路は398姿勢で、結果はSUCCEEDEDです。同じゴールへの再計画はキャッシュヒットで
