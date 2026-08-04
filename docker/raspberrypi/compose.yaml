@@ -74,8 +74,10 @@ services:
       FASTRTPS_DEFAULT_PROFILES_FILE: /etc/fastdds/udp_whitelist.xml
     volumes:
       - ./fastdds_udp_whitelist.xml:/etc/fastdds/udp_whitelist.xml:ro
-      # joy_node uses evdev devices. The cgroup rule also permits hot-plugged
-      # controllers whose minor number was not present at container creation.
+      # 入力デバイス。cgroup 規則のほうは、コンテナ生成時に居なかった
+      # マイナー番号のコントローラを後から挿しても通るようにするもの。
+      # **joy_node が居るのはここではなく raspicat サービス**なので、
+      # ゲームパッドの話はあちらの group_add を見ること。
       - /dev/input:/dev/input:ro
       # ソースと成果物。workspace-build と同じものを見せる必要がある
       # (--symlink-install した install/ は src/ への symlink を含むため、
@@ -118,6 +120,15 @@ services:
     network_mode: host
     ipc: host
     user: "1000:1000"
+    # joy_node (joy 3.3.0) が掴むのは js0 ではなく /dev/input/event* で、これが
+    # root:input 0660 なので uid 1000 では開けない。下の `/dev` 丸ごと + cgroup
+    # `c *:* rwm` は cgroup 層を通すだけで、POSIX のパーミッションには効かない。
+    # 足りないと **エラーも警告も出ないまま /joy に publisher が 1 つも立たず**、
+    # START 長押しが無反応になる (2026-08-04 の実機で踏んだ)。
+    # 995 はホストの input グループ (`getent group input`)。イメージを焼き直して
+    # 番号が変わったら INPUT_GID で渡すこと。
+    group_add:
+      - "${INPUT_GID:-995}"
     environment:
       HOME: /tmp
       ROS_HOME: /tmp/ros
