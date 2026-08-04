@@ -149,7 +149,12 @@ networkingMode=mirrored
 firewall=true
 ```
 
-設定変更後は`wsl --shutdown`を実行し、Docker Desktopを再起動します。
+設定変更後は`wsl --shutdown`を実行し、Docker Desktopを再起動します。mirroredは
+ホストによっては失敗し、NATではなく`None`（NICが1枚も無い状態）にフォールバック
+します。`wslinfo --networking-mode`で確認し、失敗する場合は
+[ROS 2ネットワーク](../../docs/setup/network.md#wsl2から直接つなぐ)のbridgedを
+使ってください。
+
 WSL2シェルから起動する場合:
 
 ```bash

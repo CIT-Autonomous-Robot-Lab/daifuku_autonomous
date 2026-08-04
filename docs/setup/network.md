@@ -82,7 +82,8 @@ networkingMode=mirrored
 firewall=true
 ```
 
-変更後は`wsl --shutdown`を実行し、Docker Desktopを再起動します。
+変更後は`wsl --shutdown`を実行し、Docker Desktopを再起動します。mirroredが失敗する
+環境では[WSL2から直接つなぐ](#wsl2から直接つなぐ)のbridgedを使います。
 
 ## 専用Ethernetで機体を接続する
 
@@ -93,6 +94,7 @@ firewall=true
 |---|---|
 | Windows / Linuxホスト | `192.168.1.3/24` |
 | Podman Hyper-V VM | `192.168.1.2/24` |
+| WSL2（bridged、[下記](#wsl2から直接つなぐ)） | `192.168.1.4/24` |
 | Raspberry Pi Cat | `192.168.1.50/24` |
 | Livox Mid-360 | `192.168.1.108/24` |
 
@@ -131,6 +133,61 @@ Windows用スクリプトは既存のICS共有を解除し、旧`OpenDHCPServer`
 ```
 
 通常の接続先は`ssh ubuntu@192.168.1.50`です。
+
+## WSL2から直接つなぐ
+
+WSL2の中でROS 2ノード（RVizなど）を動かして機体のトピックを見る場合、既定のNATでは
+接続できません。WSLの`eth0`は`172.31.x.x`で、Windowsホストが`192.168.1.3/24`を持つため
+**pingとsshはSNATで通ります**。しかしDDSの参加者は自分のロケータとして`172.31.x.x`を
+広告するため、ゲートウェイの無いロボットLANからは返せません。`ROS_STATIC_PEERS`や初期
+ピアを両側に書いても解決しません。**エラーは出ず、トピックだけが見えない**形になります。
+
+[上記](#docker-desktop)のmirrored networkingが使えればそれで解決しますが、ホストに
+よっては失敗します。**失敗するとNATではなく`None`にフォールバックする**ため、NICが
+1枚も無い状態になります（`lo`に`10.255.255.254/32`だけが付き、`/etc/resolv.conf`も
+生成されない）。`wslinfo --networking-mode`で確認できます。
+
+```
+CreateInstance/CreateVm/ConfigureNetworking/0x8007054f
+Failed to configure network (networkingMode Mirrored), falling back to networkingMode None.
+```
+
+この場合はHyper-Vの外部スイッチへ直結します。`vmSwitch`には`Get-VMSwitch`の
+`SwitchType`が`External`のものを指定します。
+
+```ini
+[wsl2]
+networkingMode=bridged
+vmSwitch=RasPiCat External
+dhcp=false
+```
+
+このセグメントにはDHCPもゲートウェイも無いため、アドレスはWSL側で静的に設定します。
+`/etc/wsl.conf`の`[boot] command`から次のようなスクリプトを呼びます。NATへ戻したときに
+影響しないよう、`bridged`のときだけ動かします。
+
+```sh
+#!/bin/sh
+[ "$(wslinfo --networking-mode 2>/dev/null)" = "bridged" ] || exit 0
+ip link set eth0 up
+ip -4 -o addr show dev eth0 | grep -q ' inet ' && exit 0
+ip addr replace 192.168.1.4/24 dev eth0
+```
+
+機体側の`fastdds_udp_whitelist.xml`はループバックとロボットLANのロケータだけを広告
+するため、WSLがこのセグメントにいる構成と噛み合います。mirroredの場合はWi-FiやVPNの
+ロケータまで広告することになります。
+
+注意点が3つあります。
+
+- **bridgedのあいだWSLは外部ネットワークへ出られません**（このセグメントに既定経路が
+  無いため）。aptやgitを使うときは上の3行を外してNATに戻します。
+- **`.wslconfig`は全ディストロ共通**です。適用には`wsl --shutdown`が必要で、
+  `wsl --terminate <distro>`ではVMが動き続けるため`networkingMode`は変わりません
+  （`[boot] command`の再実行には使えます）。
+- **`.wslconfig`はVMが起動するたびに読まれます。** アイドルタイムアウトや最後の
+  ディストロの終了でVMが落ちれば、`wsl --shutdown`を明示しなくても次の起動で反映
+  されます。編集した時点で意図しないタイミングの切り替わりが起こり得ます。
 
 ## 接続を確認する
 
