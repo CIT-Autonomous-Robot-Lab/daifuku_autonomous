@@ -109,9 +109,15 @@ Pi 4 のメモリとコア数に由来するもので、Pi 5 では緩みます�
 
 ## LED・ブザー・スイッチ・測距センサ
 
-rtmouse があるので公式実装では出ます（`use_light_sensors: true` で
-`/light_sensors`）。ただし、このワークスペースの中にこれらを使うものはありません。
-自前ドライバがこれらを持たないのはそのためです。
+rtmouse があるので公式実装では出せます。ただし、このワークスペースの中にこれらを
+使うものはありません。自前ドライバがこれらを持たないのはそのためです。
+
+**測距センサだけは切ってあります**（`config/robot/raspicat.yaml` の
+`use_light_sensors: false`）。`true` に戻すと `raspimouse` が
+`/dev/rtlightsensor0` を 100 Hz で読み、rtmouse 側でカーネル oops を起こして
+プロセスごと落ちます。ログには何も出ず、`odom` が来ないという形でだけ現れます
+（2026-08-03 に Pi 4 Model B Rev 1.5 / 5.15.0-1098-raspi で確認）。症状と復旧は
+[トラブルシューティング](../usage/troubleshooting.md)の先頭にあります。
 
 ## 手順
 
