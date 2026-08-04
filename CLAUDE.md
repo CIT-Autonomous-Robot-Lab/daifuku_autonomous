@@ -117,6 +117,12 @@ Docker 越しに叩く形は
   (`ros:humble-ros-base`) に rqt と RViz が無いため。両方の `build-workspace.sh` が
   `--packages-select` で名前を並べているので、Pi 側の一覧に足すと**ビルドが通らなく
   なる**。
+- **`planner:=vi`（既定）では `navigate_through_poses` が常に失敗する。** VI 系は
+  `compute_path_to_pose` しか持たないので、`navigation.launch.py` が through_poses の
+  木を `behavior_trees/nav_through_poses_stub.xml`（`AlwaysFailure`）へ差し替える。
+  ここへ投げるものは**即座に ABORTED になり、ログにも何も出ない**。複数点を回すなら
+  `nav2_waypoint_follower` の `/follow_waypoints` を使うこと（`daifuku_waypoint_manager`
+  はそちら。両プランナ経路で lifecycle 管理下に立っている）。
 - **`navigation.rviz` の `2D Goal Pose` は `/goal_pose` を出さない。**
   `daifuku_waypoint_manager` へ waypoint を渡すため `/waypoint_pose` に付け替えて
   ある。単発ゴールは `Nav2 Goal` (`nav2_rviz_plugins/GoalTool`) のほうを使う。

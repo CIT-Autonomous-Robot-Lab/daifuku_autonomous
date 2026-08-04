@@ -9,7 +9,7 @@
 
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/point_stamped.hpp>
-#include <nav2_msgs/action/navigate_through_poses.hpp>
+#include <nav2_msgs/action/follow_waypoints.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_action/rclcpp_action.hpp>
 #include <rviz_common/panel.hpp>
@@ -43,11 +43,14 @@ private Q_SLOTS:
   void startFollowing();
   void cancelFollowing();
   void setStatus(const QString & status);
-  void handleResult(int result_code);
+  void handleResult(int result_code, int missed_count);
 
 private:
-  using NavigateThroughPoses = nav2_msgs::action::NavigateThroughPoses;
-  using GoalHandleNavigateThroughPoses = rclcpp_action::ClientGoalHandle<NavigateThroughPoses>;
+  // NavigateThroughPoses ではなく FollowWaypoints を使う。前者の BT は
+  // ComputePathThroughPoses を要求するが、planner:=vi (daifuku_stack の既定) では
+  // その action が存在せず、木がスタブ (常に失敗) に差し替えられているため。
+  using FollowWaypoints = nav2_msgs::action::FollowWaypoints;
+  using GoalHandleFollowWaypoints = rclcpp_action::ClientGoalHandle<FollowWaypoints>;
 
   void buildUi();
   void refreshList();
@@ -66,8 +69,12 @@ private:
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_publisher_;
   rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr clicked_point_subscription_;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr clicked_pose_subscription_;
-  rclcpp_action::Client<NavigateThroughPoses>::SharedPtr action_client_;
-  GoalHandleNavigateThroughPoses::SharedPtr active_goal_;
+  rclcpp_action::Client<FollowWaypoints>::SharedPtr action_client_;
+  GoalHandleFollowWaypoints::SharedPtr active_goal_;
+  // ゴールを送ってから goal_response_callback が返るまでの窓。この間 active_goal_ は
+  // まだ空なので、waypoint の編集 (refreshList 経由の updateButtons) が Start を
+  // 押せる状態に戻してしまい、二重にゴールを送れる。
+  bool goal_pending_{false};
 
   QListWidget * waypoint_list_{nullptr};
   QLabel * status_label_{nullptr};

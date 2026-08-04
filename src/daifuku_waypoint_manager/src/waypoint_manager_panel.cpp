@@ -26,7 +26,7 @@ namespace daifuku_waypoint_manager
 namespace
 {
 constexpr char kMarkerTopic[] = "/waypoint_markers";
-constexpr char kActionName[] = "/navigate_through_poses";
+constexpr char kActionName[] = "/follow_waypoints";
 constexpr char kClickedPointTopic[] = "/clicked_point";
 constexpr char kWaypointPoseTopic[] = "/waypoint_pose";
 
@@ -66,7 +66,7 @@ void WaypointManagerPanel::onInitialize()
     [this](geometry_msgs::msg::PoseStamped::SharedPtr pose) {
       QMetaObject::invokeMethod(this, [this, pose]() {addClickedPose(*pose);}, Qt::QueuedConnection);
     });
-  action_client_ = rclcpp_action::create_client<NavigateThroughPoses>(node_, kActionName);
+  action_client_ = rclcpp_action::create_client<FollowWaypoints>(node_, kActionName);
   publishMarkers();
   setStatus("Waiting");
   updateButtons();
@@ -491,64 +491,87 @@ void WaypointManagerPanel::startFollowing()
     return;
   }
   if (!action_client_ || !action_client_->action_server_is_ready()) {
-    setStatus("Error: /navigate_through_poses action server is unavailable");
+    setStatus("Error: /follow_waypoints action server is unavailable");
     return;
   }
-  NavigateThroughPoses::Goal goal;
+  FollowWaypoints::Goal goal;
   goal.poses = waypoints_;
   for (auto & pose : goal.poses) {
     pose.header.frame_id = frame_id_;
     pose.header.stamp = node_->now();
   }
   QPointer<WaypointManagerPanel> panel(this);
-  rclcpp_action::Client<NavigateThroughPoses>::SendGoalOptions options;
-  options.goal_response_callback = [panel](GoalHandleNavigateThroughPoses::SharedPtr goal_handle) {
+  rclcpp_action::Client<FollowWaypoints>::SendGoalOptions options;
+  options.goal_response_callback = [panel](GoalHandleFollowWaypoints::SharedPtr goal_handle) {
       if (!panel) {return;}
       QMetaObject::invokeMethod(panel, [panel, goal_handle]() {
         if (!panel) {return;}
+        panel->goal_pending_ = false;
         if (!goal_handle) {
-          panel->setStatus("Error: NavigateThroughPoses goal was rejected");
+          panel->setStatus("Error: FollowWaypoints goal was rejected");
         } else {
           panel->active_goal_ = goal_handle;
-          panel->setStatus("Navigating through waypoints");
+          panel->setStatus("Following waypoints");
         }
         panel->updateButtons();
       }, Qt::QueuedConnection);
     };
-  options.result_callback = [panel](const GoalHandleNavigateThroughPoses::WrappedResult & result) {
-    if (!panel) {return;}
-      const int code = static_cast<int>(result.code);
-      QMetaObject::invokeMethod(panel, [panel, code]() {
-        if (panel) {panel->handleResult(code);}
+  options.feedback_callback = [panel](GoalHandleFollowWaypoints::SharedPtr,
+      const std::shared_ptr<const FollowWaypoints::Feedback> feedback) {
+      if (!panel) {return;}
+      const int current = static_cast<int>(feedback->current_waypoint);
+      QMetaObject::invokeMethod(panel, [panel, current]() {
+        if (!panel) {return;}
+        panel->setStatus(
+          QString("Following waypoint %1 / %2").arg(current + 1).arg(
+            static_cast<int>(panel->waypoints_.size())));
       }, Qt::QueuedConnection);
     };
+  options.result_callback = [panel](const GoalHandleFollowWaypoints::WrappedResult & result) {
+    if (!panel) {return;}
+      const int code = static_cast<int>(result.code);
+      const int missed = result.result ? static_cast<int>(result.result->missed_waypoints.size()) : 0;
+      QMetaObject::invokeMethod(panel, [panel, code, missed]() {
+        if (panel) {panel->handleResult(code, missed);}
+      }, Qt::QueuedConnection);
+    };
+  goal_pending_ = true;
   action_client_->async_send_goal(goal, options);
-  setStatus("Sending NavigateThroughPoses goal...");
-  start_button_->setEnabled(false);
+  setStatus("Sending FollowWaypoints goal...");
+  updateButtons();
 }
 
 void WaypointManagerPanel::cancelFollowing()
 {
   if (!active_goal_ || !action_client_) {
-    setStatus("No active NavigateThroughPoses goal");
+    setStatus("No active FollowWaypoints goal");
     return;
   }
   action_client_->async_cancel_goal(active_goal_);
   setStatus("Cancellation requested");
 }
 
-void WaypointManagerPanel::handleResult(int result_code)
+void WaypointManagerPanel::handleResult(int result_code, int missed_count)
 {
   active_goal_.reset();
+  goal_pending_ = false;
+  QString status;
   if (result_code == static_cast<int>(rclcpp_action::ResultCode::SUCCEEDED)) {
-    setStatus("Succeeded");
+    status = "Succeeded";
   } else if (result_code == static_cast<int>(rclcpp_action::ResultCode::CANCELED)) {
-    setStatus("Canceled");
+    status = "Canceled";
   } else if (result_code == static_cast<int>(rclcpp_action::ResultCode::ABORTED)) {
-    setStatus("Failed (aborted)");
+    status = "Failed (aborted)";
   } else {
-    setStatus("Failed (unknown result)");
+    status = "Failed (unknown result)";
   }
+  // 取りこぼしは結果コードによらず出す。stop_on_failure:=false
+  // (config/nav2/behaviors.yaml) なら SUCCEEDED で返るが、true にすると同じ
+  // missed_waypoints を積んだまま ABORTED で返るため、そこで数を落とさない。
+  if (missed_count > 0) {
+    status += QString(" - %1 waypoint(s) missed").arg(missed_count);
+  }
+  setStatus(status);
   updateButtons();
 }
 
@@ -559,7 +582,8 @@ void WaypointManagerPanel::setStatus(const QString & status)
 
 void WaypointManagerPanel::updateButtons()
 {
-  start_button_->setEnabled(!waypoints_.empty() && !active_goal_ && action_client_);
+  start_button_->setEnabled(
+    !waypoints_.empty() && !active_goal_ && !goal_pending_ && action_client_);
   cancel_button_->setEnabled(static_cast<bool>(active_goal_));
 }
 

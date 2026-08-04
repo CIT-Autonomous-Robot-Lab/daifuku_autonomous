@@ -1,11 +1,32 @@
 # daifuku_waypoint_manager
 
 RViz2 上で waypoint を作り、並べ替え・YAML 保存/読込を行い、Nav2 の
-`/navigate_through_poses`（`nav2_msgs/action/NavigateThroughPoses`）へ送るパネル
-プラグイン。
+`/follow_waypoints`（`nav2_msgs/action/FollowWaypoints`）へ送るパネルプラグイン。
 
 `nav2_astar` ブランチの `nav2_waypoint_manager` を移植したもの。名前と namespace を
 `daifuku_*` にそろえてある。
+
+## `/navigate_through_poses` は使わない
+
+移植元は `/navigate_through_poses` へ投げていたが、**`daifuku_stack` の既定
+（`planner:=vi`）ではそれが必ず失敗する。** VI 系プランナは
+`compute_path_to_pose` しか提供せず、nav2 既定の through_poses BT が要求する
+`compute_path_through_poses` が存在しないため、`navigation.launch.py` が
+`default_nav_through_poses_bt_xml` を
+`daifuku_stack/behavior_trees/nav_through_poses_stub.xml`（中身は `AlwaysFailure`）
+へ差し替えているから。Start を押した瞬間に **ステータス行が
+`Failed (aborted)` になり、機体はまったく動かない**。
+
+`nav2_waypoint_follower` は 1 点ずつ `navigate_to_pose` を呼ぶだけなので、
+`planner:=vi` でも `planner:=navfn` でも通る。両方の経路で lifecycle 管理下に
+起動している（`vi_global_planner/launch/navigation_launch.py` と nav2 の
+`navigation_launch.py`）。
+
+代償として **nav2 に「通過点をまとめて 1 本の経路にする」最適化はさせない**（1 点
+ずつ止まって次を計画する）。各点での停止時間は
+`config/nav2/behaviors.yaml` の `waypoint_pause_duration`。同ファイルの
+`stop_on_failure: false` により、途中で行けない点があっても巡回は続き、取りこぼし
+数だけが完了時のステータス行に出る。
 
 ## Pi では建てない
 
@@ -31,7 +52,7 @@ RViz プラグインなので、実機イメージ (`ros:humble-ros-base`) で�
 なり、**向きが常に単位クォータニオン（yaw 0）になる**（パネルに yaw の手入力欄は無い）。
 
 地図上をクリック＋ドラッグで、クリック位置が座標、ドラッグ方向が向きになる。
-**Start** で巡回開始、**Cancel** で停止。
+**Start** で巡回開始、**Cancel** で停止。巡回中は「いま何点目か」がステータス行に出る。
 
 ## frame_id
 

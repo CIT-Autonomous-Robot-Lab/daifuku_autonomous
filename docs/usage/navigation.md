@@ -258,7 +258,7 @@ RVizで次の順に操作します。
 ## Waypointを並べて巡回する
 
 `WaypointManagerPanel`（`daifuku_waypoint_manager`）で、複数の通過点を並べて
-`/navigate_through_poses`へ投げられます。RVizの左に出ていない場合は
+`/follow_waypoints`へ投げられます。RVizの左に出ていない場合は
 **Panels → Add New Panel**から追加します。
 
 1. 「2D Goal Pose」で地図上をクリック＋ドラッグ。クリック位置が座標、ドラッグ方向が
@@ -271,6 +271,11 @@ RVizで次の順に操作します。
 
 RVizのFixed Frameとwaypointの`frame_id`が一致している必要があります。ずれていると
 追加も追加読み込みも拒否され、パネルのステータス行にだけ理由が出ます。
+
+`nav2_waypoint_follower`が1点ずつ`navigate_to_pose`を呼ぶ形なので、点と点のあいだで
+いったん止まります（停止時間は`config/nav2/behaviors.yaml`の
+`waypoint_pause_duration`）。行けない点があっても巡回は続き、完了時に取りこぼした
+点数がステータス行に出ます。
 
 詳細は[`src/daifuku_waypoint_manager/README.md`](../../src/daifuku_waypoint_manager/README.md)。
 

@@ -140,6 +140,28 @@ id -u
 ls -l /dev/shm | head
 ```
 
+## Waypointパネルの「Start」が即座に`Failed (aborted)`になる
+
+押した瞬間にステータス行が変わり、機体はまったく動かず、経路計算のログも出ない場合
+です。パネルが`/navigate_through_poses`へ投げているのに、`planner:=vi`（既定）では
+その行動木が常に失敗するスタブ（`daifuku_stack/behavior_trees/nav_through_poses_stub.xml`）
+に差し替わっているのが原因です。VI系プランナは`compute_path_to_pose`しか提供せず、
+nav2既定の行動木が要求する`compute_path_through_poses`が無いためです。
+
+パネルは`/follow_waypoints`（`nav2_waypoint_follower`）へ送る形に直してあります。
+古いプラグインが`install/`に残っていると直っていないほうが読まれることがあるので、
+症状が続くならRVizを起動しているコンテナで`daifuku_waypoint_manager`を建て直して
+ください。
+
+```bash
+ros2 action list | grep -E 'follow_waypoints|navigate_through_poses'
+ros2 node info /waypoint_follower
+```
+
+数秒動いてから中断する場合は別件です。TFの遅延（下の「TFが20秒以上遅れて…」）か、
+Pi 4のCPU飽和によるゴール受理ackの取りこぼし（`bt_navigator`の
+`default_server_timeout`）を疑ってください。
+
 ## `Aborting bringup`でNav2が落ちる
 
 ログに`… unable to be reached after 4.00s by bond`と出て、ライフサイクルマネージャが
