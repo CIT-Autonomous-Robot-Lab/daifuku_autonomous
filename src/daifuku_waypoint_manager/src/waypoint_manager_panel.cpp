@@ -1,6 +1,8 @@
 #include "daifuku_waypoint_manager/waypoint_manager_panel.hpp"
 
 #include <cmath>
+#include <cstdint>
+#include <string>
 #include <utility>
 
 #include <QFileDialog>
@@ -41,6 +43,41 @@ constexpr char kRobotFrameFallback[] = "base_link";
 constexpr int kLeadIntervalMs = 500;
 // これ未満しか機体が動いていなければマーカを出し直さない。
 constexpr double kLeadMoveThreshold = 0.05;
+
+using Marker = visualization_msgs::msg::Marker;
+
+Marker makeMarker(
+  const std::string & ns, int id, int32_t type, const std::string & frame_id,
+  const rclcpp::Time & stamp)
+{
+  Marker marker;
+  marker.header.frame_id = frame_id;
+  marker.header.stamp = stamp;
+  marker.ns = ns;
+  marker.id = id;
+  marker.type = type;
+  marker.action = Marker::ADD;
+  return marker;
+}
+
+// 消すほうは header を埋めない (RViz は ns/id と action しか見ない)。DELETEALL を
+// 付けない出し直しでは、消えたものを明示的に消さないと残る。
+Marker deleteMarker(const std::string & ns, int id)
+{
+  Marker marker;
+  marker.ns = ns;
+  marker.id = id;
+  marker.action = Marker::DELETE;
+  return marker;
+}
+
+void setColor(Marker * marker, float r, float g, float b, float a)
+{
+  marker->color.r = r;
+  marker->color.g = g;
+  marker->color.b = b;
+  marker->color.a = a;
+}
 
 }  // namespace
 
@@ -312,132 +349,115 @@ void WaypointManagerPanel::publishMarkers(bool reset)
   }
   visualization_msgs::msg::MarkerArray markers;
   if (reset) {
-    visualization_msgs::msg::Marker clear;
-    clear.action = visualization_msgs::msg::Marker::DELETEALL;
+    Marker clear;
+    clear.action = Marker::DELETEALL;
     markers.markers.push_back(clear);
   }
 
   const auto stamp = node_->now();
+  // リストで選んでいる 1 点。73 点あると番号のラベルだけでは地図上のどれか分からない。
+  const int selected = waypoint_list_ ? waypoint_list_->currentRow() : -1;
 
+  appendLeadMarker(&markers, stamp, reset);
+  appendRouteMarker(&markers, stamp);
+  appendSelectionMarker(&markers, stamp, selected);
+  appendWaypointMarkers(&markers, stamp, selected);
+
+  marker_publisher_->publish(markers);
+}
+
+void WaypointManagerPanel::appendLeadMarker(
+  visualization_msgs::msg::MarkerArray * markers, const rclcpp::Time & stamp, bool reset)
+{
   // 機体から 1 点目までの区間。巡回中は引かない (1 点目はもう後ろにあるため。いま
   // どこへ向かっているかは Nav2 の Path 表示に出る)。
   geometry_msgs::msg::Point lead;
   QString lead_reason;
   const bool draw_lead = !active_goal_ && !goal_pending_ && leadPoint(&lead, &lead_reason);
   if (draw_lead) {
-    visualization_msgs::msg::Marker lead_marker;
-    lead_marker.header.frame_id = frame_id_;
-    lead_marker.header.stamp = stamp;
-    lead_marker.ns = "waypoint_lead";
-    lead_marker.id = 0;
-    lead_marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
-    lead_marker.action = visualization_msgs::msg::Marker::ADD;
-    lead_marker.scale.x = 0.06;
-    lead_marker.color.r = 1.0F;
-    lead_marker.color.g = 0.7F;
-    lead_marker.color.b = 0.0F;
-    lead_marker.color.a = 0.5F;
-    lead_marker.points.push_back(lead);
-    lead_marker.points.push_back(waypoints_.front().pose.position);
-    markers.markers.push_back(lead_marker);
+    Marker marker = makeMarker("waypoint_lead", 0, Marker::LINE_STRIP, frame_id_, stamp);
+    marker.scale.x = 0.06;
+    setColor(&marker, 1.0F, 0.7F, 0.0F, 0.5F);
+    marker.points.push_back(lead);
+    marker.points.push_back(waypoints_.front().pose.position);
+    markers->markers.push_back(marker);
     lead_origin_ = lead;
   } else if (lead_drawn_ && !reset) {
-    // DELETEALL を付けない出し直しでは、消えた区間を明示的に消す。
-    visualization_msgs::msg::Marker lead_marker;
-    lead_marker.ns = "waypoint_lead";
-    lead_marker.id = 0;
-    lead_marker.action = visualization_msgs::msg::Marker::DELETE;
-    markers.markers.push_back(lead_marker);
+    markers->markers.push_back(deleteMarker("waypoint_lead", 0));
   }
   lead_drawn_ = draw_lead;
+}
 
-  if (waypoints_.size() >= 2) {
-    visualization_msgs::msg::Marker route;
-    route.header.frame_id = frame_id_;
-    route.header.stamp = stamp;
-    route.ns = "waypoint_route";
-    route.id = 0;
-    route.type = visualization_msgs::msg::Marker::LINE_STRIP;
-    route.action = visualization_msgs::msg::Marker::ADD;
-    route.scale.x = 0.06;
-    route.color.r = 1.0F;
-    route.color.g = 0.7F;
-    route.color.b = 0.0F;
-    route.color.a = 1.0F;
-    route.points.reserve(waypoints_.size());
-    for (const auto & waypoint : waypoints_) {
-      route.points.push_back(waypoint.pose.position);
-    }
-    markers.markers.push_back(route);
+void WaypointManagerPanel::appendRouteMarker(
+  visualization_msgs::msg::MarkerArray * markers, const rclcpp::Time & stamp) const
+{
+  if (waypoints_.size() < 2) {
+    return;
   }
-
-  // リストで選んでいる 1 点。73 点あると番号のラベルだけでは地図上のどれか分からない。
-  const int selected = waypoint_list_ ? waypoint_list_->currentRow() : -1;
-  if (selected >= 0 && selected < static_cast<int>(waypoints_.size())) {
-    visualization_msgs::msg::Marker highlight;
-    highlight.header.frame_id = frame_id_;
-    highlight.header.stamp = stamp;
-    highlight.ns = "waypoint_selected";
-    highlight.id = 0;
-    highlight.type = visualization_msgs::msg::Marker::CYLINDER;
-    highlight.action = visualization_msgs::msg::Marker::ADD;
-    highlight.pose.position = waypoints_[selected].pose.position;
-    highlight.pose.orientation.w = 1.0;
-    highlight.scale.x = 0.9;
-    highlight.scale.y = 0.9;
-    highlight.scale.z = 0.02;
-    highlight.color.r = 1.0F;
-    highlight.color.g = 0.95F;
-    highlight.color.b = 0.2F;
-    highlight.color.a = 0.45F;
-    markers.markers.push_back(highlight);
-  } else {
-    // 選択が外れたとき。DELETEALL を付けない出し直しでは明示的に消さないと残る。
-    visualization_msgs::msg::Marker highlight;
-    highlight.ns = "waypoint_selected";
-    highlight.id = 0;
-    highlight.action = visualization_msgs::msg::Marker::DELETE;
-    markers.markers.push_back(highlight);
+  Marker route = makeMarker("waypoint_route", 0, Marker::LINE_STRIP, frame_id_, stamp);
+  route.scale.x = 0.06;
+  setColor(&route, 1.0F, 0.7F, 0.0F, 1.0F);
+  route.points.reserve(waypoints_.size());
+  for (const auto & waypoint : waypoints_) {
+    route.points.push_back(waypoint.pose.position);
   }
+  markers->markers.push_back(route);
+}
 
+void WaypointManagerPanel::appendSelectionMarker(
+  visualization_msgs::msg::MarkerArray * markers, const rclcpp::Time & stamp,
+  int selected) const
+{
+  if (selected < 0 || selected >= static_cast<int>(waypoints_.size())) {
+    markers->markers.push_back(deleteMarker("waypoint_selected", 0));
+    return;
+  }
+  Marker highlight = makeMarker("waypoint_selected", 0, Marker::CYLINDER, frame_id_, stamp);
+  highlight.pose.position = waypoints_[selected].pose.position;
+  highlight.pose.orientation.w = 1.0;
+  highlight.scale.x = 0.9;
+  highlight.scale.y = 0.9;
+  highlight.scale.z = 0.02;
+  setColor(&highlight, 1.0F, 0.95F, 0.2F, 0.45F);
+  markers->markers.push_back(highlight);
+}
+
+void WaypointManagerPanel::appendWaypointMarkers(
+  visualization_msgs::msg::MarkerArray * markers, const rclcpp::Time & stamp,
+  int selected) const
+{
   for (size_t i = 0; i < waypoints_.size(); ++i) {
     const auto & waypoint = waypoints_[i];
     const bool is_selected = static_cast<int>(i) == selected;
-    visualization_msgs::msg::Marker arrow;
-    arrow.header = waypoint.header;
-    arrow.header.stamp = stamp;
-    arrow.ns = "waypoint_arrow";
-    arrow.id = static_cast<int>(i);
-    arrow.type = visualization_msgs::msg::Marker::ARROW;
-    arrow.action = visualization_msgs::msg::Marker::ADD;
+    const int id = static_cast<int>(i);
+
+    // frame_id_ ではなく点そのものの frame_id を使う。並びは 1 つの座標系に
+    // そろえてあるが (addClickedPose と readYamlFile が拒否する)、矢印だけは
+    // 点の側を正としておく。
+    Marker arrow = makeMarker(
+      "waypoint_arrow", id, Marker::ARROW, waypoint.header.frame_id, stamp);
     arrow.pose = waypoint.pose;
     arrow.scale.x = is_selected ? 0.75 : 0.55;
     arrow.scale.y = is_selected ? 0.18 : 0.12;
     arrow.scale.z = is_selected ? 0.18 : 0.12;
-    arrow.color.r = is_selected ? 1.0F : 0.1F;
-    arrow.color.g = is_selected ? 0.95F : 0.8F;
-    arrow.color.b = is_selected ? 0.2F : 1.0F;
-    arrow.color.a = 1.0F;
-    markers.markers.push_back(arrow);
+    setColor(
+      &arrow,
+      is_selected ? 1.0F : 0.1F,
+      is_selected ? 0.95F : 0.8F,
+      is_selected ? 0.2F : 1.0F,
+      1.0F);
+    markers->markers.push_back(arrow);
 
-    visualization_msgs::msg::Marker label;
-    label.header = arrow.header;
-    label.ns = "waypoint_label";
-    label.id = static_cast<int>(i);
-    label.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
-    label.action = visualization_msgs::msg::Marker::ADD;
+    Marker label = makeMarker(
+      "waypoint_label", id, Marker::TEXT_VIEW_FACING, waypoint.header.frame_id, stamp);
     label.pose.position = waypoint.pose.position;
     label.pose.position.z += 0.35;
     label.pose.orientation.w = 1.0;
     label.scale.z = 0.25;
-    label.color.r = 1.0F;
-    label.color.g = 1.0F;
-    label.color.b = 1.0F;
-    label.color.a = 1.0F;
+    setColor(&label, 1.0F, 1.0F, 1.0F, 1.0F);
     label.text = std::to_string(i);
-    markers.markers.push_back(label);
+    markers->markers.push_back(label);
   }
-  marker_publisher_->publish(markers);
 }
 
 bool WaypointManagerPanel::leadPoint(geometry_msgs::msg::Point * point, QString * reason) const
@@ -598,7 +618,10 @@ bool WaypointManagerPanel::readYamlFile(
       pose.header.frame_id = *loaded_frame_id;
       pose.pose.position.x = position["x"].as<double>();
       pose.pose.position.y = position["y"].as<double>();
-      pose.pose.position.z = position["z"].as<double>();
+      // z だけは省略可。接地して走る機体なので無くても意味が決まる (joy_teleop.py の
+      // load_waypoints と同じ扱い。片方だけが通す形にすると、手で書いた順路が
+      // 「実機では走るのにパネルでは開けない」になる)。
+      pose.pose.position.z = position["z"] ? position["z"].as<double>() : 0.0;
       pose.pose.orientation.x = orientation["x"].as<double>();
       pose.pose.orientation.y = orientation["y"].as<double>();
       pose.pose.orientation.z = orientation["z"].as<double>();

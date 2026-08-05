@@ -68,12 +68,23 @@ def _dump_temp(prefix, body):
     return out.name
 
 
-def declare_args(overrides_dir):
-    """overrides / extra_params_file を宣言する (4 つの launch が同じものを使う)。"""
-    available = ", ".join(sorted(
+def _available_overrides(overrides_dir):
+    """overrides:= に渡せる名前を並べる。
+
+    --show-args に出る一覧と、綴りを間違えたときのエラーに出る一覧は同じもので
+    なければならない (片方だけが古いと、「一覧に無いのに通る」名前が出る)。
+    """
+    if not os.path.isdir(overrides_dir):
+        return []
+    return sorted(
         os.path.splitext(f)[0]
         for f in os.listdir(overrides_dir) if f.endswith(".yaml")
-    )) if os.path.isdir(overrides_dir) else ""
+    )
+
+
+def declare_args(overrides_dir):
+    """overrides / extra_params_file を宣言する (4 つの launch が同じものを使う)。"""
+    available = ", ".join(_available_overrides(overrides_dir))
     return [
         DeclareLaunchArgument(
             "overrides",
@@ -112,11 +123,7 @@ def _resolve_layers(context, overrides_dir):
             continue
         path = os.path.join(overrides_dir, f"{name}.yaml")
         if not os.path.isfile(path):
-            available = sorted(
-                os.path.splitext(f)[0]
-                for f in os.listdir(overrides_dir)
-                if f.endswith(".yaml")
-            ) if os.path.isdir(overrides_dir) else []
+            available = _available_overrides(overrides_dir)
             raise RuntimeError(
                 f"Unknown overrides name: {name}\n"
                 f"Available: {', '.join(available) or '(none)'}\n"

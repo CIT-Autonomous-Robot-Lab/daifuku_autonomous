@@ -122,6 +122,24 @@ RViz の Fixed Frame と waypoint の `frame_id` が一致している必要が�
 **黙って捨てずにステータス行にエラーを出して**追加しない。YAML の追加読み込み
 （Append）も `frame_id` が一致するファイルだけが対象。
 
+## YAML の受け入れ規則
+
+読み手が 2 つある。このパネルの `readYamlFile` と、実機で巡回を始める
+`daifuku_stack/src/joy_teleop.py` の `load_waypoints` である。**両方が同じ規則で
+受けること。** 片方だけが通す形にすると、手で書いた順路が「実機では走るのに
+パネルでは開けない」（あるいはその逆）になり、しかもどちらの側にも異常が出ない。
+
+- `frame_id` は必須。既定を持たせない — 書き忘れた順路が黙って `map` 上の座標として
+  走ると、座標系を取り違えたときに全点が地図の外に出る（`plan` が失敗するだけなので、
+  外からは recovery の spin が回っているようにしか見えない）
+- `position.z` は省略可（`0.0`）。接地して走る機体なので、無くても意味が決まる
+- 有限でない値と、長さが 0 のクォータニオンは弾く。`NaN` のまま `FollowWaypoints` へ
+  投げると Nav2 の側で黙って落ちる
+
+`load_waypoints` は UTF-8 を明示して開く。同梱の `waypoints_tsudanuma.yaml` は冒頭に
+日本語の注記を持っていて、ロケールが C の環境（実機のコンテナは `LANG` を持たない）では
+既定の encoding が ASCII になり、**読み込みごと失敗する**。
+
 ## 保存済みの waypoint
 
 `daifuku_stack/waypoints/waypoints_tsudanuma.yaml`（73 点、`map_tsudanuma` 用）。

@@ -59,7 +59,20 @@ private:
   void refreshList();
   // reset=false のときは DELETEALL を付けない。同じ ns/id は ADD で上書きされるので、
   // タイマからの出し直し (updateLead) で全マーカが作り直されて瞬くのを避ける。
+  // **その代わり、消えたマーカは append 側が明示的に DELETE を積む必要がある。**
   void publishMarkers(bool reset = true);
+  // publishMarkers が積む 4 種類。lead だけは lead_drawn_ / lead_origin_ を更新
+  // するので const ではない。
+  void appendLeadMarker(
+    visualization_msgs::msg::MarkerArray * markers, const rclcpp::Time & stamp, bool reset);
+  void appendRouteMarker(
+    visualization_msgs::msg::MarkerArray * markers, const rclcpp::Time & stamp) const;
+  void appendSelectionMarker(
+    visualization_msgs::msg::MarkerArray * markers, const rclcpp::Time & stamp,
+    int selected) const;
+  void appendWaypointMarkers(
+    visualization_msgs::msg::MarkerArray * markers, const rclcpp::Time & stamp,
+    int selected) const;
   // 巡回の順路そのものを nav_msgs/Path で latch する。マーカ (見せるため) と違い、
   // これは他ノードが読むためのもの — vi_planner の先読み (waypoint_prefetch) が
   // 「いま向かっている点の次はどこか」をこれで知る。

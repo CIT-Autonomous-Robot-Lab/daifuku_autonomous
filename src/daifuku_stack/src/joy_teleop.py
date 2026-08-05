@@ -77,6 +77,7 @@ teleop を切るとき (と巡回を始めるとき) は、ゼロを stop_tail �
 入れ替えるモードを持つ機種もある。
 """
 
+import math
 import os
 import sys
 import time
@@ -131,16 +132,32 @@ def load_waypoints(path):
     (frame_id + waypoints[].position/orientation)。パネルは RViz プラグインで
     実機には載らないので、ここでは同じ書式を読むだけの実装を持っている。
 
+    **受け入れる書式はパネルの readYamlFile (waypoint_manager_panel.cpp) と
+    そろえてある。** 片方だけが通す形にすると、手で書いた順路が「実機では走るのに
+    パネルでは開けない」(あるいはその逆) になる。決まりは 3 つ:
+
+      * frame_id は必須。既定を持たせると、書き忘れた順路が黙って map 上の
+        座標として走る (座標系を取り違えると全点が地図の外に出る)
+      * position.z は省略可 (0.0)。接地して走る機体なので、無くても意味が決まる
+      * 有限でない値と、長さが 0 のクォータニオンは弾く。NaN のまま
+        FollowWaypoints へ投げると Nav2 の側で黙って落ちる
+
     Raises:
         ValueError: 書式が違うとき。1 点でも欠けていれば読み込みごと失敗させる
             (黙って飛ばすと、経路の途中が抜けた巡回が静かに走ってしまう)。
     """
-    with open(path) as handle:
+    # encoding を明示する。同梱の waypoints_tsudanuma.yaml は冒頭に日本語の注記を
+    # 持っていて、ロケールが C の環境 (実機のコンテナは LANG を持たない) では
+    # 既定の encoding が ASCII になり、**読み込みごと失敗する**。
+    # daifuku_stack_launch/params.py が同じ理由で明示しているのと同じ。
+    with open(path, encoding="utf-8") as handle:
         document = yaml.safe_load(handle)
     if not isinstance(document, dict):
         raise ValueError("top level is not a mapping")
 
-    frame_id = document.get("frame_id", "map")
+    frame_id = document.get("frame_id")
+    if not frame_id or not isinstance(frame_id, str):
+        raise ValueError("missing or invalid frame_id")
     entries = document.get("waypoints")
     if not entries:
         raise ValueError("no waypoints")
@@ -161,8 +178,24 @@ def load_waypoints(path):
             pose.pose.orientation.w = float(orientation["w"])
         except (KeyError, TypeError, ValueError) as exc:
             raise ValueError("waypoint %d: %s" % (index, exc))
+        _validate_pose(index, pose)
         poses.append(pose)
     return frame_id, poses
+
+
+def _validate_pose(index, pose):
+    """有限でない座標と、長さが 0 のクォータニオンを弾く (パネルと同じ判定)。"""
+    position = pose.pose.position
+    quaternion = pose.pose.orientation
+    norm_squared = (
+        quaternion.x ** 2 + quaternion.y ** 2 + quaternion.z ** 2 + quaternion.w ** 2
+    )
+    if not all(math.isfinite(v) for v in (position.x, position.y, position.z)):
+        raise ValueError("waypoint %d: position is not finite" % index)
+    if not math.isfinite(norm_squared) or norm_squared < 1e-12:
+        raise ValueError(
+            "waypoint %d: orientation is not a usable quaternion" % index
+        )
 
 
 class JoyTeleop(Node):
@@ -421,16 +454,14 @@ class JoyTeleop(Node):
         """
         if self._motor_pending:
             # 前の要求がまだ返っていない。二度押しで往復させない。
-            self.get_logger().warning("motor power request still in flight")
-            self._play(TUNE_REFUSED)
+            self._refuse("motor power request still in flight", warning=True)
             return
 
         if not self._motor_client.service_is_ready():
-            self.get_logger().error(
+            self._refuse(
                 "%s service is not available; is the driver up and activated?"
                 % self._motor_service
             )
-            self._play(TUNE_REFUSED)
             return
 
         wanted = not self._motor_power
@@ -457,11 +488,13 @@ class JoyTeleop(Node):
         # 通らなかったのなら数えた側を戻す。戻さないと、次の長押しが「切る」
         # つもりで「入れる」になる。
         self._motor_power = not self._motor_power
-        if response is not None:
-            self.get_logger().error(
+        if response is None:
+            # 例外の中身は上で出してある。ここは音だけ。
+            self._play(TUNE_REFUSED)
+        else:
+            self._refuse(
                 "motor power refused: %s" % (response.message or "(no message)")
             )
-        self._play(TUNE_REFUSED)
 
     # ── 音 ──────────────────────────────────────────────────────────────
 
@@ -470,6 +503,19 @@ class JoyTeleop(Node):
         if self._buzzer_pub is None:
             return
         self._tune.start(tune, time.monotonic())
+
+    def _refuse(self, message, warning=False):
+        """押されたが効かなかったことを、ログと音の両方で伝える。
+
+        **断る分岐は必ずここを通すこと。** 「長押ししたのに何も起きない」が一番
+        分かりにくく、実機ではログも見えない。ログだけ書いて音を鳴らし忘れると、
+        パッドの側からは無反応と区別が付かなくなる。
+        """
+        if warning:
+            self.get_logger().warning(message)
+        else:
+            self.get_logger().error(message)
+        self._play(TUNE_REFUSED)
 
     def _tune_tick(self):
         """音の変わり目だけを /buzzer へ出す。"""
@@ -494,43 +540,39 @@ class JoyTeleop(Node):
         if not self._waypoints_file:
             # 既定の順路を持たないので、設定していなければここで終わり。黙って
             # 何かを走らせるより、押しても始まらないほうが安全側。
-            self.get_logger().error(
+            self._refuse(
                 "waypoints_file is not set; pick a route that matches map:= first"
             )
-            self._play(TUNE_REFUSED)
             return
 
         if self._goal_pending or self._goal_handle is not None:
-            self.get_logger().warning(
-                "waypoints already running; hold START to take over first"
+            self._refuse(
+                "waypoints already running; hold START to take over first",
+                warning=True,
             )
-            self._play(TUNE_REFUSED)
             return
 
         # 取り消しを出しているあいだに投げると、あとから届いた取り消しが今から
         # 出すゴールを巻き込む。hold_seconds > cancel_window なら普通は来ない。
         if time.monotonic() < self._cancel_until:
-            self.get_logger().warning("still cancelling the previous goal; try again")
-            self._play(TUNE_REFUSED)
+            self._refuse(
+                "still cancelling the previous goal; try again", warning=True
+            )
             return
 
         try:
             frame_id, poses = load_waypoints(self._waypoints_file)
         except (OSError, ValueError, yaml.YAMLError) as exc:
-            self.get_logger().error(
-                "cannot read %s: %s" % (self._waypoints_file, exc)
-            )
-            self._play(TUNE_REFUSED)
+            self._refuse("cannot read %s: %s" % (self._waypoints_file, exc))
             return
 
         if not self._follow_client.server_is_ready():
             # navigation.launch.py が立っていないか、lifecycle がまだ activate
             # されていない。ここで黙ると「押したのに何も起きない」になる。
-            self.get_logger().error(
+            self._refuse(
                 "%s action server is not available; is navigation.launch.py up?"
                 % self._follow_action
             )
-            self._play(TUNE_REFUSED)
             return
 
         self._set_enabled(False)
@@ -571,8 +613,7 @@ class JoyTeleop(Node):
         self._goal_pending = False
         handle = future.result()
         if not handle.accepted:
-            self.get_logger().error("waypoint goal rejected")
-            self._play(TUNE_REFUSED)
+            self._refuse("waypoint goal rejected")
             return
         self._goal_handle = handle
         handle.get_result_async().add_done_callback(self._on_goal_result)
