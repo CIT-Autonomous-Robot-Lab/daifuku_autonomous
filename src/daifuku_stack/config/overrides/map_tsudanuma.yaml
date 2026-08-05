@@ -32,7 +32,7 @@
 # 動かすと帯が潰れて (min >= max) スキャンが空になるので、対で見ること。**未検証**。
 pointcloud_to_laserscan:
   ros__parameters:
-    min_height: 0.5                 # 断片 0.275 (搭載高): 床と低い戻りを切るため上げる
+    min_height: 0.8                 # 断片 0.275 (搭載高): 床と低い戻りを切るため上げる
     max_height: 3.00                # 断片 0.50: 高い壁や柱まで採るため上へ広げる
 
 emcl2:
