@@ -77,11 +77,15 @@ reap_orphans() {
 
   for pgid in "${!victims[@]}"; do
     echo "entrypoint: 前回の exec の残骸を止めます (pgid ${pgid}): ${victims[${pgid}]:0:110}" >&2
-    kill -TERM -- "-${pgid}" 2>/dev/null || true
+    # **SIGTERM ではなく SIGINT。** Humble の rclcpp / rclpy が入れるハンドラは
+    # SIGINT だけで、SIGTERM は既定動作にも落ちず**黙って無視される**
+    # (2026-08-05 の実機で static_transform_publisher が 10 秒粘って SIGKILL に
+    # なった)。SIGINT は Ctrl-C と同じ経路なので、ros2 launch が生きていれば
+    # 子を順に畳んでから終わり、死んでいれば各ノードが自分で終わる。
+    kill -INT -- "-${pgid}" 2>/dev/null || true
   done
-  # ros2 launch は SIGTERM を受けてから子を順に落とすので、待つ意味がある。
-  # 落ちるにつれて孫が PPid 1 へ付け替わるが、pgid は変わらないので同じ
-  # 走査でそのまま拾える。
+  # 落ちるにつれて孫が PPid 1 へ付け替わるが、pgid は変わらないので同じ走査で
+  # そのまま拾える。
   while ((waited < 100)) && [[ -n "$(orphan_groups)" ]]; do
     sleep 0.1
     waited=$((waited + 1))
