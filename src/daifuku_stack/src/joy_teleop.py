@@ -18,6 +18,19 @@ robot_bringup.launch.py が joy:=true (既定) のとき joy_node と一緒に�
 出す先は **/cmd_vel_teleop** (twist_mux の優先度 100 側)。/cmd_vel は自律側の
 出力なので、そちらへ出すと自律走行中に取り合いになる。
 
+## 指令は刻んで出す (加減速)
+
+スティックの値をそのまま速度にはしない。**本体ドライバは受けた速度をそのまま
+ステップ周波数にする**ので (raspicat_driver の `_drive`。公式実装も同じ)、段差の
+ある指令はそのまま段差のある周波数になり、ステッパは自起動域を超えたところで
+脱調する — 指令より遅く、左右バラバラに回るのに**エラーは何も出ない**。そこで
+linear_accel / linear_decel (と angular 側) で変化率を抑える。詳しくは
+joy_buttons.RateLimiter。
+
+刻むのは**このノードが出す区間だけ**である。teleop に入った時点で自律側が
+走らせていても相手の速度は分からないので、そこは段差のまま (従来どおりゼロを
+出して奪う)。自律側の加減速は velocity_smoother の担当。
+
 ## モータ電源は「切る」ほうが本命
 
 twist_mux の優先度は非常停止ではない。実際に止めるのはモータ電源で、これまでは
@@ -59,17 +72,20 @@ timeout (0.5 s) だけである。したがって teleop 入のあいだはス�
 同じ理由で、teleop に入るときは走行中のゴールを**取り消す**。優先度で押さえて
 いるだけでは、teleop を切った瞬間に元のゴールが再開する。
 
-teleop を切るとき (と巡回を始めるとき) は、ゼロを stop_tail 秒だけ出してから
-黙る。黙るだけだと本体ドライバは最後に受けた速度を保持し続けるためで、最後に
-届いた指令をゼロにしておく。自前実装 (driver:=original) は cmd_vel_timeout の
-60 秒で止まるが、公式実装 (既定の driver:=raspimouse) はこのキーを持たず、
-いつ止まるかは**未確認**である。
+teleop を切るとき (と巡回を始めるとき) は、減速で降りきってから、さらに
+stop_tail 秒ゼロを出してから黙る。黙るだけだと本体ドライバは最後に受けた速度を
+保持し続けるためで、最後に届いた指令をゼロにしておく。自前実装
+(driver:=original) は cmd_vel_timeout の 60 秒で止まるが、公式実装 (既定の
+driver:=raspimouse) はこのキーを持たず、いつ止まるかは**未確認**である。
+**降りきるまでを stop_tail 任せにしていない**のは、減速に stop_tail より時間の
+かかる設定にされたときに、途中の速度で黙って走り続けてしまうため。
 
 ## 受信が途切れたら止める
 
 無線のゲームパッドは、受信機を抜かれても電池が切れても /joy が来なくなるだけで
-エラーは出ない。joy_timeout 秒来なければゼロを出し、長押しの計測も捨てる
-(押しっぱなしのまま切れたのを長押しの成立として拾わないため)。
+エラーは出ない。joy_timeout 秒来なければゼロへ**減速し** (段差で落とすと脱調して
+惰性で滑るので、そのほうが速く止まる)、長押しの計測も捨てる (押しっぱなしのまま
+切れたのを長押しの成立として拾わないため)。即断したいときはモータ電源のほう。
 
 ボタンと軸の番号は **XInput (X モード)** のときのもの。DirectInput のパッドや、
 モード切り替えを持つ機種を D 側にしたものは総入れ替えになるので、パラメータで
@@ -114,9 +130,9 @@ if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
 from joy_buttons import (  # noqa: E402
-    COMBO, HoldLatch, MOTOR, TOGGLE, TUNE_FINISHED, TUNE_MOTOR_OFF, TUNE_MOTOR_ON,
-    TUNE_REFUSED, TUNE_TELEOP_OFF, TUNE_TELEOP_ON, TUNE_WAYPOINTS, TunePlayer, axis,
-    axis_to_speed, pressed,
+    COMBO, HoldLatch, MOTOR, RateLimiter, TOGGLE, TUNE_FINISHED, TUNE_MOTOR_OFF,
+    TUNE_MOTOR_ON, TUNE_REFUSED, TUNE_TELEOP_OFF, TUNE_TELEOP_ON, TUNE_WAYPOINTS,
+    TunePlayer, axis, axis_to_speed, pressed,
 )
 
 # 旋律の音の変わり目を拾う周期 [s]。一番短い音 (60 ms) の 1/6 で、publish するのは
@@ -212,6 +228,10 @@ class JoyTeleop(Node):
         self.declare_parameter("angular_min_speed", 0.3)
         self.declare_parameter("angular_max_speed", 1.0)
         self.declare_parameter("angular_boost_speed", 1.5)
+        self.declare_parameter("linear_accel", 0.6)
+        self.declare_parameter("linear_decel", 1.2)
+        self.declare_parameter("angular_accel", 2.0)
+        self.declare_parameter("angular_decel", 4.0)
         self.declare_parameter("button_toggle", 7)
         self.declare_parameter("button_waypoints", 6)
         self.declare_parameter("button_boost", 5)
@@ -240,6 +260,10 @@ class JoyTeleop(Node):
         self._angular_min = float(value("angular_min_speed"))
         self._angular_max = float(value("angular_max_speed"))
         self._angular_boost = float(value("angular_boost_speed"))
+        # 刻むのは目標のほうではなく publish する値。目標 (axis_to_speed の出力) は
+        # 不感帯の外側で min_speed に飛ぶ段差を持つので、そこも一緒に均される。
+        self._linear_ramp = RateLimiter(value("linear_accel"), value("linear_decel"))
+        self._angular_ramp = RateLimiter(value("angular_accel"), value("angular_decel"))
         self._button_toggle = int(value("button_toggle"))
         self._button_waypoints = int(value("button_waypoints"))
         self._button_boost = int(value("button_boost"))
@@ -258,6 +282,7 @@ class JoyTeleop(Node):
         self._axes = []
         self._buttons = []
         self._joy_at = None
+        self._tick_at = None
         self._stop_until = 0.0
         self._cancel_until = 0.0
         self._cancel_at = 0.0
@@ -328,6 +353,9 @@ class JoyTeleop(Node):
                 )
 
         period = 1.0 / max(float(value("publish_rate")), 1.0)
+        # 加減速に使う経過時間の上限。タイマが詰まって数秒飛んだとき、その分を
+        # まるごと積むと 1 回で最高速まで飛ぶ (刻んだ意味が無くなる)。
+        self._max_dt = 5.0 * period
         self.create_timer(period, self._tick)
         self._publish_state()
         self.get_logger().info(
@@ -356,6 +384,7 @@ class JoyTeleop(Node):
 
     def _tick(self):
         now = time.monotonic()
+        dt = self._elapsed(now)
         fresh = self._joy_at is not None and (now - self._joy_at) <= self._joy_timeout
 
         if fresh:
@@ -376,7 +405,7 @@ class JoyTeleop(Node):
             self._latch.reset()
             if self._enabled and not self._warned_stale:
                 self._warned_stale = True
-                self.get_logger().warning("no joy for %.1f s; holding still"
+                self.get_logger().warning("no joy for %.1f s; slowing to a stop"
                                           % self._joy_timeout)
 
         # 取り消しは 1 回では足りない。waypoint_follower は stop_on_failure: false
@@ -393,26 +422,64 @@ class JoyTeleop(Node):
         if now - self._state_at >= 1.0:
             self._publish_state()
 
+        # teleop を切ったあとは stop_tail を待たずに、**刻みがゼロに着くまで**
+        # 出し続ける。stop_tail (1 秒) より減速に時間がかかる設定にされると、
+        # 途中で黙った速度をドライバが保持したまま走り続けるため。
         if self._enabled:
-            self._cmd_pub.publish(self._twist() if fresh else Twist())
-        elif now < self._stop_until:
-            self._cmd_pub.publish(Twist())
+            self._cmd_pub.publish(self._twist(dt) if fresh else self._coast(dt))
+        elif now < self._stop_until or not self._at_rest():
+            self._cmd_pub.publish(self._coast(dt))
 
-    def _twist(self):
+    def _elapsed(self, now):
+        """前回の _tick からの経過 [s]。上限は max_dt、初回は 0。
+
+        タイマの公称周期ではなく実時間で刻む。周期がゆらいでも同じ入力なら
+        同じ時間で最高速に着く (刻みが落ちた分だけ立ち上がりが伸びない)。
+        """
+        previous = self._tick_at
+        self._tick_at = now
+        if previous is None:
+            return 0.0
+        return min(now - previous, self._max_dt)
+
+    def _twist(self, dt):
         boost = pressed(self._buttons, self._button_boost)
         linear_max = self._linear_boost if boost else self._linear_max
         angular_max = self._angular_boost if boost else self._angular_max
 
         twist = Twist()
-        twist.linear.x = axis_to_speed(
-            axis(self._axes, self._axis_linear),
-            self._deadzone, self._linear_min, linear_max,
+        twist.linear.x = self._linear_ramp.update(
+            axis_to_speed(
+                axis(self._axes, self._axis_linear),
+                self._deadzone, self._linear_min, linear_max,
+            ),
+            dt,
         )
-        twist.angular.z = axis_to_speed(
-            axis(self._axes, self._axis_angular),
-            self._deadzone, self._angular_min, angular_max,
+        twist.angular.z = self._angular_ramp.update(
+            axis_to_speed(
+                axis(self._axes, self._axis_angular),
+                self._deadzone, self._angular_min, angular_max,
+            ),
+            dt,
         )
         return twist
+
+    def _coast(self, dt):
+        """目標をゼロにして刻む。受信断のときと teleop を切ったあとに出す。
+
+        受信断でも段差で 0 に落とさないのは、ドライバがそれをそのままステップ
+        周波数の段差にするためで、**脱調して惰性で滑るより decel で止めたほうが
+        速く止まる**。止まるまでは linear_decel で決まる (0.8 m/s なら 0.67 秒・
+        0.27 m)。本当に即断したいときはモータ電源 (BACK 長押し) のほう。
+        """
+        twist = Twist()
+        twist.linear.x = self._linear_ramp.update(0.0, dt)
+        twist.angular.z = self._angular_ramp.update(0.0, dt)
+        return twist
+
+    def _at_rest(self):
+        """刻みがゼロに着いているか (出すのをやめてよいか)。"""
+        return self._linear_ramp.value == 0.0 and self._angular_ramp.value == 0.0
 
     # ── モード ──────────────────────────────────────────────────────────
 
@@ -431,6 +498,12 @@ class JoyTeleop(Node):
             # 実際に取り消すのは _tick で、cancel_window のあいだ繰り返す。
             self._cancel_until = now + self._cancel_window
             self._cancel_at = 0.0
+            # 刻みの起点をゼロへ戻す。ここで出すゼロと揃えておかないと、次の
+            # _tick が「前は出ていた」ことにして減速で降りてくる。
+            # **自律側が走らせている最中に入ってもここは段差になる** (こちらは
+            # 相手の速度を知らない)。加減速が効くのはこのノードが出す区間だけ。
+            self._linear_ramp.reset()
+            self._angular_ramp.reset()
             self._cmd_pub.publish(Twist())
         else:
             self._cancel_until = 0.0

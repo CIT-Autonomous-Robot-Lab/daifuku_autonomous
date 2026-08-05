@@ -251,6 +251,90 @@ def axis_to_speed(value, deadzone, min_speed, max_speed):
     return speed if value > 0.0 else -speed
 
 
+def _approach(value, target, limit):
+    """value を target へ、1 回で limit までしか動かさずに近づける。"""
+    delta = target - value
+    if delta > limit:
+        return value + limit
+    if delta < -limit:
+        return value - limit
+    return target
+
+
+class RateLimiter:
+    """指令速度の変化率を抑える (加減速)。時計は呼び出し側が渡す。
+
+    **本体ドライバは指令をそのままステップ周波数にする** (raspicat_driver の
+    `_drive`。公式実装も同じ) ので、段差のある指令はそのまま段差のある周波数に
+    なる。0 から 0.8 m/s は 725 Hz への飛びで、ステッパは自起動域を超えると
+    脱調して**指令より遅く・左右バラバラに**回る (エラーは出ない)。ここで刻むのは
+    そのため。止まるほうも同じで、段差で 0 に落とすと積荷が前へ倒れる。
+
+    加速と減速で上限を分ける。**減速のほうを大きくする** — 立ち上がりが緩いのは
+    操作感の問題で済むが、止まるのが遅いのは安全側でないため。
+
+    前後を入れ替えるときは、0 までを減速・0 から先を加速の上限で刻む。1 回の刻みに
+    両方が入るので、**0 を跨いだ瞬間に加速側の上限が緩まない**。
+
+    accel / decel に 0 以下を渡すとその側は制限しない (段差のまま通す)。
+    """
+
+    def __init__(self, accel, decel):
+        """
+        Args:
+            accel: 速さが増える向きの上限 [単位/s^2]。0 以下で制限しない。
+            decel: 速さが減る向きの上限 [単位/s^2]。0 以下で制限しない。
+        """
+        self.accel = float(accel)
+        self.decel = float(decel)
+        self._value = 0.0
+
+    @property
+    def value(self):
+        """最後に返した値。まだ動かしていなければ 0.0。"""
+        return self._value
+
+    def reset(self, value=0.0):
+        """刻みの起点を置き直す。次の update() はここから始まる。"""
+        self._value = float(value)
+        return self._value
+
+    def update(self, target, dt):
+        """target へ dt 秒ぶんだけ近づけた値を返す。
+
+        Args:
+            target: 目標の速度。
+            dt: 前回からの経過 [s]。0 以下なら動かさない (値はそのまま返す)。
+
+        Returns:
+            刻んだあとの速度。上限に掛からなければ target そのもの。
+        """
+        target = float(target)
+        value = self._value
+        if dt <= 0.0 or target == value:
+            return value
+
+        if value * target < 0.0:
+            # 前後の入れ替え。0 までにかかる時間を先に引く。
+            to_zero = abs(value) / self.decel if self.decel > 0.0 else 0.0
+            if to_zero >= dt:
+                value = _approach(value, 0.0, _budget(self.decel, dt))
+            else:
+                value = _approach(0.0, target, _budget(self.accel, dt - to_zero))
+        elif abs(target) >= abs(value):
+            value = _approach(value, target, _budget(self.accel, dt))
+        else:
+            value = _approach(value, target, _budget(self.decel, dt))
+
+        self._value = value
+        return value
+
+
+def _budget(rate, dt):
+    """この刻みで動かしてよい量。rate が 0 以下なら制限しない。"""
+    return rate * dt if rate > 0.0 else float("inf")
+
+
 def pressed(buttons, index):
     """buttons[index] が押されているか。範囲外なら False。
 

@@ -27,10 +27,19 @@ joy_teleop:
 
     linear_min_speed: 0.15  # 既定 同左 [m/s]: 不感帯を出た直後の速さ。これ未満は唸るだけで進まない
     linear_max_speed: 0.35  # 既定 同左 [m/s]: 目一杯倒したときの速さ
-    linear_boost_speed: 0.5 # 既定 同左 [m/s]: button_boost を押しているときの上限
+    linear_boost_speed: 0.8 # 既定 同左 [m/s]: button_boost を押しているときの上限。ステップ 726 Hz 相当 (max_step_frequency 10000 には遠い)
     angular_min_speed: 0.3  # 既定 同左 [rad/s]: 旋回の下限。並進と同じ考え方
     angular_max_speed: 1.0  # 既定 同左 [rad/s]: 旋回の上限
     angular_boost_speed: 1.5 # 既定 同左 [rad/s]: ブースト時の旋回の上限
+
+    # 加減速。ドライバは受けた速度をそのままステップ周波数にするので、段差の
+    # ある指令は**エラーを出さずに脱調**する (指令より遅く・左右バラバラに回る)。
+    # 減速を加速の 2 倍にしてあるのは、立ち上がりが緩いのは操作感の問題で済むが、
+    # 止まるのが遅いのは安全側でないため。0 以下でその側の制限を外せる。
+    linear_accel: 0.6       # 既定 同左 [m/s^2]: 0 -> 0.8 に 1.33 秒
+    linear_decel: 1.2       # 既定 同左 [m/s^2]: 0.8 -> 0 に 0.67 秒 = 0.27 m。**/joy が途切れたときの停止距離もこれ**
+    angular_accel: 2.0      # 既定 同左 [rad/s^2]: 0 -> 1.5 に 0.75 秒
+    angular_decel: 4.0      # 既定 同左 [rad/s^2]: 1.5 -> 0 に 0.38 秒
 
     button_toggle: 7        # 既定 7: START。hold_seconds 長押しで teleop の入/切
     button_waypoints: 6     # 既定 6: BACK。単体で長押しして離すとモータ電源の入/切、START と同時ならウェイポイント巡回を開始
@@ -39,7 +48,7 @@ joy_teleop:
 
     publish_rate: 20.0      # 既定 同左 [Hz]: /cmd_vel_teleop を出す周期。twist_mux の timeout 0.5 s より十分速く
     joy_timeout: 0.5        # 既定 同左 [s]: /joy がこれだけ途切れたら受信断とみなしてゼロを出す
-    stop_tail: 1.0          # 既定 同左 [s]: teleop を切ったあとゼロを出し続ける時間。黙るだけだとドライバが最後の速度を保持する
+    stop_tail: 1.0          # 既定 同左 [s]: teleop を切ったあとゼロを出し続ける時間。黙るだけだとドライバが最後の速度を保持する。linear_decel で降りきるまでは別途待つので、ここを縮めても途中で黙りはしない
     cancel_window: 2.0      # 既定 同左 [s]: teleop に入ったあと取り消しを出し続ける時間。1 回では waypoint_follower が次の点へ出し直す分を拾えない
     start_enabled: false    # 既定 false: 起動直後から teleop 入にするか。true にすると挿しただけで自律側を塞ぐ
     buzzer: true            # 既定 同左: モードが切り替わったとき /buzzer へ短い旋律を出すか。旋律は src/joy_buttons.py の TUNE_*
