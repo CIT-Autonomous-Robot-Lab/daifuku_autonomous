@@ -1,6 +1,7 @@
 #ifndef DAIFUKU_WAYPOINT_MANAGER__WAYPOINT_MANAGER_PANEL_HPP_
 #define DAIFUKU_WAYPOINT_MANAGER__WAYPOINT_MANAGER_PANEL_HPP_
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -44,6 +45,8 @@ private Q_SLOTS:
   void loadYaml();
   void startFollowing();
   void cancelFollowing();
+  void cancelWaitTimedOut();
+  void watchActionServer();
   void selectionChanged();
   void setStatus(const QString & status);
   void handleResult(int result_code, int missed_count);
@@ -54,8 +57,12 @@ private:
   // その action が存在せず、木がスタブ (常に失敗) に差し替えられているため。
   using FollowWaypoints = nav2_msgs::action::FollowWaypoints;
   using GoalHandleFollowWaypoints = rclcpp_action::ClientGoalHandle<FollowWaypoints>;
+  using CancelResponse = rclcpp_action::Client<FollowWaypoints>::CancelResponse;
 
   void buildUi();
+  // 「巡回中」の表示をやめて Start を押せる状態へ戻す。goal_epoch_ を進めるので、
+  // 諦めたゴールのコールバックが後から届いても拾い直さない。
+  void resetGoalState();
   void refreshList();
   // reset=false のときは DELETEALL を付けない。同じ ns/id は ADD で上書きされるので、
   // タイマからの出し直し (updateLead) で全マーカが作り直されて瞬くのを避ける。
@@ -100,6 +107,15 @@ private:
   // まだ空なので、waypoint の編集 (refreshList 経由の updateButtons) が Start を
   // 押せる状態に戻してしまい、二重にゴールを送れる。
   bool goal_pending_{false};
+  // Cancel を投げて応答も結果も待っている状態。**サーバが落ちた・入れ替わった後は
+  // どちらも二度と来ない**ので、この間も Cancel を押せるままにして 2 度目で諦める。
+  bool cancel_requested_{false};
+  QTimer * cancel_timer_{nullptr};
+  // action サーバが居ない状態が続いた tick 数 (lead_timer_ で数える)。
+  int server_gone_ticks_{0};
+  // ゴール 1 回ぶんの世代。諦めた (resetGoalState した) 後に届いたコールバックを
+  // 捨てるために使う。捨てないと、戻したはずの表示が「巡回中」に戻る。
+  std::uint64_t goal_epoch_{0};
 
   // 機体から 1 点目へ引く線。この区間だけ機体に追随して動くので、編集のたびに出す
   // publishMarkers() とは別にタイマで出し直す。lead_drawn_ / lead_origin_ は前回どこに
