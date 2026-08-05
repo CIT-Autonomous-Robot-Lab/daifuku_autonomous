@@ -141,6 +141,42 @@ id -u
 ls -l /dev/shm | head
 ```
 
+## Waypointパネルが`/follow_waypoints action server is unavailable`と出す
+
+ゴールが送られる前に止まっているので、サーバ側が居ません。既定（`nav2:=false`）で
+`/follow_waypoints`を出すのは**`vi_planner`だけ**（`nav2:=true`なら
+`nav2_waypoint_follower`）で、どちらも`navigation.launch.py`が立てます。
+`robot_bringup.launch.py`だけでは出ません。
+
+**`ros2 action list`では判別できません。** あれはクライアントしか居ない名前も出すので、
+RVizやパネルを開いているだけで`/follow_waypoints`が一覧に現れます。`info`で
+`Action servers:`の数を見てください（`ros2 daemon`のキャッシュが古いと同じノードが
+2つに見えることがあるので、数が合わないときは`ros2 daemon stop`のあと10秒ほど待つ）。
+
+```bash
+ros2 action info /follow_waypoints   # Action servers: 1 (/vi_planner) が正
+```
+
+navigationが立っているのに0なら、**`src/value_iteration3`のチェックアウトが古い**のが
+本命です。`vcs import`は`--skip-existing`なので、上流を更新しても既にあるクローンは
+そのまま残ります（[`docker/raspberrypi/README.md`](../../docker/raspberrypi/README.md)）。
+`standalone`を知らない`vi_planner`は`compute_path_to_pose`と`follow_path`しか出さず、
+**知らないパラメータを渡されてもエラーにはならない**ので、起動しているように見えます。
+`nav2:=false`では`nav2_waypoint_follower`も立たないため、両方居ない状態になります。
+確かめるのは起動ログの`actions=`の行です。
+
+```
+vi_planner: ready (solver=..., actions=compute_path_to_pose + follow_path
+            + navigate_to_pose + follow_waypoints (standalone: no Nav2 nodes), 10Hz)
+```
+
+`+ navigate_to_pose + follow_waypoints`が無ければ古いバイナリです。
+
+```bash
+git -C src/value_iteration3 pull   # 実機の側で。ホストの作業用クローンとは別物
+docker compose up -d               # 差分ビルド。リポジトリルートから叩くこと
+```
+
 ## Waypointパネルの「Start」が即座に`Failed (aborted)`になる
 
 押した瞬間にステータス行が変わり、機体はまったく動かず、経路計算のログも出ない場合
