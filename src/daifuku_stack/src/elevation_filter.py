@@ -28,6 +28,7 @@ Topics are the relative cloud_in / cloud_out, remapped by
 lidar_bringup.launch.py -- the same shape as restamp_scan.py.
 """
 
+import array
 import math
 
 import numpy as np
@@ -161,7 +162,13 @@ class ElevationFilter(Node):
             keep &= z <= self._max_slope * radius
 
         kept = points[keep]
-        message.data = kept.tobytes()
+        # array.array("B") is the only fast path the generated setter has for a
+        # uint8[] field: hand it bytes instead and the __debug__ block walks
+        # every byte twice in Python (measured on the Pi 5, 2026-08-05: 90ms for
+        # 260KB, against 0.03ms here -- at 10Hz that alone was half a core).
+        # A numpy array is not an option; it is not a Sequence, so the same
+        # block rejects it outright.
+        message.data = array.array("B", kept.tobytes())
         # Filtering breaks any row structure, so the cloud comes out
         # unordered (height 1) regardless of how it went in.
         message.height = 1
