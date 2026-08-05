@@ -161,6 +161,12 @@ BTを挟まなくなることで、VIが損をしていた点が4つ消えます
 投げ直しの回数は`goal_retry_limit`（既定3、負で無制限）で、BTの
 `RecoveryNode number_of_retries: 6`の置き換えです。
 
+RVizの「Navigation 2」パネルは**ほぼ空になります**。あれはライフサイクル
+マネージャを叩くパネルで、`nav2:=false`で管理下にあるのは`velocity_smoother`
+1つだけ（`velocity_smoother:=false`ならマネージャ自体が居ません）。故障ではあり
+ません。ゴールを出すのは同じ「Nav2 Goal」ツールで、経路は`/plan`にそのまま出ます
+（表示専用で、走行は方策を1手ずつ引きます）。
+
 ## Nav2コンポーネント
 
 構成に応じて次を使用します（`nav2:=false`では上2つ以外は立ちません）。
