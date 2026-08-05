@@ -24,7 +24,7 @@ from launch.actions import (
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 
-from . import is_true, value
+from . import env_bool_default, is_true, value
 
 
 def _shared_arg_specs(pkg_share):
@@ -54,16 +54,24 @@ def _shared_arg_specs(pkg_share):
          "点群を仰角で切るか (勾配の床を落とす。lidar:=mid360 のときだけ効く)。"),
         ("mid360_elevation_params_file", os.path.join(sensors, "mid360_elevation.yaml"),
          "仰角フィルタの設定 (点群を pointcloud_to_laserscan へ渡す前に切る)。"),
-        # 既定 false は本体ドライバの都合。EKF が odom -> base_footprint と /odom を
-        # 出す側になるので、車輪ノードは /wheel/odom を出して TF を止めていなければ
-        # ならない。robot_bringup.launch.py の同名の引数がそれをやるので、true に
-        # するときは**両方に渡す**こと。こちらだけ true にすると EKF が入力を得られない
-        # まま TF と /odom の配信元が二重になり、エラーも警告も出ないまま自己位置が
-        # 壊れる (2026-08-05 の実機: 静止中に姿勢が震え、追従開始で回り出した)。
-        ("use_mid360_imu", "false",
-         "Mid-360 の IMU と車輪オドメトリを EKF で融合するか。true にするなら "
-         "robot_bringup.launch.py にも同じ値を渡すこと (あちらが車輪 "
-         "オドメトリを /wheel/odom へ移し、TF の配信を止める)。"),
+        # true では EKF が odom -> base_footprint と /odom を出す側になるので、車輪
+        # ノードは /wheel/odom を出して TF を止めていなければならない。それをやるのは
+        # robot_bringup.launch.py の同名の引数で、**2 つの launch が同じ値でないと
+        # 壊れる**。こちらだけ true にすると EKF が入力を得られないまま TF と /odom の
+        # 配信元が二重になり、エラーも警告も出ないまま自己位置が壊れる (2026-08-05 の
+        # 実機: 静止中に姿勢が震え、追従開始で回り出した)。逆に車輪側だけ true なら
+        # odom -> base_footprint を誰も出さないので、TF が繋がらず気付ける。
+        #
+        # その「両方に渡す」を人手でやらずに済ませるため、既定は環境変数
+        # USE_MID360_IMU から取る。Compose が .env の 1 行を ros2 と raspicat の
+        # 両サービスへ配るので、launch を 2 つとも書き換えなくても揃う
+        # (docker/raspberrypi/compose.common.yaml。変えたら up -d で作り直すこと)。
+        # 環境変数も無いときの既定 true は実機構成 (Mid-360 + 自前ドライバ)。
+        ("use_mid360_imu", env_bool_default("USE_MID360_IMU", "true"),
+         "Mid-360 の IMU と車輪オドメトリを EKF で融合するか。既定は環境変数 "
+         "USE_MID360_IMU (Compose なら .env の 1 行で両サービスに効く)。"
+         "引数で渡すときは robot_bringup.launch.py にも同じ値を渡すこと "
+         "(あちらが車輪オドメトリを /wheel/odom へ移し、TF の配信を止める)。"),
 
         # 既定 true は mid360 構成の都合。URDF は base_footprint -> lidar_link
         # (2D LiDAR のフレーム) しか配信しておらず、Mid-360 の livox_frame は

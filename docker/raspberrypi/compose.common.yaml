@@ -102,6 +102,12 @@ services:
       # Restrict DDS to lo/eth0 so wlan0 locators are never advertised
       # (unreachable locators made discovery flap under load).
       FASTRTPS_DEFAULT_PROFILES_FILE: /etc/fastdds/udp_whitelist.xml
+      # Mid-360 の IMU 融合。**2 つのサービスに同じ値が要る**ので、launch 引数では
+      # なく環境変数で配る (navigation は人が exec で叩くため、compose の command
+      # には書けない)。launch 側はこれを use_mid360_imu の既定として読む。
+      # 片方だけ true にすると /odom と TF の配信元が二重になり、エラーも警告も
+      # 出ないまま自己位置が壊れる (docs/setup/lidar.md)。
+      USE_MID360_IMU: ${USE_MID360_IMU:-true}
     volumes:
       - ./fastdds_udp_whitelist.xml:/etc/fastdds/udp_whitelist.xml:ro
       # 入力デバイス。cgroup 規則のほうは、コンテナ生成時に居なかった
@@ -175,6 +181,9 @@ services:
       ROS_LOCALHOST_ONLY: "0"
       RMW_IMPLEMENTATION: rmw_fastrtps_cpp
       FASTRTPS_DEFAULT_PROFILES_FILE: /etc/fastdds/udp_whitelist.xml
+      # ros2 サービスと同じ値を渡すこと (上のコメント)。こちらが true のときだけ
+      # ドライバは /wheel/odom を出し、odom -> base_footprint を出さなくなる。
+      USE_MID360_IMU: ${USE_MID360_IMU:-true}
     volumes:
       - ./fastdds_udp_whitelist.xml:/etc/fastdds/udp_whitelist.xml:ro
       - ../../src:/opt/ros_ws/src

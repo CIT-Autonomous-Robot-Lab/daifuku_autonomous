@@ -331,12 +331,11 @@ RESETのログが毎スキャン出て、推定姿勢が回り続ける場合で
 
 **静止しているのに姿勢が細かく震える／追従を始めた瞬間に機体が回り出す**なら、まず
 `use_mid360_imu`を疑ってください。**`robot_bringup.launch.py`と
-`navigation.launch.py`（`mapping.launch.py`）の両方に同じ値を渡す引数**で、
-ナビゲーション側だけ`true`にするとEKFと車輪ノードが同時に`odom -> base_footprint`と
-`/odom`を配信します。tf2は届いた順に上書きするので、姿勢が2つの答えのあいだで
-振動します。しかもEKFの入力`/wheel/odom`は誰も出していないので、EKF側の答えは
-ジャイロだけを積分した値です。**エラーも警告も出ません**（2026-08-05の実機の症状が
-これでした）。
+`navigation.launch.py`（`mapping.launch.py`）が同じ値でなければならない引数**で、
+食い違うとEKFと車輪ノードが同時に`odom -> base_footprint`と`/odom`を配信します。
+tf2は届いた順に上書きするので、姿勢が2つの答えのあいだで振動します。しかもEKFの入力
+`/wheel/odom`は誰も出していないので、EKF側の答えはジャイロだけを積分した値です。
+**エラーも警告も出ません**（2026-08-05の実機の症状がこれでした）。
 
 ```bash
 ros2 topic info /odom          # Publisher count: 1 が正。2 なら二重配信
@@ -344,10 +343,16 @@ ros2 topic hz /wheel/odom      # use_mid360_imu:=true のときだけ出る
 ros2 run tf2_ros tf2_echo odom base_footprint
 ```
 
-配線の詳細と、片方だけ`true`にしたときにどちらが気付けるかは
-[LiDARとオドメトリ](../setup/lidar.md#imuと車輪オドメトリ)。車輪側TFを止められない
-ドライバでは、そのノードの`/tf`を未使用トピックへremapします（`driver:=raspimouse`は
-`publish_tf`を持たないので、launchがこの形にします）。
+食い違うのは、片方のlaunchにだけ`use_mid360_imu:=`を書いたときです。既定値は環境変数
+`USE_MID360_IMU`から取り、Composeが`.env`の1行を両サービスへ配るので、**切り替えは
+`.env`で行ってください**（変更後は`docker compose up -d`。環境変数は起動時にしか
+読まれません）。配線の詳細と、片方だけ`true`にしたときにどちらが気付けるかは
+[LiDARとオドメトリ](../setup/lidar.md#imuと車輪オドメトリ)。
+
+逆に**`odom -> base_footprint`がまったく出ない**ときは、`raspicat`サービスだけが
+立っている状態です。既定（`USE_MID360_IMU=true`）ではこのTFを出すのはナビゲーション側の
+EKFなので、`navigation.launch.py`か`mapping.launch.py`が要ります。ドライバ単体で
+TFが欲しいときは`.env`で`USE_MID360_IMU=false`にしてください。
 
 センサーTFもURDFと`publish_lidar_tf:=true`の両方から配信しないでください。
 

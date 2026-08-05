@@ -90,6 +90,20 @@ sed -i 's|^COMPOSE_FILE=.*|COMPOSE_FILE=docker/raspberrypi/compose.rt.yaml|' .en
 docker compose up -d
 ```
 
+`.env`にはもう1つ、**2つのサービスにまたがる設定**があります。`USE_MID360_IMU`
+（既定`true`）で、Mid-360のIMUと車輪オドメトリをEKFで融合するかどうかです。
+`odom -> base_footprint`と`/odom`の所有者が`raspicat`側から`ros2`側へ移る切り替えなので、
+**両方が同時に変わらないと壊れます**（片方だけだと配信元が二重になり、エラーも警告も
+出ないまま自己位置が壊れます）。launch引数ではなく環境変数で配っているのはこのためです。
+
+```bash
+sed -i 's|^#*USE_MID360_IMU=.*|USE_MID360_IMU=false|' .env
+docker compose up -d    # 環境変数は起動時に読まれるのでコンテナを作り直す
+```
+
+配線と、`true`のときの注意（起動時に機体を静止させること、`raspicat`単体では
+`odom -> base_footprint`が出ないこと）は[LiDARとオドメトリ](lidar.md#imuと車輪オドメトリ)。
+
 **`.env`は2つ読まれ、値は合成されます。** リポジトリルートのものと、
 `docker/raspberrypi/.env`（`provision.sh`が`ROS_DOMAIN_ID`と`BUILD_JOBS`を書いて生成する）
 の両方で、**同じキーが両方にあるとあちらが勝ちます**。`COMPOSE_FILE`だけはルート側でしか

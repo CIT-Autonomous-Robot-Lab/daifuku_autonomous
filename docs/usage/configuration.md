@@ -50,7 +50,7 @@
 | `use_composition` | `False` | Nav2ノードを1プロセスへ合成するか（Pi 4では既定の分離を推奨） |
 | `scan_filter_enabled` | `true` | 角度フィルタを使うか |
 | `elevation_filter` | `true` | 点群を仰角で切るか（`lidar:=mid360`のときだけ効く）。既定の設定`config/sensors/mid360_elevation.yaml`は0〜90度＝搭載高の水平面から上で、19Fの断片の`min_height: 0.275`と同じ切り方のため既定では挙動が変わらない。実際に狭めるのは`overrides/`の側（`map_tsudanuma`が5度）。**`pointcloud_to_laserscan`の`max_height`と組で決まる**（[LiDAR](../setup/lidar.md#仰角フィルタ勾配のある場所向け)） |
-| `use_mid360_imu` | `false` | Mid-360のIMU融合を使うか。`true`にするとEKFが`/wheel/odom`と`/imu/mid360`を融合して`/odom`と`odom -> base_footprint`を出す。**そのときは`robot_bringup.launch.py`にも同じ値を渡すこと**（あちらが車輪側を`/wheel/odom`へ移してTFを止める）。こちらだけ`true`にするとEKFが入力を得られないまま配信元が二重になり、**エラーも警告も出ない**（[LiDARとオドメトリ](../setup/lidar.md#imuと車輪オドメトリ)） |
+| `use_mid360_imu` | `true`（環境変数`USE_MID360_IMU`） | Mid-360のIMU融合を使うか。`true`ではEKFが`/wheel/odom`と`/imu/mid360`を融合して`/odom`と`odom -> base_footprint`を出す。**`robot_bringup.launch.py`にも同じ値が要る**（あちらが車輪側を`/wheel/odom`へ移してTFを止める）ので、切り替えは`.env`の`USE_MID360_IMU`で行う。片方だけ`true`にするとEKFが入力を得られないまま配信元が二重になり、**エラーも警告も出ない**（[LiDARとオドメトリ](../setup/lidar.md#imuと車輪オドメトリ)） |
 | `publish_lidar_tf` | `true` | センサーTFを配信するか。配信されるのは`lidar:=mid360`のときだけ（URDFは`lidar_link`しか出さず、`livox_frame`は誰も出さない） |
 | `lidar_driver` | `true` | LiDARの実機ドライバ（`mid360`: livox_ros_driver2 + restamp / `2d`: `urg_node`）を起動するか。シミュレータでは`false` |
 | `urg_interface` | `serial` | `lidar:=2d`のときのURGの接続方式（`serial` / `ethernet`）。`raspicat_bringup`の`config/urg_<方式>.param.yaml`を選ぶ |

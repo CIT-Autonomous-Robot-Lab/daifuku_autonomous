@@ -2,7 +2,7 @@
 # 生の IMU を整える prepare_mid360_imu。
 # 「既定」= robot_localization (humble-devel) の src/ros_filter.cpp の declare_parameter
 # (prepare_mid360_imu は src/prepare_mid360_imu.py の declare_parameter)。
-# use_mid360_imu:=true (既定 false) のときだけ起動し、最終的な /odom と
+# use_mid360_imu:=true (既定。環境変数 USE_MID360_IMU で切り替える) のときだけ起動し、/odom と
 # odom -> base_footprint TF を出す。lidar_bringup.launch.py が両ノードへ直接渡す。
 # **車輪ノード側も同じ引数で /wheel/odom + TF なしに切り替えること** (robot_bringup)。
 

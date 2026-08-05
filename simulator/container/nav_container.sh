@@ -250,10 +250,10 @@ fi
 # livox_frame を出さないため) だが、こちらは上で robot_state_publisher が
 # base_footprint -> $lidar_frame を出しており、二重配信になる。
 #
-# use_mid360_imu:=true も lidar:=mid360 では必須。launch の既定は false (実機の
-# 本体ドライバが /odom と odom -> base_footprint を自分で出すため) だが、Isaac は
-# 上の ODOM_TOPIC=/wheel/odom と PUBLISH_ODOM_TF=false で EKF に譲る側に回って
-# いるので、こちらを立てないと odom -> base_footprint を誰も出さない。
+# use_mid360_imu:=true も lidar:=mid360 では必須。Isaac は上の ODOM_TOPIC=/wheel/odom
+# と PUBLISH_ODOM_TF=false で EKF に譲る側に回っているので、これが立たないと
+# odom -> base_footprint を誰も出さない。launch の既定も true だが、そちらは環境変数
+# USE_MID360_IMU 次第で変わる (実機は Compose が配る) ので、ここでは明示しておく。
 imu_arg=()
 [ "$LIDAR" = "mid360" ] && imu_arg=(use_mid360_imu:=true)
 

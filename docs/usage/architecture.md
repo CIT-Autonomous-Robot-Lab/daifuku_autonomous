@@ -13,10 +13,11 @@ Mid-360 ─ /livox/lidar ─ 3D→2D ─ スタンプ打ち直し ─┴→ 角�
 TF                ─── odom → base_footprint → センサーフレーム
 ```
 
-上の図は既定（`use_mid360_imu:=false`）の構成です。`use_mid360_imu:=true`では車輪入力が
-`/wheel/odom`に変わり、EKFが最終的な`/odom`と`odom -> base_footprint`を生成します。
-**このとき`robot_bringup.launch.py`にも同じ値を渡します**（車輪側をそちらへ移し、TFの
-配信を止めるのはあちらの仕事です）。片方だけ`true`にしたときに何が起きるかは
+上の図は`use_mid360_imu:=false`のときの構成です。**既定は`true`**で、そのときは車輪入力が
+`/wheel/odom`に変わり、EKFが最終的な`/odom`と`odom -> base_footprint`を生成します
+（車輪側をそちらへ移してTFの配信を止めるのは`robot_bringup.launch.py`の仕事です）。
+**2つのlaunchが同じ値でなければ壊れる**ので、既定値は環境変数`USE_MID360_IMU`から取り、
+Composeが`.env`の1行を両サービスへ配ります。片方だけ`true`にしたときに何が起きるかは
 [LiDARとオドメトリ](../setup/lidar.md#imuと車輪オドメトリ)。
 
 速度指令は`twist_mux`が優先度で1本に束ねます（`robot_bringup.launch.py`の
@@ -45,7 +46,7 @@ Mid-360は時刻同期がないためスタンプが実時計からずれてい�
 スタンプを打ち直し（実機ドライバを立てる`lidar_driver:=true`のときのみ。既定は`true`）、
 `prepare_mid360_imu.py`が生のIMUメッセージに共分散を付け、ジャイロのバイアスを引き、
 加速度をgから m/s² へ直してEKFへ渡します（`use_mid360_imu:=true`のときのみ。既定は
-`false`）。
+`true`）。
 
 残る2本はLiDAR構成によりません。`system_monitor.py`は`navigation.launch.py`だけが
 立てます（`use_system_monitor:=true`が既定）。`/proc`を1 Hzで読み、CPUと温度を

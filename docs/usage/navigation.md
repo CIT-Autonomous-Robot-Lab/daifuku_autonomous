@@ -63,11 +63,16 @@ bash docker/raspberrypi/tools/control.sh motor off
 tmux kill-session -t nav
 ```
 
-Mid-360のIMU融合（`use_mid360_imu`）は使っていません。既定が`false`で、`raspicat`
-サービスが立てる本体ドライバが`/odom`と`odom -> base_footprint`を自分で配信する構成です。
-**使うなら`raspicat`サービス側の`robot_bringup.launch.py`にも同じ引数を渡します**
-（[LiDARとオドメトリ](../setup/lidar.md#imuと車輪オドメトリ)）。こちらだけ`true`にすると
-EKFが入力を受け取れないまま`/odom`とTFの配信元が二重になり、エラーも警告も出ません。
+Mid-360のIMU融合（`use_mid360_imu`）は既定の`true`のまま使っています。`/odom`と
+`odom -> base_footprint`を出すのはEKFで、`raspicat`サービスの本体ドライバは
+`/wheel/odom`を出すだけです。**切り替えはリポジトリルートの`.env`の`USE_MID360_IMU`で**
+行ってください（Composeが`ros2`と`raspicat`の両サービスへ配ります。変えたら
+`docker compose up -d`）。launch引数で片方だけ`true`にすると、EKFが入力を受け取れない
+まま`/odom`とTFの配信元が二重になり、エラーも警告も出ません
+（[LiDARとオドメトリ](../setup/lidar.md#imuと車輪オドメトリ)）。
+
+**起動時は機体を静止させておいてください。** Mid-360のジャイロの電源投入時バイアス
+（実測+0.80 deg/s = 48 deg/min）を`prepare_mid360_imu`が測って引きます。
 
 `lidar:=mid360`、`use_rviz:=false`、`publish_lidar_tf:=true`、`lidar_z:=0.275`は
 すべてlaunchの既定値になったため、上のコマンドでは省いています。`lidar_z`の既定

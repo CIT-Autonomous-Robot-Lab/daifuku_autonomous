@@ -135,31 +135,46 @@ lidar_roll:=0.0 lidar_pitch:=0.0 lidar_yaw:=0.0
 
 ### IMUと車輪オドメトリ
 
-Mid-360ではIMU融合を`use_mid360_imu:=true`で有効にできます。**既定は`false`で、そのときは
-2D LiDAR構成と同様に車輪ノードが`/odom`と`odom -> base_footprint`を配信します。**
+Mid-360ではIMU融合が**既定で有効**です（`use_mid360_imu`、既定`true`）。`odom ->
+base_footprint`と`/odom`の所有者はEKFで、EKFが車輪の並進速度とMid-360のZ軸角速度を
+融合して両方を出します。車輪ノードは生値を`/wheel/odom`へ出すだけの立場です。
+`false`にすると2D LiDAR構成と同様に、車輪ノードが`/odom`と`odom -> base_footprint`を
+自分で配信する形に戻ります。
 
-有効にすると`odom -> base_footprint`の所有者がEKFへ移ります。EKFが車輪の並進速度と
-Mid-360のZ軸角速度を融合して最終的な`/odom`とTFを出し、車輪ノードは生値を`/wheel/odom`へ
-出すだけの立場になります。
-
-**この引数は`robot_bringup.launch.py`にも渡してください。** 車輪側の配線を切り替えるのは
-あちらで、`true`のときだけドライバの`odom`を`/wheel/odom`へremapし、TF配信を止めます
-（自前実装は`publish_tf: false`、公式実装は`publish_tf`を持たないのでノードの`/tf`を
+**この引数は`robot_bringup.launch.py`と`navigation.launch.py`（`mapping.launch.py`）の
+両方が持ち、同じ値でなければ壊れます。** 車輪側の配線を切り替えるのは前者で、`true`の
+ときだけドライバの`odom`を`/wheel/odom`へremapし、TF配信を止めます（自前実装は
+`publish_tf: false`、公式実装は`publish_tf`を持たないのでノードの`/tf`を
 `/wheel/tf_unused`へ捨てます）。
 
+### 切り替えは`.env`で
+
+引数を2か所に手で書かなくて済むよう、**既定値は環境変数`USE_MID360_IMU`から取ります**。
+Composeがこれをリポジトリルートの`.env`から`ros2`と`raspicat`の両サービスへ配るので、
+1行直せば両方に効きます。
+
 ```bash
-# 実機。2 つのサービスに同じ値を渡す
-docker compose exec raspicat /ros_entrypoint.sh ros2 launch daifuku_stack \
-  robot_bringup.launch.py driver:=original use_mid360_imu:=true
-docker compose exec ros2 /ros_entrypoint.sh ros2 launch daifuku_stack \
-  navigation.launch.py use_mid360_imu:=true ...
+# リポジトリルートの .env
+USE_MID360_IMU=false
 ```
+
+```bash
+docker compose up -d   # 環境変数は起動時に読まれるのでコンテナを作り直す
+```
+
+`true` / `false`のほか`1` / `0` / `yes` / `no` / `on` / `off`も受けます。**読めない値は
+起動時にエラーで止まります**（既定へ黙って落とすと、`USE_MID360_IMU=TRUE`のつもりが
+違う構成で走ってしまうため）。launch引数`use_mid360_imu:=`を明示すればそちらが勝ちますが、
+そのときは**2か所とも**渡してください。
 
 片方だけ`true`にしてもエラーにはなりません。**車輪側だけ`true`**なら
 `odom -> base_footprint`を誰も出さないのでTFが繋がらず（すぐ気付けます）、
 **ナビゲーション側だけ`true`**ならEKFが入力を得られないまま`/odom`とTFの配信元が
 二重になります。後者は**エラーも警告も出ません**。2026-08-05の実機では、静止中に姿勢が
 細かく震え、ウェイポイント追従を始めた瞬間に機体が回り出しました。
+
+**`raspicat`サービスだけを立てても`odom -> base_footprint`は出ません。** 既定では
+出すのがEKF側だからです。ドライバ単体でTFを見たいときは`USE_MID360_IMU=false`にします。
 
 ### ジャイロのバイアス
 

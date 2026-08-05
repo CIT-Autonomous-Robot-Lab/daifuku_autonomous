@@ -32,9 +32,12 @@
 # **twist_mux:=false では誰も購読しない**。操作は docs/usage/joystick.md と
 # src/joy_teleop.py。
 #
-# use_mid360_imu:= (既定 false) は上の契約のうち odom の担当を EKF へ譲る。true にすると
-# ドライバは /wheel/odom を出すだけになり、odom -> base_footprint TF を出さなくなる。
-# **navigation / mapping 側にも同じ値を渡すこと** (詳細は launch_setup のコメント)。
+# use_mid360_imu:= (既定 true) は上の契約のうち odom の担当を EKF へ譲る。true では
+# ドライバは /wheel/odom を出すだけになり、odom -> base_footprint TF を出さない。
+# **この launch だけを立てたときは odom -> base_footprint が出ない** (navigation /
+# mapping 側の EKF が出す)。既定は環境変数 USE_MID360_IMU から取るので、Compose では
+# .env の 1 行で両サービスに効く。引数で渡すときは **navigation / mapping 側にも同じ
+# 値を渡すこと** (詳細は launch_setup のコメント)。
 
 import os
 import sys
@@ -64,7 +67,7 @@ _LAUNCH_DIR = os.path.dirname(os.path.realpath(__file__))
 if _LAUNCH_DIR not in sys.path:
     sys.path.insert(0, _LAUNCH_DIR)
 
-from daifuku_stack_launch import is_true, params  # noqa: E402
+from daifuku_stack_launch import env_bool_default, is_true, params  # noqa: E402
 
 
 # twist_mux を挟むときにドライバが購読するトピック。仲裁の入力 (/cmd_vel と
@@ -357,12 +360,15 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             "use_mid360_imu",
-            default_value="false",
+            # 既定は環境変数から取る。Compose が .env の 1 行を raspicat と ros2 の
+            # 両サービスへ配るので、2 つの launch を人手で揃えなくてよくなる。
+            default_value=env_bool_default("USE_MID360_IMU", "true"),
             description="Mid-360 の IMU 融合に合わせた配線にするか。true にすると "
                         "ドライバは車輪オドメトリを wheel_odom_topic へ出し、"
                         "odom -> base_footprint TF を出さなくなる (ナビゲーション "
-                        "側の EKF が両方を出す)。**navigation / mapping にも同じ "
-                        "値を渡すこと。**",
+                        "側の EKF が両方を出す)。既定は環境変数 USE_MID360_IMU。"
+                        "**引数で渡すときは navigation / mapping にも同じ値を "
+                        "渡すこと。**",
         ),
         DeclareLaunchArgument(
             "wheel_odom_topic",

@@ -249,17 +249,24 @@ Docker 越しに叩く形は
   下限が距離とともに上がるので、**`max_height` をその下に置くと帯が潰れ、
   `range_max` を伸ばしてもエラーも警告も出ないまま手前で何も入らなくなる**
   （5 度なら 50m 先の実効下限は 4.65m）。地図ごとの角度は `overrides/` 側。
-- **`use_mid360_imu` は launch 2 つに同じ値を渡す。** `robot_bringup.launch.py` と
-  `navigation.launch.py`（`mapping.launch.py`）の両方が持つ同名の引数で、**既定は
-  どちらも `false`**。`true` にすると `odom→base_footprint` と `/odom` の所有者が
-  車輪ドライバから EKF へ移り、ドライバ側は `/wheel/odom` を出すだけになる
-  （自前実装は `publish_tf: false`、公式実装は `publish_tf` が無いのでノードの
-  `/tf` を捨て先へ remap）。**ナビゲーション側だけ `true`** にすると EKF の入力
-  `/wheel/odom` を誰も出さないまま `/odom` と TF の配信元が 2 つになり、**エラーも
-  警告も出ない**（tf2 は届いた順に上書きするので姿勢が 2 つの答えの間で震え、
-  追従を始めると回り出す。2026-08-05 の実機）。車輪側だけ `true` なら TF が
-  繋がらないので気付ける。`simulator/` の Isaac ハーネスは Isaac が
-  `/wheel/odom` を出す側なので `nav_container.sh` が `true` を足している。
+- **`use_mid360_imu` は launch 2 つが同じ値でないと壊れる。** `robot_bringup.launch.py`
+  と `navigation.launch.py`（`mapping.launch.py`）の両方が持つ同名の引数で、**既定は
+  どちらも `true`**（`odom→base_footprint` と `/odom` の所有者は EKF で、ドライバ側は
+  `/wheel/odom` を出すだけ。自前実装は `publish_tf: false`、公式実装は `publish_tf`
+  が無いのでノードの `/tf` を捨て先へ remap）。**ナビゲーション側だけ `false`**
+  ——または片方だけ `true`——にすると EKF の入力を誰も出さないまま `/odom` と TF の
+  配信元が 2 つになり、**エラーも警告も出ない**（tf2 は届いた順に上書きするので姿勢が
+  2 つの答えの間で震え、追従を始めると回り出す。2026-08-05 の実機）。車輪側だけ
+  `true` なら TF が繋がらないので気付ける。
+  **人が 2 か所に書かなくて済むよう、既定値は環境変数 `USE_MID360_IMU` から取る**
+  （`daifuku_stack_launch.env_bool_default`）。`docker/raspberrypi/compose.common.yaml`
+  が `ros2` と `raspicat` の両サービスへ配るので、切り替えるのは**リポジトリルートの
+  `.env` の 1 行**（変えたら `docker compose up -d` でコンテナを作り直すこと。環境変数は
+  起動時にしか読まれない）。読めない綴りは黙って既定に落とさず起動時に落とす。
+  **`raspicat` サービスだけを立てても `odom→base_footprint` は出ない**（既定 `true`
+  では EKF が出すため）。`simulator/` の Isaac ハーネスは Isaac が `/wheel/odom` を
+  出す側なので、環境変数の無い環境でも変わらないよう `nav_container.sh` が
+  `use_mid360_imu:=true` を明示している。
 - **Mid-360 のジャイロは電源投入時バイアスが大きい**（この個体は z 軸
   +0.013960 rad/s = +0.800 deg/s = 48 deg/min。2026-08-05 実測）。
   `robot_localization` はセンサのバイアスを推定しないので、`prepare_mid360_imu` が
