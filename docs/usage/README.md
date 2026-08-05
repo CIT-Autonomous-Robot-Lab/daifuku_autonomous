@@ -28,9 +28,14 @@
 各ページはネイティブ環境の`ros2 ...`を基本形として記載します。軽量Docker環境では先頭に次を付けます。RVizは既定で起動しないため（`use_rviz`の既定は`false`）、追加の指定は要りません。
 
 ```bash
-docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
+docker compose exec ros2 \
   /ros_entrypoint.sh ros2 ...
 ```
+
+**`docker compose`は必ずリポジトリルートで実行します。** どのComposeファイルを使うかは
+リポジトリルートの`.env`（`COMPOSE_FILE`）が持っているので、別のディレクトリからだと
+`no configuration file provided`で止まります。`.env`が無ければ`.env.example`から
+作ってください（[`docker/raspberrypi/README.md`](../../docker/raspberrypi/README.md#起動)）。
 
 コマンドが長くなる場合は、先にコンテナのシェルへ入ったほうが扱いやすくなります。
 

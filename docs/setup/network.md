@@ -4,7 +4,7 @@ Raspberry Pi Catとナビゲーション環境はDDSで直接通信します。�
 
 ## 共通設定
 
-両側で`ROS_DOMAIN_ID`を同じ値にします。`docker/raspberrypi/compose.yaml`と
+両側で`ROS_DOMAIN_ID`を同じ値にします。`docker/raspberrypi/compose.common.yaml`と
 `docker/dev/compose.yaml`の既定はどちらも`90`です。
 
 ```bash
@@ -32,7 +32,7 @@ Raspberry Pi上のネイティブROSノードとDocker内のFast DDSを確実に
 
 Pi本体でネイティブのROS 2ノードを動かし、同じPi上の`docker/raspberrypi/`コンテナと通信する構成
 では、ホストとコンテナで同じFast DDSプロファイル`docker/raspberrypi/fastdds_udp_whitelist.xml`
-を使います。コンテナ側は`compose.yaml`がマウントと環境変数を設定するため、追加の
+を使います。コンテナ側は`compose.common.yaml`がマウントと環境変数を設定するため、追加の
 作業はホスト側だけです。
 
 ```bash
@@ -53,8 +53,8 @@ export FASTRTPS_DEFAULT_PROFILES_FILE=/path/to/daifuku_autonomous/docker/raspber
 
 そのため、次の3点が前提になります。
 
-- `docker/raspberrypi/compose.yaml`の`ipc: host`（`/dev/shm`をホストと共有する）
-- `docker/raspberrypi/compose.yaml`の`user: "1000:1000"`。Fast DDSはSHMセグメントを0644で作るため、
+- `docker/raspberrypi/compose.common.yaml`の`ipc: host`（`/dev/shm`をホストと共有する）
+- `docker/raspberrypi/compose.common.yaml`の`user: "1000:1000"`。Fast DDSはSHMセグメントを0644で作るため、
   ホスト側ROSプロセスとuidを揃えないと互いのポートを開けません
 - whitelist内の`192.168.1.50`は、Piの固定IPをそのまま書いたものです。ロボットLANの
   アドレスが異なる場合はXMLを書き換えてください
@@ -64,7 +64,7 @@ export FASTRTPS_DEFAULT_PROFILES_FILE=/path/to/daifuku_autonomous/docker/raspber
 
 ## Docker Desktop
 
-`docker/raspberrypi/compose.yaml`と`docker/dev/compose.yaml`は`network_mode: host`を使います。Docker Desktop 4.34以降で、Settings > Resources > Networkの「Enable host networking」を有効にしてください。
+`docker/raspberrypi/compose.common.yaml`と`docker/dev/compose.yaml`は`network_mode: host`を使います。Docker Desktop 4.34以降で、Settings > Resources > Networkの「Enable host networking」を有効にしてください。
 
 WindowsファイアウォールではDocker Desktop、WSL、ROS 2で使用するネットワークの通信を許可します。
 
@@ -200,7 +200,7 @@ ros2 topic echo /odom --once
 Docker環境では:
 
 ```bash
-docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
+docker compose exec ros2 \
   /ros_entrypoint.sh ros2 topic list
 ```
 

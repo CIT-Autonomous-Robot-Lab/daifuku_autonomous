@@ -13,7 +13,7 @@ Raspberry Pi本体にSSHでつなぎ、`docker/raspberrypi/`環境で地図を�
 
 ```bash
 cd ~/daifuku_autonomous   # リポジトリを置いた場所
-docker compose -f docker/raspberrypi/compose.yaml up -d
+docker compose up -d
 ```
 
 続いてセッションを作り、3つの窓に割り当てます。
@@ -21,7 +21,7 @@ docker compose -f docker/raspberrypi/compose.yaml up -d
 ```bash
 cd ~/daifuku_autonomous
 tmux new-session -d -s mapping -c "$PWD" -n slam
-tmux send-keys -t mapping:slam 'docker compose -f docker/raspberrypi/compose.yaml exec ros2 /ros_entrypoint.sh ros2 launch daifuku_stack mapping.launch.py use_mid360_imu:=false use_sim_time:=false' Enter
+tmux send-keys -t mapping:slam 'docker compose exec ros2 /ros_entrypoint.sh ros2 launch daifuku_stack mapping.launch.py use_mid360_imu:=false use_sim_time:=false' Enter
 
 tmux new-window -t mapping -c "$PWD" -n teleop
 tmux send-keys -t mapping:teleop 'bash docker/raspberrypi/tools/control.sh motor on'
@@ -48,7 +48,7 @@ TELEOP_LINEAR_SPEED=0.1 bash docker/raspberrypi/tools/control.sh teleop keyboard
 走り終えたら`check`の窓で地図を保存します。
 
 ```bash
-docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
+docker compose exec ros2 \
   /ros_entrypoint.sh ros2 run nav2_map_server map_saver_cli \
   -f /opt/ros_ws/install/share/daifuku_stack/maps/map_19f
 ```
@@ -79,12 +79,13 @@ tmux kill-session -t mapping
 ## 1. 機体側ドライバを起動する
 
 `docker/raspberrypi/`環境では、Composeの`raspicat`サービスが`robot_bringup.launch.py`
-（本体ドライバと`robot_state_publisher`）を起動します。本体ドライバの既定は公式実装の
-`raspimouse`です（自前実装に替えるには`compose.original.yaml`を重ねる。
+（本体ドライバと`robot_state_publisher`）を起動します。どの本体ドライバになるかは
+`.env`の`COMPOSE_FILE`で決まります（既定は自前実装の`compose.original.yaml`。公式実装は
+`compose.rt.yaml`で、rtmouse 入りの Pi 4 専用。
 [Pi 4](../setup/raspberry-pi-4.md) / [Pi 5](../setup/raspberry-pi-5.md)）。
 
 ```bash
-docker compose -f docker/raspberrypi/compose.yaml up -d
+docker compose up -d
 ```
 
 このサービスは`restart: unless-stopped`で動きます。ナビゲーション側の`ros2`サービスを
@@ -134,7 +135,7 @@ SLAM Toolboxの値を差し替えるなら、`slam_params_file:=`でファイル
 軽量Docker環境:
 
 ```bash
-docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
+docker compose exec ros2 \
   /ros_entrypoint.sh ros2 launch daifuku_stack mapping.launch.py \
   lidar:=2d use_sim_time:=false
 ```
@@ -178,7 +179,7 @@ ros2 run nav2_map_server map_saver_cli \
 軽量Docker環境:
 
 ```bash
-docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
+docker compose exec ros2 \
   /ros_entrypoint.sh ros2 run nav2_map_server map_saver_cli \
   -f /opt/ros_ws/install/share/daifuku_stack/maps/map_19f
 ```

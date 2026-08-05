@@ -16,7 +16,7 @@ Docker Desktopでは[ネットワーク設定](network.md#docker-desktop)も先�
 
 Pi本体でもネイティブのROS 2ノード（モータードライバなど）を動かす構成では、
 コンテナを起動する前に、ホスト側のFast DDSを同じプロファイルへそろえてください。
-`docker/raspberrypi/compose.yaml`はコンテナへ`docker/raspberrypi/fastdds_udp_whitelist.xml`をマウントし、
+`docker/raspberrypi/compose.common.yaml`はコンテナへ`docker/raspberrypi/fastdds_udp_whitelist.xml`をマウントし、
 UDPの送信インターフェースをループバックとロボットLANへ限定したうえで、同一ホスト内の
 通信に共有メモリ（SHM）を使います。ホスト側が既定設定のままだと、SHMを使う側と
 使わない側が混在して通信が成立しません。
@@ -31,12 +31,12 @@ export FASTRTPS_DEFAULT_PROFILES_FILE=/path/to/daifuku_autonomous/docker/raspber
 
 - whitelist内の`192.168.1.50`はPiの固定IPです。ロボットLANのアドレスが異なる場合は
   XMLを編集してください。
-- `compose.yaml`の`user: "1000:1000"`は、ホストのROSプロセスがuid 1000（`ubuntu`）で
+- `compose.common.yaml`の`user: "1000:1000"`は、ホストのROSプロセスがuid 1000（`ubuntu`）で
   動くことを前提にしています。Fast DDSはSHMセグメントを0644で作成するため、uidが
   一致しないと互いのSHMポートを開けません。Fast DDS 2.6にはUDPへのフォールバックが
   ないため、ホストからコンテナへのトピックがエラーも出ないまま止まります。
 
-SHMを使うため、`compose.yaml`は`ipc: host`で`/dev/shm`をホストと共有します。理由と
+SHMを使うため、`compose.common.yaml`は`ipc: host`で`/dev/shm`をホストと共有します。理由と
 経緯は[ROS 2ネットワーク](network.md#raspberry-pi本体でのdds設定)を参照してください。
 
 ## ビルドと起動
@@ -49,9 +49,9 @@ composeが`src/`をマウントし、`up`のたびにコンテナの中で`colco
 リポジトリルートで実行します。
 
 ```bash
-docker compose -f docker/raspberrypi/compose.yaml build
-docker compose -f docker/raspberrypi/compose.yaml up -d
-docker compose -f docker/raspberrypi/compose.yaml ps
+docker compose build
+docker compose up -d
+docker compose ps
 ```
 
 初回の`up`はワークスペース全体を建てるので時間がかかります（Raspberry Pi 4で
@@ -62,29 +62,31 @@ docker compose -f docker/raspberrypi/compose.yaml ps
 （既定は4＝Pi 4の全コア）。メモリが不足してOOMで落ちるときだけ減らします。
 
 ```bash
-BUILD_JOBS=1 docker compose -f docker/raspberrypi/compose.yaml up -d
+BUILD_JOBS=1 docker compose up -d
 ```
 
 PowerShellでは次のように指定します。
 
 ```powershell
 $env:BUILD_JOBS = "1"
-docker compose -f docker/raspberrypi/compose.yaml up -d
+docker compose up -d
 ```
 
 ## 本体ドライバを自前実装に替える
 
-`raspicat`サービスが立てる本体ドライバは、既定が公式実装（`driver:=raspimouse`）です。
-これはrtmouseカーネルモジュールをホスト側で読み込んである前提なので、rtmouseが動かない
-Raspberry Pi 5では自前実装（`driver:=original`）に替えます。`compose.original.yaml`を
-重ねると、`raspicat`サービスの引数と`/sys/class/pwm`まわりのマウントが差し替わります。
+`raspicat`サービスが立てる本体ドライバは、`.env`の`COMPOSE_FILE`で選びます。既定は
+自前実装（`compose.original.yaml`＝`driver:=original`）です。公式実装
+（`compose.rt.yaml`＝`driver:=raspimouse`）はrtmouseカーネルモジュールをホスト側で
+読み込んである前提なので、rtmouseが動かないRaspberry Pi 5では選べません。
 
 ```bash
-docker compose -f docker/raspberrypi/compose.yaml \
-               -f docker/raspberrypi/compose.original.yaml up -d
+# 公式実装に替えるとき
+sed -i 's|^COMPOSE_FILE=.*|COMPOSE_FILE=docker/raspberrypi/compose.rt.yaml|' .env
+docker compose up -d
 ```
 
-Pi 5では必須、Pi 4では任意です。Pi 4で自前実装を選ぶときはrtmouseを載せないでください。
+`compose.original.yaml`のほうは`raspicat`サービスに`driver:=original`を渡し、
+`/sys/class/pwm`まわりのマウントを足します。Pi 5では必須、Pi 4では任意です。Pi 4で自前実装を選ぶときはrtmouseを載せないでください。
 両方がGPIO 16/6/5とPWMを奪い合いますが、rtmouseはレジスタを直書きするためカーネルは
 衝突を検出しません（ノード側が起動時に拒否します）。機種ごとの前提と確認手順は
 [Raspberry Pi 4で動かす](raspberry-pi-4.md)と[Raspberry Pi 5で動かす](raspberry-pi-5.md)に
@@ -96,12 +98,12 @@ Composeの既定値は`90`です。機体側が別の値なら、起動前に合
 
 ```bash
 export ROS_DOMAIN_ID=10
-docker compose -f docker/raspberrypi/compose.yaml up -d
+docker compose up -d
 ```
 
 ```powershell
 $env:ROS_DOMAIN_ID = "10"
-docker compose -f docker/raspberrypi/compose.yaml up -d
+docker compose up -d
 ```
 
 ## コンテナを操作する
@@ -109,9 +111,9 @@ docker compose -f docker/raspberrypi/compose.yaml up -d
 エントリポイントスクリプト（`/ros_entrypoint.sh`）がROS 2とビルド済みワークスペースを自動で読み込みます。
 
 ```bash
-docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
+docker compose exec ros2 \
   /ros_entrypoint.sh ros2 pkg list
-docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
+docker compose exec ros2 \
   /ros_entrypoint.sh bash
 ```
 
@@ -136,25 +138,25 @@ bash docker/raspberrypi/tools/control.sh teleop keyboard
 ## 動作確認
 
 ```bash
-docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
+docker compose exec ros2 \
   /ros_entrypoint.sh ros2 topic list
-docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
+docker compose exec ros2 \
   /ros_entrypoint.sh ros2 topic echo /scan_raw --once
-docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
+docker compose exec ros2 \
   /ros_entrypoint.sh ros2 topic echo /odom --once
 ```
 
 ## ログと終了
 
 ```bash
-docker compose -f docker/raspberrypi/compose.yaml logs
-docker compose -f docker/raspberrypi/compose.yaml down
+docker compose logs
+docker compose down
 ```
 
 キャッシュを使わず再ビルドする場合:
 
 ```bash
-docker compose -f docker/raspberrypi/compose.yaml build --no-cache
+docker compose build --no-cache
 ```
 
 次は[LiDARとオドメトリ](lidar.md)を設定し、[地図作成](../usage/mapping.md)または[自律移動](../usage/navigation.md)へ進みます。`use_rviz`の既定は`false`なので、Dockerでlaunchする際に指定するものはありません。

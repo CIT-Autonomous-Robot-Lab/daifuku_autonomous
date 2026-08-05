@@ -1,13 +1,17 @@
-# 自前の本体ドライバ (driver:=original) で走らせるときの上書き。compose.yaml に
-# 重ねて使う。
-#
-#   docker compose -f docker/raspberrypi/compose.yaml \
-#                  -f docker/raspberrypi/compose.original.yaml up -d
+# 本体ドライバに自前実装 (driver:=original、src/raspicat_driver) を使う構成。
 #
 # Pi 5 では**必須**（rtmouse が動かないので公式実装を選べない）。Pi 4 では任意で、
-# 重ねなければ既定の driver:=raspimouse（公式実装 + rtmouse）になる。Pi 4 で
-# こちらを使うときは rtmouse を載せないこと（ノードが起動時に拒否する）。経緯と
-# 検証項目は docs/setup/raspberry-pi-4.md と raspberry-pi-5.md。
+# compose.rt.yaml のほうが公式実装 + rtmouse になる。Pi 4 でこちらを使うときは
+# rtmouse を載せないこと（ノードが起動時に拒否する）。経緯と検証項目は
+# docs/setup/raspberry-pi-4.md と raspberry-pi-5.md。
+#
+# ドライバに依らない部分は compose.common.yaml。project 名はそちらと同じに
+# しておくこと (include されたファイルの name は無視されるため、ここに要る)。
+# rt と同じ名前なので、行き来してもビルドキャッシュは同じものが見える。
+#
+# 使うときは -f ではなくリポジトリルートの .env で選ぶ:
+#
+#   COMPOSE_FILE=docker/raspberrypi/compose.original.yaml
 #
 # 変えるのは raspicat サービスだけ。ナビゲーション側 (ros2 サービス) は機種にも
 # ドライバにも依存しない。
@@ -20,11 +24,11 @@
 #   * /sys/devices      … /sys/class/pwm/pwmchipN は実体へのシンボリックリンクで、
 #                         こちらが無いとリンクが宙に浮く
 #
-# /sys/devices を丸ごと rw で渡すのは広い。ただし compose.yaml は既にモータ制御の
-# ために /dev を丸ごと渡し `device_cgroup_rules: c *:* rwm` を付けており、キャラクタ
-# デバイスについてはほぼ privileged 相当になっている (compose.yaml のコメント)。
-# ここもその延長で、狭めるなら pwmchip の実体パスだけを名指しでマウントする
-# (機種ごとにアドレスが変わるので書き換えが要る)。
+# /sys/devices を丸ごと rw で渡すのは広い。ただし compose.common.yaml は既にモータ
+# 制御のために /dev を丸ごと渡し `device_cgroup_rules: c *:* rwm` を付けており、
+# キャラクタデバイスについてはほぼ privileged 相当になっている
+# (compose.common.yaml のコメント)。ここもその延長で、狭めるなら pwmchip の実体
+# パスだけを名指しでマウントする (機種ごとにアドレスが変わるので書き換えが要る)。
 #
 # コンテナは user: "1000:1000" で動くので、ホスト側で sysfs と /dev の所有権を
 # 渡しておく必要がある。tools/image/udev/99-daifuku-raspicat.rules を参照。
@@ -35,6 +39,10 @@
 # "configure failed: [Errno 13] Permission denied: /sys/class/pwm/pwmchip0/export")。
 # deny ルールは既定で監査ログを出さないため dmesg にも残らない。security_opt で
 # 外す。上の /dev 丸渡しと同じ範囲の話で、これ以上広げてはいない。
+name: daifuku-autonomous
+
+include:
+  - compose.common.yaml
 
 services:
   raspicat:
@@ -48,7 +56,7 @@ services:
     security_opt:
       - apparmor=unconfined
     # Compose はマウント先をキーにして重ねるので、ここは追加分だけでよい
-    # (compose.yaml 側の /dev などはそのまま残る)。
+    # (compose.common.yaml 側の /dev などはそのまま残る)。
     volumes:
       - /sys/class/pwm:/sys/class/pwm
       - /sys/devices:/sys/devices

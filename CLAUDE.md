@@ -37,6 +37,7 @@ Raspberry Pi Cat を ROS 2 Humble / Nav2 で自律移動させる colcon ワー�
 
 ```bash
 # Docker（up のたびにコンテナ内で colcon build する。初回は Pi 4 で 1〜2 時間）
+# **リポジトリルートから叩くこと**。compose ファイルは .env の COMPOSE_FILE で選ぶ
 docker compose build
 docker compose up -d
 BUILD_JOBS=1 docker compose up -d   # 低メモリ時
@@ -143,6 +144,33 @@ Docker 越しに叩く形は
   (`ros:humble-ros-base`) に rqt と RViz が無いため。両方の `build-workspace.sh` が
   `--packages-select` で名前を並べているので、Pi 側の一覧に足すと**ビルドが通らなく
   なる**。
+- **`docker/raspberrypi/` に `compose.yaml` は無い。** 入口は本体ドライバ別の
+  `compose.rt.yaml`（公式実装 + rtmouse。Pi 4 専用）と `compose.original.yaml`
+  （自前実装。既定、Pi 5 では必須）の 2 つで、どちらも `compose.common.yaml` を
+  `include:` する。選ぶのは**リポジトリルートの `.env`** の `COMPOSE_FILE`
+  （`.gitignore` 済み。`.env.example` から作る。`provision.sh` は機種を見て自動で
+  作る）。ここに 3 つ罠がある。**(1)** Compose が `.env` を読むのは**カレント
+  ディレクトリ**なので、リポジトリルート以外から `docker compose` を叩くと
+  `no configuration file provided` で止まる。**(2)** 入口 2 つは `name:
+  daifuku-autonomous` をわざと揃えてある。違えるとドライバを替えた瞬間に
+  ビルドキャッシュの名前付きボリュームが別物になり、**1〜2 時間かけて建て直しに
+  なる**（`include:` された側の `name:` は無視されるので、入口の側に要る）。
+  **(3)** `compose.common.yaml` を単体で `-f` に渡すと `raspicat` が exit 1 で
+  落ちる（どちらのドライバか決まらないまま起動しないための placeholder）。
+  ドライバに依存しない `ros2` サービスだけを触る `tools/control.sh` と
+  `tools/shell.sh` は、意図してこちらを直接渡している。
+- **`.env` は 2 つ読まれ、値は合成される。** リポジトリルートのものと、
+  `docker/raspberrypi/.env`（`provision.sh` が `ROS_DOMAIN_ID` と `BUILD_JOBS` を
+  書いて生成する）の両方。**同じキーが両方にあると `docker/raspberrypi/.env` が
+  勝つ**（Compose の project directory は `COMPOSE_FILE` の 1 つめがあるディレクトリ）。
+  逆に `COMPOSE_FILE` はルート側でしか効かない。実機で「ルートの `.env` を直したのに
+  効かない」はこれ。
+- **`ros2` と `raspicat` は `restart: unless-stopped` なので Pi の再起動で戻るが、
+  そのとき `workspace-build` は走らない。** デーモンが上げ直すときは `depends_on`
+  が効かず、各コンテナが独立に上がるため。`install/` が名前付きボリュームに残るので
+  それで動くが、**C++ / Rust を直した分は再起動しても反映されない**（`docker compose
+  up -d` を人手で通すこと）。`workspace-build` 側に `restart` を足してはいけない
+  （正常終了でも上げ直すので、ビルドが終わるたびに次が始まる）。
 - **`planner:=vi`（既定）では `navigate_through_poses` が使えない。** VI 系は
   `compute_path_to_pose` しか持たないので、`nav2:=true` では `navigation.launch.py` が
   through_poses の木を `behavior_trees/nav_through_poses_stub.xml`（`AlwaysFailure`）へ

@@ -185,8 +185,8 @@ apt が走ると全リポジトリが `Release file ... is not valid yet` で拒
 ### 2. 起動する
 
 ```bash
-docker compose -f docker/raspberrypi/compose.yaml \
-               -f docker/raspberrypi/compose.original.yaml up -d
+# .env が COMPOSE_FILE=docker/raspberrypi/compose.original.yaml を指していること（既定）
+docker compose up -d
 ```
 
 `compose.original.yaml` が raspicat サービスに `driver:=original` を渡し、`/sys/class/pwm` と

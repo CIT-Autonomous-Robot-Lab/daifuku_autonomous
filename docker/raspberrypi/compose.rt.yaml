@@ -1,0 +1,33 @@
+# 本体ドライバに RT 公式実装 (raspimouse) を使う構成。**Pi 4 + rtmouse 専用**で、
+# Pi 5 では rtmouse が動かないので compose.original.yaml のほうを使うこと
+# (docs/setup/raspberry-pi-5.md)。
+#
+#   * 公式実装は /dev/rt* を読む。rtmouse がホストで insmod されていないと
+#     configure で落ちる (raspicat_setup_scripts が導入する)。
+#   * **rtmouse と自前実装 (compose.original.yaml) は排他。** rtmouse は
+#     レジスタを ioremap するのでカーネルが衝突を検出せず、両方が GPIO 16/6/5 を
+#     持つと車輪が逆に回り得る (CLAUDE.md)。
+#   * 公式実装は車輪径 400mm を直書きしているので、実機 (200mm) では指令の
+#     70% で走る。合わせたいなら自前実装のほう。
+#
+# ドライバに依らない部分は compose.common.yaml。project 名はそちらと同じに
+# しておくこと (include されたファイルの name は無視されるため、ここに要る)。
+# original と同じ名前なので、行き来してもビルドキャッシュは同じものが見える。
+#
+# 使うときは -f ではなくリポジトリルートの .env で選ぶ:
+#
+#   COMPOSE_FILE=docker/raspberrypi/compose.rt.yaml
+name: daifuku-autonomous
+
+include:
+  - compose.common.yaml
+
+services:
+  raspicat:
+    command:
+      - /ros_entrypoint.sh
+      - ros2
+      - launch
+      - daifuku_stack
+      - robot_bringup.launch.py
+      - driver:=raspimouse

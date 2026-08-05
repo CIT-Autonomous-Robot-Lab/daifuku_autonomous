@@ -28,7 +28,7 @@ Ethernet接続のURGでは`urg_interface:=ethernet`を指定します。別の�
 使う場合は`urg_params_file:=/path/to/urg.param.yaml`を渡します。
 
 `docker/raspberrypi/`環境では、既定がMid-360（Ethernet）のため`/dev/ttyACM0`を
-コンテナへ渡していません。シリアル接続のURGを使うときは`compose.yaml`の`ros2`
+コンテナへ渡していません。シリアル接続のURGを使うときは`compose.common.yaml`の`ros2`
 サービスへ次を足してください。存在しないデバイスを書くと`compose up`自体が
 失敗するので、URGを挿したときだけ有効にします。
 

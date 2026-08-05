@@ -48,7 +48,7 @@ Pi 5 は 24.04 なので選べません。ただし実運用はコンテナで�
 
 ## `/dev` を丸ごと渡している理由
 
-`compose.yaml` の `raspicat` サービスは `/dev` をまるごとマウントし、
+`compose.common.yaml` の `raspicat` サービスは `/dev` をまるごとマウントし、
 `device_cgroup_rules: c *:* rwm` を付けています。キャラクタデバイスについては
 ほぼ privileged 相当で、狭めたくなる形ですが、**狭めると静かに壊れます**。
 
@@ -91,7 +91,7 @@ rtmouse は out-of-tree モジュールで、キャラクタデバイスのメ�
 
 Pi 4 のメモリとコア数に由来するもので、Pi 5 では緩みます。
 
-- **ビルド並列数。** `compose.yaml` の `BUILD_JOBS` の既定は 4（Pi 4 の全コア）です。
+- **ビルド並列数。** `compose.common.yaml` の `BUILD_JOBS` の既定は 4（Pi 4 の全コア）です。
   `up` のワークスペースビルドはこれで足ります。release の rustc 2 本を走らせた実測で
   RSS 750 MB・available 2.5 GB と余っていました。**イメージそのものを Pi 上で焼く
   ときだけ別**で、`provision.sh` が書く `docker/raspberrypi/.env` には 1 が入ります
@@ -157,11 +157,15 @@ A/D（MCP3204）をこのオーバレイ経由で取るためです。rtmouse �
 ### 2. 起動する
 
 ```bash
-docker compose -f docker/raspberrypi/compose.yaml up -d
+docker compose up -d
 ```
 
-Pi 5 と違って重ねる compose ファイルはありません（`driver:` の既定が
-`raspimouse`）。初回はワークスペース全体を建てるので 1〜2 時間かかります。
+`.env` の `COMPOSE_FILE` が `docker/raspberrypi/compose.rt.yaml` を指していること。
+**リポジトリ既定は `compose.original.yaml`（自前実装）なので、rtmouse 入りの Pi 4 は
+ここを書き換える必要があります**（`provision.sh` は `--model pi4` かつ rtmouse ありの
+ときだけ `compose.rt.yaml` を指す `.env` を自動で作ります）。取り違えると
+`raspicat_driver` が rtmouse を見つけて configure を拒否します。初回はワークスペース
+全体を建てるので 1〜2 時間かかります。
 
 ### 3. 確認する
 
@@ -224,8 +228,8 @@ sudo rm -f /etc/modules-load.d/rtmouse.conf
 ### 2. 起動する
 
 ```bash
-docker compose -f docker/raspberrypi/compose.yaml \
-               -f docker/raspberrypi/compose.original.yaml up -d
+# .env が COMPOSE_FILE=docker/raspberrypi/compose.original.yaml を指していること（既定）
+docker compose up -d
 ```
 
 `compose.original.yaml` が `driver:=original` を渡し、`/sys/class/pwm` と

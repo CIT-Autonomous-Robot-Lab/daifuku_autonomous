@@ -33,7 +33,7 @@ Pi 側は `system_monitor` が新しいファイルなので、一度だけワ�
 マウントから来るので、パッケージ名が変わってもイメージは有効なままです）。
 
 ```bash
-docker compose -f docker/raspberrypi/compose.yaml up -d
+docker compose up -d
 ```
 
 ただし、`autonomous_nav` という名前だった頃にビルドした Pi では、名前付きボリュームの
@@ -42,7 +42,7 @@ docker compose -f docker/raspberrypi/compose.yaml up -d
 状態**になります。一度だけ落としてください。
 
 ```bash
-docker compose -f docker/raspberrypi/compose.yaml run --rm workspace-build bash -c '
+docker compose run --rm workspace-build bash -c '
   cd /opt/ros_ws
   rm -rf build/autonomous_nav install/lib/autonomous_nav install/share/autonomous_nav \
          install/share/ament_index/resource_index/packages/autonomous_nav \
@@ -76,7 +76,7 @@ Windows + Podman の dev コンテナからは、X サーバ（VcXsrv）の起�
 `system_monitor` が止まっていると「system_monitor を待っています」のまま動きません。
 
 プロセス別の内訳は **`ros2` コンテナの PID 名前空間の中しか見えません**。
-`docker/raspberrypi/compose.yaml` は `pid: host` を付けていないので、別コンテナで動く本体
+`docker/raspberrypi/compose.common.yaml` は `pid: host` を付けていないので、別コンテナで動く本体
 ドライバとホストの rtmouse は出てきません。見たい場合は `ros2` サービスに `pid: host` を
 足してください（compose の変更なので再起動だけで済みます）。全体の CPU・loadavg・温度の
 ほうは `/proc/stat` が名前空間化されないため、コンテナの中から読んでもホストの値です。

@@ -5,7 +5,10 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DOCKER_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 source "$(cd -- "${DOCKER_DIR}/../common/lib" && pwd)/compose.sh"
 
-COMPOSE_FILE="${DOCKER_DIR}/compose.yaml"
+# 触るのは ros2 サービスだけで、そこは本体ドライバに依存しない。だから入口
+# (compose.rt.yaml / compose.original.yaml) ではなく共通のほうを渡す。project 名が
+# 同じなので、どちらの入口で up したコンテナでも同じものが見える。
+COMPOSE_FILE="${DOCKER_DIR}/compose.common.yaml"
 SERVICE="${CONTROL_SERVICE:-ros2}"
 MOTOR_SERVICE="${MOTOR_SERVICE:-/motor_power}"
 # 人が出す速度指令は仲裁 (twist_mux) の優先度の高い側へ入れる。robot_bringup を

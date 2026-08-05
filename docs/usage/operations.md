@@ -23,9 +23,9 @@ ros2 topic hz /wheel/odom
 ## Dockerでコマンドを実行する
 
 ```bash
-docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
+docker compose exec ros2 \
   /ros_entrypoint.sh ros2 topic list
-docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
+docker compose exec ros2 \
   /ros_entrypoint.sh bash
 ```
 
@@ -145,9 +145,9 @@ aptパッケージを足したときにイメージを焼き直すのは、`rosd
 うえにaptの状態が毎回変わり、この切り分け自体が崩れます）。最後の行のコマンドは次のとおりです。
 
 ```bash
-docker compose -f docker/raspberrypi/compose.yaml down
-docker compose -f docker/raspberrypi/compose.yaml build
-docker compose -f docker/raspberrypi/compose.yaml up -d
+docker compose down
+docker compose build
+docker compose up -d
 ```
 
 `autonomous_bot.repos`だけは、この3通りのどれにもきれいには収まりません。外部パッケージの取得は`up`のときの
@@ -167,17 +167,17 @@ docker compose -f docker/raspberrypi/compose.yaml up -d
 確認します（`build`と`log`は残して構いません）。
 
 ```bash
-docker compose -f docker/raspberrypi/compose.yaml down
+docker compose down
 docker volume ls | grep autonomous-install
 docker volume rm <上で出た名前>
-docker compose -f docker/raspberrypi/compose.yaml up -d
+docker compose up -d
 ```
 
 ## ログを見る
 
 ```bash
-docker compose -f docker/raspberrypi/compose.yaml logs
-docker compose -f docker/raspberrypi/compose.yaml logs -f ros2
+docker compose logs
+docker compose logs -f ros2
 bash docker/raspberrypi/tools/control.sh logs -f
 ```
 
@@ -185,8 +185,8 @@ bash docker/raspberrypi/tools/control.sh logs -f
 コンテナを作り直すと消えるので、残したいログはホストへ取り出してください。
 
 ```bash
-docker compose -f docker/raspberrypi/compose.yaml exec ros2 ls /tmp/ros/log
-docker compose -f docker/raspberrypi/compose.yaml cp ros2:/tmp/ros/log ./ros_log
+docker compose exec ros2 ls /tmp/ros/log
+docker compose cp ros2:/tmp/ros/log ./ros_log
 ```
 
 ## 終了する
@@ -195,7 +195,7 @@ docker compose -f docker/raspberrypi/compose.yaml cp ros2:/tmp/ros/log ./ros_log
 
 ```bash
 bash docker/raspberrypi/tools/control.sh motor off
-docker compose -f docker/raspberrypi/compose.yaml down
+docker compose down
 ```
 
 ネイティブ環境ではlaunchを実行したターミナルで`Ctrl+C`を押します。停止後も機体側ドライバが動いている場合があるため、必要に応じて機体側も安全に停止してください。

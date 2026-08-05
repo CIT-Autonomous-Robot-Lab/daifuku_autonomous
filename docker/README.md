@@ -30,7 +30,7 @@ Windows側（`dev/tools/windows/`）はPodman固有の処理が主で`raspberryp
 
 ## Composeプロジェクト名
 
-`compose.yaml`は両方とも`name:`を明示しています。既定ではCompose
+どのComposeファイルも`name:`を明示しています。既定ではCompose
 ファイルのあるディレクトリ名がプロジェクト名になり、ネットワーク名や
 名前付きボリューム名がそこから作られるため、ディレクトリを動かすと
 `dev/`のcolconキャッシュ（`autonomous-build`/`-install`/`-log`）が
@@ -38,5 +38,12 @@ Windows側（`dev/tools/windows/`）はPodman固有の処理が主で`raspberryp
 
 | Composeファイル | プロジェクト名 |
 |---|---|
-| `raspberrypi/compose.yaml` | `daifuku-autonomous` |
+| `raspberrypi/compose.original.yaml` | `daifuku-autonomous` |
+| `raspberrypi/compose.rt.yaml` | `daifuku-autonomous` |
 | `dev/compose.yaml` | `daifuku-raspicat-dev` |
+
+`raspberrypi/`の2つは本体ドライバ違いの入口で、どちらも共通部分
+（`compose.common.yaml`）を`include:`します。**プロジェクト名をわざと同じに
+してあります**。違えると、ドライバを替えた瞬間にビルドキャッシュのボリュームが
+別物になり、1〜2時間かけて建て直すことになります。`include:`されたファイルの
+`name:`は無視されるので、入口2つの側に書いてあります。

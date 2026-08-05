@@ -23,8 +23,9 @@ Livox関連ノード、teleopノードを含みます。RVizは含みません�
 
 | ファイル | 用途 |
 |---|---|
-| `compose.yaml` | サービス`workspace-build` / `ros2` / `raspicat`の定義。`network_mode: host`、`ipc: host`で起動する |
-| `compose.original.yaml` | 自前の本体ドライバ（`driver:=original`）で走らせるときの上書き。`compose.yaml`に重ねる。Pi 5では必須 |
+| `compose.common.yaml` | 本体ドライバに依存しない部分。サービス`workspace-build` / `ros2` / `raspicat`の共通定義。`network_mode: host`、`ipc: host`で起動する。**直接`-f`で渡さない** |
+| `compose.original.yaml` | 入口。自前の本体ドライバ（`driver:=original`、[`src/raspicat_driver`](../../src/raspicat_driver/README.md)）。Pi 5では必須。**既定** |
+| `compose.rt.yaml` | 入口。公式実装の本体ドライバ（`driver:=raspimouse` + rtmouse）。**Pi 4専用** |
 | `Dockerfile` | apt依存とツールチェーンだけを持つイメージ。ワークスペースはビルドしない |
 | `fastdds_udp_whitelist.xml` | Fast DDSのトランスポート設定（後述） |
 | `scripts/build-workspace.sh` | `up`のときにコンテナ内で走る`colcon build`（`/usr/local/bin/build-workspace`） |
@@ -40,32 +41,59 @@ entrypointとホスト側スクリプトの共通部分は[`docker/common/`](../
 
 ## 起動
 
-リポジトリルートから実行します。
+**リポジトリルートから実行します。** 入口の compose ファイルはリポジトリルートの
+`.env`で選びます（`.env.example`をコピーして作る。`.env`は`.gitignore`）。
 
 ```bash
-docker compose -f docker/raspberrypi/compose.yaml build
-docker compose -f docker/raspberrypi/compose.yaml up -d
+cp .env.example .env    # 初回だけ。provision.sh は機種を見て自動で作る
+docker compose build
+docker compose up -d
 ```
 
-本体ドライバに自前実装を使う場合（Raspberry Pi 5では必須）は`compose.original.yaml`を
-重ねます。詳細は[Raspberry Pi 4](../../docs/setup/raspberry-pi-4.md)と
+```bash
+# .env（既定）
+COMPOSE_FILE=docker/raspberrypi/compose.original.yaml   # 自前実装。Pi 5では必須
+#COMPOSE_FILE=docker/raspberrypi/compose.rt.yaml        # 公式実装。Pi 4専用
+```
+
+**Composeが`COMPOSE_FILE`を読むのはカレントディレクトリの`.env`なので、リポジトリ
+ルート以外から叩くと効きません**（`no configuration file provided`で止まります）。
+`-f`を明示したときはそちらが優先されるので、開発用の`docker/dev/`は今までどおりです。
+
+**`.env`は2つ読まれます。** リポジトリルートのものと、この`docker/raspberrypi/.env`
+（`provision.sh`が`ROS_DOMAIN_ID`と`BUILD_JOBS`を書いて生成する）の両方で、値は
+合成されます。**同じキーが両方にあるとこちらが勝ちます**（Composeのproject
+directoryは`COMPOSE_FILE`の1つめがあるディレクトリで、そちらが後勝ちになるため）。
+`COMPOSE_FILE`だけはリポジトリルート側でしか効きません。実機で「ルートの`.env`を
+直したのに効かない」ときはここを見てください。
+機種ごとの前提は[Raspberry Pi 4](../../docs/setup/raspberry-pi-4.md)と
 [Raspberry Pi 5](../../docs/setup/raspberry-pi-5.md)。
 
-```bash
-docker compose -f docker/raspberrypi/compose.yaml \
-               -f docker/raspberrypi/compose.original.yaml up -d
-```
+入口を切り替えてもプロジェクト名（`daifuku-autonomous`）は同じなので、名前付き
+ボリュームのビルドキャッシュはそのまま使い回せます。`raspicat`コンテナだけが
+作り直されます。
 
 `up`はまず`workspace-build`サービスを走らせ、その正常終了を待ってから`ros2`と
 `raspicat`を起動します。初回はワークスペース全体を建てるので時間がかかります
 （Raspberry Pi 4で1〜2時間、大半は価値反復プランナのRustのreleaseビルド）。
 2回目以降は変更のあったパッケージだけです。
 
+`ros2`と`raspicat`は`restart: unless-stopped`なので、一度`up`しておけば
+Raspberry Piを再起動しても自動で上がります（Dockerデーモンが`enabled`であること。
+`systemctl is-enabled docker`）。**このとき`workspace-build`は走りません。**
+名前付きボリュームの`install/`がそのまま見えるので前回の成果物で起動します。
+したがってC++やRustを直した分は再起動しても反映されません。反映するには
+`docker compose up -d`を人手で通してください（launch / config / YAMLは
+`--symlink-install`なのでノードの再起動だけで足ります）。
+
+`docker compose stop`で止めたものは再起動後も止まったままです（`unless-stopped`）。
+`down`したものはコンテナごと消えるので、次は`up`が要ります。
+
 `BUILD_JOBS`はイメージのビルドと`up`のときの`colcon build`の両方に効きます
 （既定は4＝Pi 4の全コア）。メモリが足りずにOOMで落ちるときだけ下げてください。
 
 ```bash
-BUILD_JOBS=1 docker compose -f docker/raspberrypi/compose.yaml up -d
+BUILD_JOBS=1 docker compose up -d
 ```
 
 外部パッケージ（`emcl2_ros2`、`livox_ros_driver2`、`value_iteration3`など）は
@@ -89,7 +117,7 @@ git -C src/value_iteration3 fetch origin && git -C src/value_iteration3 merge --
 `autonomous-log`に入ります。作り直したいときは次のようにします。
 
 ```bash
-docker compose -f docker/raspberrypi/compose.yaml down -v
+docker compose down -v
 ```
 
 ## tools/control.sh
@@ -126,7 +154,7 @@ bash docker/raspberrypi/tools/control.sh help
 | `JOYSTICK_ID` | `0` | joyデバイスID |
 | `JOYSTICK_CONFIG` | `xbox` | `teleop_twist_joy`の設定名 |
 
-ジョイスティックを使うため、`compose.yaml`は`/dev/input`を読み取り専用でマウントし、
+ジョイスティックを使うため、`compose.common.yaml`は`/dev/input`を読み取り専用でマウントし、
 `device_cgroup_rules`でキャラクタデバイス13番を許可しています。コンテナ作成後に
 接続したコントローラも利用できます。
 
@@ -162,7 +190,7 @@ export FASTRTPS_DEFAULT_PROFILES_FILE=/path/to/daifuku_autonomous/docker/raspber
 
 - whitelistの`192.168.1.50`はPiの固定IPをそのまま書いています。ロボットLANの
   アドレスが異なる場合はXMLを書き換えてください。
-- `compose.yaml`の`user: "1000:1000"`は、ホストのROSプロセスがuid 1000（`ubuntu`）
+- `compose.common.yaml`の`user: "1000:1000"`は、ホストのROSプロセスがuid 1000（`ubuntu`）
   で動くことを前提にしています。Fast DDSはSHMセグメントを0644で作るため、root権限の
   コンテナと非rootのホストが混在すると互いのポートを開けず、通信が静かに止まります。
   ホスト側のユーザーが異なる場合はこの値を合わせてください。

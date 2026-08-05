@@ -1,8 +1,23 @@
-# Composeはプロジェクト名を既定でcompose.yamlのあるディレクトリ名から作る。
+# 本体ドライバに依存しない部分。**このファイルを直接 `-f` で渡さない。**
+# 入口は compose.rt.yaml (公式実装 raspimouse) と compose.original.yaml
+# (自前実装) の 2 つで、どちらも `include:` でここを取り込む。選ぶのは
+# リポジトリルートの .env の COMPOSE_FILE (.env.example を参照)。
+#
+#   * ドライバに依らないもの (workspace-build / ros2 / volumes、raspicat の
+#     マウントやデバイスや DDS 設定) -> ここ
+#   * ドライバで変わるもの (raspicat の command と、自前実装だけが要る
+#     /sys/class/pwm と apparmor)     -> 入口の 2 ファイル
+#
+# ここの raspicat は command を持たない (下の placeholder で落ちる)。入口を
+# 通さずに起動できないようにするため。
+#
+# Composeはプロジェクト名を既定で compose ファイルのあるディレクトリ名から作る。
 # それだとディレクトリを動かすたびにネットワーク名やボリューム名が変わるので、
 # 明示的に固定する。名前付きボリューム (autonomous-build/install/log) は
 # プロジェクト名を接頭辞に持つため、固定しないとcolconのキャッシュが
-# ディレクトリ移動のたびに別ボリュームへ化ける。
+# ディレクトリ移動のたびに別ボリュームへ化ける。**入口 2 つで同じ名前にして
+# あるので、rt と original を行き来してもビルドキャッシュは同じものが見える**
+# (include されたファイルの name は無視されるため、入口側にも書いてある)。
 name: daifuku-autonomous
 
 # ソースはイメージに焼かず、ここからマウントする。イメージが持つのは apt 依存と
@@ -17,6 +32,10 @@ name: daifuku-autonomous
 
 services:
   # ワークスペースをビルドして終了するワンショットサービス。
+  #
+  # **ここに restart を書かないこと。** always / unless-stopped は正常終了 (exit 0)
+  # でも上げ直すので、ビルドが終わるたびに次のビルドが始まって止まらなくなる
+  # (on-failure も、失敗する状態のまま延々と建て続ける)。既定の `no` のまま。
   workspace-build:
     build:
       context: ../..
@@ -51,6 +70,12 @@ services:
     stdin_open: true
     tty: true
     command: ["sleep", "infinity"]
+    # Pi の再起動でも上がるようにする (raspicat と同じ)。デーモンが上げ直すときは
+    # **depends_on が効かない** (あれは compose up のときの順序で、デーモン起動時は
+    # 各コンテナが独立に上がる)。それでよいのは install/ が名前付きボリュームに残る
+    # ため。逆に `down -v` の直後だけは空の install/ で上がるので、そのときは
+    # `docker compose up -d` を人手で 1 回通すこと。
+    restart: unless-stopped
     network_mode: host
     # Share /dev/shm with the host so Fast DDS SHM works between the
     # container and the native driver processes. UDP-only fan-out to ~20
@@ -90,7 +115,7 @@ services:
     device_cgroup_rules:
       - "c 13:* r"
 
-  # Raspberry Pi Cat 本体ドライバ (raspimouse + robot_state_publisher)。
+  # Raspberry Pi Cat 本体ドライバ (本体ドライバ + robot_state_publisher)。
   # 従来はホストの ~/raspicat2 ワークスペースから直接起動していたものを、
   # ナビゲーションと同じイメージ・同じ compose に取り込んだもの。
   #
@@ -98,8 +123,9 @@ services:
   # `docker compose restart ros2` で入れ替えてもドライバは生き続けるため、
   # odom の累積が落ちない/取り違える事故が起きにくい。
   #
-  # 前提: rtmouse カーネルモジュールがホストで insmod 済みであること
-  # (コンテナからは insmod できない。raspicat_setup_scripts が導入する)。
+  # 前提 (driver:=raspimouse のときだけ): rtmouse カーネルモジュールがホストで
+  # insmod 済みであること (コンテナからは insmod できない。
+  # raspicat_setup_scripts が導入する)。
   raspicat:
     image: daifuku-autonomous:humble
     container_name: daifuku-raspicat
@@ -108,12 +134,16 @@ services:
         condition: service_completed_successfully
     stdin_open: true
     tty: true
+    # **本物の command は compose.rt.yaml / compose.original.yaml が持つ。**
+    # ここを素通りできてしまうと、どちらのドライバで走っているのかログを見ても
+    # 分からないまま起動してしまうので、入口を通さなかったことが分かる形で落とす。
     command:
-      - /ros_entrypoint.sh
-      - ros2
-      - launch
-      - daifuku_stack
-      - robot_bringup.launch.py
+      - /bin/sh
+      - -c
+      - >-
+        echo 'compose.common.yaml を直接起動しないこと。
+        compose.rt.yaml か compose.original.yaml を使う (.env の COMPOSE_FILE)。' >&2;
+        exit 1
     # 再起動してよいのは install/ が名前付きボリュームに残るから。Docker デーモン
     # の再起動でこのコンテナだけ先に上がっても、前回のビルド成果物がそのまま見える。
     restart: unless-stopped

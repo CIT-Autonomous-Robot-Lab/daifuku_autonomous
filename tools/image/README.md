@@ -112,8 +112,8 @@ sudo tail -f /var/log/daifuku-provision.log
 sudo reboot
 # 再ログイン後
 cd ~/daifuku_autonomous
-BUILD_JOBS=1 docker compose -f docker/raspberrypi/compose.yaml build
-docker compose -f docker/raspberrypi/compose.yaml up -d
+BUILD_JOBS=1 docker compose build
+docker compose up -d
 ```
 
 `--build-on-first-boot`を付けておくと初回起動のプロビジョニングで最後まで

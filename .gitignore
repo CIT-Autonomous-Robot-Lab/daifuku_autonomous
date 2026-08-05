@@ -16,3 +16,5 @@ __pycache__/
 src/emcl2_ros2/
 src/livox_ros_driver2/
 src/value_iteration3/
+
+.env

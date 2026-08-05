@@ -77,7 +77,7 @@ ros2 topic hz /cmd_vel_mux          # 指令を出しているあいだだけ流
 6. 機体側ドライバが起動しているか確認する
 7. VPNや不要なNICを一時的に切り分ける
 
-`docker/raspberrypi/compose.yaml`と`docker/dev/compose.yaml`の`ROS_DOMAIN_ID`既定値は`90`です。
+`docker/raspberrypi/compose.common.yaml`と`docker/dev/compose.yaml`の`ROS_DOMAIN_ID`既定値は`90`です。
 
 Pi本体のネイティブノードと同じPi上のコンテナとの間でトピックが見えない場合は、
 下記のディスカバリとSHMの項目も確認してください。
@@ -95,7 +95,7 @@ Pi本体でネイティブノードと`docker/raspberrypi/`コンテナを同時
 そのぶんUDPバッファが逼迫することです。
 
 `docker/raspberrypi/fastdds_udp_whitelist.xml`をホストとコンテナの両方で使ってください。
-コンテナ側は`compose.yaml`が設定済みなので、必要な作業はPi本体側だけです。
+コンテナ側は`compose.common.yaml`が設定済みなので、必要な作業はPi本体側だけです。
 
 ```bash
 # Pi本体の ~/.bashrc へ追記
@@ -128,8 +128,8 @@ Nav2のゴールが次々と中断します。
 同一ホスト内の通信を共有メモリ（SHM）へ切り替えて解消します。上記のプロファイル
 設定に加えて、次の2点を確認してください。
 
-- `docker/raspberrypi/compose.yaml`に`ipc: host`があること（`/dev/shm`をホストと共有する）
-- `docker/raspberrypi/compose.yaml`の`user`が、ホストのROSプロセスのuidと一致していること
+- `docker/raspberrypi/compose.common.yaml`に`ipc: host`があること（`/dev/shm`をホストと共有する）
+- `docker/raspberrypi/compose.common.yaml`の`user`が、ホストのROSプロセスのuidと一致していること
 
 Fast DDSはSHMセグメントを0644で作成するため、root権限のコンテナと非rootのホストが
 混在すると互いのポートを開けません。Fast DDS 2.6にはUDPへのフォールバックがないため、
@@ -320,7 +320,7 @@ Compose経由でシェルを開きます。`docker/common/entrypoint.sh`（イ�
 `/ros_entrypoint.sh`として入ります）が環境を読み込みます。
 
 ```bash
-docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
+docker compose exec ros2 \
   /ros_entrypoint.sh bash
 ```
 
@@ -329,7 +329,7 @@ docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
 メモリ不足の可能性があります。並列数を1にします。
 
 ```bash
-BUILD_JOBS=1 docker compose -f docker/raspberrypi/compose.yaml build
+BUILD_JOBS=1 docker compose build
 ```
 
 ## 価値反復の最初の経路計算が遅い
@@ -356,7 +356,7 @@ vi_planner: tile repair running for 6.0s (412 visits, 27 tiles queued) # 2秒ご
 ## ログを確認する
 
 ```bash
-docker compose -f docker/raspberrypi/compose.yaml logs -f ros2
+docker compose logs -f ros2
 ```
 
 **これで見えるのは`compose up`が建てたぶんだけです。** `docker compose exec`から
@@ -367,9 +367,8 @@ docker compose -f docker/raspberrypi/compose.yaml logs -f ros2
 の形で並びます。**
 
 ```bash
-C=docker/raspberrypi/compose.yaml
-docker compose -f $C exec ros2 ls -t /tmp/ros/log | head
-docker compose -f $C exec ros2 sh -c 'cat /tmp/ros/log/lifecycle_manager_*.log'
+docker compose exec ros2 ls -t /tmp/ros/log | head
+docker compose exec ros2 sh -c 'cat /tmp/ros/log/lifecycle_manager_*.log'
 ```
 
 生きているノードだけでよければ`/rosout`でも読めます（`ros2 topic echo /rosout`）。

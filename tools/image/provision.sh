@@ -231,7 +231,7 @@ fi
 systemctl enable --now docker || soft_fail "dockerの有効化"
 
 if ! docker compose version >/dev/null 2>&1; then
-  soft_fail "docker compose プラグインがありません。docker/raspberrypi/compose.yaml を使えません"
+  soft_fail "docker compose プラグインがありません。docker/raspberrypi/ の compose を使えません"
 fi
 
 step "${DAIFUKU_USER} をグループへ追加"
@@ -446,7 +446,29 @@ fi
 # Dockerイメージ
 # ---------------------------------------------------------------------------
 
-COMPOSE_FILE="${WORKSPACE}/docker/raspberrypi/compose.yaml"
+# 本体ドライバの選択。rtmouseを載せたPi 4だけが公式実装(raspimouse)を使える。
+# Pi 5とrtmouse無しのPi 4は自前実装(original)。取り違えるとノードが起動時に
+# 落ちる/拒否するので、ここで機種から決めてしまう。
+if [[ "${DAIFUKU_MODEL}" != "pi5" && "${DAIFUKU_WITH_RTMOUSE}" == "1" ]]; then
+  COMPOSE_ENTRY="docker/raspberrypi/compose.rt.yaml"
+else
+  COMPOSE_ENTRY="docker/raspberrypi/compose.original.yaml"
+fi
+COMPOSE_FILE="${WORKSPACE}/${COMPOSE_ENTRY}"
+
+# リポジトリルートの .env に置いておくと、以後 `docker compose` を -f 無しで
+# 叩ける（Composeが読むのはカレントディレクトリの .env なので、WORKSPACEから
+# 実行すること）。人が書き換えた .env は上書きしない。
+if [[ -d "${WORKSPACE}" && ! -f "${WORKSPACE}/.env" ]]; then
+  step ".env を作成（COMPOSE_FILE=${COMPOSE_ENTRY}）"
+  if [[ -f "${WORKSPACE}/.env.example" ]]; then
+    sed "s|^COMPOSE_FILE=.*|COMPOSE_FILE=${COMPOSE_ENTRY}|" \
+      "${WORKSPACE}/.env.example" >"${WORKSPACE}/.env"
+  else
+    echo "COMPOSE_FILE=${COMPOSE_ENTRY}" >"${WORKSPACE}/.env"
+  fi
+  chown "${DAIFUKU_USER}:${DAIFUKU_USER}" "${WORKSPACE}/.env"
+fi
 
 if [[ "${DAIFUKU_BUILD_ON_FIRST_BOOT}" == "1" && -f "${COMPOSE_FILE}" ]]; then
   step "Dockerイメージをビルド（Pi 4では数時間かかります）"
@@ -478,11 +500,11 @@ echo "         sudo reboot"
 if [[ "${DAIFUKU_BUILD_ON_FIRST_BOOT}" != "1" ]]; then
   echo "  2. Dockerイメージをビルドする（Pi 4で数時間）"
   echo "         cd ${WORKSPACE}"
-  echo "         BUILD_JOBS=${DAIFUKU_BUILD_JOBS} docker compose -f docker/raspberrypi/compose.yaml build"
+  echo "         BUILD_JOBS=${DAIFUKU_BUILD_JOBS} docker compose build"
   echo "  3. 起動する"
 else
   echo "  2. 起動する"
 fi
 echo "         cd ${WORKSPACE}"
-echo "         docker compose -f docker/raspberrypi/compose.yaml up -d"
+echo "         docker compose up -d   # -f は要らない (.env の COMPOSE_FILE=${COMPOSE_ENTRY})"
 echo "======================================================================"
