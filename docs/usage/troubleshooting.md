@@ -368,6 +368,32 @@ GUI付き環境では次を確認します。
 - Windows X Serverが外部クライアントを許可している
 - Linux X11のアクセス許可を設定している
 
+## CPU使用率とloadだけがじわじわ上がる
+
+前回の`docker compose exec`で立てたlaunchが残っている可能性があります。tmuxの
+ペインを閉じた・sshが切れた場合、SIGINTが届かないまま**コンテナのPID 1に
+引き取られて走り続けます**。ROSは同じ名前のノードを何個でも立てるので、
+`ros2 node list`は普段どおりに見え、**エラーも警告も出ません**。
+
+```bash
+# PPidが1のものが残骸（生きているexecの木はリーダのPPidが0）
+docker compose exec -T ros2 ps -eo pid,ppid,etimes,args
+```
+
+2026-08-05の実機では3組が重なってload 12まで上がり、3つの`elevation_filter`だけで
+1コア半を食っていました。
+
+`/ros_entrypoint.sh`越しにlaunchを叩いていれば、次に何かを実行した時点で自動的に
+止まります（止めたものはログに出ます）。素の`docker exec ... ros2 launch`では
+この掃除が通らないので、**必ずentrypoint越しに叩いてください**。仕組みは
+[`docker/README.md`](../../docker/README.md#前回の残骸を止める)。
+
+その場で片付けるなら、`ros2`サービスだけを入れ替えます（ドライバは生き続けます）。
+
+```bash
+docker compose restart ros2
+```
+
 ## コンテナ内で`ros2`が見つからない
 
 Compose経由でシェルを開きます。`docker/common/entrypoint.sh`（イメージへは

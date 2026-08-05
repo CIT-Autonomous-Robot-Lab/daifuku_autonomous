@@ -27,4 +27,72 @@ do
   fi
 done
 
+# 前回の `docker exec` の残骸を止めてから先へ進む。
+#
+# exec で立てた木は、クライアント (compose exec) が SIGINT を届けないまま死ぬと
+# -- tmux のペインを閉じた、ssh が切れた、端末ごと落とした -- コンテナの PID 1 に
+# 引き取られて**走り続ける**。ROS は同じ名前のノードを何個でも立てられるので、
+# 気づかないまま navigation や mapping が二重三重に走り、**エラーも警告も出ない
+# まま CPU だけが減る** (2026-08-05 の実機で 3 組が重なって load 12。3 つの
+# elevation_filter が同じ /livox/lidar を読んで 1 コア半を食っていた)。
+#
+# 見分けは PPid だけでつく。exec の木はそれぞれ独立したセッションで、リーダの
+# PPid は 0 (親が PID 名前空間の外にいる)。exec が死ぬと 1 へ付け替わるので、
+# **PPid が 1 のものが残骸**。コンテナ自身の command はセッション 1 なので
+# (init: true の tini 配下でも) そこで外れる。ros2 デーモンだけは自分で setsid
+# するので常に PPid 1 になり、名指しで除いてある (消しても次の ros2 で立ち直る
+# が、CLI を叩くたびに消していては遅くなるだけ)。
+#
+# 止めるのはプロセスグループ単位。リーダが先に死んでいても残った子は同じ pgid を
+# 持ったままなので、`kill -- -<pgid>` で木ごと落ちる。
+#
+# **消したものは必ず名前を出す。** 黙って消すと、自分で `docker exec -d` して
+# 意図的に離した木が消えたときに追えない。そういう使い方をするなら
+# DAIFUKU_NO_REAP=1 で止めること。
+orphan_groups() {
+  local pid rest cmd fields
+  for pid in $(ls /proc 2>/dev/null); do
+    case "${pid}" in ''|*[!0-9]*) continue ;; esac
+    [[ "${pid}" != 1 ]] || continue
+    rest="$(cat "/proc/${pid}/stat" 2>/dev/null)" || continue
+    # comm には空白も括弧も入りうるので、最後の ") " より後だけを見る。
+    # 以降は state(0) ppid(1) pgrp(2) session(3) と並ぶ。
+    read -r -a fields <<<"${rest##*") "}"
+    [[ "${fields[1]}" == 1 && "${fields[3]}" != 1 ]] || continue
+    cmd="$(tr '\0' ' ' < "/proc/${pid}/cmdline" 2>/dev/null)" || continue
+    [[ -n "${cmd}" && "${cmd}" != *ros2cli.daemon* ]] || continue
+    printf '%s %s\n' "${fields[2]}" "${cmd}"
+  done
+}
+
+reap_orphans() {
+  [[ -z "${DAIFUKU_NO_REAP:-}" ]] || return 0
+  local -A victims=()
+  local pgid cmd waited=0
+  while read -r pgid cmd; do
+    [[ -n "${pgid}" && -z "${victims[${pgid}]:-}" ]] || continue
+    victims["${pgid}"]="${cmd}"
+  done < <(orphan_groups)
+  ((${#victims[@]})) || return 0
+
+  for pgid in "${!victims[@]}"; do
+    echo "entrypoint: 前回の exec の残骸を止めます (pgid ${pgid}): ${victims[${pgid}]:0:110}" >&2
+    kill -TERM -- "-${pgid}" 2>/dev/null || true
+  done
+  # ros2 launch は SIGTERM を受けてから子を順に落とすので、待つ意味がある。
+  # 落ちるにつれて孫が PPid 1 へ付け替わるが、pgid は変わらないので同じ
+  # 走査でそのまま拾える。
+  while ((waited < 100)) && [[ -n "$(orphan_groups)" ]]; do
+    sleep 0.1
+    waited=$((waited + 1))
+  done
+  [[ -n "$(orphan_groups)" ]] || return 0
+  for pgid in "${!victims[@]}"; do
+    kill -KILL -- "-${pgid}" 2>/dev/null || true
+  done
+  echo "entrypoint: 10 秒で終わらなかったので SIGKILL しました" >&2
+}
+
+reap_orphans
+
 exec "$@"

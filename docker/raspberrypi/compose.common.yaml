@@ -70,6 +70,11 @@ services:
     stdin_open: true
     tty: true
     command: ["sleep", "infinity"]
+    # PID 1 を tini にする。`sleep` は子を wait しないので、docker exec の木が
+    # 引き取られて死ぬと **ゾンビが永久に溜まる** (2026-08-05 の実機で
+    # livox_ros_driver2 と pkill が defunct のまま残っていた)。tini は回収する
+    # だけで、生きたまま残る木のほうは entrypoint.sh が止める。
+    init: true
     # Pi の再起動でも上がるようにする (raspicat と同じ)。デーモンが上げ直すときは
     # **depends_on が効かない** (あれは compose up のときの順序で、デーモン起動時は
     # 各コンテナが独立に上がる)。それでよいのは install/ が名前付きボリュームに残る
@@ -144,6 +149,9 @@ services:
         echo 'compose.common.yaml を直接起動しないこと。
         compose.rt.yaml か compose.original.yaml を使う (.env の COMPOSE_FILE)。' >&2;
         exit 1
+    # ros2 側と同じ理由。ここは PID 1 が ros2 launch なので、自分の子は自分で
+    # 待つが、引き取った孤児は回収しない。
+    init: true
     # 再起動してよいのは install/ が名前付きボリュームに残るから。Docker デーモン
     # の再起動でこのコンテナだけ先に上がっても、前回のビルド成果物がそのまま見える。
     restart: unless-stopped
