@@ -61,6 +61,14 @@ bash tools/setup/setup_native.sh              # --jobs 1 / --no-livox / --no-vi
 両方あるように見えて新しいほうしか更新されないので、紛らわしければ `install/` を消して
 からビルドしてください。
 
+`launch` の `Node(executable=...)` で立てる Python は、**git 側で実行ビットを立てて
+おくこと**（`git update-index --chmod=+x <path>`）。`install(PROGRAMS)` は本来
+実行ビットを付けて入れますが、`--symlink-install` だと `install/` はソースへの
+symlink になるので、効くのは**ソース側の権限**です。Windows のチェックアウトは
+`core.fileMode=false` なので `chmod` しても記録されず、**Linux で初めて
+`Permission denied` になります**。`import` されるだけのもの（`joy_buttons.py`）は
+立てなくてよい。
+
 ## テストと起動
 
 自動テストは実質ありません。`colcon test` で走るのは lint だけで、独自テストを持つ
