@@ -17,19 +17,22 @@ Raspberry Pi 4 / 5のSDカードを一から用意する場合は、[`tools/imag
 モジュール、DDS向けのカーネルパラメータなど、コンテナの外に置くしかないものは、ここで
 まとめて設定します。
 
-機種ごとの手順と注意点は次にまとめています。本体ドライバは公式実装（rtmouse +
-`raspimouse`、`driver:=raspimouse`、既定）と自前実装（[`src/raspicat_driver`](../../src/raspicat_driver/README.md)、
-`driver:=original`）から選べます。Pi 5ではrtmouseが動かないので後者だけです。
+機種ごとの手順と注意点は次にまとめています。本体ドライバは自前実装
+（[`src/raspicat_driver`](../../src/raspicat_driver/README.md)、`driver:=original`）と
+公式実装（rtmouse + `raspimouse`、`driver:=raspimouse`）から選べます。**標準は自前実装**で、
+リポジトリの`.env`（`COMPOSE_FILE`）もそちらを指しています。Pi 5ではrtmouseが動かないので
+選択肢がありません。
 
-- [Raspberry Pi 4で動かす](raspberry-pi-4.md)（どちらも選べる。既定は公式実装）
 - [Raspberry Pi 5で動かす](raspberry-pi-5.md)（自前実装のみ）
+- [Raspberry Pi 4で動かす](raspberry-pi-4.md)（どちらも選べる。公式実装にするなら`.env`を書き換える）
 
 ## 2. 機体側を準備する
 
-公式実装（`driver:=raspimouse`）を使う場合、モータードライバと車輪オドメトリは
-このリポジトリに含まれません。自前実装（`driver:=original`）を選ぶとモーター経路は
-[`src/raspicat_driver`](../../src/raspicat_driver/README.md)が持ちます。前者では
-Raspberry Pi Cat側で次のインターフェースを用意してください。
+標準の自前実装（`driver:=original`）ではモーター経路を
+[`src/raspicat_driver`](../../src/raspicat_driver/README.md)が持つので、機体側に別途
+用意するものはありません。公式実装（`driver:=raspimouse`）や自作の機体で動かす場合は、
+モータードライバと車輪オドメトリがこのリポジトリに含まれないため、次のインターフェースを
+Raspberry Pi Cat側で用意してください。
 
 | インターフェース | 型 / TF | 用途 |
 |---|---|---|

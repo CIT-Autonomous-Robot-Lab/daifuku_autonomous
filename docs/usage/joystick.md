@@ -75,8 +75,8 @@
 teleopへ移って巡回を**取り消した**ときは鳴りません。取り消しの結果が返るのは切り替えの音を
 出した直後なので、鳴らすとその音を潰してしまいます。
 
-鳴らしているのは本体ドライバで、自前実装（`driver:=original`）も公式実装（既定の
-`driver:=raspimouse`）も同じトピック・同じ型で受けます。**鳴らなくても走行には何の影響も
+鳴らしているのは本体ドライバで、自前実装（`driver:=original`）も公式実装
+（`driver:=raspimouse`）も同じトピック・同じ型で受けます。**鳴らなくても走行には何の影響も
 ありません。** うるさければ`config/robot/joy_teleop.yaml`の`buzzer: false`で止まります。
 
 ## teleopは「モード」で、押している間だけではありません
@@ -106,7 +106,7 @@ STARTで入れているあいだ、`joy_teleop`はスティックが中立でも
 
 teleopを切ったあとは1秒（`stop_tail`）だけゼロを出してから黙ります。黙るだけだと本体
 ドライバは最後に受けた速度を保持し続けるためです。自前実装（`driver:=original`）は
-`cmd_vel_timeout`の60秒で止まりますが、公式実装（既定の`driver:=raspimouse`）は
+`cmd_vel_timeout`の60秒で止まりますが、公式実装（`driver:=raspimouse`）は
 このキーを持たず、いつ止まるかは**未確認**です。
 
 ## BACKでモータ電源を切る
@@ -135,7 +135,9 @@ publishしているあいだと0.5秒だけ）。teleopに入っても自律側�
 ## 巡回を始める
 
 STARTとBACKを同時に2秒押すと、`waypoints_file`のYAMLを読んで
-[`nav2_waypoint_follower`](navigation.md)の`/follow_waypoints`へゴールを投げます。押すたびに
+[`/follow_waypoints`](navigation.md#waypointを並べて巡回する)へゴールを投げます
+（受けるのは既定の`nav2:=false`では`vi_planner`、`nav2:=true`では
+`nav2_waypoint_follower`。型も名前も同じなのでパッド側の配線は変わりません）。押すたびに
 読み直すので、`daifuku_waypoint_manager`パネルで保存し直したものがそのまま反映されます
 （再起動は不要）。
 
@@ -145,11 +147,18 @@ STARTとBACKを同時に2秒押すと、`waypoints_file`のYAMLを読んで
 走らせてしまいます。
 
 **地図と対で選んでください。** `map_19f`で津田沼の経路を投げると全点が地図の外に出ます。
-それでも`stop_on_failure: false`なので、1点ずつ失敗しながら最後まで進みます。**このとき
-外から見えるのは「その場で左に回り続ける」機体だけです** — 経路が引けないので
-`navigate_to_pose`が失敗し、nav2のrecoveryが`spin`（+1.57 rad = 反時計回り、
-`max_rotational_vel` 1.0 rad/s）を点の数だけ繰り返すためです。
-[troubleshooting.md](troubleshooting.md#その場で左に回り続ける)も参照。
+それでも`stop_on_failure: false`なので、1点ずつ失敗しながら最後まで進みます。外から
+見える形は構成で変わります。
+
+- 既定の`nav2:=false`では、`vi_planner`が1点ごとに`goal_retry_settle_sec`（3秒）
+  止まったまま`goal_retry_limit`（3回）投げ直して次へ移ります。**その場で止まったまま
+  何も起きない機体**に見えます。
+- `nav2:=true`では**その場で左に回り続けます** — 経路が引けないので
+  `navigate_to_pose`が失敗し、nav2のrecoveryが`spin`（+1.57 rad = 反時計回り、
+  `max_rotational_vel` 1.0 rad/s）を点の数だけ繰り返すためです。
+  [troubleshooting.md](troubleshooting.md#その場で左に回り続ける)も参照。
+
+どちらも上がりの音は鳴らないので、まずそこで気づけます。
 
 `navigation.launch.py`が立っていないと押しても始まりません（ログに
 `follow_waypoints action server is not available`が出ます）。走行中にもう一度押しても
@@ -157,12 +166,17 @@ STARTとBACKを同時に2秒押すと、`waypoints_file`のYAMLを読んで
 
 ゴールを投げる直前に、順路そのものを`/waypoints`（`nav_msgs/Path`、latch）へも出します。
 **見せるためのものではなく**、`vi_planner`の先読み（`waypoint_prefetch`、
-[navigation.md](navigation.md#次の点を走行中に解いておくwaypoint_prefetch)）が「いま
-向かっている点の次はどこか」を知る唯一の手立てです。同じものをRVizの
+[navigation.md](navigation.md#次の点を走行中に解いておくwaypoint_prefetch)）へ「いま
+向かっている点の次はどこか」を渡すためのものです。同じものをRVizの
 `daifuku_waypoint_manager`パネルも出しますが、**実機のイメージにパネルは入っていない**
 ので、機体だけで巡回するときはこちらが出どころになります。起動時にYAMLを読めた時点でも
-一度出します。裏を返すと、**`waypoints_file`が空だと`/waypoints`は誰も出さないので、
-先読みはエラーも警告も出さないまま働きません**。
+一度出します。
+
+**これが要るのは`nav2:=true`のときだけです。** 既定の`nav2:=false`では
+`/follow_waypoints`を`vi_planner`自身が受けるので、順路はゴールと同じ経路で届きます。
+`nav2:=true`のときにかぎり、**`waypoints_file`が空だと`/waypoints`は誰も出さないので、
+先読みはエラーも警告も出さないまま働きません**（ただしそのときはSTART+BACK自体が
+断られるので、巡回そのものが始まりません）。
 
 ## 確かめかた
 

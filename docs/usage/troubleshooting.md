@@ -144,14 +144,14 @@ ls -l /dev/shm | head
 ## Waypointパネルの「Start」が即座に`Failed (aborted)`になる
 
 押した瞬間にステータス行が変わり、機体はまったく動かず、経路計算のログも出ない場合
-です。パネルが`/navigate_through_poses`へ投げているのに、`planner:=vi`（既定）では
-その行動木が常に失敗するスタブ（`daifuku_stack/behavior_trees/nav_through_poses_stub.xml`）
-に差し替わっているのが原因です。VI系プランナは`compute_path_to_pose`しか提供せず、
-nav2既定の行動木が要求する`compute_path_through_poses`が無いためです。
+です。**いまのパネルは`/follow_waypoints`へ送るので、この症状が出るなら古いプラグインが
+`install/`に残っています。** 移植元は`/navigate_through_poses`へ投げていて、
+`planner:=vi`（既定）ではその行動木が常に失敗するスタブ
+（`daifuku_stack/behavior_trees/nav_through_poses_stub.xml`）に差し替わるためです。VI系
+プランナは`compute_path_to_pose`しか提供せず、nav2既定の行動木が要求する
+`compute_path_through_poses`が無いのがおおもとの理由です。
 
-パネルは`/follow_waypoints`へ送る形に直してあります。古いプラグインが`install/`に
-残っていると直っていないほうが読まれることがあるので、症状が続くならRVizを起動して
-いるコンテナで`daifuku_waypoint_manager`を建て直してください。
+RVizを起動しているコンテナで`daifuku_waypoint_manager`を建て直してください。
 
 ```bash
 ros2 action list | grep -E 'follow_waypoints|navigate_through_poses'

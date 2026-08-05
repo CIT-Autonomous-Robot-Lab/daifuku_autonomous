@@ -1,24 +1,30 @@
 # Raspberry Pi 4 で動かす
 
-Pi 4 は既定の構成です。ここには Pi 4 に固有のことだけを書きます。Docker の使い方は
+ここには Pi 4 に固有のことだけを書きます。Docker の使い方は
 [Docker 環境](docker.md)、SD カード作成のオプション一覧は
 [`tools/image/README.md`](../../tools/image/README.md) にあります。
 
 ## 本体ドライバを選ぶ
 
-Pi 4 では 2 つから選べます（Pi 5 では自前実装しか選べません。
-[Raspberry Pi 5 で動かす](raspberry-pi-5.md)）。
+**Pi 4 だけが 2 つから選べます**（Pi 5 では自前実装しかありません。
+[Raspberry Pi 5 で動かす](raspberry-pi-5.md)）。リポジトリの標準はどちらの機種でも
+自前実装で、`.env` の `COMPOSE_FILE` もそちらを指しています。
 
-| | 公式実装（既定） | 自前実装 |
+| | 自前実装（標準） | 公式実装 |
 | --- | --- | --- |
-| 起動 | `driver:=raspimouse` | `driver:=original` |
-| ノード | `raspimouse`（raspimouse2） | `raspicat_driver`（[`src/raspicat_driver`](../../src/raspicat_driver/README.md)） |
-| モータ経路 | rtmouse がレジスタを直書き | `/sys/class/pwm`・`/dev/gpiochip*`・`/dev/i2c-1` |
-| rtmouse | **要る** | **載っていてはいけない** |
-| パルスカウンタ | 使わない設定にしてある（下記） | 使う（`use_pulse_counters: true`） |
-| LED・ブザー・スイッチ | あり | あり（ブザーはソフト生成。下記） |
-| 測距センサ | あり | なし |
-| SD カード | `create_image.py --model pi4`（既定） | `create_image.py --model pi4 --no-rtmouse` |
+| 起動 | `driver:=original` | `driver:=raspimouse` |
+| ノード | `raspicat_driver`（[`src/raspicat_driver`](../../src/raspicat_driver/README.md)） | `raspimouse`（raspimouse2） |
+| モータ経路 | `/sys/class/pwm`・`/dev/gpiochip*`・`/dev/i2c-1` | rtmouse がレジスタを直書き |
+| rtmouse | **載っていてはいけない** | **要る** |
+| パルスカウンタ | 使う（`use_pulse_counters: true`） | 使わない設定にしてある（下記） |
+| LED・ブザー・スイッチ | あり（ブザーはソフト生成。下記） | あり |
+| 測距センサ | なし | あり |
+| SD カード | `create_image.py --model pi4 --no-rtmouse` | `create_image.py --model pi4` |
+| `.env` の `COMPOSE_FILE` | `compose.original.yaml`（既定） | `compose.rt.yaml`（書き換えが要る） |
+
+**`driver:=` という引数そのものの既定値は `raspimouse` です。** Docker では compose が
+`driver:=` を明示して渡すのでこの既定は表に出ませんが、`robot_bringup.launch.py` を
+手で叩くときだけは効きます（rtmouse の無い機体では configure で落ちます）。
 
 **同時には動かせません。** rtmouse は GPIO と PWM のレジスタを `ioremap()` して直接
 書くので、カーネルの pinctrl からは何も見えず、衝突は検出されません。両方が
@@ -26,8 +32,9 @@ GPIO 16/6/5 を持てば、モータ電源が入ったまま車輪が逆に回�
 rtmouse が載っていると configure を拒否します（`/proc/modules` と `/dev/rtmotor*` を
 見る）。
 
-以下は既定（公式実装）の話です。自前実装は[自前ドライバで動かす](#自前ドライバで動かす)に
-まとめてあります。
+**以下は公式実装（rtmouse）を選んだときの話です。** Pi 4 でしか成り立たない前提が多いので
+先に置いてあります。標準の自前実装で動かす手順は[自前ドライバで動かす](#自前ドライバで動かす)に
+まとめてあり、そちらは Pi 5 と同じ内容です。
 
 ## ホスト側に置くもの
 
@@ -161,7 +168,7 @@ docker compose up -d
 ```
 
 `.env` の `COMPOSE_FILE` が `docker/raspberrypi/compose.rt.yaml` を指していること。
-**リポジトリ既定は `compose.original.yaml`（自前実装）なので、rtmouse 入りの Pi 4 は
+**リポジトリ標準は `compose.original.yaml`（自前実装）なので、rtmouse 入りの Pi 4 は
 ここを書き換える必要があります**（`provision.sh` は `--model pi4` かつ rtmouse ありの
 ときだけ `compose.rt.yaml` を指す `.env` を自動で作ります）。取り違えると
 `raspicat_driver` が rtmouse を見つけて configure を拒否します。初回はワークスペース

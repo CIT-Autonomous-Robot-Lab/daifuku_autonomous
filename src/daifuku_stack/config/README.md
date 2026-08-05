@@ -12,8 +12,8 @@
 | `sensors/*.yaml` | `lidar_bringup.launch.py` | 各ノードへ直接（`scan_filter_params_file` など） |
 | `sensors/MID360_config.json` | `lidar_bringup.launch.py` | `livox_ros_driver2` へ直接。**ROS のパラメータファイルではない**ので上書きの対象外 |
 | `mapping/slam_toolbox.yaml` | `mapping.launch.py` | `slam_params_file` でノードへ直接 |
-| `robot/raspicat.yaml` | `robot_bringup.launch.py` | `raspimouse` (LifecycleNode) へ直接。`driver:=raspimouse` (既定 / 公式実装 / Pi 4) |
-| `robot/raspicat_driver.yaml` | `robot_bringup.launch.py` | `raspicat_driver` (LifecycleNode) へ直接。`driver:=original` (自前実装 / Pi 4・Pi 5) |
+| `robot/raspicat_driver.yaml` | `robot_bringup.launch.py` | `raspicat_driver` (LifecycleNode) へ直接。`driver:=original` (自前実装 / 標準 / Pi 4・Pi 5) |
+| `robot/raspicat.yaml` | `robot_bringup.launch.py` | `raspimouse` (LifecycleNode) へ直接。`driver:=raspimouse` (公式実装 / rtmouse 入りの Pi 4 のみ) |
 | `robot/twist_mux.yaml` | `robot_bringup.launch.py` | `twist_mux` へ直接。`twist_mux:=true` (既定) のときだけ |
 | `robot/joy_teleop.yaml` | `robot_bringup.launch.py` | `joy_node` と `joy_teleop` の**両方**へ直接（1 ファイルに 2 ノード分）。`joy:=true` (既定) のときだけ |
 
@@ -366,8 +366,9 @@ Pi 5 実機で、右車輪だけを一定周波数で回してエンコーダで
 `raspicat.yaml` は公式実装（`driver:=raspimouse`）用で、rtmouse カーネルモジュールが
 出す `/dev/rt*` を `raspimouse` ノードが読む構成が前提です。自前実装
 （`driver:=original`、[`src/raspicat_driver`](../../raspicat_driver/README.md)）は
-モータ経路をユーザ空間から直接扱い、そのパラメータがこのファイルです。`driver:` の
-既定は `raspimouse` なので、既存の運用は変わりません。
+モータ経路をユーザ空間から直接扱い、そのパラメータがこのファイルです。**リポジトリの
+標準はこちら**で、Docker の入口（`.env` の `COMPOSE_FILE`）が `driver:=original` を
+渡します。`driver:` という引数そのものの既定値だけは `raspimouse` のままです。
 
 Pi 4 と Pi 5 で 1 ファイルです。機種差は `model: auto` が device-tree から判定して
 チップの同定（`gpiochip` のラベルと `pwmchip`）だけを切り替えます。ピン番号・PWM
@@ -624,10 +625,11 @@ RSS 833 MB で通っています）。状態数が 1/4 になるぶん solve も
 メモリ上限を見るのはノード側の `dense_limit_mb`（既定 1500 MB、断片では 4096 MB）
 です。地図の実寸はノードしか知らないので、そちらのほうが正確に判定できます。
 
-断片が `waypoint_prefetch: true` になってからは、**密に戻すならこの表の数字を 2 倍で
-見てください**。先読み中は価値関数が 2 本生きるので、scale 2 で 1.3 GB、scale 1 で
-5.0 GB です。`dense_limit_mb` が見ているのが 1 本ぶんか 2 本の合計かは**未確認**で、
-scale 1 + 先読みが起動時に止まってくれるかどうかも分かりません。
+断片の `waypoint_prefetch` は `false` なので、この表はそのまま読めます。**`true` に
+戻すなら数字を 2 倍で見てください** — 先読み中は価値関数が 2 本生きるので、密なら
+scale 2 で 1.3 GB、scale 1 で 5.0 GB です。`dense_limit_mb` が見ているのが 1 本ぶんか
+2 本の合計かは**未確認**で、scale 1 + 先読みが起動時に止まってくれるかどうかも
+分かりません。
 
 代償は 0.10 m/cell の粗さと、保守的プーリングで通路が片側最大 0.05 m 細ること。
 **未検証** — この地図・この scale での solve 時間と経路そのものは測っていません
@@ -683,10 +685,11 @@ scale 1 + 先読みが起動時に止まってくれるかどうかも分かり�
 * **密の 1 掃きの実時間**: 掃き速度の host 実測は 5.23 M cells/s なので、19F の scale 2
   （794 万状態）なら 1.5 秒。Pi4 は同種の処理で 5〜8 倍遅いので **8〜11 秒**の見込み
   です。ノード既定の `global_sweep_budget_ms: 20` / `global_sweep_idle_ms: 60`（1 コアの
-  25%）だとその 4 倍かかります。`nav2/vi_planner.yaml` は **60 / 100（37%）** に上げて
-  あります（2026-08-04、Pi 5 で 4 コア中 2 コアが空いていたため）。**実測値は起動ログの
-  `global sweep done in ...` に出る**ので、そこから詰めてください。**未検証** — 実機での
-  1 掃きは測っていません。
+  25%）だとその 4 倍かかります。`nav2/vi_planner.yaml` も**この 20 / 60 のまま**です。
+  2026-08-04 に 60 / 100（37%）まで上げましたが（Pi 5 で 4 コア中 2 コアが空いていたため）、
+  同日の実機で機体が 1〜2 秒おきに固まったので戻しました（犯人の切り分けは未了）。
+  **実測値は起動ログの `global sweep done in ...` に出る**ので、そこから詰めてください。
+  **未検証** — 実機での 1 掃きは測っていません。
 * **ロックの持ち方**が肝です。10 Hz の追従ループは同じ `Mutex<PlannerCore>` を
   `try_lock` で取り、3 tick 続けて取れないとロボットを止めます。掃きは
   `global_sweep_budget_ms` だけ掃いてロックを手放し、`global_sweep_idle_ms` 待ちます。
@@ -694,10 +697,11 @@ scale 1 + 先読みが起動時に止まってくれるかどうかも分かり�
   **上限を決めているのは CPU ではなくこの Mutex です。** 掃きは 1 スレッドで、しかも
   追従ループが毎 tick 最大 `refine_budget_ms`（40ms）握ります。10 Hz なら追従だけで
   この 1 本のロックの 40% を先に取っているので、掃きを 60:100（37%）にすると 2 つで
-  8 割方を取り合う計算になります。コアが空いていても増やせないのはこのためです。
+  8 割方を取り合う計算になります。コアが空いていても増やせないのはこのためで、
+  **2026-08-04 に実際そこで固まりました**（上の項）。
   加えて **budget + idle を追従の周期（`control_frequency: 10.0` = 100ms）の整数倍に
   しないこと** — 位相が固定されて、追従の tick が毎回 budget 側に落ち得ます。
-  60:100 でどれだけ余裕があるかは**未検証**です。掃きは `lock()`（`try_lock` では
+  掃きは `lock()`（`try_lock` では
   なく）なので追従の解放ごとに位相がずれ直し、机上で連続失敗数を数えても当たりません。
   観測すべきは走行中の `ros2 topic hz /cmd_vel_mux` が 20 Hz を保つかどうかです。
 * **止まるとき**: 密は 1 掃き丸ごとで Δ=0 になったら、compact は待ち行列が空に

@@ -15,11 +15,12 @@
 #
 # その navigation を **Nav2 抜き**で組むのが nav2:=false で、これが**既定**。
 # vi_planner が standalone モードで navigate_to_pose と follow_waypoints も
-# 提供するので、bt_navigator /
-# behavior_server / waypoint_follower / smoother_server と
-# lifecycle_manager_navigation を立てない。アクション型は nav2_msgs のままなので
+# 提供するので、bt_navigator / behavior_server / waypoint_follower /
+# smoother_server を立てない。アクション型は nav2_msgs のままなので
 # RViz も各パネルも配線は変わらない。残る Nav2 のノードは map_server
-# (localization 側) と、velocity_smoother:=true なら velocity_smoother だけ。
+# (localization 側) と、velocity_smoother:=true なら velocity_smoother。
+# lifecycle_manager_navigation は**名前は同じまま残る**が、管理下はその
+# velocity_smoother 1 つだけになる (velocity_smoother:=false なら消える)。
 # 何が変わるか・何を読まなくてよくなるかは docs/usage/architecture.md。
 #
 # パラメータの合成規則は daifuku_stack_launch/params.py と config/README.md、

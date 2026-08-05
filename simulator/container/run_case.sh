@@ -6,6 +6,11 @@
 # 環境変数で条件を振る (既定値は Pi 実機の現行設定に一致):
 #   PLANNER=vi|navfn            planner:=
 #   LOCAL_PLANNER=auto|nav2|vi  local_planner:=
+#   NAV2=auto|true|false        nav2:= (既定 auto)。**launch の既定 false のまま
+#                               渡すと PLANNER=navfn / LOCAL_PLANNER=nav2 が
+#                               起動時にエラーで止まる**ので、ここは auto にして
+#                               プランナに追従させる。BT 込みで測りたいときだけ
+#                               NAV2=true を明示する (実機の既定は false)
 #   LOCALIZATION=emcl2|amcl     localization:=
 #   MAP_NAME=map_19f|map_tsudanuma|... share/maps/<name>.yaml を使う (既定 map_19f)。
 #                               OVERRIDES 未指定なら同名の override を自動で選ぶ
@@ -41,6 +46,7 @@ source /opt/ros/humble/setup.bash
 
 PLANNER=${PLANNER:-vi}
 LOCAL_PLANNER=${LOCAL_PLANNER:-auto}
+NAV2=${NAV2:-auto}
 LOCALIZATION=${LOCALIZATION:-emcl2}
 START_X=${START_X:--1.27}
 START_Y=${START_Y:--0.63}
@@ -207,7 +213,7 @@ sleep 3
 ros2 launch daifuku_stack navigation.launch.py \
     lidar:=2d lidar_driver:=false use_rviz:=false \
     map:="$MAP" "${params_arg[@]}" \
-    planner:="$PLANNER" local_planner:="$LOCAL_PLANNER" \
+    planner:="$PLANNER" local_planner:="$LOCAL_PLANNER" nav2:="$NAV2" \
     localization:="$LOCALIZATION" >"$RUN/nav.log" 2>&1 &
 NAV_PID=$!
 

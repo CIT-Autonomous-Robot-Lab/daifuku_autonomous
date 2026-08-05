@@ -5,11 +5,11 @@
 - 2D LiDARまたはLivox Mid-360に対応
 - SLAM Toolboxによる地図作成
 - EMCL2またはAMCLによる自己位置推定
-- 価値反復プランナ（既定）またはNavFnによる経路計画
+- 価値反復プランナ（既定。この構成ではNav2のnavigationノードを立てません）またはNavFnによる経路計画
 - キーボードとジョイスティックによる遠隔操作
 - Docker（ヘッドレス）またはUbuntu 22.04 / ROS 2 Humbleで実行可能
 
-> 本体ドライバは2つから選べます。公式実装（rtmouse + raspimouse、`driver:=raspimouse`、既定）を使う場合、モータードライバと車輪オドメトリはこのリポジトリに含まれません。自前実装（`driver:=original`、[`src/raspicat_driver`](src/raspicat_driver/README.md)）を選ぶとモーター経路をこのリポジトリが持ちます。Raspberry Pi 5はrtmouseが動かないため後者だけです（[Pi 4](docs/setup/raspberry-pi-4.md) / [Pi 5](docs/setup/raspberry-pi-5.md)）。
+> 本体ドライバは2つから選べます。標準は自前実装（`driver:=original`、[`src/raspicat_driver`](src/raspicat_driver/README.md)）で、モーター経路をこのリポジトリが持ちます。リポジトリの`.env`もこちら（`compose.original.yaml`）を指しています。もう一方の公式実装（rtmouse + raspimouse、`driver:=raspimouse`）を使う場合、モータードライバと車輪オドメトリはこのリポジトリに含まれず、rtmouseが動くRaspberry Pi 4に限られます（[Pi 4](docs/setup/raspberry-pi-4.md) / [Pi 5](docs/setup/raspberry-pi-5.md)）。`driver:=`という引数そのものの既定値は`raspimouse`ですが、Docker運用ではcomposeが`original`を渡すので、実際に立つのは自前実装です。
 
 ## はじめる
 

@@ -12,12 +12,14 @@ navigation_launch.py を include する。その中で local_planner:=vi なら
 vi_planner 1 ノードが compute_path_to_pose と follow_path の両方を提供し、
 local_planner:=nav2 なら vi_global_planner + controller_server が立つ (排他)。
 
-nav2:=false (**既定**) はそこからさらに進んで、**Nav2 のノードを 1 つも
-立てない**。vi_planner が standalone モードで
+nav2:=false (**既定**) はそこからさらに進んで、**Nav2 の navigation を
+BT ごと立てない**。vi_planner が standalone モードで
 navigate_to_pose と follow_waypoints も提供するので、bt_navigator /
-behavior_server / waypoint_follower / smoother_server と
-lifecycle_manager_navigation が丸ごと不要になる。地図を配る map_server と
-自己位置の emcl2 はそのまま (これらは navigation ではなく localization 側)。
+behavior_server / waypoint_follower / smoother_server が丸ごと不要になる。
+残るのは velocity_smoother:=true (既定) のときの velocity_smoother と、
+それを起こすためだけの lifecycle_manager_navigation (管理下 1 ノード) だけ。
+地図を配る map_server と自己位置の emcl2 はそのまま (これらは navigation では
+なく localization 側)。
 """
 
 from ament_index_python.packages import PackageNotFoundError, get_package_prefix

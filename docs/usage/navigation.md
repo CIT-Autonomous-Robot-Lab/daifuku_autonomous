@@ -9,9 +9,9 @@ Raspberry Pi本体にSSHでつなぎ、保存済み地図で自律移動を始�
 参照してください。
 
 まずコンテナを起動します。`raspicat`サービスが機体ドライバを立ち上げます。どの実装になるかは
-`.env`の`COMPOSE_FILE`で決まり、既定は自前実装の`compose.original.yaml`です（Raspberry Pi 5では
+`.env`の`COMPOSE_FILE`で決まり、標準は自前実装の`compose.original.yaml`です（Raspberry Pi 5では
 必須。公式実装に替えるには`compose.rt.yaml`。
-[Docker環境](../setup/docker.md#本体ドライバを自前実装に替える)）。
+[Docker環境](../setup/docker.md#本体ドライバを選ぶ)）。
 
 ```bash
 cd ~/daifuku_autonomous   # リポジトリを置いた場所
@@ -155,10 +155,12 @@ Nav2を立てます。
 
 ### Nav2を立てるかどうか（`nav2:=false`が既定）
 
-**素で起動するとNav2のnavigationノードは1つも立ちません。**
+**素で起動するとNav2のBTもコントローラも立ちません。**
 `vi_planner`が`navigate_to_pose`と`follow_waypoints`も提供するので、
-`bt_navigator`・`behavior_server`・`smoother_server`・`waypoint_follower`・
-`lifecycle_manager_navigation`が不要になります。アクション型は`nav2_msgs`のままなので、
+`bt_navigator`・`behavior_server`・`smoother_server`・`waypoint_follower`が
+不要になります。残るのは`velocity_smoother`と、それを起こすためだけの
+`lifecycle_manager_navigation`（管理下は1ノード）で、`velocity_smoother:=false`に
+するとどちらも消えます。アクション型は`nav2_msgs`のままなので、
 RVizの「Nav2 Goal」もパネルもパッドも、操作は何も変わりません。
 
 ```bash
@@ -190,9 +192,10 @@ BTを外すと、VIが損をしていた点が消えます。**毎秒の再計�
 投げ直しの上限は`goal_retry_limit`（既定3、負で無制限）です。
 
 読む設定ファイルも減ります。効くのは`config/nav2/vi_planner.yaml`と`map_server.yaml`、
-`config/localization/emcl2.yaml`だけで、`bt_navigator.yaml`・`behaviors.yaml`・
-`controller_server.yaml`・`costmaps.yaml`と`behavior_trees/`は**合成には入るが宛先の
-ノードが立たないので黙って無視されます**。`behaviors.yaml`にあった
+`config/localization/emcl2.yaml`、それに`behaviors.yaml`の`velocity_smoother`の節だけです。
+`bt_navigator.yaml`・`controller_server.yaml`・`costmaps.yaml`と`behaviors.yaml`の
+残り3ノード分、`behavior_trees/`は**合成には入るが宛先の
+ノードが立たないので黙って無視されます**。`behaviors.yaml`の`waypoint_follower`にあった
 `stop_on_failure`と`waypoint_pause_duration`に当たるものは`vi_planner.yaml`の
 `stop_on_failure`と`waypoint_pause_sec`です。詳しくは
 [architecture.md](architecture.md#nav2を立てない構成nav2false)。

@@ -99,14 +99,16 @@ Docker 越しに叩く形は
   できない。
 - `vi_planner`（`local_planner:=auto|vi`）と `vi_global_planner`（`local_planner:=nav2`）は
   **排他**。両方立てると `compute_path_to_pose` にサーバが 2 つ載る。
-- **`nav2` の既定は `false` で、そのとき Nav2 の navigation ノードが 1 つも
+- **`nav2` の既定は `false` で、そのとき Nav2 の navigation は BT ごと
   立たない。** `planner:=navfn` / `local_planner:=nav2` へ落とすときは
   **`nav2:=auto` を足さないと起動時にエラーで止まる**（`navigate_to_pose` を出す
-  ものが居なくなるため。黙って Nav2 を立て直しはしない）。
+  ものが居なくなるため。黙って Nav2 を立て直しはしない）。`simulator/` の
+  ハーネスが `NAV2=auto` を既定にしているのはこれが理由。
   `nav2:=false` では `vi_planner` が `standalone` モードで
   `navigate_to_pose` と `follow_waypoints` も出すので、`bt_navigator` /
-  `behavior_server` / `waypoint_follower` / `smoother_server` /
-  `lifecycle_manager_navigation` が要らなくなる（`velocity_smoother:=false` にすると
+  `behavior_server` / `waypoint_follower` / `smoother_server` が要らなくなる。
+  **`lifecycle_manager_navigation` は名前のまま残る**が、管理下は
+  `velocity_smoother` 1 つだけになる（`velocity_smoother:=false` にすると
   lifecycle ノードが navigation 側から消える）。アクション型は `nav2_msgs` のままなので
   RViz も各パネルも配線は変わらない。**`standalone` を `config/` に書かないこと** —
   真のまま Nav2 構成で起動すると `navigate_to_pose` のサーバが `bt_navigator` と 2 つに
@@ -211,8 +213,9 @@ Docker 越しに叩く形は
   （`dropped the truncated value function`）。そのとき機体は**走行中に止まったまま**
   フルの solve を待つ（津田沼で 87 秒）ので、打ち切らなかったときより待ちは長い。
 - **以下 2 つは `nav2:=true` のときの話。`nav2:=false` では `behavior_server` も
-  `waypoint_follower` も `lifecycle_manager_navigation` も立たないので起こらない**
-  （代わりに投げ直しは `vi_planner` の `goal_retry_limit` / `goal_retry_settle_sec`）。
+  `waypoint_follower` も立たないので起こらない**（`lifecycle_manager_navigation` は
+  残るが、管理下が `velocity_smoother` 1 つなので停止順で固まる相手が居ない。
+  代わりに投げ直しは `vi_planner` の `goal_retry_limit` / `goal_retry_settle_sec`）。
 - **recovery の `spin` だけは `velocity_smoother` を通らない。** 上流 nav2 の
   `navigation_launch.py` は `behavior_server` に `cmd_vel` → `cmd_vel_nav` を張るが、
   `vi_global_planner` 側の複製（`local_planner:=vi` で使うほう）は張っていないので、

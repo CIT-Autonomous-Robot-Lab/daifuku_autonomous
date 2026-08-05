@@ -13,7 +13,10 @@ Mid-360 ─ /livox/lidar ─ 3D→2D ─ スタンプ打ち直し ─┴→ 角�
 TF                ─── odom → base_footprint → センサーフレーム
 ```
 
-Mid-360 + IMUの場合、車輪入力は`/wheel/odom`となり、EKFが最終的な`/odom`と`odom -> base_footprint`を生成します。
+`use_mid360_imu:=true`（launchの既定）では車輪入力が`/wheel/odom`となり、EKFが最終的な
+`/odom`と`odom -> base_footprint`を生成します。**同梱の本体ドライバはどちらも`/odom`と
+TFを自分で出すので、実機構成では`use_mid360_imu:=false`を明示します**（[LiDARとオドメトリ](../setup/lidar.md#imuと車輪オドメトリ)）。
+上の図はその実機構成のほうです。
 
 速度指令は`twist_mux`が優先度で1本に束ねます（`robot_bringup.launch.py`の
 `twist_mux:=true`が既定）。自律側は`/cmd_vel`（優先度10）、遠隔操作は
@@ -56,7 +59,7 @@ Mid-360は時刻同期がないためスタンプが実時計からずれてい�
 `/dev/gpiochip*`、パルスカウンタを`/dev/i2c-1`から、いずれもユーザ空間で直接扱います。
 rtmouseカーネルモジュールは使いません。
 
-ROSに見える契約は既定の`driver:=raspimouse`（公式実装）と同じです。相対名`cmd_vel`を購読し
+ROSに見える契約は`driver:=raspimouse`（公式実装）と同じです。相対名`cmd_vel`を購読し
 （`twist_mux:=true`なら`/cmd_vel_mux`へremapされる）、
 `/odom`と`odom -> base_footprint` TFを配信し、`motor_power`サービスを持つlifecycleノード
 なので、Nav2・EKF・EMCL2の設定は変わりません。LED（`/leds`）、ブザー（`/buzzer`）、
@@ -76,7 +79,7 @@ Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。
 | `navigation.launch.py` | 自律移動。地図と自己位置推定、その上のNav2／価値反復スタック |
 | `mapping.launch.py` | 地図作成。SLAM Toolboxとその入力 |
 | `lidar_bringup.launch.py` | LiDARの前処理一式。上の2つから`include`される |
-| `robot_bringup.launch.py` | 機体ドライバとURDF。`driver:=raspimouse`（既定 / 公式実装 / Pi 4のみ）または`driver:=original`（自前実装 / [Pi 4](../setup/raspberry-pi-4.md)・[Pi 5](../setup/raspberry-pi-5.md)） |
+| `robot_bringup.launch.py` | 機体ドライバとURDF。`driver:=original`（標準 / 自前実装 / [Pi 4](../setup/raspberry-pi-4.md)・[Pi 5](../setup/raspberry-pi-5.md)）または`driver:=raspimouse`（公式実装 / rtmouse入りのPi 4のみ。引数そのものの既定値はこちら） |
 
 引数の合成やチェックといった補助的な処理は、launchファイル本体から
 `launch/daifuku_stack_launch/`へ切り出しています。
@@ -129,25 +132,28 @@ Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。
 
 ## Nav2を立てない構成（`nav2:=false`）
 
-**`nav2`の既定は`false`で、素で起動するとNav2のnavigation側のノードは1つも
-立ちません。** `vi_planner`が`navigate_to_pose`と`follow_waypoints`も提供する
-ためです。`planner:=navfn`や`local_planner:=nav2`へ落とすときは`nav2:=auto`が
+**`nav2`の既定は`false`で、素で起動するとNav2のnavigation側はBTも
+コントローラも立ちません。** `vi_planner`が`navigate_to_pose`と`follow_waypoints`も
+提供するためです（残るのは`velocity_smoother`とそのマネージャだけ。下記）。
+`planner:=navfn`や`local_planner:=nav2`へ落とすときは`nav2:=auto`が
 要ります（付け忘れると起動時にエラーで止まります）。
 
 アクションの型と名前は`nav2_msgs`のままなので、RVizの`Nav2 Goal`も
 `daifuku_waypoint_manager`も`daifuku_rqt`も`joy_teleop`も、配線は一切変わりません。
 
 立たなくなるもの: `bt_navigator`、`behavior_server`、`smoother_server`、
-`waypoint_follower`、`lifecycle_manager_navigation`、そして
-`behavior_trees/`の2つの木。残るのは`map_server`（自己位置側）と、
-`velocity_smoother:=true`（既定）なら`velocity_smoother`とそれを起こす
-マネージャ1つだけです。`nav2:=true`で従来の構成に戻せます。
+`waypoint_follower`、そして`behavior_trees/`の2つの木。残るのは`map_server`
+（自己位置側）と、`velocity_smoother:=true`（既定）なら`velocity_smoother`です。
+`lifecycle_manager_navigation`はそのsmootherを起こすためだけに残り、**管理下は
+1ノードだけ**になります（`velocity_smoother:=false`にするとマネージャごと消えます）。
+`nav2:=true`で従来の構成に戻せます。
 
 読む設定ファイルも減ります。`config/nav2/`のうち実際に効くのは
-`vi_planner.yaml`と`map_server.yaml`だけで、`bt_navigator.yaml`・
-`behaviors.yaml`・`controller_server.yaml`・`costmaps.yaml`は**合成には入るが
-宛先のノードが立たないので黙って無視されます**。同じ意味のキーは
-`vi_planner.yaml`へ移してあります（`stop_on_failure`、`waypoint_pause_sec`）。
+`vi_planner.yaml`と`map_server.yaml`、それに`behaviors.yaml`の`velocity_smoother`の
+節だけです。`bt_navigator.yaml`・`controller_server.yaml`・`costmaps.yaml`と
+`behaviors.yaml`の残り3ノード分は**合成には入るが宛先のノードが立たないので黙って
+無視されます**。同じ意味のキーは`vi_planner.yaml`へ移してあります
+（`stop_on_failure`、`waypoint_pause_sec`）。
 
 ### 何が変わるか
 
@@ -171,16 +177,17 @@ RVizの「Navigation 2」パネルは**ほぼ空になります**。あれはラ
 
 ## Nav2コンポーネント
 
-構成に応じて次を使用します（`nav2:=false`では上2つ以外は立ちません）。
+構成に応じて次を使用します（`nav2:=false`で立つのは最初の3つだけです）。
 
 - `nav2_map_server`: 地図配信
 - `nav2_velocity_smoother`: 速度平滑化（`velocity_smoother:=false`で外せる）
+- `nav2_lifecycle_manager`: ライフサイクル管理（`nav2:=false`では自己位置側の1つと、
+  `velocity_smoother`を起こす1つ）
 - `nav2_bt_navigator`: NavigateToPose等のビヘイビアツリー
 - `nav2_costmap_2d`: ローカル／グローバルコストマップ
 - `nav2_smoother`: 経路平滑化
 - `nav2_behaviors`: Spin、BackUp、Wait等
 - `nav2_waypoint_follower`: 経由地点追従
-- `nav2_lifecycle_manager`: ライフサイクル管理
 
 ローカルコストマップはVoxelLayer + InflationLayer、グローバルコストマップはStaticLayer + ObstacleLayer + InflationLayerを使い、障害物入力は`/scan`です。**VI構成ではどちらも使いません**（`vi_planner`も`vi_global_planner`もコストマップを持たず、障害物は価値関数のペナルティとして扱う）。
 

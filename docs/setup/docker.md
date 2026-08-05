@@ -46,7 +46,9 @@ composeが`src/`をマウントし、`up`のたびにコンテナの中で`colco
 `up`はまず`workspace-build`サービスを走らせ、その正常終了を待ってから`ros2`と
 `raspicat`を起動します。
 
-リポジトリルートで実行します。
+**リポジトリルートで実行します。** どのComposeファイルを使うかはルートの`.env`が持つので、
+別のディレクトリからだと`no configuration file provided`で止まります。`.env`が無ければ
+先に`.env.example`から作ってください（[本体ドライバを選ぶ](#本体ドライバを選ぶ)）。
 
 ```bash
 docker compose build
@@ -72,18 +74,26 @@ $env:BUILD_JOBS = "1"
 docker compose up -d
 ```
 
-## 本体ドライバを自前実装に替える
+## 本体ドライバを選ぶ
 
-`raspicat`サービスが立てる本体ドライバは、`.env`の`COMPOSE_FILE`で選びます。既定は
-自前実装（`compose.original.yaml`＝`driver:=original`）です。公式実装
+`raspicat`サービスが立てる本体ドライバは、リポジトリルートの`.env`の`COMPOSE_FILE`で
+選びます。標準は自前実装（`compose.original.yaml`＝`driver:=original`）で、
+`.env.example`をコピーした時点でこちらになっています。公式実装
 （`compose.rt.yaml`＝`driver:=raspimouse`）はrtmouseカーネルモジュールをホスト側で
 読み込んである前提なので、rtmouseが動かないRaspberry Pi 5では選べません。
 
 ```bash
-# 公式実装に替えるとき
+cp .env.example .env    # 初回だけ。provision.sh は機種を見て自動で作る
+
+# 公式実装（rtmouse 入りの Pi 4）に替えるとき
 sed -i 's|^COMPOSE_FILE=.*|COMPOSE_FILE=docker/raspberrypi/compose.rt.yaml|' .env
 docker compose up -d
 ```
+
+**`.env`は2つ読まれ、値は合成されます。** リポジトリルートのものと、
+`docker/raspberrypi/.env`（`provision.sh`が`ROS_DOMAIN_ID`と`BUILD_JOBS`を書いて生成する）
+の両方で、**同じキーが両方にあるとあちらが勝ちます**。`COMPOSE_FILE`だけはルート側でしか
+効きません（[`docker/raspberrypi/README.md`](../../docker/raspberrypi/README.md#起動)）。
 
 `compose.original.yaml`のほうは`raspicat`サービスに`driver:=original`を渡し、
 `/sys/class/pwm`まわりのマウントを足します。Pi 5では必須、Pi 4では任意です。Pi 4で自前実装を選ぶときはrtmouseを載せないでください。

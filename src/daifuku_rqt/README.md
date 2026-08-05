@@ -23,7 +23,7 @@ rqt                                          # Plugins > Raspicat > Raspicat Con
 | パネルの操作 | 相手 |
 | --- | --- |
 | 稼働状況 | `/diagnostics`（`daifuku_stack` の `system_monitor` が出す） |
-| ゴール送信・中断 | `navigate_to_pose` アクション（`bt_navigator`） |
+| ゴール送信・中断 | `navigate_to_pose` アクション（既定の `nav2:=false` では `vi_planner`、`nav2:=true` では `bt_navigator`。型も名前も同じ） |
 | configure / activate / deactivate | `/<ドライバ名>/change_state`、状態表示は `/get_state` を 2 秒ごと |
 | モータ ON/OFF | `/motor_power`（`std_srvs/SetBool`） |
 | teleop | `/cmd_vel_teleop` を 10 Hz で publish（`twist_mux` の優先度 100 側） |
@@ -36,7 +36,7 @@ rqt                                          # Plugins > Raspicat > Raspicat Con
 
 自前実装（`driver:=original`）の `config/robot/raspicat_driver.yaml` は
 `cmd_vel_timeout` が **60 秒**です。つまり「`cmd_vel` が途切れたから止まる」までに
-1 分かかります。公式実装（既定の `driver:=raspimouse`）にはこのキーが**そもそも
+1 分かかります。公式実装（`driver:=raspimouse`）にはこのキーが**そもそも
 ありません**（`raspicat.yaml` が並べている 14 個で全部）。指令が途切れたときに
 上流のノードが止めるのかどうかは**未確認**です。少なくとも 60 秒は見ておいてください。
 どちらにせよ teleop の停止をドライバ側のタイムアウトに任せられないので、パネルが

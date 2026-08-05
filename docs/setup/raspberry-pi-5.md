@@ -3,7 +3,8 @@
 Raspberry Pi 5 では rtmouse カーネルモジュールが動かないので、本体ドライバは
 自前実装（[`src/raspicat_driver`](../../src/raspicat_driver/README.md)、
 `robot_bringup.launch.py` の `driver:=original`）だけが選べます。ナビゲーション側は
-Pi 4 と同じです。Pi 4 でも同じドライバを選べます（[Raspberry Pi 4 で動かす](raspberry-pi-4.md)）。
+Pi 4 と同じです。**このドライバがリポジトリの標準**で、Pi 4 でも同じものを選べます
+（[Raspberry Pi 4 で動かす](raspberry-pi-4.md)）。
 
 ## なぜ差し替えが要るのか
 
@@ -265,4 +266,4 @@ Raspberry Pi Cat の HAT を載せ、**車輪を浮かせた状態でモータ�
 - [`src/daifuku_stack/config/README.md`](../../src/daifuku_stack/config/README.md) — 設定値の由来
 - [`tools/image/README.md`](../../tools/image/README.md) — SD カードの作成
 - [`docker/raspberrypi/README.md`](../../docker/raspberrypi/README.md) — コンテナ構成
-- [Raspberry Pi 4 で動かす](raspberry-pi-4.md) — 既定の構成（rtmouse）
+- [Raspberry Pi 4 で動かす](raspberry-pi-4.md) — Pi 4 での差分と、公式実装（rtmouse）を選ぶ場合

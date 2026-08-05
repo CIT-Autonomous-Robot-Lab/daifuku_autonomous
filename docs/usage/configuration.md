@@ -6,7 +6,7 @@
 |---|---|
 | `config/nav2/*.yaml` | Nav2、価値反復プランナ、コストマップ、速度、ゴール判定（起動時に1つへ合成） |
 | `config/overrides/*.yaml` | 地図・環境ごとの上書き（`overrides:=`で重ねる）。行き先はノード名で決まるので、この表の`MID360_config.json`以外すべてを上書きできる |
-| `behavior_trees/*.xml` | `planner:=vi`用のビヘイビアツリー（起動時に自動で選択） |
+| `behavior_trees/*.xml` | `planner:=vi`用のビヘイビアツリー（起動時に自動で選択）。**`nav2:=true`のときだけ読まれる**（既定では`bt_navigator`が立たない） |
 | `config/localization/emcl2.yaml` | EMCL2のフレーム、初期姿勢、粒子数、オドメトリモデル |
 | `config/robot/raspicat.yaml` | 公式実装（`driver:=raspimouse`）のパラメータ。車輪径、トレッド、オドメトリ源 |
 | `config/robot/raspicat_driver.yaml` | 自前実装（`driver:=original`）のパラメータ。上に加えてGPIO・PWM・I2Cの配線 |
@@ -40,13 +40,15 @@
 | `localization` | `emcl2` | `emcl2` / `emcl` / `amcl` |
 | `planner` | `vi` | `vi` / `navfn` |
 | `local_planner` | `auto` | `auto` / `vi` / `nav2` |
+| `nav2` | `false` | Nav2のnavigationノードを立てるか。`false`（既定）では`vi_planner`が`navigate_to_pose`と`follow_waypoints`も出すので、`bt_navigator`・`behavior_server`・`waypoint_follower`・`smoother_server`が立たない。`planner:=navfn`や`local_planner:=nav2`へ落とすときは`auto`か`true`が要る（**付け忘れると起動時にエラーで止まる**） |
+| `velocity_smoother` | `true` | `nav2:=false`のときだけ効く。`velocity_smoother`を`vi_planner`と`twist_mux`の間に残すか。`false`にするとnavigation側のlifecycleノードが1つも無くなる |
 | `lidar` | `mid360` | `mid360` / `2d`（`2d`ではraspicatのURG（`urg_node`）を起動する） |
 | `use_rviz` | `false` | RVizを起動するか。実機はheadlessのため既定は`false`で、表示はPC側から開く |
 | `use_system_monitor` | `true` | CPUを`/diagnostics`へ出す`system_monitor`を起動するか。1Hzで`/proc`を読むだけだがDDS参加者が1つ増えるので、ディスカバリの切り分け時は`false`にする |
 | `use_sim_time` | `false` | シミュレーション時刻を使うか |
 | `use_composition` | `False` | Nav2ノードを1プロセスへ合成するか（Pi 4では既定の分離を推奨） |
 | `scan_filter_enabled` | `true` | 角度フィルタを使うか |
-| `use_mid360_imu` | `true` | Mid-360のIMU融合を使うか |
+| `use_mid360_imu` | `true` | Mid-360のIMU融合を使うか。**この機体では`false`を明示する。** 既定の`true`はEKFが`/wheel/odom`を受け取る構成向けで、同梱の本体ドライバはどちらも`/odom`と`odom -> base_footprint`を自分で出すため、そのままだとEKFが入力を得られず配信元も二重になる |
 | `publish_lidar_tf` | `true` | センサーTFを配信するか。配信されるのは`lidar:=mid360`のときだけ（URDFは`lidar_link`しか出さず、`livox_frame`は誰も出さない） |
 | `lidar_driver` | `true` | LiDARの実機ドライバ（`mid360`: livox_ros_driver2 + restamp / `2d`: `urg_node`）を起動するか。シミュレータでは`false` |
 | `urg_interface` | `serial` | `lidar:=2d`のときのURGの接続方式（`serial` / `ethernet`）。`raspicat_bringup`の`config/urg_<方式>.param.yaml`を選ぶ |
@@ -102,7 +104,10 @@ PCなど余裕のある環境では`nav2_bringup`が配る値へ戻して構い�
 | `lifecycle_manager_*.bond_timeout` | `60.0` | 非合成起動では8プロセスが同時に立ち上がりloadが10〜19まで上がるため、既定の4秒ではbond形成が間に合わない |
 | `use_composition` | `False` | 合成起動時のディスカバリ不能とbond途絶を回避する |
 
-`planner_server`は`planner:=navfn`のときだけ起動します。
+この表のうち`controller_server`と`planner_server`、`lifecycle_manager_navigation`は
+**`nav2:=true`（または`nav2:=auto` + `planner:=navfn`）のときだけ起動します**。既定の
+`nav2:=false`ではどれも立たないので、値を変えても何も起きません
+（`planner_server`はさらに`planner:=navfn`が要ります）。
 
 ## 自己位置推定の暫定設定
 

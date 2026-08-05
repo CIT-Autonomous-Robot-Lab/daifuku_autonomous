@@ -9,24 +9,29 @@ RViz2 上で waypoint を作り、並べ替え・YAML 保存/読込を行い、N
 ## `/navigate_through_poses` は使わない
 
 移植元は `/navigate_through_poses` へ投げていたが、**`daifuku_stack` の既定
-（`planner:=vi`）ではそれが必ず失敗する。** VI 系プランナは
+（`planner:=vi`）ではどう転んでも動かない。** VI 系プランナは
 `compute_path_to_pose` しか提供せず、nav2 既定の through_poses BT が要求する
-`compute_path_through_poses` が存在しないため、`navigation.launch.py` が
-`default_nav_through_poses_bt_xml` を
-`daifuku_stack/behavior_trees/nav_through_poses_stub.xml`（中身は `AlwaysFailure`）
-へ差し替えているから。Start を押した瞬間に **ステータス行が
-`Failed (aborted)` になり、機体はまったく動かない**。
+`compute_path_through_poses` が無いためで、構成によって出かたが 2 通りに分かれる。
 
-`nav2_waypoint_follower` は 1 点ずつ `navigate_to_pose` を呼ぶだけなので、
-`planner:=vi` でも `planner:=navfn` でも通る。両方の経路で lifecycle 管理下に
-起動している（`vi_global_planner/launch/navigation_launch.py` と nav2 の
-`navigation_launch.py`）。
+* **`nav2:=false`（既定）**: `bt_navigator` 自体が立たないので、`navigate_through_poses`
+  の**サーバがそもそも居ない**。パネルは「サーバがいません」で止まる。
+* **`nav2:=true`**: `navigation.launch.py` が `default_nav_through_poses_bt_xml` を
+  `daifuku_stack/behavior_trees/nav_through_poses_stub.xml`（中身は `AlwaysFailure`）
+  へ差し替えているので、Start を押した瞬間に **ステータス行が `Failed (aborted)` に
+  なり、機体はまったく動かない**。
+
+そこで投げ先は `/follow_waypoints` にしてある。これは 1 点ずつ単発ゴールへ落とす
+だけなので、`planner:=vi` でも `planner:=navfn` でも通る。**受けるノードは構成で
+変わるが、アクションの型と名前は同じ**なので、パネル側の配線は 1 つで足りる。
+
+| | 受けるノード | 停止時間 | 取りこぼしの扱い |
+| --- | --- | --- | --- |
+| `nav2:=false`（既定） | `vi_planner` 自身 | `config/nav2/vi_planner.yaml` の `waypoint_pause_sec`（0.2 s） | 同ファイルの `stop_on_failure: false` |
+| `nav2:=true` | `nav2_waypoint_follower` | `config/nav2/behaviors.yaml` の `waypoint_pause_duration`（200 ms） | 同ファイルの `stop_on_failure: false` |
 
 代償として **nav2 に「通過点をまとめて 1 本の経路にする」最適化はさせない**（1 点
-ずつ止まって次を計画する）。各点での停止時間は
-`config/nav2/behaviors.yaml` の `waypoint_pause_duration`。同ファイルの
-`stop_on_failure: false` により、途中で行けない点があっても巡回は続き、取りこぼし
-数だけが完了時のステータス行に出る。
+ずつ止まって次を計画する）。どちらの構成でも `stop_on_failure: false` なので、途中で
+行けない点があっても巡回は続き、取りこぼし数だけが完了時のステータス行に出る。
 
 ## Pi では建てない
 
@@ -98,10 +103,15 @@ latch して出す。**これは他ノードが読むためのもの**で、い�
 変更と機体からの線の引き直しでは出さない — 走行中に毎秒飛ばすと購読側が並びを
 受け取り直し続けるため。
 
+**ただし、この Path が要るのは `nav2:=true` のときだけである。** 既定の `nav2:=false`
+では `follow_waypoints` を `vi_planner` 自身が受けるので、順路はゴールと同じ経路で
+そのまま届く（このトピックはもう 1 つの入口として残っているだけ）。
+
 `vi_planner` 側はトピック名が `waypoints`、`waypoint_prefetch` は
-`daifuku_stack/config/nav2/vi_planner.yaml` が **`true`** にしている（2026-08-04 に反転。
-ノードの宣言は `false`）。**つまりこのパネルが出す順路がそのまま先読みを動かす**ので、
-ここを直すと `planner:=vi` の挙動が変わる。代償（メモリ 2 倍）は上の yaml 側に書いてある。
+`daifuku_stack/config/nav2/vi_planner.yaml`・ノードの宣言ともに **`false`** である
+（2026-08-04 に一度 `true` へ反転したが、同日の実機で走行中の固まりが出たため容疑者の
+1 つとして戻した）。先読みを試すときにこのパネルが出す順路が要るので、ここを直すと
+`planner:=vi` + `nav2:=true` の挙動が変わる。代償（メモリ 2 倍）は上の yaml 側に書いてある。
 
 同じものを `daifuku_stack/src/joy_teleop.py`（START+BACK での巡回開始）も出す。
 **実機のイメージにこのパネルは入らない**ので、機体だけで走らせるときはあちらが

@@ -18,6 +18,11 @@
 # 環境変数 (既定値は実機の現行設定に一致):
 #   PLANNER=vi|navfn            planner:=
 #   LOCAL_PLANNER=auto|nav2|vi  local_planner:=
+#   NAV2=auto|true|false        nav2:= (既定 auto)。**launch の既定 false のまま
+#                               渡すと PLANNER=navfn / LOCAL_PLANNER=nav2 が
+#                               起動時にエラーで止まる**ので、ここは auto にして
+#                               プランナに追従させる。BT 込みで測りたいときだけ
+#                               NAV2=true を明示する (実機の既定は false)
 #   LOCALIZATION=emcl2|amcl     localization:=
 #   LIDAR=2d|mid360             lidar:= (Isaac 側の --lidar と必ず揃えること)
 #   USE_SIM_TIME=true|false     use_sim_time:= (既定 false。true にすると
@@ -36,6 +41,7 @@ source /opt/ros/humble/setup.bash
 
 PLANNER=${PLANNER:-vi}
 LOCAL_PLANNER=${LOCAL_PLANNER:-auto}
+NAV2=${NAV2:-auto}
 LOCALIZATION=${LOCALIZATION:-emcl2}
 LIDAR=${LIDAR:-2d}
 USE_SIM_TIME=${USE_SIM_TIME:-false}
@@ -247,7 +253,7 @@ ros2 launch daifuku_stack navigation.launch.py \
     lidar:="$LIDAR" lidar_driver:=false publish_lidar_tf:=false use_rviz:=false \
     use_sim_time:="$USE_SIM_TIME" \
     map:="$MAP" "${params_arg[@]}" \
-    planner:="$PLANNER" local_planner:="$LOCAL_PLANNER" \
+    planner:="$PLANNER" local_planner:="$LOCAL_PLANNER" nav2:="$NAV2" \
     localization:="$LOCALIZATION" >"$RUN/nav.log" 2>&1 &
 NAV_PID=$!
 

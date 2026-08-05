@@ -4,8 +4,10 @@ Raspberry Pi Cat の本体ドライバの**自前実装**。Pi 4 と Pi 5 の両
 モータ経路（ステップクロック・方向・モータ電源・パルスカウンタ）をユーザ空間から
 直接扱います。カーネルモジュール（rtmouse）は使いません。
 
-`robot_bringup.launch.py` の `driver:=original` で立ちます。既定は公式実装
-（`driver:=raspimouse`）のままです。
+`robot_bringup.launch.py` の `driver:=original` で立ちます。**リポジトリの標準はこちら**で、
+Docker の入口（`.env` の `COMPOSE_FILE`）も `compose.original.yaml` を指しています。
+`driver:=` という引数そのものの既定値だけは `raspimouse`（公式実装）のままなので、
+`robot_bringup.launch.py` を手で叩くときは明示してください。
 
 ```bash
 ros2 launch daifuku_stack robot_bringup.launch.py driver:=original

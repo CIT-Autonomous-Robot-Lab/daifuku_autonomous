@@ -337,6 +337,7 @@ NO_LIMITS=1 CONTAINER=isaacsim_full bash simulator/scripts/run_isaac_case.sh nol
 | `MAP_NAME` | `map_19f` | `src/daifuku_stack/maps/<name>.yaml`。launch と `nav_container.sh` の既定と揃えてある |
 | `PLANNER` | `vi` | `vi` / `navfn` |
 | `LOCAL_PLANNER` | `auto` | `auto` / `nav2` / `vi` |
+| `NAV2` | `auto` | `auto` / `true` / `false`。**ここだけ launch の既定（`false`）と違う** — 下記 |
 | `LOCALIZATION` | `emcl2` | `emcl2` / `amcl` |
 | `QUOTA` / `PERIOD` | `6000` / `10000` | cgroup の cpu.max (0.6 コア) |
 | `MEMORY` | `3g` | Pi4 4GB から OS + コンテナ外ノード分を引いた値 |
@@ -346,6 +347,15 @@ NO_LIMITS=1 CONTAINER=isaacsim_full bash simulator/scripts/run_isaac_case.sh nol
 | `PUBLISH_LINK_TF` | `rsp` | リンク間 TF の所有者 (`rsp` / `isaac`)。下記「TF の所有者」 |
 | `WORLD_MAP_YAML` | `MAP_NAME` と同じ | **意図的に**ワールドと地図をずらすとき用 |
 | `PLANNER_EXPECTED_FREQ` | — | キャリブレーション用 (下記) |
+
+**`NAV2` だけは launch の既定を引き継いでいない。** `navigation.launch.py` の `nav2:=` は
+既定 `false`（Nav2 の navigation ノードを立てず、`vi_planner` が `navigate_to_pose` も
+出す）だが、そのまま渡すと `PLANNER=navfn` と `LOCAL_PLANNER=nav2` のケースが
+**起動時にエラーで止まる**（`navigate_to_pose` を出すものが居なくなるため、launch が
+わざと弾く）。ハーネスは条件を振るのが仕事なのでプランナに追従する `auto` を既定に
+してある。**したがって `PLANNER=vi` のケースは BT 抜きで測ることになる** — `bt_navigator`
+込みで測りたいとき、および `docs/pi4_sim.md` の過去の記録と条件をそろえたいときは
+`NAV2=true` を明示すること。
 
 ## RTF — このハーネスの成立条件
 

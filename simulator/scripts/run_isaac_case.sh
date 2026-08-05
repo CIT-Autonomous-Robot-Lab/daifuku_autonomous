@@ -252,6 +252,7 @@ $ENGINE exec \
     -e MAP_NAME="$MAP_NAME" \
     -e PLANNER="${PLANNER:-vi}" \
     -e LOCAL_PLANNER="${LOCAL_PLANNER:-auto}" \
+    -e NAV2="${NAV2:-auto}" \
     -e LOCALIZATION="${LOCALIZATION:-emcl2}" \
     -e OVERRIDES="${OVERRIDES:-}" \
     -e EXTRA_PARAMS="${EXTRA_PARAMS:-}" \
