@@ -4,9 +4,11 @@
 # SLAM と Nav2 に渡す。
 #
 #   lidar:=2d      urg_node -> /scan_raw -> 角度フィルタ -> /scan
-#   lidar:=mid360  livox_ros_driver2 -> /livox/lidar -> pointcloud_to_laserscan
+#   lidar:=mid360  livox_ros_driver2 -> /livox/lidar -> elevation_filter.py
+#                  -> /livox/lidar_elevation -> pointcloud_to_laserscan
 #                  -> /scan_mid360_prestamp -> restamp_scan.py
 #                  -> /scan_raw -> 角度フィルタ -> /scan
+#                  (elevation_filter:=false なら /livox/lidar が直接 2 段目へ入る)
 #
 # lidar:=mid360 では加えて IMU 経路 (prepare_mid360_imu.py -> ekf_node) が立ち、
 # 車輪オドメトリと融合した /odom と odom -> base_footprint TF を配信する。
@@ -49,7 +51,9 @@ def generate_launch_description():
     mid360_config = LaunchConfiguration("mid360_config")
     mid360_scan_params_file = LaunchConfiguration("mid360_scan_params_file")
     mid360_ekf_params_file = LaunchConfiguration("mid360_ekf_params_file")
+    mid360_elevation_params_file = LaunchConfiguration("mid360_elevation_params_file")
     use_mid360_imu = LaunchConfiguration("use_mid360_imu")
+    elevation_filter = LaunchConfiguration("elevation_filter")
     publish_lidar_tf = LaunchConfiguration("publish_lidar_tf")
     wheel_odom_topic = LaunchConfiguration("wheel_odom_topic")
     odom_topic = LaunchConfiguration("odom_topic")
@@ -82,6 +86,10 @@ def generate_launch_description():
     ])
     use_mid360_ekf = PythonExpression([
         "'", lidar, "' == 'mid360' and '", use_mid360_imu,
+        "'.lower() == 'true'",
+    ])
+    use_elevation_filter = PythonExpression([
+        "'", lidar, "' == 'mid360' and '", elevation_filter,
         "'.lower() == 'true'",
     ])
     publish_mid360_tf = PythonExpression([
@@ -182,8 +190,27 @@ def generate_launch_description():
     )
 
     # ------------------------------------------------------------------
-    # Mid-360: 点群 -> スキャン -> (打ち直し) -> scan_raw_topic
+    # Mid-360: 点群 -> (仰角で切る) -> スキャン -> (打ち直し) -> scan_raw_topic
+    #
+    # 仰角フィルタは pointcloud_to_laserscan の**手前**に入る。あちらが切るのは
+    # 変換したあとの z だけなので、仰角は元の点が持っていた情報として先に使う。
     # ------------------------------------------------------------------
+    elevation_filter_node = Node(
+        condition=IfCondition(use_elevation_filter),
+        package="daifuku_stack",
+        executable="elevation_filter.py",
+        name="elevation_filter",
+        output="screen",
+        parameters=[
+            mid360_elevation_params_file,
+            {"use_sim_time": use_sim_time},
+        ],
+        remappings=[
+            ("cloud_in", "/livox/lidar"),
+            ("cloud_out", "/livox/lidar_elevation"),
+        ],
+    )
+
     pointcloud_to_laserscan = Node(
         condition=IfCondition(is_mid360),
         package="pointcloud_to_laserscan",
@@ -195,7 +222,11 @@ def generate_launch_description():
             {"use_sim_time": use_sim_time, "target_frame": base_frame},
         ],
         remappings=[
-            ("cloud_in", "/livox/lidar"),
+            # 仰角フィルタを外したときは点群を直接受ける (relay は挟まない)。
+            ("cloud_in", PythonExpression([
+                "'/livox/lidar_elevation' if '", elevation_filter,
+                "'.lower() == 'true' else '/livox/lidar'",
+            ])),
             # The MID360 device clock is not PTP-synced and drifts by
             # seconds per minute against the system clock, so the raw
             # scan is restamped with the receive time below before it
@@ -294,6 +325,7 @@ def generate_launch_description():
                 "targets": [
                     "scan_filter_params_file",
                     "mid360_scan_params_file",
+                    "mid360_elevation_params_file",
                     "mid360_ekf_params_file",
                     "urg_params_file",
                 ],
@@ -303,6 +335,7 @@ def generate_launch_description():
         urg_driver,
         livox_driver,
         mid360_static_tf,
+        elevation_filter_node,
         pointcloud_to_laserscan,
         restamp_scan,
 

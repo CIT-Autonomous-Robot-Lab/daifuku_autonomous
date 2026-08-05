@@ -8,10 +8,43 @@
 
 ```text
 2D LiDAR      : urg_node → /scan_raw → 角度フィルタ → /scan
-Mid-360       : /livox/lidar → pointcloud_to_laserscan
+Mid-360       : /livox/lidar → elevation_filter.py（仰角フィルタ）
+                → /livox/lidar_elevation → pointcloud_to_laserscan
                 → /scan_mid360_prestamp → restamp_scan.py
                 → /scan_raw → 角度フィルタ → /scan
 ```
+
+`elevation_filter:=false`にすると仰角フィルタは立たず、`/livox/lidar`が
+`pointcloud_to_laserscan`へ直接入ります（relayは挟みません）。
+
+### 仰角フィルタ（勾配のある場所向け）
+
+`pointcloud_to_laserscan`の`min_height`は接地面からの**固定の高さ**で切るため、
+勾配のある床を落とせません。相対傾斜αの床は`min_height / tan α`の先で必ず帯に入り、
+地図にない壁として立ちます。下限を上げれば遠ざけられますが、その高さ未満の障害物が
+costmapから消え、近くはセンサーの垂直FOVから外れて死角になります。
+
+`elevation_filter.py`はセンサー原点からの**仰角**で切ります。切り出しの下限が距離に
+比例する（`base_footprint`で見ると`lidar_z + 距離 × tan(min_elevation_deg)`）ので、
+床も天井も遠方では仰角0度へ収束することを使い、`min_elevation_deg`より緩い勾配を
+**どの距離でも入らない**ようにします。近くほど下限が低いので、低い障害物もcostmapに
+残ります。
+
+代償は、見える最大距離が対象の高さで決まることです。
+
+```text
+最大距離 = (対象の高さ − lidar_z) / tan(min_elevation_deg)
+```
+
+`min_elevation_deg: 5.0`・`lidar_z: 0.275`なら、高さ3mの壁は31m、5mの壁は54mまでです。
+`min_elevation_deg`より急な勾配には効きません（高さで切るより早く入ってきます）ので、
+実機で偽の壁が出る距離dを測り、`α = atan(1.0/d)`より上に設定してください。
+
+**`pointcloud_to_laserscan`の`max_height`と`range_max`は、この角度と組で決めます。**
+実効下限は距離とともに上がるので、`max_height`をそれより下に置くと帯が潰れ、
+`range_max`を伸ばしても**エラーも警告も出ないまま**その手前で何も入らなくなります
+（5度なら50m先の実効下限は4.65m）。地図ごとの値は
+`config/overrides/map_tsudanuma.yaml`にあります。
 
 ## 2D LiDAR
 

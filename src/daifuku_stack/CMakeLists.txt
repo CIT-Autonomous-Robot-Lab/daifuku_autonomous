@@ -14,6 +14,7 @@ install(DIRECTORY behavior_trees config launch maps rviz src waypoints
 )
 
 install(PROGRAMS
+  src/elevation_filter.py
   src/prepare_mid360_imu.py
   src/restamp_scan.py
   src/system_monitor.py

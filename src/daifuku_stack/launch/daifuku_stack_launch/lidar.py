@@ -47,6 +47,13 @@ def _shared_arg_specs(pkg_share):
 
         ("mid360_config", os.path.join(sensors, "MID360_config.json"),
          "livox_ros_driver2 の設定 (Mid-360 本体とホストの IP)。"),
+        # 既定 true でも既定の設定は 0-90 度 = 搭載高の水平面から上、で、これは
+        # 19F の断片が持つ min_height: 0.275 と同じ切り方。切る角度を実際に狭めるのは
+        # overrides/ の側 (map_tsudanuma)。
+        ("elevation_filter", "true",
+         "点群を仰角で切るか (勾配の床を落とす。lidar:=mid360 のときだけ効く)。"),
+        ("mid360_elevation_params_file", os.path.join(sensors, "mid360_elevation.yaml"),
+         "仰角フィルタの設定 (点群を pointcloud_to_laserscan へ渡す前に切る)。"),
         ("use_mid360_imu", "true",
          "Mid-360 の IMU と車輪オドメトリを EKF で融合するか。"),
 
@@ -182,6 +189,11 @@ def validate(context, *args, **kwargs):
             files.append(("mid360_config", value(context, "mid360_config")))
         if is_true(context, "use_mid360_imu"):
             files.append(("mid360_ekf_params_file", value(context, "mid360_ekf_params_file")))
+        if is_true(context, "elevation_filter"):
+            files.append((
+                "mid360_elevation_params_file",
+                value(context, "mid360_elevation_params_file"),
+            ))
 
     for label, path in files:
         if not os.path.isfile(path):

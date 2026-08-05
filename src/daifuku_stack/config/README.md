@@ -57,6 +57,7 @@ resample_interval: 1         # 既定 1: 何回の更新ごとにリサンプル
 | `mapping/slam_toolbox.yaml` | `slam_toolbox` の `slam_toolbox_common.cpp` / `slam_mapper.cpp` / `laser_utils.cpp` / `ceres_solver.cpp` |
 | `sensors/mid360_ekf.yaml` | `robot_localization` の `ros_filter.cpp` |
 | `sensors/mid360_scan.yaml` | `pointcloud_to_laserscan` の `pointcloud_to_laserscan_node.cpp` |
+| `sensors/mid360_elevation.yaml` | `src/elevation_filter.py` の `declare_parameter` |
 | `sensors/scan_filter.yaml` | `laser_filters` の `sector_filter.h`（既定なし＝全項目必須） |
 | `robot/raspicat.yaml` | 上流 `raspicat_ros` の `raspicat/config/raspicat.param.yaml` |
 | `robot/raspicat_driver.yaml` | `src/raspicat_driver` の `src/raspicat_driver/node.py` |

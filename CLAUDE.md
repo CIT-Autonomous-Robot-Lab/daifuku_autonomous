@@ -233,6 +233,14 @@ Docker 越しに叩く形は
 - **teleop を出すものは自分で 0 を出して止める。** 自前実装（`driver:=original`）の
   `cmd_vel_timeout` は既定 60 秒で、指令が途切れてもその間は**走り続ける**。公式実装
   （既定の `driver:=raspimouse`）にはこのキーが無く、止まるかどうかは**未確認**。
+- **`elevation_filter`（既定 `true`）の `min_elevation_deg` と
+  `pointcloud_to_laserscan` の `max_height` / `range_max` は組で決まる。** 仰角
+  フィルタは `pointcloud_to_laserscan` の手前に入り、切り出しの下限を
+  `lidar_z + 距離 × tan(min_elevation_deg)` へ変える（勾配のある床を落とすため。
+  高さで切る限り、相対傾斜 α の床は `min_height/tan α` の先で必ず入ってくる）。
+  下限が距離とともに上がるので、**`max_height` をその下に置くと帯が潰れ、
+  `range_max` を伸ばしてもエラーも警告も出ないまま手前で何も入らなくなる**
+  （5 度なら 50m 先の実効下限は 4.65m）。地図ごとの角度は `overrides/` 側。
 - TF は区間ごとに所有者を 1 つだけにする（`map→odom` は emcl2/amcl、
   `odom→base_footprint` は本体ドライバ（raspimouse / raspicat_driver）または EKF、
   リンク間は robot_state_publisher）。

@@ -17,6 +17,7 @@
 | `config/sensors/scan_filter.yaml` | LiDARの角度フィルタ |
 | `config/sensors/MID360_config.json` | Mid-360とホストのIP |
 | `config/sensors/mid360_scan.yaml` | 3D点群から2D LaserScanへの変換 |
+| `config/sensors/mid360_elevation.yaml` | 3D点群の仰角フィルタ（勾配のある床を落とす） |
 | `config/sensors/mid360_ekf.yaml` | Mid-360 IMUと車輪オドメトリの融合 |
 | `rviz/mapping.rviz` | 地図作成用RViz |
 | `rviz/navigation.rviz` | 自律移動用RViz |
@@ -48,6 +49,7 @@
 | `use_sim_time` | `false` | シミュレーション時刻を使うか |
 | `use_composition` | `False` | Nav2ノードを1プロセスへ合成するか（Pi 4では既定の分離を推奨） |
 | `scan_filter_enabled` | `true` | 角度フィルタを使うか |
+| `elevation_filter` | `true` | 点群を仰角で切るか（`lidar:=mid360`のときだけ効く）。既定の設定`config/sensors/mid360_elevation.yaml`は0〜90度＝搭載高の水平面から上で、19Fの断片の`min_height: 0.275`と同じ切り方のため既定では挙動が変わらない。実際に狭めるのは`overrides/`の側（`map_tsudanuma`が5度）。**`pointcloud_to_laserscan`の`max_height`と組で決まる**（[LiDAR](../setup/lidar.md#仰角フィルタ勾配のある場所向け)） |
 | `use_mid360_imu` | `true` | Mid-360のIMU融合を使うか。**この機体では`false`を明示する。** 既定の`true`はEKFが`/wheel/odom`を受け取る構成向けで、同梱の本体ドライバはどちらも`/odom`と`odom -> base_footprint`を自分で出すため、そのままだとEKFが入力を得られず配信元も二重になる |
 | `publish_lidar_tf` | `true` | センサーTFを配信するか。配信されるのは`lidar:=mid360`のときだけ（URDFは`lidar_link`しか出さず、`livox_frame`は誰も出さない） |
 | `lidar_driver` | `true` | LiDARの実機ドライバ（`mid360`: livox_ros_driver2 + restamp / `2d`: `urg_node`）を起動するか。シミュレータでは`false` |
