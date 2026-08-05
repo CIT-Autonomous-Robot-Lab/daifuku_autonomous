@@ -14,7 +14,7 @@ Raspberry Pi本体にSSHでつなぎ、保存済み地図で自律移動を始�
 
 ```bash
 cd ~/daifuku_autonomous   # リポジトリを置いた場所
-docker compose -f docker/raspberrypi/compose.yaml up -d
+docker compose up -d
 ```
 
 続いてセッションを作り、3つの窓に割り当てます。
@@ -22,7 +22,7 @@ docker compose -f docker/raspberrypi/compose.yaml up -d
 ```bash
 cd ~/daifuku_autonomous
 tmux new-session -d -s nav -c "$PWD" -n nav
-tmux send-keys -t nav:nav 'docker compose -f docker/raspberrypi/compose.yaml exec ros2 /ros_entrypoint.sh ros2 launch daifuku_stack navigation.launch.py map:=/opt/ros_ws/install/share/daifuku_stack/maps/map_19f.yaml use_sim_time:=false localization:=emcl2 planner:=vi use_mid360_imu:=false' Enter
+tmux send-keys -t nav:nav 'docker compose exec ros2 /ros_entrypoint.sh ros2 launch daifuku_stack navigation.launch.py map:=/opt/ros_ws/install/share/daifuku_stack/maps/map_19f.yaml use_sim_time:=false localization:=emcl2 planner:=vi use_mid360_imu:=false' Enter
 
 tmux new-window -t nav -c "$PWD" -n motor
 tmux send-keys -t nav:motor 'bash docker/raspberrypi/tools/control.sh motor on'
@@ -106,7 +106,7 @@ RVizを同じ端末から開く場合は`use_rviz:=true`を渡します。
 軽量Docker環境:
 
 ```bash
-docker compose -f docker/raspberrypi/compose.yaml exec ros2 \
+docker compose exec ros2 \
   /ros_entrypoint.sh ros2 launch daifuku_stack navigation.launch.py \
   map:=/opt/ros_ws/install/share/daifuku_stack/maps/map_19f.yaml \
   use_sim_time:=false localization:=emcl2
@@ -133,7 +133,7 @@ NavFnとNav2 DWBへ切り替える場合:
 ```bash
 ros2 launch daifuku_stack navigation.launch.py \
   map:=$PWD/src/daifuku_stack/maps/map_19f.yaml \
-  planner:=navfn
+  planner:=navfn nav2:=auto
 ```
 
 グローバルは価値反復のまま、ローカルだけDWBへ変更する場合:
@@ -141,20 +141,29 @@ ros2 launch daifuku_stack navigation.launch.py \
 ```bash
 ros2 launch daifuku_stack navigation.launch.py \
   map:=$PWD/src/daifuku_stack/maps/map_19f.yaml \
-  planner:=vi local_planner:=nav2
+  planner:=vi local_planner:=nav2 nav2:=auto
 ```
+
+**どちらも`nav2:=auto`が要ります。** `nav2`の既定は`false`＝Nav2を立てない
+（次節）で、これらの構成では`navigate_to_pose`を出すものが居なくなるため、
+付け忘れると**起動時にエラーで止まります**（黙ってNav2を立て直したりはしません）。
+`nav2:=auto`はプランナに連動して`true`/`false`を選び、`nav2:=true`は明示的に
+Nav2を立てます。
 
 `local_planner:=auto`（既定）は、`planner:=vi`なら`vi`、`planner:=navfn`なら`nav2`を選びます。
 
-### Nav2を立てるかどうか（`nav2:=auto`）
+### Nav2を立てるかどうか（`nav2:=false`が既定）
 
-`planner:=vi` + `local_planner:=vi`（＝上の既定）では、**Nav2のnavigationノードを
-1つも立てません**。`vi_planner`が`navigate_to_pose`と`follow_waypoints`も提供するので、
+**素で起動するとNav2のnavigationノードは1つも立ちません。**
+`vi_planner`が`navigate_to_pose`と`follow_waypoints`も提供するので、
 `bt_navigator`・`behavior_server`・`smoother_server`・`waypoint_follower`・
 `lifecycle_manager_navigation`が不要になります。アクション型は`nav2_msgs`のままなので、
 RVizの「Nav2 Goal」もパネルもパッドも、操作は何も変わりません。
 
 ```bash
+# 何も付けなければ Nav2 抜き（vi_planner 1 ノード）
+ros2 launch daifuku_stack navigation.launch.py \
+  map:=$PWD/src/daifuku_stack/maps/map_19f.yaml
 ros2 launch daifuku_stack navigation.launch.py \
   map:=$PWD/src/daifuku_stack/maps/map_19f.yaml \
   nav2:=true                     # 従来どおりBTを挟む構成に戻す
@@ -162,6 +171,12 @@ ros2 launch daifuku_stack navigation.launch.py \
   map:=$PWD/src/daifuku_stack/maps/map_19f.yaml \
   velocity_smoother:=false       # 残る唯一のlifecycleノードも外す
 ```
+
+`nav2:=false`が成り立つのは`planner:=vi`かつ狭域も`vi`に解決されるときだけです。
+`planner:=navfn`や`local_planner:=nav2`と組み合わせると`navigate_to_pose`を出す
+ものが居なくなるので、**起動時にエラーで止まります**（`nav2:=auto`か`nav2:=true`を
+足してください。前節）。黙ってNav2を立て直さないのは、「立てないつもりだったのに
+立っていた」が起動ログを1行ずつ読むまで気付けないためです。
 
 BTを外すと、VIが損をしていた点が消えます。**毎秒の再計画が無くなり**（BTは
 `ComputePathToPose`を1 Hzで呼び、キャッシュヒットでもロールアウトを共有ロックの中で

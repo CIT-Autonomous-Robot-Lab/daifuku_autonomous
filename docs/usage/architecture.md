@@ -129,11 +129,13 @@ Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。
 
 ## Nav2を立てない構成（`nav2:=false`）
 
-`planner:=vi` + `local_planner:=vi`のときの**既定**です。`vi_planner`が
-`navigate_to_pose`と`follow_waypoints`も提供するので、Nav2のnavigation側の
-ノードを1つも立てません。アクションの型と名前は`nav2_msgs`のままなので、RVizの
-`Nav2 Goal`も`daifuku_waypoint_manager`も`daifuku_rqt`も`joy_teleop`も、配線は
-一切変わりません。
+**`nav2`の既定は`false`で、素で起動するとNav2のnavigation側のノードは1つも
+立ちません。** `vi_planner`が`navigate_to_pose`と`follow_waypoints`も提供する
+ためです。`planner:=navfn`や`local_planner:=nav2`へ落とすときは`nav2:=auto`が
+要ります（付け忘れると起動時にエラーで止まります）。
+
+アクションの型と名前は`nav2_msgs`のままなので、RVizの`Nav2 Goal`も
+`daifuku_waypoint_manager`も`daifuku_rqt`も`joy_teleop`も、配線は一切変わりません。
 
 立たなくなるもの: `bt_navigator`、`behavior_server`、`smoother_server`、
 `waypoint_follower`、`lifecycle_manager_navigation`、そして

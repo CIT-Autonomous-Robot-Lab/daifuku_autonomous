@@ -5,15 +5,15 @@ navigation.launch.py が扱う 4 つの選択肢:
   localization  : amcl / emcl2
   planner       : navfn (nav2 標準) / vi (価値反復)
   local_planner : auto / nav2 / vi
-  nav2          : auto / true / false
+  nav2          : false (既定) / true / auto
 
 planner:=vi では planner_server の代わりに vi_global_planner パッケージの
 navigation_launch.py を include する。その中で local_planner:=vi なら
 vi_planner 1 ノードが compute_path_to_pose と follow_path の両方を提供し、
 local_planner:=nav2 なら vi_global_planner + controller_server が立つ (排他)。
 
-nav2:=false (planner:=vi + local_planner:=vi のときの既定) はそこからさらに
-進んで、**Nav2 のノードを 1 つも立てない**。vi_planner が standalone モードで
+nav2:=false (**既定**) はそこからさらに進んで、**Nav2 のノードを 1 つも
+立てない**。vi_planner が standalone モードで
 navigate_to_pose と follow_waypoints も提供するので、bt_navigator /
 behavior_server / waypoint_follower / smoother_server と
 lifecycle_manager_navigation が丸ごと不要になる。地図を配る map_server と
@@ -42,9 +42,11 @@ def resolve_local_planner(planner, local_planner):
 def resolve_nav2(nav2, planner, effective_local_planner):
     """nav2:=auto を "true" / "false" へ解決する substitution を作る。
 
-    auto (既定) は「VI が 1 ノードで全部やれるなら Nav2 は立てない」:
-    planner:=vi かつ狭域も vi に解決されるときだけ false。それ以外
-    (planner:=navfn、local_planner:=nav2) は Nav2 のノードが要るので true。
+    **既定は auto ではなく false**。素で起動したら Nav2 は立ちません。
+
+    auto は「VI が 1 ノードで全部やれるなら Nav2 は立てない」で、planner:=vi かつ
+    狭域も vi に解決されるときだけ false になります。**planner:=navfn へ落とすときは
+    これが要ります** — 既定のままだと下の validate_nav2 が弾くので。
 
     Args:
         effective_local_planner: resolve_local_planner() が返した substitution。
@@ -69,20 +71,27 @@ def validate_nav2(context, *args, effective_nav2, effective_local_planner, **kwa
     if selected not in ("auto", "true", "false"):
         raise RuntimeError(
             f"Unsupported nav2: {selected}\n"
-            "Use nav2:=auto (off when the VI planner can serve everything), "
-            "nav2:=true (bt_navigator + behavior_server + waypoint_follower) or "
-            "nav2:=false (vi_planner standalone)."
+            "Use nav2:=false (default; vi_planner standalone), nav2:=true "
+            "(bt_navigator + behavior_server + waypoint_follower) or nav2:=auto "
+            "(false when the VI planner can serve everything, true otherwise)."
         )
     if effective_nav2.perform(context) != "false":
         return []
 
     if effective_local_planner.perform(context) != "vi":
+        # 既定のまま planner:=navfn / local_planner:=nav2 を選んだときにここへ来る。
+        # 黙って nav2 を立て直すことはしない: 「Nav2 は立てないつもりだったのに
+        # 立っていた」は起動ログを 1 行ずつ読むまで気付けないので、要求どおりに
+        # できないなら止める。
+        how = "planner:=navfn" if value(context, "planner") != "vi" else "local_planner:=nav2"
         raise RuntimeError(
-            "nav2:=false requires the vi_planner local planner "
-            "(planner:=vi with local_planner:=auto or :=vi).\n"
+            f"nav2:=false (the default) cannot be honored with {how}.\n"
             "navigate_to_pose / follow_waypoints are served by vi_planner itself in "
-            "that mode; with planner:=navfn or local_planner:=nav2 nothing would "
-            "serve them. Use nav2:=true (or leave nav2:=auto)."
+            "that mode, and vi_planner is not launched here — nothing would serve "
+            "them.\n"
+            f"Add nav2:=auto to let it follow the planner (recommended when you are "
+            f"falling back to {how}), or nav2:=true to ask for the Nav2 nodes "
+            "explicitly."
         )
     return []
 

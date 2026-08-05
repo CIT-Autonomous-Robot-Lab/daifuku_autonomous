@@ -119,9 +119,8 @@ resample_interval: 1         # 既定 1: 何回の更新ごとにリサンプル
 ### 合成には入るが読まれない断片（`nav2:=false`）
 
 **束ねるのは常に 8 ファイル全部です。何が実際に読まれるかは、どのノードが立つかで
-決まります。** 既定の `planner:=vi` + `local_planner:=vi` では
-`nav2:=false`（[navigation.md](../../../docs/usage/navigation.md#nav2を立てるかどうかnav2auto)）
-になり、Nav2 の navigation ノードが 1 つも立ちません。そのとき効くのは
+決まります。** `nav2` の既定は `false`（[navigation.md](../../../docs/usage/navigation.md#nav2を立てるかどうかnav2falseが既定)）
+で、素で起動すると Nav2 の navigation ノードが 1 つも立ちません。そのとき効くのは
 
 | 断片 | `nav2:=false` |
 | --- | --- |

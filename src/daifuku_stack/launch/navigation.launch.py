@@ -13,9 +13,9 @@
 # emcl2 は nav2 のノードではないので、標準の bringup には乗らない。map_server と
 # lifecycle_manager_localization をここで立てているのはそのため。
 #
-# その navigation を **Nav2 抜き**で組むのが nav2:=false (planner:=vi +
-# local_planner:=vi での既定)。vi_planner が standalone モードで
-# navigate_to_pose と follow_waypoints も提供するので、bt_navigator /
+# その navigation を **Nav2 抜き**で組むのが nav2:=false で、これが**既定**。
+# vi_planner が standalone モードで navigate_to_pose と follow_waypoints も
+# 提供するので、bt_navigator /
 # behavior_server / waypoint_follower / smoother_server と
 # lifecycle_manager_navigation を立てない。アクション型は nav2_msgs のままなので
 # RViz も各パネルも配線は変わらない。残る Nav2 のノードは map_server
@@ -120,8 +120,9 @@ def generate_launch_description():
     use_navfn = PythonExpression(["'", planner, "' == 'navfn'"])
     use_vi = PythonExpression(["'", planner, "' == 'vi'"])
     effective_local_planner = backends.resolve_local_planner(planner, local_planner)
-    # Nav2 のノードを立てるか ("true" / "false")。auto は「VI が 1 ノードで
-    # 全部やれるなら立てない」。
+    # Nav2 のノードを立てるか ("true" / "false")。**既定は false**。
+    # auto は「VI が 1 ノードで全部やれるなら立てない」で、planner:=navfn へ
+    # 落とすときに要る (既定のままだと backends.validate_nav2 が弾く)。
     effective_nav2 = backends.resolve_nav2(nav2, planner, effective_local_planner)
     use_nav2 = PythonExpression(["'", effective_nav2, "' == 'true'"])
     # vi_planner 1 ノード構成 (Nav2 抜き)。
@@ -528,15 +529,17 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             "nav2",
-            default_value="auto",
-            description="Bring up the Nav2 navigation nodes? auto (default) = no "
-                        "when the VI planner can serve everything (planner:=vi with "
-                        "local_planner resolving to vi), yes otherwise. false runs "
+            default_value="false",
+            description="Bring up the Nav2 navigation nodes? false (default) runs "
                         "vi_planner standalone: it serves navigate_to_pose and "
                         "follow_waypoints itself, so bt_navigator, behavior_server, "
                         "waypoint_follower, smoother_server and "
                         "lifecycle_manager_navigation are not launched. The action "
-                        "types stay nav2_msgs, so RViz and the panels are unchanged.",
+                        "types stay nav2_msgs, so RViz and the panels are unchanged. "
+                        "true brings the Nav2 stack up. auto follows the planner "
+                        "(false only when planner:=vi resolves the local planner to "
+                        "vi, true otherwise) — needed when falling back to "
+                        "planner:=navfn, which the default would otherwise reject.",
         ),
         DeclareLaunchArgument(
             "velocity_smoother",

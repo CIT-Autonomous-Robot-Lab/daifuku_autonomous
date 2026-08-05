@@ -37,9 +37,9 @@ Raspberry Pi Cat を ROS 2 Humble / Nav2 で自律移動させる colcon ワー�
 
 ```bash
 # Docker（up のたびにコンテナ内で colcon build する。初回は Pi 4 で 1〜2 時間）
-docker compose -f docker/raspberrypi/compose.yaml build
-docker compose -f docker/raspberrypi/compose.yaml up -d
-BUILD_JOBS=1 docker compose -f docker/raspberrypi/compose.yaml up -d   # 低メモリ時
+docker compose build
+docker compose up -d
+BUILD_JOBS=1 docker compose up -d   # 低メモリ時
 
 # ネイティブ（Ubuntu 22.04 / ROS 2 Humble）
 bash tools/setup/setup_native.sh              # --jobs 1 / --no-livox / --no-vi
@@ -98,8 +98,11 @@ Docker 越しに叩く形は
   できない。
 - `vi_planner`（`local_planner:=auto|vi`）と `vi_global_planner`（`local_planner:=nav2`）は
   **排他**。両方立てると `compute_path_to_pose` にサーバが 2 つ載る。
-- **`nav2:=false`（`planner:=vi` + `local_planner:=vi` での既定）では Nav2 の
-  navigation ノードが 1 つも立たない。** `vi_planner` が `standalone` モードで
+- **`nav2` の既定は `false` で、そのとき Nav2 の navigation ノードが 1 つも
+  立たない。** `planner:=navfn` / `local_planner:=nav2` へ落とすときは
+  **`nav2:=auto` を足さないと起動時にエラーで止まる**（`navigate_to_pose` を出す
+  ものが居なくなるため。黙って Nav2 を立て直しはしない）。
+  `nav2:=false` では `vi_planner` が `standalone` モードで
   `navigate_to_pose` と `follow_waypoints` も出すので、`bt_navigator` /
   `behavior_server` / `waypoint_follower` / `smoother_server` /
   `lifecycle_manager_navigation` が要らなくなる（`velocity_smoother:=false` にすると
