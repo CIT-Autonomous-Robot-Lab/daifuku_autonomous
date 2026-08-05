@@ -116,6 +116,30 @@ resample_interval: 1         # 既定 1: 何回の更新ごとにリサンプル
 `amcl` が `localization/` ではなく `nav2/` にあるのは、nav2 の
 `localization_launch.py` が `params_file` の中から読むためです。
 
+### 合成には入るが読まれない断片（`nav2:=false`）
+
+**束ねるのは常に 8 ファイル全部です。何が実際に読まれるかは、どのノードが立つかで
+決まります。** 既定の `planner:=vi` + `local_planner:=vi` では
+`nav2:=false`（[navigation.md](../../../docs/usage/navigation.md#nav2を立てるかどうかnav2auto)）
+になり、Nav2 の navigation ノードが 1 つも立ちません。そのとき効くのは
+
+| 断片 | `nav2:=false` |
+| --- | --- |
+| `vi_planner.yaml` | 効く（`vi_planner` の節だけ。`vi_global_planner` は立たない） |
+| `map_server.yaml` | 効く（自己位置側なので構成によらない） |
+| `behaviors.yaml` | `velocity_smoother` の節だけ効く。残り 3 ノードは立たない |
+| `amcl.yaml` | `localization:=amcl` のときだけ |
+| `bt_navigator.yaml` / `controller_server.yaml` / `costmaps.yaml` / `planner_server.yaml` | **どれも立たない = まるごと無視** |
+
+無視されるほうを書き換えても**エラーも警告も出ません**。同じ意味のキーの移り先は
+`vi_planner.yaml` です（`behaviors.yaml` の `waypoint_follower` の `stop_on_failure` /
+`waypoint_pause_duration` → `vi_planner.yaml` の `stop_on_failure` /
+`waypoint_pause_sec`、BT の `RecoveryNode number_of_retries` → `goal_retry_limit`）。
+
+`overrides/*.yaml` の行き先判定は**この影響を受けません**。行き先はノード名で決まり、
+判定するのは「その名前を宣言している断片があるか」だけなので、立たないノードへの
+override も**通ります**（そして黙って無視されます）。
+
 ## 上書き（override）
 
 優先順位は下ほど強く、**後勝ち**です。

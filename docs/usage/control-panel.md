@@ -7,7 +7,8 @@ PC 側の rqt に、ゴール送信・ドライバ操作・teleop・CPU 表示�
 ```
 Pi (ros2 コンテナ)                                PC (dev コンテナ / ネイティブ)
   system_monitor ──── /diagnostics ──┐
-  bt_navigator ───  navigate_to_pose ├─[DDS, 同じ ROS_DOMAIN_ID]─> rqt 操作パネル
+  vi_planner ────   navigate_to_pose ├─[DDS, 同じ ROS_DOMAIN_ID]─> rqt 操作パネル
+   (nav2:=true なら bt_navigator)    │
   raspicat_driver ── /motor_power ───┘                                   │
                                                      /cmd_vel_teleop <───┘
   自律側 /cmd_vel ──┐
@@ -138,6 +139,6 @@ deactivate と、モータ ON/OFF。状態は 2 秒ごとに `get_state` で取�
 | プラグイン一覧に出てこない | `install/share/daifuku_rqt/plugin.xml` があるか。新規パッケージなので初回ビルドが要る |
 | 稼働状況が空のまま | Pi 側で `ros2 topic echo /diagnostics`。`use_system_monitor:=false` にしていないか |
 | プロセス別だけ空 | PID 名前空間（上記）。`ros2` コンテナに `pid: host` を足す |
-| ゴールが「サーバがいません」 | `bt_navigator` が active か。`ros2 action list` に `navigate_to_pose` があるか |
+| ゴールが「サーバがいません」 | `ros2 action list` に `navigate_to_pose` があるか。出すのは既定（`nav2:=false`）では `vi_planner`、`nav2:=true` では `bt_navigator`（後者は active かも見る。前者は lifecycle ノードではないので、居れば動いている） |
 | モータが「サービスがいません」 | ドライバが configure 済みか。ノード名の選択が `driver:=` と合っているか |
 | teleop でロボットが動かない | ゴールが走っていないか（走行中は無効）。`ros2 topic hz /cmd_vel_teleop` で出ているなら、`twist_mux` が立っているか（`twist_mux:=false` なら誰も購読しない）と `/cmd_vel_mux` を確認 |

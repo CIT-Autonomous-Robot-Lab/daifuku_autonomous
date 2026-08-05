@@ -1,15 +1,23 @@
 """localization / planner バックエンドの選択と、その起動前チェック。
 
-navigation.launch.py が扱う 3 つの選択肢:
+navigation.launch.py が扱う 4 つの選択肢:
 
   localization  : amcl / emcl2
   planner       : navfn (nav2 標準) / vi (価値反復)
   local_planner : auto / nav2 / vi
+  nav2          : auto / true / false
 
 planner:=vi では planner_server の代わりに vi_global_planner パッケージの
 navigation_launch.py を include する。その中で local_planner:=vi なら
 vi_planner 1 ノードが compute_path_to_pose と follow_path の両方を提供し、
 local_planner:=nav2 なら vi_global_planner + controller_server が立つ (排他)。
+
+nav2:=false (planner:=vi + local_planner:=vi のときの既定) はそこからさらに
+進んで、**Nav2 のノードを 1 つも立てない**。vi_planner が standalone モードで
+navigate_to_pose と follow_waypoints も提供するので、bt_navigator /
+behavior_server / waypoint_follower / smoother_server と
+lifecycle_manager_navigation が丸ごと不要になる。地図を配る map_server と
+自己位置の emcl2 はそのまま (これらは navigation ではなく localization 側)。
 """
 
 from ament_index_python.packages import PackageNotFoundError, get_package_prefix
@@ -29,6 +37,54 @@ def resolve_local_planner(planner, local_planner):
         "'", local_planner, "' if '", local_planner, "' != 'auto' else "
         "('vi' if '", planner, "' == 'vi' else 'nav2')"
     ])
+
+
+def resolve_nav2(nav2, planner, effective_local_planner):
+    """nav2:=auto を "true" / "false" へ解決する substitution を作る。
+
+    auto (既定) は「VI が 1 ノードで全部やれるなら Nav2 は立てない」:
+    planner:=vi かつ狭域も vi に解決されるときだけ false。それ以外
+    (planner:=navfn、local_planner:=nav2) は Nav2 のノードが要るので true。
+
+    Args:
+        effective_local_planner: resolve_local_planner() が返した substitution。
+    """
+    return PythonExpression([
+        "'", nav2, "' if '", nav2, "' != 'auto' else ",
+        "('false' if ('", planner, "' == 'vi' and '", effective_local_planner,
+        "' == 'vi') else 'true')",
+    ])
+
+
+def validate_nav2(context, *args, effective_nav2, effective_local_planner, **kwargs):
+    """nav2:= の値と、false にできる前提を見る。
+
+    nav2:=false は vi_planner の standalone モードそのものなので、
+    vi_planner が立たない構成では成り立たない。ここで弾かないと、
+    navigate_to_pose のサーバが**どこにも居ない**まま起動が通ってしまい、
+    症状は「ゴールを投げても何も起きない」になる (RViz もパネルも
+    「サーバがいません」としか言わない)。
+    """
+    selected = value(context, "nav2")
+    if selected not in ("auto", "true", "false"):
+        raise RuntimeError(
+            f"Unsupported nav2: {selected}\n"
+            "Use nav2:=auto (off when the VI planner can serve everything), "
+            "nav2:=true (bt_navigator + behavior_server + waypoint_follower) or "
+            "nav2:=false (vi_planner standalone)."
+        )
+    if effective_nav2.perform(context) != "false":
+        return []
+
+    if effective_local_planner.perform(context) != "vi":
+        raise RuntimeError(
+            "nav2:=false requires the vi_planner local planner "
+            "(planner:=vi with local_planner:=auto or :=vi).\n"
+            "navigate_to_pose / follow_waypoints are served by vi_planner itself in "
+            "that mode; with planner:=navfn or local_planner:=nav2 nothing would "
+            "serve them. Use nav2:=true (or leave nav2:=auto)."
+        )
+    return []
 
 
 def validate_localization(context, *args, **kwargs):

@@ -146,13 +146,48 @@ ros2 launch daifuku_stack navigation.launch.py \
 
 `local_planner:=auto`（既定）は、`planner:=vi`なら`vi`、`planner:=navfn`なら`nav2`を選びます。
 
+### Nav2を立てるかどうか（`nav2:=auto`）
+
+`planner:=vi` + `local_planner:=vi`（＝上の既定）では、**Nav2のnavigationノードを
+1つも立てません**。`vi_planner`が`navigate_to_pose`と`follow_waypoints`も提供するので、
+`bt_navigator`・`behavior_server`・`smoother_server`・`waypoint_follower`・
+`lifecycle_manager_navigation`が不要になります。アクション型は`nav2_msgs`のままなので、
+RVizの「Nav2 Goal」もパネルもパッドも、操作は何も変わりません。
+
+```bash
+ros2 launch daifuku_stack navigation.launch.py \
+  map:=$PWD/src/daifuku_stack/maps/map_19f.yaml \
+  nav2:=true                     # 従来どおりBTを挟む構成に戻す
+ros2 launch daifuku_stack navigation.launch.py \
+  map:=$PWD/src/daifuku_stack/maps/map_19f.yaml \
+  velocity_smoother:=false       # 残る唯一のlifecycleノードも外す
+```
+
+BTを外すと、VIが損をしていた点が消えます。**毎秒の再計画が無くなり**（BTは
+`ComputePathToPose`を1 Hzで呼び、キャッシュヒットでもロールアウトを共有ロックの中で
+回していました。10 Hzの追従ループはそれと毎秒取り合っていました）、**経路が引けなくても
+ゴールが死ななくなり**（ロールアウトの振動＝`LoopDetected`は「方策が無い」とは別物です）、
+**投げ直しの待ちに意味が出ます**。最後のが一番効きます — BTの`Wait`のあいだは
+`follow_path`が走っていないので価値関数が1ミリも動かず、待っても状況が変わりません。
+`nav2:=false`では`goal_retry_settle_sec`（既定3秒）のあいだ**止まったままスキャンを
+取り込み続ける**ので、一度「通れない」と塗った場所のペナルティが実際に薄れていきます。
+投げ直しの上限は`goal_retry_limit`（既定3、負で無制限）です。
+
+読む設定ファイルも減ります。効くのは`config/nav2/vi_planner.yaml`と`map_server.yaml`、
+`config/localization/emcl2.yaml`だけで、`bt_navigator.yaml`・`behaviors.yaml`・
+`controller_server.yaml`・`costmaps.yaml`と`behavior_trees/`は**合成には入るが宛先の
+ノードが立たないので黙って無視されます**。`behaviors.yaml`にあった
+`stop_on_failure`と`waypoint_pause_duration`に当たるものは`vi_planner.yaml`の
+`stop_on_failure`と`waypoint_pause_sec`です。詳しくは
+[architecture.md](architecture.md#nav2を立てない構成nav2false)。
+
 `vi_planner`は既定でアウトオブコアソルバ（`frontier2d_sparse_compact`）で解きます。
 状態配列を確保せず、確定した価値関数と方策だけを12バイト/状態で持つので、地図が
 大きくなっても載ります。経路計画と経路追従はその確定出力を共有場として使い、追従が
 スキャンから書いたペナルティを全域掃き（`global_sweep`、既定で有効）が広域の経路まで
-広げます。掃きは追従中もバックグラウンドで回り、1コアの37%を使います（`config/nav2/`の
-60:100。ノード既定の20:60なら25%）。実時間は起動ログの`global sweep done in ...`に
-出ます。
+広げます。掃きは追従中もバックグラウンドで回り、1コアの25%を使います（20:60）。
+2026-08-04に60:100（37%）へ上げたところ機体が1〜2秒おきに固まったため戻しました。
+実時間は起動ログの`global sweep done in ...`に出ます。
 
 `map_19f`では`map_scale: 2`でプランナ内部だけを0.10 m/セルに粗くしています（地図、
 コストマップ、自己位置推定は0.05 mのままです）。solveと伝播を軽くするためで、必須では
@@ -290,10 +325,12 @@ RVizで次の順に操作します。
 RVizのFixed Frameとwaypointの`frame_id`が一致している必要があります。ずれていると
 追加も追加読み込みも拒否され、パネルのステータス行にだけ理由が出ます。
 
-`nav2_waypoint_follower`が1点ずつ`navigate_to_pose`を呼ぶ形なので、点と点のあいだで
-いったん止まります（停止時間は`config/nav2/behaviors.yaml`の
-`waypoint_pause_duration`）。行けない点があっても巡回は続き、完了時に取りこぼした
-点数がステータス行に出ます。
+点と点のあいだではいったん止まります。停止時間は既定（`nav2:=false`）では
+`config/nav2/vi_planner.yaml`の`waypoint_pause_sec`（0.2秒。この間も価値関数の更新は
+続きます）、`nav2:=true`では`config/nav2/behaviors.yaml`の`waypoint_pause_duration`
+（200 ms）です。行けない点があっても巡回は続き、完了時に取りこぼした点数がステータス行に
+出ます（`stop_on_failure: false`。これも構成ごとに置き場が違い、既定では
+`vi_planner.yaml`の側です）。
 
 ### 次の点を走行中に解いておく（`waypoint_prefetch`）
 
@@ -301,19 +338,21 @@ RVizのFixed Frameとwaypointの`frame_id`が一致している必要があり�
 ゴールごとに価値関数を解き直すので、**点が変わるたびに丸ごと1回のsolveが入り、その
 間ずっと機体が止まっています**（実測で19Fが29秒、津田沼が87秒）。
 
-`config/nav2/vi_planner.yaml`の`waypoint_prefetch`が**既定で`true`**なので（2026-08-04に
-反転。ノード側の宣言は`false`のまま）、いまの点へ走っているあいだに次の点を別スレッドで
-解いておき、着いたらsolveを飛ばして受け取ります。効いた回はログに出ます。
+`config/nav2/vi_planner.yaml`の`waypoint_prefetch`を`true`にすると、いまの点へ
+走っているあいだに次の点を別スレッドで解いておき、着いたらsolveを飛ばして受け取ります。
+**既定は`false`です**（2026-08-04に一度`true`へ反転しましたが、同日の実機で走行中の
+固まりが出たため容疑者の1つとして戻しました。切り分けは未了）。効いた回はログに出ます。
 
 ```
 vi_planner: prefetched the value function for (12.30, -4.50) in 31.20s
 vi_planner: path with 412 poses in 0.34s (solved_now=true, iters=0, prefetched)
 ```
 
-順路を`/waypoints`（`nav_msgs/Path`、latch）へ出すのは
-`daifuku_waypoint_manager`のパネルと`joy_teleop`（START+BACK）の2つです。
-`/follow_waypoints`へ直接投げる経路と単発ゴールは順路が無いので対象外で、そのときも
-**エラーは出ません**。効いているかは上のログで判断してください。
+既定の`nav2:=false`では、順路は`/follow_waypoints`のゴールそのものが先読みへ渡ります。
+`nav2:=true`だけは違い、順路を`/waypoints`（`nav_msgs/Path`、latch）へ出す
+`daifuku_waypoint_manager`のパネルか`joy_teleop`（START+BACK）を通った巡回でしか
+効きません。そちらで`/follow_waypoints`へ直接投げた場合と単発ゴールは順路が無いので
+対象外で、そのときも**エラーは出ません**。効いているかは上のログで判断してください。
 
 有効なぶん代償も常時払います。価値関数が同時に2つ生きるので、場も2つ要ります。
 密ソルバではメモリがそのまま2倍です。compactでsinkがディスクへ出るのは

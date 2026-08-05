@@ -13,6 +13,15 @@
 # emcl2 は nav2 のノードではないので、標準の bringup には乗らない。map_server と
 # lifecycle_manager_localization をここで立てているのはそのため。
 #
+# その navigation を **Nav2 抜き**で組むのが nav2:=false (planner:=vi +
+# local_planner:=vi での既定)。vi_planner が standalone モードで
+# navigate_to_pose と follow_waypoints も提供するので、bt_navigator /
+# behavior_server / waypoint_follower / smoother_server と
+# lifecycle_manager_navigation を立てない。アクション型は nav2_msgs のままなので
+# RViz も各パネルも配線は変わらない。残る Nav2 のノードは map_server
+# (localization 側) と、velocity_smoother:=true なら velocity_smoother だけ。
+# 何が変わるか・何を読まなくてよくなるかは docs/usage/architecture.md。
+#
 # パラメータの合成規則は daifuku_stack_launch/params.py と config/README.md、
 # バックエンドの選択規則は daifuku_stack_launch/backends.py を参照。
 
@@ -94,6 +103,8 @@ def generate_launch_description():
     localization = LaunchConfiguration("localization")
     planner = LaunchConfiguration("planner")
     local_planner = LaunchConfiguration("local_planner")
+    nav2 = LaunchConfiguration("nav2")
+    use_velocity_smoother = LaunchConfiguration("velocity_smoother")
 
     # ------------------------------------------------------------------
     # どのスタックを立てるかの条件
@@ -109,6 +120,24 @@ def generate_launch_description():
     use_navfn = PythonExpression(["'", planner, "' == 'navfn'"])
     use_vi = PythonExpression(["'", planner, "' == 'vi'"])
     effective_local_planner = backends.resolve_local_planner(planner, local_planner)
+    # Nav2 のノードを立てるか ("true" / "false")。auto は「VI が 1 ノードで
+    # 全部やれるなら立てない」。
+    effective_nav2 = backends.resolve_nav2(nav2, planner, effective_local_planner)
+    use_nav2 = PythonExpression(["'", effective_nav2, "' == 'true'"])
+    # vi_planner 1 ノード構成 (Nav2 抜き)。
+    use_standalone = PythonExpression(["'", effective_nav2, "' != 'true'"])
+    # standalone で velocity_smoother を挟むか。挟むなら vi_planner の cmd_vel は
+    # cmd_vel_nav へ (Nav2 構成と同じ配線)、挟まないなら cmd_vel をそのまま出す。
+    # **どちらでも twist_mux から先は変わらない**。
+    use_smoother = PythonExpression(
+        [use_standalone, " and '", use_velocity_smoother, "'.lower() in ('true', '1')"]
+    )
+    # vi_planner の cmd_vel の行き先。挟むなら velocity_smoother の入力
+    # (cmd_vel_nav)、挟まないなら twist_mux の入力 (cmd_vel) へ直接。
+    # リマップ先を substitution にしてあるのは、Node を 2 つに割らずに済ませるため。
+    vi_cmd_vel_topic = PythonExpression(
+        ["'cmd_vel_nav' if ", use_smoother, " else 'cmd_vel'"]
+    )
 
     # ------------------------------------------------------------------
     # スタックの部品
@@ -164,7 +193,8 @@ def generate_launch_description():
         """
         bt_dir = PathJoinSubstitution([FindPackageShare("daifuku_stack"), "behavior_trees"])
         return GroupAction(
-            condition=IfCondition(use_vi),
+            # nav2:=false では bt_navigator を立てないので、差し替える木も無い。
+            condition=IfCondition(PythonExpression([use_vi, " and ", use_nav2])),
             scoped=False,
             actions=[
                 SetParameter(
@@ -192,7 +222,13 @@ def generate_launch_description():
             SetParametersFromFile(bond_params_file),
             vi_behavior_tree_params(),
             Node(
-                condition=IfCondition(use_composition),
+                # nav2:=false では中身が 1 つも入らない (vi_planner は composable
+                # ではない) ので、空のコンテナを立てない。
+                condition=IfCondition(
+                    PythonExpression(
+                        ["'", use_composition, "'.lower() in ('true', '1') and ", use_nav2]
+                    )
+                ),
                 name="nav2_container",
                 package="rclcpp_components",
                 executable="component_container_isolated",
@@ -273,6 +309,84 @@ def generate_launch_description():
             launch_arguments=launch_arguments.items(),
         )
 
+    def standalone_navigation(pose_topic):
+        """nav2:=false: vi_planner 1 ノードだけで navigation を組む。
+
+        vi_global_planner の navigation_launch.py を include する代わりに
+        vi_planner を直接立てる。あちらは Nav2 のスタック (bt_navigator /
+        behavior_server / waypoint_follower / smoother_server / velocity_smoother
+        + lifecycle_manager) を組む launch なので、Nav2 を立てないならもう
+        通り道が無い。
+
+        `standalone: true` がノード側の切り替えで、これが navigate_to_pose と
+        follow_waypoints を生やす。**params_file 側でこのキーを立ててはいけない** —
+        Nav2 構成のときに立っていると navigate_to_pose のサーバが bt_navigator と
+        2 つになり、クライアントは先に見つけたほうへ繋ぐ (どちらに繋がったかは
+        どこにも出ない)。だからここ、launch 引数と 1 対 1 の場所で渡す。
+
+        velocity_smoother は残せるようにしてある (既定 true)。VI の cmd_vel は
+        10Hz の離散な行動そのもので、Nav2 構成ではこれを通してから車輪へ送って
+        いた。外すのは 1 引数だが、加減速の当たりが変わるので既定は据え置き。
+        """
+        smoother_nodes = [
+            Node(
+                condition=IfCondition(use_smoother),
+                package="nav2_velocity_smoother",
+                executable="velocity_smoother",
+                name="velocity_smoother",
+                output="screen",
+                respawn=use_respawn,
+                respawn_delay=2.0,
+                parameters=[configured_nav2_params],
+                arguments=["--ros-args", "--log-level", log_level],
+                remappings=remappings
+                + [("cmd_vel", "cmd_vel_nav"), ("cmd_vel_smoothed", "cmd_vel")],
+            ),
+            # velocity_smoother は lifecycle ノードなので、起こす者が要る。
+            # **管理下はこれ 1 つだけ** (vi_planner は rclrs に lifecycle が無く、
+            # 非 lifecycle ノードとしてただ動く)。bond の心拍も 1 本しか無いので、
+            # Nav2 構成で起きていた「高負荷でマネージャが CRITICAL FAILURE」は
+            # ここでは起こりにくい。
+            Node(
+                condition=IfCondition(use_smoother),
+                package="nav2_lifecycle_manager",
+                executable="lifecycle_manager",
+                name="lifecycle_manager_navigation",
+                output="screen",
+                arguments=["--ros-args", "--log-level", log_level],
+                parameters=[
+                    {"use_sim_time": use_sim_time},
+                    {"autostart": autostart},
+                    {"node_names": ["velocity_smoother"]},
+                ],
+            ),
+        ]
+        return GroupAction(
+            condition=IfCondition(use_standalone),
+            actions=[
+                Node(
+                    package="vi_planner",
+                    executable="vi_planner",
+                    name="vi_planner",
+                    output="screen",
+                    respawn=use_respawn,
+                    respawn_delay=2.0,
+                    parameters=[
+                        configured_nav2_params,
+                        {
+                            "use_sim_time": use_sim_time,
+                            "standalone": True,
+                            "pose_topic": pose_topic,
+                            "scan_topic": "scan",
+                        },
+                    ],
+                    arguments=["--ros-args", "--log-level", log_level],
+                    remappings=remappings + [("cmd_vel", vi_cmd_vel_topic)],
+                ),
+                *smoother_nodes,
+            ],
+        )
+
     # ------------------------------------------------------------------
     # スタック
     # ------------------------------------------------------------------
@@ -312,7 +426,12 @@ def generate_launch_description():
                     "container_name": "nav2_container",
                 }.items(),
             ),
-            navigation_include(vi_navigation_launch, pose_topic="amcl_pose"),
+            navigation_include(
+                vi_navigation_launch,
+                pose_topic="amcl_pose",
+                condition=IfCondition(use_nav2),
+            ),
+            standalone_navigation("amcl_pose"),
         ],
     )
 
@@ -324,8 +443,9 @@ def generate_launch_description():
             navigation_include(
                 vi_navigation_launch,
                 pose_topic="mcl_pose",
-                condition=IfCondition(use_vi),
+                condition=IfCondition(PythonExpression([use_vi, " and ", use_nav2])),
             ),
+            standalone_navigation("mcl_pose"),
         ],
     )
 
@@ -406,6 +526,26 @@ def generate_launch_description():
                         "(vi_global_planner + controller_server/DWB, the wiring "
                         "needed for maps that use map_scale / the compact solver).",
         ),
+        DeclareLaunchArgument(
+            "nav2",
+            default_value="auto",
+            description="Bring up the Nav2 navigation nodes? auto (default) = no "
+                        "when the VI planner can serve everything (planner:=vi with "
+                        "local_planner resolving to vi), yes otherwise. false runs "
+                        "vi_planner standalone: it serves navigate_to_pose and "
+                        "follow_waypoints itself, so bt_navigator, behavior_server, "
+                        "waypoint_follower, smoother_server and "
+                        "lifecycle_manager_navigation are not launched. The action "
+                        "types stay nav2_msgs, so RViz and the panels are unchanged.",
+        ),
+        DeclareLaunchArgument(
+            "velocity_smoother",
+            default_value="true",
+            description="nav2:=false only: keep nav2_velocity_smoother between "
+                        "vi_planner and twist_mux (cmd_vel_nav -> cmd_vel). false "
+                        "publishes cmd_vel directly, which removes the last "
+                        "lifecycle-managed node from the navigation side.",
+        ),
 
         # --- nav2 共通 ---
         DeclareLaunchArgument("use_sim_time", default_value="false"),
@@ -454,6 +594,13 @@ def generate_launch_description():
         OpaqueFunction(
             function=backends.validate_local_planner,
             kwargs={"effective_local_planner": effective_local_planner},
+        ),
+        OpaqueFunction(
+            function=backends.validate_nav2,
+            kwargs={
+                "effective_nav2": effective_nav2,
+                "effective_local_planner": effective_local_planner,
+            },
         ),
 
         lidar_common.include_lidar_bringup(pkg_share),

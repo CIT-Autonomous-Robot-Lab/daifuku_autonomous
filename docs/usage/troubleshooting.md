@@ -149,21 +149,30 @@ ls -l /dev/shm | head
 に差し替わっているのが原因です。VI系プランナは`compute_path_to_pose`しか提供せず、
 nav2既定の行動木が要求する`compute_path_through_poses`が無いためです。
 
-パネルは`/follow_waypoints`（`nav2_waypoint_follower`）へ送る形に直してあります。
-古いプラグインが`install/`に残っていると直っていないほうが読まれることがあるので、
-症状が続くならRVizを起動しているコンテナで`daifuku_waypoint_manager`を建て直して
-ください。
+パネルは`/follow_waypoints`へ送る形に直してあります。古いプラグインが`install/`に
+残っていると直っていないほうが読まれることがあるので、症状が続くならRVizを起動して
+いるコンテナで`daifuku_waypoint_manager`を建て直してください。
 
 ```bash
 ros2 action list | grep -E 'follow_waypoints|navigate_through_poses'
-ros2 node info /waypoint_follower
+ros2 node info /vi_planner       # nav2:=true なら /waypoint_follower
 ```
 
+既定（`nav2:=false`）では`navigate_through_poses`は**スタブですらなく、サーバが
+そもそも居ません**。パネルやクライアントは「サーバがいません」で止まるので、
+黙ってABORTEDになる上の症状は`nav2:=true`のときだけ起こります。
+
 数秒動いてから中断する場合は別件です。TFの遅延（下の「TFが20秒以上遅れて…」）か、
-Pi 4のCPU飽和によるゴール受理ackの取りこぼし（`bt_navigator`の
+Pi 4のCPU飽和によるゴール受理ackの取りこぼし（`nav2:=true`のときの`bt_navigator`の
 `default_server_timeout`）を疑ってください。
 
 ## その場で左に回り続ける
+
+**これは`nav2:=true`のときだけ起こります。** 既定の`nav2:=false`では
+`behavior_server`が立たず、`spin`というリカバリ自体が存在しません（代わりに
+`vi_planner`が止まったまま場を更新して投げ直します。
+[architecture.md](architecture.md#nav2を立てない構成nav2false)）。この節の
+「経路がそもそも引けていない」の切り分けはどちらの構成でも同じように使えます。
 
 自律走行のつもりが前へ進まず、その場で反時計回りにぐるぐる回り続ける場合です。
 **これは故障ではなくnav2のrecoveryです。** `spin`は`+1.57 rad`（反時計回り）を

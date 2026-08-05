@@ -98,6 +98,21 @@ Docker 越しに叩く形は
   できない。
 - `vi_planner`（`local_planner:=auto|vi`）と `vi_global_planner`（`local_planner:=nav2`）は
   **排他**。両方立てると `compute_path_to_pose` にサーバが 2 つ載る。
+- **`nav2:=false`（`planner:=vi` + `local_planner:=vi` での既定）では Nav2 の
+  navigation ノードが 1 つも立たない。** `vi_planner` が `standalone` モードで
+  `navigate_to_pose` と `follow_waypoints` も出すので、`bt_navigator` /
+  `behavior_server` / `waypoint_follower` / `smoother_server` /
+  `lifecycle_manager_navigation` が要らなくなる（`velocity_smoother:=false` にすると
+  lifecycle ノードが navigation 側から消える）。アクション型は `nav2_msgs` のままなので
+  RViz も各パネルも配線は変わらない。**`standalone` を `config/` に書かないこと** —
+  真のまま Nav2 構成で起動すると `navigate_to_pose` のサーバが `bt_navigator` と 2 つに
+  なり、クライアントは先に見つけたほうへ繋ぐ（**どちらに繋がったかはログにも
+  `ros2 action list` にも出ない**）。渡すのは launch だけ。
+- **`nav2:=false` では `config/nav2/{bt_navigator,behaviors,controller_server,costmaps}.yaml`
+  と `behavior_trees/` が丸ごと読まれない。** 合成には入る（ファイル名順に束ねる規則は
+  そのまま）が、宛先のノードが立たないので**エラーも警告も出ないまま無視される**。
+  同名の設定を移した先は `config/nav2/vi_planner.yaml`（`stop_on_failure` /
+  `waypoint_pause_sec` / `goal_retry_limit`）。`behaviors.yaml` のほうを直しても効かない。
 - **`twist_mux:=true`（既定）だと、機体が動くのは `/cmd_vel` ではなく
   `/cmd_vel_mux`。** 人が出す指令は `/cmd_vel_teleop`（優先度 100）へ。`/cmd_vel`
   （優先度 10）は自律側の出力で、そちらへ投げると自律走行中は取り合いになる（誰も
@@ -125,24 +140,29 @@ Docker 越しに叩く形は
   (`ros:humble-ros-base`) に rqt と RViz が無いため。両方の `build-workspace.sh` が
   `--packages-select` で名前を並べているので、Pi 側の一覧に足すと**ビルドが通らなく
   なる**。
-- **`planner:=vi`（既定）では `navigate_through_poses` が常に失敗する。** VI 系は
-  `compute_path_to_pose` しか持たないので、`navigation.launch.py` が through_poses の
-  木を `behavior_trees/nav_through_poses_stub.xml`（`AlwaysFailure`）へ差し替える。
-  ここへ投げるものは**即座に ABORTED になり、ログにも何も出ない**。複数点を回すなら
-  `nav2_waypoint_follower` の `/follow_waypoints` を使うこと（`daifuku_waypoint_manager`
-  はそちら。両プランナ経路で lifecycle 管理下に立っている）。
-- **`vi_planner` の先読み（`waypoint_prefetch`）は `/waypoints` が来ないと何も
-  しない。** 次のウェイポイントを走行中に解いておく機能だが、「次」を知る手立ては
-  順路そのものを latch する `nav_msgs/Path` だけで、これを出すのは
-  `daifuku_waypoint_manager` のパネルと `joy_teleop`（START+BACK での巡回開始）の
-  **2 か所しかない**。どちらも通らない経路（`/follow_waypoints` へ直接投げる、
+- **`planner:=vi`（既定）では `navigate_through_poses` が使えない。** VI 系は
+  `compute_path_to_pose` しか持たないので、`nav2:=true` では `navigation.launch.py` が
+  through_poses の木を `behavior_trees/nav_through_poses_stub.xml`（`AlwaysFailure`）へ
+  差し替え、**即座に ABORTED になってログにも何も出ない**。`nav2:=false` では
+  `bt_navigator` 自体が立たないので**サーバがそもそも居ない**（クライアント側が
+  「サーバがいません」で止まるぶん、こちらのほうが分かる）。複数点を回すなら
+  `/follow_waypoints` を使うこと（`daifuku_waypoint_manager` はそちら。出すのは
+  `nav2:=true` なら `nav2_waypoint_follower`、`nav2:=false` なら `vi_planner` 自身で、
+  クライアントから見た型と名前は同じ）。
+- **`nav2:=true` では、`vi_planner` の先読み（`waypoint_prefetch`）は `/waypoints` が
+  来ないと何もしない。** 次のウェイポイントを走行中に解いておく機能だが、そちらの
+  構成で「次」を知る手立ては順路そのものを latch する `nav_msgs/Path` だけで、これを
+  出すのは `daifuku_waypoint_manager` のパネルと `joy_teleop`（START+BACK での巡回
+  開始）の**2 か所しかない**。どちらも通らない経路（`/follow_waypoints` へ直接投げる、
   単発ゴール）では**エラーも警告も出ないまま先読みだけが起きない**。実機ではパネルが
   載らないので `joy_teleop` だけが出どころだが、そちらは **`waypoints_file` が空だと
   巡回そのものを断る**（2026-08-04 に既定の順路を廃止。それまでは津田沼の 73 点に
   フォールバックしていて、`map_19f` で立てると全点が地図の外に出た）。トピック名は
   パネルの `kWaypointPathTopic`、`joy_teleop` の publisher、`vi_planner` の
   `waypoint_topic` の 3 か所にあり、1 つだけ変えても同じことになる（パネルだけが
-  絶対名なので、`namespace:=` を付けた構成でも噛み合わない）。**既定は `false`**
+  絶対名なので、`namespace:=` を付けた構成でも噛み合わない）。**`nav2:=false` では
+  この穴は無い** — `follow_waypoints` を `vi_planner` 自身が受けるので、順路はゴールと
+  同じ経路で入る（トピックはもう 1 つの入口として残る）。**既定は `false`**
   （2026-08-04 に一度 `true` へ反転したが、同日の実機で走行中の固まりが出たため
   容疑者の 1 つとして戻した。ノード側の宣言も `false`）— 価値関数が同時に 2 つ
   生きるので、**密ソルバではメモリが 2 倍要る**。compact でも同梱の 2 地図は sink が
@@ -159,6 +179,9 @@ Docker 越しに叩く形は
   未確定**なので、機体が経路から外れて方策が引けなくなると捨てて解き直す
   （`dropped the truncated value function`）。そのとき機体は**走行中に止まったまま**
   フルの solve を待つ（津田沼で 87 秒）ので、打ち切らなかったときより待ちは長い。
+- **以下 2 つは `nav2:=true` のときの話。`nav2:=false` では `behavior_server` も
+  `waypoint_follower` も `lifecycle_manager_navigation` も立たないので起こらない**
+  （代わりに投げ直しは `vi_planner` の `goal_retry_limit` / `goal_retry_settle_sec`）。
 - **recovery の `spin` だけは `velocity_smoother` を通らない。** 上流 nav2 の
   `navigation_launch.py` は `behavior_server` に `cmd_vel` → `cmd_vel_nav` を張るが、
   `vi_global_planner` 側の複製（`local_planner:=vi` で使うほう）は張っていないので、

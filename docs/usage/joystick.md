@@ -8,7 +8,7 @@
 
 ```text
 パッド ─ /joy ─ joy_teleop ─ /cmd_vel_teleop（優先度 100）─┐
-                     ├─ FollowWaypoints ─ nav2_waypoint_follower
+                     ├─ FollowWaypoints ─ vi_planner（nav2:=true なら nav2_waypoint_follower）
                      └─ /buzzer ─→ ドライバ（音）
                                                            ├→ twist_mux → /cmd_vel_mux → ドライバ
 自律側 ───────────────────── /cmd_vel（優先度 10）─────────┘
@@ -66,8 +66,10 @@
 にくいからです（巡回中にもう一度押した、`navigation.launch.py`が立っていない、YAMLが
 読めない、ゴールを拒否された、のどれか。理由はログに出ます）。
 
-**1点でも外したら下がりになります。** `nav2_waypoint_follower`は`stop_on_failure: false`
-なので、[地図と経路を取り違えて全点が地図の外に出ても「成功」で返ってきます](#巡回を始める)。
+**1点でも外したら下がりになります。** `/follow_waypoints`を受けるほう（既定の
+`nav2:=false`では`vi_planner`、`nav2:=true`では`nav2_waypoint_follower`）は
+どちらも`stop_on_failure: false`なので、[地図と経路を取り違えて全点が地図の外に出ても
+「成功」で返ってきます](#巡回を始める)。
 上がりが鳴らなければ、そこを疑ってください（外した数はログに出ます）。
 
 teleopへ移って巡回を**取り消した**ときは鳴りません。取り消しの結果が返るのは切り替えの音を
@@ -93,9 +95,14 @@ STARTで入れているあいだ、`joy_teleop`はスティックが中立でも
 ゴールが再開してしまいます。
 
 取り消しは1回ではなく2秒（`cancel_window`）のあいだ繰り返します。
-`nav2_waypoint_follower`は`stop_on_failure: false`なので、`navigate_to_pose`側が先に
-取り消されると「1点失敗した」と見なして**次の点へ新しいゴールを出す**ためです。1回だけ
-だと、それが取り消されずに残ります。
+`nav2_waypoint_follower`（`nav2:=true`）は`stop_on_failure: false`なので、
+`navigate_to_pose`側が先に取り消されると「1点失敗した」と見なして**次の点へ新しい
+ゴールを出す**ためです。1回だけだと、それが取り消されずに残ります。
+
+既定の`nav2:=false`ではこの穴はありません。巡回は`vi_planner`の中のループで、
+`navigate_to_pose`のゴールを1点ごとに出し直してはいないので、`/follow_waypoints`の
+取り消し1回で巡回そのものが止まります（取り消しは「1点失敗」ではなく巡回の中断として
+扱われる）。繰り返しても害はないので、`cancel_window`はそのままにしてあります。
 
 teleopを切ったあとは1秒（`stop_tail`）だけゼロを出してから黙ります。黙るだけだと本体
 ドライバは最後に受けた速度を保持し続けるためです。自前実装（`driver:=original`）は

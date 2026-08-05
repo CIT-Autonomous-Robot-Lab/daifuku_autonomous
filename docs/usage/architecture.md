@@ -84,7 +84,7 @@ Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。
 | モジュール | 内容 |
 | --- | --- |
 | `params.py` | 設定ファイルへの上書きの合成（土台 → `overrides` → `extra_params_file`）。4つのlaunchすべてが使う |
-| `backends.py` | `localization`／`planner`／`local_planner`の解決と起動前チェック |
+| `backends.py` | `localization`／`planner`／`local_planner`／`nav2`の解決と起動前チェック |
 | `lidar.py` | LiDAR構成の共通引数と`lidar_bringup`の`include` |
 
 `lidar`や`lidar_z`のようなLiDAR構成の引数は、`navigation`・`mapping`・
@@ -127,20 +127,54 @@ Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。
 - Nav2標準の`planner_server`と`NavfnPlanner`を使う
 - `local_planner:=auto`ではNav2標準の`controller_server`とDWBを使う
 
+## Nav2を立てない構成（`nav2:=false`）
+
+`planner:=vi` + `local_planner:=vi`のときの**既定**です。`vi_planner`が
+`navigate_to_pose`と`follow_waypoints`も提供するので、Nav2のnavigation側の
+ノードを1つも立てません。アクションの型と名前は`nav2_msgs`のままなので、RVizの
+`Nav2 Goal`も`daifuku_waypoint_manager`も`daifuku_rqt`も`joy_teleop`も、配線は
+一切変わりません。
+
+立たなくなるもの: `bt_navigator`、`behavior_server`、`smoother_server`、
+`waypoint_follower`、`lifecycle_manager_navigation`、そして
+`behavior_trees/`の2つの木。残るのは`map_server`（自己位置側）と、
+`velocity_smoother:=true`（既定）なら`velocity_smoother`とそれを起こす
+マネージャ1つだけです。`nav2:=true`で従来の構成に戻せます。
+
+読む設定ファイルも減ります。`config/nav2/`のうち実際に効くのは
+`vi_planner.yaml`と`map_server.yaml`だけで、`bt_navigator.yaml`・
+`behaviors.yaml`・`controller_server.yaml`・`costmaps.yaml`は**合成には入るが
+宛先のノードが立たないので黙って無視されます**。同じ意味のキーは
+`vi_planner.yaml`へ移してあります（`stop_on_failure`、`waypoint_pause_sec`）。
+
+### 何が変わるか
+
+BTを挟まなくなることで、VIが損をしていた点が4つ消えます。
+
+| 従来（`nav2:=true`） | `nav2:=false` |
+| --- | --- |
+| BTが`ComputePathToPose`を毎秒呼ぶ。キャッシュヒットでもロールアウトと補間を**共有ロックの中で**回すので、10 Hzの追従ループと毎秒取り合う | ロールアウトはゴールにつき1回だけ。しかも`plan`トピックへの**表示専用**で、走行は方策を1手ずつ引く |
+| ロールアウトが振動（`LoopDetected`）すると`ComputePathToPose`が失敗し、ゴールごと死ぬ | 経路が引けなくても走る。「方策が無い」と「貪欲降下が振動した」は別物なので、後者では走れることが多い |
+| リカバリの`Spin`／`BackUp`は`local_costmap/costmap_raw`を待つので、コストマップの無いVI構成では**必ず失敗**する。動くのは`Wait`だけで、その`Wait`の間は`follow_path`が走っていない＝価値関数が1ミリも動かない | 投げ直しの間に`goal_retry_settle_sec`（既定3秒）だけ**止まったまま場を更新する**。スキャンを取り込み続けるので、一度「通れない」と塗った場所のペナルティが半減で消えていく |
+| 巡回の先読み（`waypoint_prefetch`）は`/waypoints`を出すものがいないと**警告も出さずに何もしない** | 順路は`follow_waypoints`のゴールそのものなので、必ず届く |
+
+投げ直しの回数は`goal_retry_limit`（既定3、負で無制限）で、BTの
+`RecoveryNode number_of_retries: 6`の置き換えです。
+
 ## Nav2コンポーネント
 
-構成に応じて次を使用します。
+構成に応じて次を使用します（`nav2:=false`では上2つ以外は立ちません）。
 
 - `nav2_map_server`: 地図配信
+- `nav2_velocity_smoother`: 速度平滑化（`velocity_smoother:=false`で外せる）
 - `nav2_bt_navigator`: NavigateToPose等のビヘイビアツリー
 - `nav2_costmap_2d`: ローカル／グローバルコストマップ
 - `nav2_smoother`: 経路平滑化
 - `nav2_behaviors`: Spin、BackUp、Wait等
 - `nav2_waypoint_follower`: 経由地点追従
-- `nav2_velocity_smoother`: 速度平滑化
 - `nav2_lifecycle_manager`: ライフサイクル管理
 
-ローカルコストマップはVoxelLayer + InflationLayer、グローバルコストマップはStaticLayer + ObstacleLayer + InflationLayerを使い、障害物入力は`/scan`です。
+ローカルコストマップはVoxelLayer + InflationLayer、グローバルコストマップはStaticLayer + ObstacleLayer + InflationLayerを使い、障害物入力は`/scan`です。**VI構成ではどちらも使いません**（`vi_planner`も`vi_global_planner`もコストマップを持たず、障害物は価値関数のペナルティとして扱う）。
 
 ### プロセス構成
 
