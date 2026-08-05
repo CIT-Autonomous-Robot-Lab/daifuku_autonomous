@@ -113,6 +113,17 @@ BUILD_JOBS=1 docker compose up -d
 git -C src/value_iteration3 fetch origin && git -C src/value_iteration3 merge --ff-only origin/main
 ```
 
+**そのうえで、`src/`が揃っているときは`vcs import`をそもそも呼びません。**
+`--skip-existing`はチェックアウトを動かさないだけで、URLの一致する既存リポジトリにも
+`git fetch`まで走ります。つまり呼ぶ限りネットワークが要り、Wi-Fiのないところでは
+`Could not resolve host`で`docker compose up`ごと止まります（`set -e`）。
+`--skip-existing`が付いている以上fetchしても作業ツリーは変わらないので、呼ばないことと
+結果は同じです。したがって一度取り込んであればオフラインでも`up`できます。
+足りないものがあるときだけ`vcs import`し、それでも埋まらなければ足りない
+リポジトリ名を並べて止まります（黙って進めるとcolconが「そんなパッケージは無い」と
+いう無関係な顔で落ちるため）。何も取り込んでいない環境では、最初の1回だけ
+ネットワークが要ります。
+
 ビルド成果物は名前付きボリューム`autonomous-build` / `autonomous-install` /
 `autonomous-log`に入ります。作り直したいときは次のようにします。
 

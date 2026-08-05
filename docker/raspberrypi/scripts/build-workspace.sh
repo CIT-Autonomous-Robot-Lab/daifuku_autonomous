@@ -29,10 +29,54 @@ mkdir -p src
 export CARGO_HOME="${WS}/build/.cargo"
 mkdir -p "${CARGO_HOME}"
 
-# 外部パッケージの取得。既にあるものは触らないので、揃っていればネットワークは
-# 要らない。ホスト側で vcs import 済みならそれをそのまま使う。
+# 外部パッケージの取得。ホスト側で vcs import 済みならそれをそのまま使う。
+#
+# **揃っているときは vcs import を呼ばない。** `--skip-existing` はチェックアウトを
+# 動かさないだけで、URL が一致する既存リポジトリには git fetch まで走る。つまり
+# 揃っていても Wi-Fi が無いと `Could not resolve host` で落ち、`set -e` で
+# `docker compose up` ごと止まる (2026-08-05 に踏んだ)。--skip-existing がある以上
+# fetch しても作業ツリーは変わらないので、呼ばないことと結果は同じ。
+#
+# 足りないものがあるときだけ import する。そこで失敗したら、名前を並べて落とす
+# (黙って進めると colcon が「そんなパッケージは無い」という無関係な顔で落ちる)。
 if [[ -f "${WS}/autonomous_bot.repos" ]]; then
-  vcs import . --skip-existing < "${WS}/autonomous_bot.repos"
+  # repos ファイルのキーが取り込み先のパス (WS からの相対)。
+  mapfile -t repo_paths < <(python3 - "${WS}/autonomous_bot.repos" <<'PY'
+import sys
+import yaml
+
+# repos ファイルには日本語のコメントが入っている。ロケール依存の既定エンコーディング
+# を踏まないよう、バイト列で渡して PyYAML に UTF-8 と判定させる。
+with open(sys.argv[1], 'rb') as f:
+    print('\n'.join(yaml.safe_load(f)['repositories'] or {}))
+PY
+  )
+  # mapfile は右辺が失敗しても成功するので、空なら自分で落とす (パースに失敗した
+  # まま「揃っている」と見えると、上と同じ無関係な失敗に化ける)。
+  if [[ ${#repo_paths[@]} -eq 0 ]]; then
+    echo "autonomous_bot.repos を読めませんでした" >&2
+    exit 1
+  fi
+
+  # 空ディレクトリは「無い」とみなす (マウントし損ねた跡が残っていても取りに行く)。
+  missing=()
+  for repo_path in "${repo_paths[@]}"; do
+    [[ -n "$(ls -A "${WS}/${repo_path}" 2>/dev/null)" ]] || missing+=("${repo_path}")
+  done
+
+  if [[ ${#missing[@]} -eq 0 ]]; then
+    echo "外部パッケージは揃っているので vcs import を省略します (ネットワーク不要)"
+  else
+    vcs import . --skip-existing < "${WS}/autonomous_bot.repos" || true
+    still_missing=()
+    for repo_path in "${missing[@]}"; do
+      [[ -n "$(ls -A "${WS}/${repo_path}" 2>/dev/null)" ]] || still_missing+=("${repo_path}")
+    done
+    if [[ ${#still_missing[@]} -ne 0 ]]; then
+      printf '取得できませんでした (ネットワークが要ります): %s\n' "${still_missing[*]}" >&2
+      exit 1
+    fi
+  fi
 fi
 
 # livox_ros_driver2 は ROS 2 用の manifest と launch を上流で別名に置いている。
