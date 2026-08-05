@@ -31,6 +31,10 @@
 # joy:= (既定 true) はゲームパッド (XInput 互換) を足す。出す先が仲裁の teleop 側なので、
 # **twist_mux:=false では誰も購読しない**。操作は docs/usage/joystick.md と
 # src/joy_teleop.py。
+#
+# use_mid360_imu:= (既定 false) は上の契約のうち odom の担当を EKF へ譲る。true にすると
+# ドライバは /wheel/odom を出すだけになり、odom -> base_footprint TF を出さなくなる。
+# **navigation / mapping 側にも同じ値を渡すこと** (詳細は launch_setup のコメント)。
 
 import os
 import sys
@@ -217,6 +221,26 @@ def launch_setup(context, *args, **kwargs):
     mux_actions, mux_logs = _twist_mux(context, pkg_share, overrides_dir)
     remappings = [("cmd_vel", MUXED_CMD_VEL)] if mux_actions else []
 
+    # use_mid360_imu:=true では odom -> base_footprint の所有者が EKF に移る。
+    # ドライバは車輪の生値を wheel_odom_topic へ出すだけの立場になるので、
+    # トピックを振り替えたうえで TF を止める。**止め方がドライバで違う**:
+    # 自前実装には publish_tf があるが、公式実装 (raspimouse) には無いので
+    # ノードの /tf を捨て先へ remap する (あちらが出す TF はこれだけ)。
+    #
+    # 同じ引数を navigation / mapping 側にも渡すこと。片方だけ true にしても
+    # エラーにはならない: 両方 false なら従来どおり、こちらだけ true なら
+    # odom -> base_footprint を誰も出さず (TF が繋がらないので気付ける)、
+    # navigation 側だけ true なら EKF が入力を得られないまま TF と /odom の
+    # 配信元が二重になる (**気付けない**。自己位置だけが静かに壊れる)。
+    if is_true(context, "use_mid360_imu"):
+        remappings.append(
+            ("odom", LaunchConfiguration("wheel_odom_topic").perform(context))
+        )
+        if driver == "original":
+            parameters.append({"publish_tf": False})
+        else:
+            remappings.append(("/tf", "/wheel/tf_unused"))
+
     joy_actions, joy_logs = _joy_teleop(context, pkg_share, overrides_dir)
 
     driver_node = LifecycleNode(
@@ -330,6 +354,21 @@ def generate_launch_description():
                         "保存したウェイポイントの巡回を始める。挿していなくても "
                         "他のノードは動く (joy_teleop は /joy が来なければ何も "
                         "publish しない。joy_node は respawn 付き)。",
+        ),
+        DeclareLaunchArgument(
+            "use_mid360_imu",
+            default_value="false",
+            description="Mid-360 の IMU 融合に合わせた配線にするか。true にすると "
+                        "ドライバは車輪オドメトリを wheel_odom_topic へ出し、"
+                        "odom -> base_footprint TF を出さなくなる (ナビゲーション "
+                        "側の EKF が両方を出す)。**navigation / mapping にも同じ "
+                        "値を渡すこと。**",
+        ),
+        DeclareLaunchArgument(
+            "wheel_odom_topic",
+            default_value="/wheel/odom",
+            description="use_mid360_imu:=true のときにドライバが車輪オドメトリを "
+                        "出すトピック (EKF の入力)。",
         ),
         DeclareLaunchArgument(
             "joy_teleop_params_file",

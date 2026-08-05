@@ -135,28 +135,49 @@ lidar_roll:=0.0 lidar_pitch:=0.0 lidar_yaw:=0.0
 
 ### IMUと車輪オドメトリ
 
-Mid-360ではIMU融合が既定で有効です。機体側の車輪オドメトリを`/wheel/odom`へremapし、車輪ノード自身による`odom -> base_footprint` TF配信を止めてください。ナビゲーション側のEKFが車輪速度とMid-360のZ軸角速度を融合し、最終的な`/odom`とTFを配信します。
+Mid-360ではIMU融合を`use_mid360_imu:=true`で有効にできます。**既定は`false`で、そのときは
+2D LiDAR構成と同様に車輪ノードが`/odom`と`odom -> base_footprint`を配信します。**
 
-**同梱の本体ドライバはどちらもこの形になっていません。** `raspicat_driver`（標準）も
-`raspimouse`（公式実装）も`/odom`と`odom -> base_footprint`を自分で配信し、
-`/wheel/odom`は出しません。したがって`raspicat`サービスで立てる実機構成では
-`use_mid360_imu:=false`を明示してください（[自律移動](../usage/navigation.md#tmuxで一式を起動する)と
-[地図作成](../usage/mapping.md#tmuxで一式を起動する)のtmux例はどちらもそうしています）。
-既定の`true`のままだとEKFが入力を受け取れず、`/odom`とTFの配信元も二重になります。
-IMU融合を使うなら、下の`publish_tf: false`で車輪側のTFを止めたうえで、車輪オドメトリを
-`/wheel/odom`へ出す構成にしてください。
+有効にすると`odom -> base_footprint`の所有者がEKFへ移ります。EKFが車輪の並進速度と
+Mid-360のZ軸角速度を融合して最終的な`/odom`とTFを出し、車輪ノードは生値を`/wheel/odom`へ
+出すだけの立場になります。
 
-自前実装（`driver:=original`）にはこのための`publish_tf`パラメータがあり、
-`config/robot/raspicat_driver.yaml`で`false`にすると`odom -> base_footprint`の配信だけを
-止められます。TF無効化機能を持たない車輪ドライバでは、そのノードの`/tf`を未使用トピックへ
-remapします。実際のパッケージ名とノード名に置き換えてください。
+**この引数は`robot_bringup.launch.py`にも渡してください。** 車輪側の配線を切り替えるのは
+あちらで、`true`のときだけドライバの`odom`を`/wheel/odom`へremapし、TF配信を止めます
+（自前実装は`publish_tf: false`、公式実装は`publish_tf`を持たないのでノードの`/tf`を
+`/wheel/tf_unused`へ捨てます）。
 
 ```bash
-ros2 run <wheel_package> <wheel_odom_node> --ros-args \
-  -r /odom:=/wheel/odom -r /tf:=/wheel/tf_unused
+# 実機。2 つのサービスに同じ値を渡す
+docker compose exec raspicat /ros_entrypoint.sh ros2 launch daifuku_stack \
+  robot_bringup.launch.py driver:=original use_mid360_imu:=true
+docker compose exec ros2 /ros_entrypoint.sh ros2 launch daifuku_stack \
+  navigation.launch.py use_mid360_imu:=true ...
 ```
 
-IMU融合を無効にする場合は`use_mid360_imu:=false`を指定します。この場合は2D LiDAR構成と同様に、車輪ノードが通常の`/odom`と`odom -> base_footprint`を配信します。
+片方だけ`true`にしてもエラーにはなりません。**車輪側だけ`true`**なら
+`odom -> base_footprint`を誰も出さないのでTFが繋がらず（すぐ気付けます）、
+**ナビゲーション側だけ`true`**ならEKFが入力を得られないまま`/odom`とTFの配信元が
+二重になります。後者は**エラーも警告も出ません**。2026-08-05の実機では、静止中に姿勢が
+細かく震え、ウェイポイント追従を始めた瞬間に機体が回り出しました。
+
+### ジャイロのバイアス
+
+**起動時は機体を静止させておいてください。** Mid-360のジャイロには大きな電源投入時
+バイアスがあり、この個体はZ軸で+0.013960 rad/s（+0.800 deg/s、5001サンプル、2026-08-05実測）
+でした。放置すると静止しているだけで48 deg/minヨーが回ります。`robot_localization`は
+センサのバイアスを推定しないので、`prepare_mid360_imu`が起動後の静止区間から測って
+引きます（`config/sensors/mid360_ekf.yaml`の`prepare_mid360_imu`節）。
+
+測れたかはログで分かります。
+
+```
+prepare_mid360_imu: gyro bias = [+0.000112, -0.000305, +0.013960] rad/s
+                    (z = +0.800 deg/s = 48.0 deg/min of yaw if left in), ...
+```
+
+動いていて測れないあいだは`still moving, so the gyro bias is not measured yet`が出ます。
+値が分かっているなら`estimate_gyro_bias: false` + `gyro_bias: [x, y, z]`で固定できます。
 
 ## スキャンフィルタを変更する
 

@@ -249,6 +249,23 @@ Docker 越しに叩く形は
   下限が距離とともに上がるので、**`max_height` をその下に置くと帯が潰れ、
   `range_max` を伸ばしてもエラーも警告も出ないまま手前で何も入らなくなる**
   （5 度なら 50m 先の実効下限は 4.65m）。地図ごとの角度は `overrides/` 側。
+- **`use_mid360_imu` は launch 2 つに同じ値を渡す。** `robot_bringup.launch.py` と
+  `navigation.launch.py`（`mapping.launch.py`）の両方が持つ同名の引数で、**既定は
+  どちらも `false`**。`true` にすると `odom→base_footprint` と `/odom` の所有者が
+  車輪ドライバから EKF へ移り、ドライバ側は `/wheel/odom` を出すだけになる
+  （自前実装は `publish_tf: false`、公式実装は `publish_tf` が無いのでノードの
+  `/tf` を捨て先へ remap）。**ナビゲーション側だけ `true`** にすると EKF の入力
+  `/wheel/odom` を誰も出さないまま `/odom` と TF の配信元が 2 つになり、**エラーも
+  警告も出ない**（tf2 は届いた順に上書きするので姿勢が 2 つの答えの間で震え、
+  追従を始めると回り出す。2026-08-05 の実機）。車輪側だけ `true` なら TF が
+  繋がらないので気付ける。`simulator/` の Isaac ハーネスは Isaac が
+  `/wheel/odom` を出す側なので `nav_container.sh` が `true` を足している。
+- **Mid-360 のジャイロは電源投入時バイアスが大きい**（この個体は z 軸
+  +0.013960 rad/s = +0.800 deg/s = 48 deg/min。2026-08-05 実測）。
+  `robot_localization` はセンサのバイアスを推定しないので、`prepare_mid360_imu` が
+  起動後の静止区間から測って引く。**そのため起動時は機体を静止させておくこと**
+  （動いていると測れないまま補正なしで通り、ログに `still moving` が出るだけ）。
+  同じノードが加速度を g から m/s² へ直している（Livox が出すのは g）。
 - TF は区間ごとに所有者を 1 つだけにする（`map→odom` は emcl2/amcl、
   `odom→base_footprint` は本体ドライバ（raspimouse / raspicat_driver）または EKF、
   リンク間は robot_state_publisher）。

@@ -60,7 +60,7 @@ NavFn構成のデバッグ起動例:
 
 ```bash
 ros2 launch daifuku_stack navigation.launch.py \
-  planner:=navfn use_mid360_imu:=false use_rviz:=true
+  planner:=navfn use_rviz:=true
 ```
 
 `lidar:=mid360`と`publish_lidar_tf:=true`、`lidar_z:=0.275`は既定値なので省略できます。

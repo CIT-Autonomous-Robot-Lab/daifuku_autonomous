@@ -281,7 +281,7 @@ Windows側でDDSを起動せず、固定IP`192.168.1.50`へSSHして`ros2`を実
 
 ```bash
 ros2 launch daifuku_stack navigation.launch.py \
-  planner:=navfn use_mid360_imu:=false use_rviz:=true
+  planner:=navfn use_rviz:=true
 ```
 
 `lidar:=mid360`と`publish_lidar_tf:=true`、`lidar_z:=0.275`はlaunchの既定値なので

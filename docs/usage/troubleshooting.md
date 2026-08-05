@@ -329,15 +329,33 @@ RESETのログが毎スキャン出て、推定姿勢が回り続ける場合で
 
 ## TFが競合または不安定になる
 
-Mid-360 + IMUでは、EKFと車輪ノードが同時に`odom -> base_footprint`を配信していないか確認します。車輪側TFを停止するか、`/tf`を未使用トピックへremapしてください。自前実装（`driver:=original`）なら`config/robot/raspicat_driver.yaml`の`publish_tf: false`で止まります。
+**静止しているのに姿勢が細かく震える／追従を始めた瞬間に機体が回り出す**なら、まず
+`use_mid360_imu`を疑ってください。**`robot_bringup.launch.py`と
+`navigation.launch.py`（`mapping.launch.py`）の両方に同じ値を渡す引数**で、
+ナビゲーション側だけ`true`にするとEKFと車輪ノードが同時に`odom -> base_footprint`と
+`/odom`を配信します。tf2は届いた順に上書きするので、姿勢が2つの答えのあいだで
+振動します。しかもEKFの入力`/wheel/odom`は誰も出していないので、EKF側の答えは
+ジャイロだけを積分した値です。**エラーも警告も出ません**（2026-08-05の実機の症状が
+これでした）。
+
+```bash
+ros2 topic info /odom          # Publisher count: 1 が正。2 なら二重配信
+ros2 topic hz /wheel/odom      # use_mid360_imu:=true のときだけ出る
+ros2 run tf2_ros tf2_echo odom base_footprint
+```
+
+配線の詳細と、片方だけ`true`にしたときにどちらが気付けるかは
+[LiDARとオドメトリ](../setup/lidar.md#imuと車輪オドメトリ)。車輪側TFを止められない
+ドライバでは、そのノードの`/tf`を未使用トピックへremapします（`driver:=raspimouse`は
+`publish_tf`を持たないので、launchがこの形にします）。
 
 センサーTFもURDFと`publish_lidar_tf:=true`の両方から配信しないでください。
 
-```bash
-ros2 run tf2_ros tf2_echo odom base_footprint
-ros2 topic hz /wheel/odom
-ros2 topic hz /odom
-```
+**ヨーだけがゆっくり回り続ける**場合はジャイロのバイアスです。起動時に機体が動いて
+いるとバイアスを測れず、`prepare_mid360_imu`が`still moving, so the gyro bias is not
+measured yet`を出したまま補正なしで通します。この個体の実測は+0.800 deg/s
+（=48 deg/min）で、放置すると走行に効く大きさです。静止させて立て直すか、値を
+`gyro_bias`に固定してください。
 
 ## RVizが表示されない
 

@@ -449,7 +449,9 @@ launch 側の配線が構成によって変わる。`run_isaac_case.sh` は明�
 | `lidar:=mid360` + EKF | `/wheel/odom` | **ekf_node が出す** (Isaac は出さない) |
 
 MID360 構成では `robot_localization` の `ekf_node` が `/wheel/odom` と `/imu/mid360` を
-融合して `odometry/filtered` → `/odom` に remap している。ここを取り違えると
+融合して `odometry/filtered` → `/odom` に remap している。**launch の既定は
+`use_mid360_imu:=false`** (実機の本体ドライバが `/odom` と TF を自分で出すため) なので、
+`nav_container.sh` が `lidar:=mid360` のときだけ `use_mid360_imu:=true` を足している。ここを取り違えると
 `odom → base_footprint` の TF が二重に出る (または出ない) が、どちらも
 **「なんとなく動いて見えるのに自己位置だけ壊れる」**形で失敗するので気づきにくい。
 

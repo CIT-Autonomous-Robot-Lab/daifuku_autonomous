@@ -249,8 +249,17 @@ fi
 # publish_lidar_tf:=false も必須。launch の既定は true (実機の URDF は
 # livox_frame を出さないため) だが、こちらは上で robot_state_publisher が
 # base_footprint -> $lidar_frame を出しており、二重配信になる。
+#
+# use_mid360_imu:=true も lidar:=mid360 では必須。launch の既定は false (実機の
+# 本体ドライバが /odom と odom -> base_footprint を自分で出すため) だが、Isaac は
+# 上の ODOM_TOPIC=/wheel/odom と PUBLISH_ODOM_TF=false で EKF に譲る側に回って
+# いるので、こちらを立てないと odom -> base_footprint を誰も出さない。
+imu_arg=()
+[ "$LIDAR" = "mid360" ] && imu_arg=(use_mid360_imu:=true)
+
 ros2 launch daifuku_stack navigation.launch.py \
     lidar:="$LIDAR" lidar_driver:=false publish_lidar_tf:=false use_rviz:=false \
+    "${imu_arg[@]}" \
     use_sim_time:="$USE_SIM_TIME" \
     map:="$MAP" "${params_arg[@]}" \
     planner:="$PLANNER" local_planner:="$LOCAL_PLANNER" nav2:="$NAV2" \

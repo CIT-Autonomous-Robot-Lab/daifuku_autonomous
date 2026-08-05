@@ -289,7 +289,10 @@ def generate_launch_description():
         executable="prepare_mid360_imu.py",
         name="prepare_mid360_imu",
         output="screen",
-        parameters=[{"use_sim_time": use_sim_time}],
+        # EKF と同じファイルを渡す。節はノード名で分かれるので互いに影響せず、
+        # overrides/ から両方のノードを 1 つのファイルで触れる (行き先はノード名で
+        # 決まるので、どの設定ファイルにも無いノード名は起動時に弾かれる)。
+        parameters=[mid360_ekf_params_file, {"use_sim_time": use_sim_time}],
         remappings=[("imu_in", "/livox/imu"), ("imu_out", "/imu/mid360")],
     )
     ekf = Node(

@@ -23,7 +23,7 @@ docker compose up -d
 ```bash
 cd ~/daifuku_autonomous
 tmux new-session -d -s nav -c "$PWD" -n nav
-tmux send-keys -t nav:nav 'docker compose exec ros2 /ros_entrypoint.sh ros2 launch daifuku_stack navigation.launch.py map:=/opt/ros_ws/install/share/daifuku_stack/maps/map_19f.yaml use_sim_time:=false localization:=emcl2 planner:=vi use_mid360_imu:=false' Enter
+tmux send-keys -t nav:nav 'docker compose exec ros2 /ros_entrypoint.sh ros2 launch daifuku_stack navigation.launch.py map:=/opt/ros_ws/install/share/daifuku_stack/maps/map_19f.yaml use_sim_time:=false localization:=emcl2 planner:=vi' Enter
 
 tmux new-window -t nav -c "$PWD" -n motor
 tmux send-keys -t nav:motor 'bash docker/raspberrypi/tools/control.sh motor on'
@@ -63,10 +63,11 @@ bash docker/raspberrypi/tools/control.sh motor off
 tmux kill-session -t nav
 ```
 
-`use_mid360_imu:=false`は`raspicat`サービスに合わせた指定です。本体ドライバ
-（`raspimouse`でも`raspicat_driver`でも）は`/odom`と`odom -> base_footprint`を自分で
-配信し、`/wheel/odom`は出しません。既定の`true`のままだとEKFが入力を受け取れないうえ、
-`/odom`とTFの配信元が二重になります。
+Mid-360のIMU融合（`use_mid360_imu`）は使っていません。既定が`false`で、`raspicat`
+サービスが立てる本体ドライバが`/odom`と`odom -> base_footprint`を自分で配信する構成です。
+**使うなら`raspicat`サービス側の`robot_bringup.launch.py`にも同じ引数を渡します**
+（[LiDARとオドメトリ](../setup/lidar.md#imuと車輪オドメトリ)）。こちらだけ`true`にすると
+EKFが入力を受け取れないまま`/odom`とTFの配信元が二重になり、エラーも警告も出ません。
 
 `lidar:=mid360`、`use_rviz:=false`、`publish_lidar_tf:=true`、`lidar_z:=0.275`は
 すべてlaunchの既定値になったため、上のコマンドでは省いています。`lidar_z`の既定

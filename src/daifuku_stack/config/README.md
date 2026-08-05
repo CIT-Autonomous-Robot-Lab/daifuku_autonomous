@@ -396,8 +396,9 @@ Pi 4 と Pi 5 で 1 ファイルです。機種差は `model: auto` が device-t
 * `odom_hz` の既定が 50.0（`raspicat.yaml` は 100.0）。1 周期あたり I2C を
   6 トランザクション使うので、62.5 kHz のバス占有を半分に落としてあります
   （カウンタ 1 個につき 3 回。上位バイトで下位バイトを挟んで桁上がりを検出する）。
-* `publish_tf` があります。EKF に `odom -> base_footprint` を出させる構成では
-  `false` にしてください。
+* `publish_tf` があります。EKF に `odom -> base_footprint` を出させる構成
+  （`use_mid360_imu:=true`）では `false` になります。`robot_bringup.launch.py` が
+  その引数を受けたときに自分で渡すので、**このファイルを直す必要はありません**。
 
 * **LED・ブザー・スイッチのキーがあります**（`use_leds` / `use_switches` /
   `use_buzzer` / `gpio_leds` / `gpio_switches` / `gpio_buzzer` / `switch_pull_up` /
