@@ -243,19 +243,18 @@ ros2 topic hz /scan_raw
 ```
 
 `/scan_mid360_prestamp`だけが流れて`/scan_raw`が止まっている場合は、中継ノードが
-起動していません。中継は`share/daifuku_stack/src/restamp_scan.py`を
-`ExecuteProcess`で直接起動します。`ExecuteProcess`は失敗しても他のノードを止めないため、
-エラーが出ないまま`/scan_raw`だけが欠けた状態になります。まずファイルの有無を
-確認してください。
+起動していません。中継は他のノードと同じ`Node`（`lib/daifuku_stack/restamp_scan.py`）
+なので、実行ファイルが無ければ**launchごとエラーで止まります**。黙って`/scan_raw`だけが
+欠けることは無いので、まず`ros2 launch`のログを見てください。それでも見当たらなければ
+置き場を確認します。
 
 ```bash
 ros2 pkg prefix daifuku_stack
-ls $(ros2 pkg prefix daifuku_stack)/share/daifuku_stack/src/
+ls $(ros2 pkg prefix daifuku_stack)/lib/daifuku_stack/
 ```
 
-見つからなければ、`src`をインストールする前の`install/`が残っています（`scripts/`から
-`src/`へ移す前の`install/`も同じで、古い`share/daifuku_stack/scripts/`だけが残ります）。
-`colcon build`を
+見つからなければ、`restamp_scan.py`を`install(PROGRAMS)`へ足す前の`install/`が
+残っています。`colcon build`を
 やり直してください（`docker/raspberrypi/`では`docker compose up`）。
 
 なお`lidar_driver:=false`（シミュレータやバッグ再生）では中継そのものを挟まず、

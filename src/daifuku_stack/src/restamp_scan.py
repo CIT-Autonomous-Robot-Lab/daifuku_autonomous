@@ -9,9 +9,9 @@ seconds per minute against the Pi system clock. Downstream consumers
 is PTP-synced, restamping at receive time keeps every stamp on the one
 clock the rest of the stack (wheel odometry, TF, Nav2) already uses.
 
-Usage: restamp_scan.py <input_topic> <output_topic>
+Topics are the relative scan_in / scan_out, remapped by
+lidar_bringup.launch.py -- the same shape as prepare_mid360_imu.py.
 """
-import sys
 
 import rclpy
 from rclpy.node import Node
@@ -20,36 +20,34 @@ from sensor_msgs.msg import LaserScan
 
 
 class RestampScan(Node):
-    def __init__(self, in_topic, out_topic):
+    def __init__(self):
         super().__init__("restamp_scan")
         # Publisher is reliable so both reliable and best-effort
         # subscribers (laser_filters, rviz) can match it.
         pub_qos = QoSProfile(depth=10)
         sub_qos = QoSProfile(depth=10)
         sub_qos.reliability = ReliabilityPolicy.BEST_EFFORT
-        self.pub_ = self.create_publisher(LaserScan, out_topic, pub_qos)
-        self.sub_ = self.create_subscription(
-            LaserScan, in_topic, self.callback, sub_qos)
+        self._publisher = self.create_publisher(LaserScan, "scan_out", pub_qos)
+        self._subscription = self.create_subscription(
+            LaserScan, "scan_in", self._callback, sub_qos)
 
-    def callback(self, msg):
-        msg.header.stamp = self.get_clock().now().to_msg()
-        self.pub_.publish(msg)
+    def _callback(self, message):
+        message.header.stamp = self.get_clock().now().to_msg()
+        self._publisher.publish(message)
 
 
-def main():
-    args = rclpy.utilities.remove_ros_args(sys.argv)
-    if len(args) != 3:
-        print("usage: restamp_scan.py <input_topic> <output_topic>",
-              file=sys.stderr)
-        return 1
-    rclpy.init(args=sys.argv)
-    node = RestampScan(args[1], args[2])
+def main(args=None):
+    rclpy.init(args=args)
+    node = RestampScan()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
-    return 0
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

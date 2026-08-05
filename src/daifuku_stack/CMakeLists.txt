@@ -3,9 +3,9 @@ project(daifuku_stack)
 
 find_package(ament_cmake REQUIRED)
 
-# src も share へ入れる: lidar_bringup.launch.py が
-# share/daifuku_stack/src/restamp_scan.py を ExecuteProcess で直接叩く
-# (lidar:=mid360 のときのみ)。
+# src も share へ入れるが、**起動には要らない** (立てるものは下の
+# install(PROGRAMS) で lib/ に入り、launch はそちらを executable= で指す)。
+# 実機で中身を読む・単体で叩くための控えなので、消しても起動は壊れない。
 # launch/daifuku_stack_launch/ を import すると launch/ の下に __pycache__ が
 # できる。install には要らないので落とす。
 install(DIRECTORY behavior_trees config launch maps rviz src waypoints
@@ -15,6 +15,7 @@ install(DIRECTORY behavior_trees config launch maps rviz src waypoints
 
 install(PROGRAMS
   src/prepare_mid360_imu.py
+  src/restamp_scan.py
   src/system_monitor.py
   # joy_buttons.py は実行するものではないが、joy_teleop.py が隣から import する
   # ので同じ lib/ へ入れる (share/ 側にも上の install(DIRECTORY) で入る)。

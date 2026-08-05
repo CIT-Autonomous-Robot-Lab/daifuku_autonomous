@@ -78,12 +78,11 @@ Nav2コストマップのメッセージフィルタが、起動から数分で�
 挟まず、`pointcloud_to_laserscan`が`/scan_raw`へ直接出します。センサー側をPTP同期
 できるようになれば、この中継は不要になります。
 
-中継は`share/daifuku_stack/src/restamp_scan.py`を`ExecuteProcess`で直接起動する形
-なので、`CMakeLists.txt`が`src`ディレクトリを`share`へインストールしています
-（通常のノードとして起動する`prepare_mid360_imu.py`・`system_monitor.py`・
-`joy_teleop.py`は、これに加えて`lib`へも入ります）。`ExecuteProcess`は失敗しても他のノードを止めません。そのため、古い`install/`が
-残っているなどで`restamp_scan.py`が置かれていない環境では、エラーが出ないまま
-`/scan_raw`だけが配信されない状態になります。切り分けは
+中継は`prepare_mid360_imu.py`・`system_monitor.py`・`joy_teleop.py`と同じく通常の
+`Node`として起動します（`lib/daifuku_stack/restamp_scan.py`。トピックは相対名の
+`scan_in` / `scan_out`で、launch側が remap します）。実行ファイルが無ければlaunchごと
+エラーで止まるので、古い`install/`が残っていても黙って`/scan_raw`だけが欠けることは
+ありません。切り分けは
 [トラブルシューティング](../usage/troubleshooting.md#mid-360のスキャンが古すぎると拒否される)を
 参照してください。
 

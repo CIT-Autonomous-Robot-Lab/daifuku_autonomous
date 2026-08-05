@@ -80,6 +80,26 @@ DRIVERS = {
 }
 
 
+def _params_file(context, pkg_share, overrides_dir, argument, default_name):
+    """launch 引数が指すパラメータファイルを解決し、overrides を重ねる。
+
+    空なら config/robot/<default_name> に落とす。実在しないものをそのまま
+    params.compose_path へ渡すと FileNotFoundError の traceback になり、**どの
+    引数が悪いのか出ない**ので、ここで引数名を添えて落とす。
+
+    Returns:
+        (パス, ログの並び)。
+    """
+    path = LaunchConfiguration(argument).perform(context)
+    if not path:
+        path = os.path.join(pkg_share, "config", "robot", default_name)
+    if not os.path.isfile(path):
+        raise RuntimeError(f"{argument} does not exist: {path}")
+    return params.compose_path(
+        context, path, name=argument, overrides_dir=overrides_dir
+    )
+
+
 def _twist_mux(context, pkg_share, overrides_dir):
     """cmd_vel の仲裁ノードを組み立てる (twist_mux:=false なら何も作らない)。
 
@@ -95,16 +115,9 @@ def _twist_mux(context, pkg_share, overrides_dir):
     if not is_true(context, "twist_mux"):
         return [], []
 
-    params_file = LaunchConfiguration("twist_mux_params_file").perform(context)
-    if not params_file:
-        params_file = os.path.join(pkg_share, "config", "robot", "twist_mux.yaml")
-    if not os.path.isfile(params_file):
-        raise RuntimeError(f"twist_mux_params_file does not exist: {params_file}")
-
-    params_file, logs = params.compose_path(
-        context, params_file,
-        name="twist_mux_params_file",
-        overrides_dir=overrides_dir,
+    params_file, logs = _params_file(
+        context, pkg_share, overrides_dir,
+        "twist_mux_params_file", "twist_mux.yaml",
     )
 
     return [
@@ -142,16 +155,9 @@ def _joy_teleop(context, pkg_share, overrides_dir):
     if not is_true(context, "joy"):
         return [], []
 
-    params_file = LaunchConfiguration("joy_teleop_params_file").perform(context)
-    if not params_file:
-        params_file = os.path.join(pkg_share, "config", "robot", "joy_teleop.yaml")
-    if not os.path.isfile(params_file):
-        raise RuntimeError(f"joy_teleop_params_file does not exist: {params_file}")
-
-    params_file, logs = params.compose_path(
-        context, params_file,
-        name="joy_teleop_params_file",
-        overrides_dir=overrides_dir,
+    params_file, logs = _params_file(
+        context, pkg_share, overrides_dir,
+        "joy_teleop_params_file", "joy_teleop.yaml",
     )
 
     return [
@@ -191,16 +197,10 @@ def launch_setup(context, *args, **kwargs):
         )
     node_name, package, executable, default_params_name = DRIVERS[driver]
 
-    params_file = LaunchConfiguration("params_file").perform(context)
-    if not params_file:
-        params_file = os.path.join(pkg_share, "config", "robot", default_params_name)
-
     # overrides を重ねる。行き先はノード名で決まるので、driver:= で選ばなかった
     # ほうの節 (raspimouse: / raspicat_driver:) は自動的に外れる。
-    params_file, override_logs = params.compose_path(
-        context, params_file,
-        name="params_file",
-        overrides_dir=overrides_dir,
+    params_file, override_logs = _params_file(
+        context, pkg_share, overrides_dir, "params_file", default_params_name
     )
 
     parameters = [params_file]

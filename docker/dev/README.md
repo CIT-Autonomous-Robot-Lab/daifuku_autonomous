@@ -293,14 +293,13 @@ ros2 launch daifuku_stack navigation.launch.py \
 PC側なので、Mid-360を繋いでもいないしバッグも再生していないなら、空なのが正常です。
 
 `/livox/lidar`は来ているのに`/scan_raw`だけが無いなら、スタンプ打ち直しを疑います。
-中継は`share/daifuku_stack/src/restamp_scan.py`を`ExecuteProcess`で直接叩く形です。
-`CMakeLists.txt`が`src`ディレクトリを`share`へ入れているので普通は揃っていますが、
-`build-autonomous`を一度も通していない場合や、`scripts/`から`src/`へ移す前の
-`install/`ボリュームが残っている場合は、**エラーが出ないまま`/scan_raw`だけが配信
-されません**。置き場を見てください。
+中継は他のノードと同じ`Node`（`lib/daifuku_stack/restamp_scan.py`）です。実行ファイルが
+無ければlaunchごとエラーで止まるので、`build-autonomous`を一度も通していない場合や
+古い`install/`ボリュームが残っている場合でも、**黙って`/scan_raw`だけが欠けることは
+ありません**。まず`ros2 launch`のログを見てください。
 
 ```bash
-ls $(ros2 pkg prefix daifuku_stack)/share/daifuku_stack/src/
+ls $(ros2 pkg prefix daifuku_stack)/lib/daifuku_stack/
 ```
 
 詳細は[LiDARとオドメトリ](../../docs/setup/lidar.md#タイムスタンプの打ち直し)と

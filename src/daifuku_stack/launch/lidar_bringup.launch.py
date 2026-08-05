@@ -17,7 +17,6 @@ import sys
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
-    ExecuteProcess,
     OpaqueFunction,
 )
 from launch.conditions import IfCondition, UnlessCondition
@@ -211,15 +210,17 @@ def generate_launch_description():
         ],
     )
 
-    restamp_scan = ExecuteProcess(
+    restamp_scan = Node(
         condition=IfCondition(use_livox_driver),
-        cmd=[
-            "python3",
-            os.path.join(pkg_share, "src", "restamp_scan.py"),
-            "/scan_mid360_prestamp",
-            scan_raw_topic,
-        ],
+        package="daifuku_stack",
+        executable="restamp_scan.py",
+        name="restamp_scan",
         output="screen",
+        parameters=[{"use_sim_time": use_sim_time}],
+        remappings=[
+            ("scan_in", "/scan_mid360_prestamp"),
+            ("scan_out", scan_raw_topic),
+        ],
     )
 
     # ------------------------------------------------------------------
