@@ -365,8 +365,13 @@ RVizのFixed Frameとwaypointの`frame_id`が一致している必要があり�
 
 `config/nav2/vi_planner.yaml`の`waypoint_prefetch`を`true`にすると、いまの点へ
 走っているあいだに次の点を別スレッドで解いておき、着いたらsolveを飛ばして受け取ります。
-**既定は`false`です**（2026-08-04に一度`true`へ反転しましたが、同日の実機で走行中の
-固まりが出たため容疑者の1つとして戻しました。切り分けは未了）。効いた回はログに出ます。
+
+**`map_19f`（`overrides`の既定）では`true`です。** 断片（`config/nav2/vi_planner.yaml`）の
+ほうは`false`のままで、`overrides/map_19f.yaml`が上書きしています。`overrides`は
+置き換えなので、`map:=`を津田沼へ替えれば自動的に外れます（あちらは場が1.3 GBに
+なるため、外れたままが正しい）。2026-08-04に一度**断片**で`true`へ反転しましたが、
+同日の実機で走行中の固まりが出たため容疑者の1つとして戻した経緯があります
+（切り分けは未了）。効いた回はログに出ます。
 
 ```
 vi_planner: prefetched the value function for (12.30, -4.50) in 31.20s
@@ -386,8 +391,9 @@ vi_planner: path with 412 poses in 0.34s (solved_now=true, iters=0, prefetched)
 （津田沼648 MB×2＝1.3 GB、19F 95 MB×2）。津田沼を巡回するなら、その1.3 GBが
 匿名メモリとして居座ることになります。solveのCPUも取られます（追従の`try_lock`は
 邪魔しませんが、10Hzの制御周期がずれ得ます）。**Pi 4（4 GB）で走らせるなら
-`waypoint_prefetch`を`false`へ戻してください**（この既定はPi 5の8 GBを前提にした
-`dense_limit_mb`・`compact_ram_limit_mb`と同じ事情です）。
+`overrides/map_19f.yaml`の`waypoint_prefetch`を`false`へ戻してください**（Pi 5の8 GBを
+前提にしている点は`dense_limit_mb`・`compact_ram_limit_mb`と同じ事情です）。
+走行中に固まるようになったときも、まずここを戻して切り分けます。
 **まだ実機でもpi4_simでも通していません。**
 
 詳細は[`src/daifuku_waypoint_manager/README.md`](../../src/daifuku_waypoint_manager/README.md)。

@@ -57,7 +57,7 @@ vi_planner:
     global_sweep_budget_ms: 20    # 既定 20 [ms]: 1 回のロック取得で掃きに使う時間。60 へ上げたら機体が 1〜2 秒おきに固まったので戻した (2026-08-04 実機。犯人の切り分けは未了)
     global_sweep_idle_ms: 60      # 既定 60 [ms]: そのあとロックを手放して待つ時間 (20:60 = 1 コアの 25%)。budget を伸ばすときは一緒に伸ばすこと
     # ── ウェイポイントの先読み (代償と条件は ../../../../docs/usage/navigation.md) ──
-    waypoint_prefetch: false      # 既定 false: 次のウェイポイントを走行中に解いておくか。価値関数が 2 つ生きるので場も 2 倍。走行中ずっと 1 コアを使うので、固まりの容疑者として一度戻してある (2026-08-04 実機)
+    waypoint_prefetch: false      # 既定 false: 次のウェイポイントを走行中に解いておくか。価値関数が 2 つ生きるので場も 2 倍で、走行中ずっと 1 コアを使う。**既定の overrides である ../overrides/map_19f.yaml が true にしている**ので、実質の既定はそちら (津田沼は 1.3GB になるので外したまま)
     # ── 未設定 (既定のまま。上の先読みが効くかどうかを決める 2 つ) ──
     # waypoint_topic: "waypoints" # 順路 (nav_msgs/Path、latch)。出すのはパネルと ../../src/joy_teleop.py だけで、来なければ先読みは**黙って起きない**
     # waypoint_prefetch_threads: 1  # 先読みの solve のスレッド数。**効くのは compact だけ** (密は VI_THREADS をプロセスで 1 つ読む)
