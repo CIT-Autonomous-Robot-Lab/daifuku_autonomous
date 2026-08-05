@@ -69,8 +69,12 @@ vi_planner:
     cost_drawing_threshold: 60    # 既定 60: 色スケール上限 [ステップ数≒秒]。**地図ごとに測り直す値**で、同梱の 2 地図はどちらも ../overrides/ で上げてある (19F 180 / 津田沼 600)。この 60 が出るのはどちらでもない地図のとき (../README.md)
     window_cost_drawing_threshold: 10  # 既定 60: /local_window_value (±1m 窓) の色スケール上限
     # ── 行動集合 (前進量と回転量の組。3 つの配列で要素数を揃えること。6 個でなくてよい) ──
+    # 前進量は**価値反復の 1 手の長さであると同時に linear.x の指令値そのもの**で、1 手 = 1 秒。
+    # 旋回付き 2 つ (rightfw/leftfw) はノード既定の 0.2 だと 1m 進むのに直進の 1.5 倍の手数が
+    # かかり、曲がりながら進む手がほとんど選ばれなかったので直進と同じ 0.3 へ上げてある
+    # (経緯と代償 — 旋回半径が 0.57m から 0.86m へ広がる — は ../README.md)。
     action_names: ["forward", "back", "right", "rightfw", "left", "leftfw"]  # 既定 同左
-    action_forward_m: [0.3, -0.2, 0.0, 0.2, 0.0, 0.2]      # 既定 同左 [m]: 各行動の前進量
+    action_forward_m: [0.3, -0.2, 0.0, 0.3, 0.0, 0.3]      # 既定 [0.3, -0.2, 0.0, 0.2, 0.0, 0.2] [m]: 各行動の前進量。旋回付き 2 つだけ既定と違う
     action_rotation_deg: [0.0, 0.0, -20.0, -20.0, 20.0, 20.0]  # 既定 同左 [deg]: 各行動の回転量
 
     # ── 未設定 (既定のまま) ──
@@ -115,7 +119,7 @@ vi_global_planner:
     value_publish_interval_ms: 500  # 既定 500 [ms]: solve 途中経過の配信間隔 (0 で完了時のみ)
     unknown_as_obstacle: true     # 既定 true: 未観測セルを障害物として扱う
     action_names: ["forward", "back", "right", "rightfw", "left", "leftfw"]  # 既定 同左
-    action_forward_m: [0.3, -0.2, 0.0, 0.2, 0.0, 0.2]      # 既定 同左 [m]
+    action_forward_m: [0.3, -0.2, 0.0, 0.3, 0.0, 0.3]      # 既定 [0.3, -0.2, 0.0, 0.2, 0.0, 0.2] [m]: 旋回付き 2 つを上のブロックと揃える (../README.md)
     action_rotation_deg: [0.0, 0.0, -20.0, -20.0, 20.0, 20.0]  # 既定 同左 [deg]
 
     # ── 未設定 (既定のまま) ──
