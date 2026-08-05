@@ -25,7 +25,7 @@ joy_teleop:
     axis_angular: 0         # 既定 0: 旋回に使う軸 (左スティックの左右)。左が左旋回
     deadzone: 0.15          # 既定 同左: この傾き以下は 0。超えたところで min_speed に飛ぶ
 
-    linear_min_speed: 0.15  # 既定 同左 [m/s]: 不感帯を出た直後の速さ。これ未満は唸るだけで進まない
+    linear_min_speed: 0.1   # 既定 同左 [m/s]: 不感帯を出た直後の速さ。ステップ 91 Hz 相当で、0 に丸められる min_step_frequency (5 Hz) には遠い
     linear_max_speed: 0.35  # 既定 同左 [m/s]: 目一杯倒したときの速さ
     linear_boost_speed: 0.8 # 既定 同左 [m/s]: button_boost を押しているときの上限。ステップ 726 Hz 相当 (max_step_frequency 10000 には遠い)
     angular_min_speed: 0.3  # 既定 同左 [rad/s]: 旋回の下限。並進と同じ考え方

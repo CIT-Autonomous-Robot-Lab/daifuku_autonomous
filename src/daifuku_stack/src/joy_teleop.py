@@ -222,7 +222,7 @@ class JoyTeleop(Node):
         self.declare_parameter("axis_linear", 1)
         self.declare_parameter("axis_angular", 0)
         self.declare_parameter("deadzone", 0.15)
-        self.declare_parameter("linear_min_speed", 0.15)
+        self.declare_parameter("linear_min_speed", 0.1)
         self.declare_parameter("linear_max_speed", 0.35)
         self.declare_parameter("linear_boost_speed", 0.5)
         self.declare_parameter("angular_min_speed", 0.3)
