@@ -85,6 +85,11 @@ vi_planner:
     goal_margin_radius: 0.5              # 断片 0.3: ゴールセル数を 7 に保つ (セル比例)
     safety_radius_penalty: 1             # 断片 30: 30 だと貪欲ロールアウトが降下できない
     max_rollout_steps: 100000            # 断片 10000: 広域では遠い start から届かない
+    cost_drawing_threshold: 600          # 断片 60: 色スケール上限 [ステップ数≒秒] ≒300m
+    # ▲ 表示専用 (経路にもメモリにも影響しない)。**この地図は 1 ステップが 0.5m**
+    #   (上の action_forward_m。断片の 5/3 倍) なので、600 で 294.4x200m の地図をほぼ
+    #   端まで階調に入れる。断片の 60 は 30m 相当しかなく、地図の大半が飽和して 1 色になる。
+    #   **未計測** — 19F の 180 と違い実測の分布ではなく、地図の広がりから置いた見込み。
     # global_sweep と budget/idle は断片のまま (compact でもタイル修復として効く)。
     # **走行中に "global sweep done in" は出ない**のが設計どおりで、動いているかは
     # 2 秒ごとの "tile repair running for" のほうで見る (../README.md)。
@@ -101,6 +106,7 @@ vi_global_planner:
     goal_margin_radius: 0.5              # 断片 0.3: ゴールセル数を 7 に保つ (セル比例)
     safety_radius_penalty: 1             # 断片 30: 30 だと貪欲ロールアウトが降下できない
     max_rollout_steps: 100000            # 断片 10000: 広域では遠い start から届かない
+    cost_drawing_threshold: 600          # 断片 60: 同上 (vi_planner と揃える)
 
 # ── ここで上書きしていないもの ────────────────────────────────────────────
 # いずれも**未検証**。次も上書きが要るかもしれない。

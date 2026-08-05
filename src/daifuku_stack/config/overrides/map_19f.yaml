@@ -34,13 +34,22 @@ emcl2:
 # 両ノードに同じ値を置くのは、片方だけだと同じ地図なのに 2 構成で別の経路が出るため。
 # 代償・見積もり・先読みとの兼ね合いは ../README.md。**未検証** — この地図・この scale
 # での solve 時間と経路、狭域 → 広域の伝播にかかる実時間は測っていない。
+#
+# cost_drawing_threshold は**表示専用**で、経路にもメモリにも影響しない。断片の 60 では
+# 2026-07-29 実測 (0.10m/cell = この scale 2) で到達可能セルの 66% が飽和し、階調が出るのは
+# ゴールから 60 ステップ = 18m 以内の 6.83% だけだった。同じ計測の分布が中央値 60 /
+# p90 110 / p99 300 / 最大 680 (≒204m) なので、p90 と p99 のあいだの 180
+# (1 ステップ = action_forward_m 0.3m なので ≒54m) に置く。運用上通る範囲へ階調を集中させ、
+# 遠い裾だけ飽和させる選び方 (../README.md)。
 vi_planner:
   ros__parameters:
     map_scale: 2                       # 既定 1 (断片は未設定): 内部だけ 0.10m/cell (794 万状態)。solve を軽くするため
+    cost_drawing_threshold: 180        # 断片 60: 色スケール上限 [ステップ数≒秒] ≒54m
 
 vi_global_planner:
   ros__parameters:
     map_scale: 2                       # 断片 1: 同上 (vi_planner と揃える)
+    cost_drawing_threshold: 180        # 断片 60: 同上 (vi_planner と揃える)
 
 # ── ここで上書きしていないもの ────────────────────────────────────────────
 # この地図では断片 (= ほぼノード既定) のままで足りている。要るとしたら次の順で疑う。
@@ -54,5 +63,5 @@ vi_global_planner:
 #     そもそも退避しない。逃がすなら速い実ディスクを明示すること (../README.md)。
 #   vi_*.downsample_policy … 通路のセル幅が足りず波がゴール近傍で止まるとき。optimistic が
 #     要るのは map_scale >= 4 からで、2 では通路が片側 0.05m しか細らない。
-#   vi_*.cost_drawing_threshold … **表示専用**。断片の 60 だと 19F では到達可能セルの 66% が
-#     飽和するので、遠くまで階調が要るなら 180 へ (../README.md)。
+#   vi_planner.window_cost_drawing_threshold … 断片の 10 のまま。/local_window_value は
+#     ±1m 窓なので、上の cost_drawing_threshold を上げても連動しない (別の色スケール)。

@@ -66,7 +66,7 @@ vi_planner:
     # ── 可視化 (経路計算には影響しない) ──
     publish_value_function: true  # 既定 true: /value_function を配信するか。追従中の出し直しは掃きスレッドが行うので、global_sweep が false だと固まる
     value_publish_interval_ms: 500  # 既定 500 [ms]: solve 途中経過の配信間隔 (0 で完了時のみ。追従中の出し直しも止まる)。掃きスレッドが全域スライス (19F 13 万 / 津田沼 94 万セル) をロック内で 2 秒ごとに作るので、2026-08-04 の「2 秒おきに固まる」の容疑者。0 が戻し方
-    cost_drawing_threshold: 60    # 既定 60: 色スケール上限 [ステップ数≒秒]。地図ごとに測り直す値で、19F ではこの 60 だと 66% が飽和する (../README.md)
+    cost_drawing_threshold: 60    # 既定 60: 色スケール上限 [ステップ数≒秒]。**地図ごとに測り直す値**で、同梱の 2 地図はどちらも ../overrides/ で上げてある (19F 180 / 津田沼 600)。この 60 が出るのはどちらでもない地図のとき (../README.md)
     window_cost_drawing_threshold: 10  # 既定 60: /local_window_value (±1m 窓) の色スケール上限
     # ── 行動集合 (前進量と回転量の組。3 つの配列で要素数を揃えること。6 個でなくてよい) ──
     action_names: ["forward", "back", "right", "rightfw", "left", "leftfw"]  # 既定 同左
@@ -110,7 +110,7 @@ vi_global_planner:
     path_spacing: 0.05            # 既定 0.05 [m]: Path の姿勢間隔 (DWB 向け補間; 0 で無効)
     goal_tolerance_xy: 0.25       # 既定 0.25 [m]: 価値関数キャッシュを再利用するゴール一致判定
     goal_tolerance_deg: 10.0      # 既定 10.0 [deg]: 同、角度
-    cost_drawing_threshold: 60    # 既定 60: /value_function の色スケール上限 (vi_planner と同じ扱い)
+    cost_drawing_threshold: 60    # 既定 60: /value_function の色スケール上限 (vi_planner と同じ扱い。overrides でも揃えること)
     publish_value_function: true  # 既定 true: /value_function を配信するか
     value_publish_interval_ms: 500  # 既定 500 [ms]: solve 途中経過の配信間隔 (0 で完了時のみ)
     unknown_as_obstacle: true     # 既定 true: 未観測セルを障害物として扱う
