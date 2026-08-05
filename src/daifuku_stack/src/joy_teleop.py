@@ -228,10 +228,10 @@ class JoyTeleop(Node):
         self.declare_parameter("angular_min_speed", 0.3)
         self.declare_parameter("angular_max_speed", 1.0)
         self.declare_parameter("angular_boost_speed", 1.5)
-        self.declare_parameter("linear_accel", 0.6)
-        self.declare_parameter("linear_decel", 1.2)
-        self.declare_parameter("angular_accel", 2.0)
-        self.declare_parameter("angular_decel", 4.0)
+        self.declare_parameter("linear_accel", 0.9)
+        self.declare_parameter("linear_decel", 1.8)
+        self.declare_parameter("angular_accel", 6.0)
+        self.declare_parameter("angular_decel", 12.0)
         self.declare_parameter("button_toggle", 7)
         self.declare_parameter("button_waypoints", 6)
         self.declare_parameter("button_boost", 5)
@@ -469,8 +469,8 @@ class JoyTeleop(Node):
 
         受信断でも段差で 0 に落とさないのは、ドライバがそれをそのままステップ
         周波数の段差にするためで、**脱調して惰性で滑るより decel で止めたほうが
-        速く止まる**。止まるまでは linear_decel で決まる (0.8 m/s なら 0.67 秒・
-        0.27 m)。本当に即断したいときはモータ電源 (BACK 長押し) のほう。
+        速く止まる**。止まるまでは linear_decel で決まる (0.8 m/s なら 0.44 秒・
+        0.18 m)。本当に即断したいときはモータ電源 (BACK 長押し) のほう。
         """
         twist = Twist()
         twist.linear.x = self._linear_ramp.update(0.0, dt)
