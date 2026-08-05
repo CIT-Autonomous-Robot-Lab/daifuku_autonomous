@@ -77,6 +77,13 @@ class PrepareMid360Imu(Node):
         needed: the standard deviation alone accepts a *steady* turn
         (its samples are as quiet as a resting sensor), and the mean
         alone rejects nothing while the robot ramps up.
+
+        Only the z axis decides.  Judging on all three rejects a robot
+        that is standing perfectly still, because the x axis of this
+        sensor is four times noisier than z (sd 0.0054 vs 0.0014 rad/s
+        at rest, 2026-08-05) -- and z is the only axis the EKF reads
+        (two_d_mode with vyaw alone).  The bias of all three is still
+        measured and subtracted; it is the *gate* that looks at z.
         """
         window = self._window
         window.append((
@@ -95,18 +102,21 @@ class PrepareMid360Imu(Node):
         ]
         window.clear()
 
-        if (max(deviations) > self._bias_max_sd
-                or max(abs(mean) for mean in means) > self._bias_max):
+        if deviations[2] > self._bias_max_sd or abs(means[2]) > self._bias_max:
             self._rejected += 1
             # Once per ~10 windows: at 200 Hz and 400 samples that is a
             # line every 20 s, enough to notice without drowning the log.
             if self._rejected % 10 == 1:
                 self.get_logger().warn(
                     "prepare_mid360_imu: still moving, so the gyro bias is not "
-                    "measured yet (mean=%.5f sd=%.5f rad/s on z, %d windows "
-                    "rejected). Keep the robot still, or pass the bias in with "
+                    "measured yet (%d windows rejected; the gate is z, limits "
+                    "are |mean| <= %.4f and sd <= %.4f rad/s). "
+                    "mean=[%+.5f, %+.5f, %+.5f] sd=[%.5f, %.5f, %.5f] rad/s. "
+                    "Keep the robot still, or pass the bias in with "
                     "estimate_gyro_bias:=false and gyro_bias:=[x, y, z]."
-                    % (means[2], deviations[2], self._rejected)
+                    % (self._rejected, self._bias_max, self._bias_max_sd,
+                       means[0], means[1], means[2],
+                       deviations[0], deviations[1], deviations[2])
                 )
             return
 
