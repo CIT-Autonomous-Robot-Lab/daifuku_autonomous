@@ -12,6 +12,7 @@
 - [ゲームパッドで操作する](joystick.md)
 - [設定リファレンス](configuration.md)
 - [構成とパッケージ](architecture.md)
+- [走行を記録して再生する](recording.md)
 - [トラブルシューティング](troubleshooting.md)
 
 ## 起動前の安全確認

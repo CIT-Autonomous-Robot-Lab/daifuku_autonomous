@@ -191,6 +191,9 @@ docker compose exec ros2 ls /tmp/ros/log
 docker compose cp ros2:/tmp/ros/log ./ros_log
 ```
 
+走行が破綻した原因を後から追うなら、ログだけでなくトピックごと録っておきます
+（[走行を記録して再生する](recording.md)）。
+
 ## 終了する
 
 走行を伴う作業のあとは、コンテナを止める前にモーター電源を切ります。

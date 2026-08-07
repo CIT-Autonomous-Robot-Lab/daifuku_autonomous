@@ -462,3 +462,7 @@ docker compose exec ros2 sh -c 'cat /tmp/ros/log/lifecycle_manager_*.log'
 
 生きているノードだけでよければ`/rosout`でも読めます（`ros2 topic echo /rosout`）。
 ネイティブ環境ではlaunchを起動したターミナルのログを確認します。
+
+その場で追いきれない破綻は、走行中に`ros2 bag`へ録っておいて後から再生します
+（`/rosout`もbagに入るので、ログを残す手段としてもこちらが確実です）。手順は
+[走行を記録して再生する](recording.md)にまとめています。
