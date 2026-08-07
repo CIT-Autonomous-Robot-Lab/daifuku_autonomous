@@ -31,7 +31,7 @@ Raspberry Pi Cat を ROS 2 Humble / Nav2 で自律移動させる colcon ワー�
 | --- | --- |
 | `daifuku_bringup` | 機体。駆動ドライバ・URDF・cmd_vel の仲裁・ゲームパッド・**LiDAR**・**EKF**。`docker compose up` で常駐する |
 | `daifuku_stack` | 自律移動。Nav2 / emcl2 / VI の設定と launch、地図、ウェイポイント、RViz |
-| `daifuku_config_manager` | 設定の合成規則（`params.py`）と、場所ごとの調整（`overrides/`）。何も起動しない葉 |`vcs import` で入るものを直しても本
+| `daifuku_config_manager` | 設定の合成規則（`params.py`）と、場所ごとの調整（`overrides/`）。葉のまま `site_manager` と `config_sentinel` を持つ（設定が書き変わったことを見つける役。**どちらも他の 2 つを import しない**） |`vcs import` で入るものを直しても本
 リポジトリのコミットには入らないので、上流を直す必要があれば向こうで作業してください。
 
 罠が 2 つあります。`raspicat_ros` / `raspicat_description` / `raspimouse2` は
@@ -130,10 +130,16 @@ Docker 越しに叩く形は
   断片どうしは深くマージしない（深いマージが効くのは `overrides` を重ねるときだけ）。
 - **場所は 1 つの値で決まる — `daifuku_config_manager` の `config/site` の 1 行。**
   すべての launch が `overrides` の既定をここから取り、`navigation.launch.py` は
-  `map` の既定もここから導く（`maps/<名前>.yaml`。`nav2_params.resolve_map`）。
-  だから**地図と overrides は同じ名前でなければならない**。`map:=` を明示したときに
-  名前が食い違うと**起動時にエラーで止まる**（別の場所の帯と emcl2 の調整を載せた
-  まま走るのを防ぐため。承知でやるなら `overrides:=none` を添える）。`overrides` は
+  `map` の既定もそこから導く。**導き方は「同じ名前の地図」ではなく、その overrides
+  自身が書いている `site: map:`**（2026-08-07 に改めた。`nav2_params.declared_map` /
+  `resolve_map`）。だから overrides の名前と地図のファイル名は揃っていなくてよい。
+  `map:=` を明示したときに `site: map:` と別のファイルを指していると**起動時に
+  エラーで止まる**（別の場所の帯と emcl2 の調整を載せたまま走るのを防ぐため。承知で
+  やるなら `overrides:=none` を添える）。**地図が決まらないとき（`overrides:=none`、
+  または `site: map:` の無い overrides）は `map:=` が必須で、既定の地図へは落とさずに
+  止まる** — 別の場所にいるのに 19F の地図で自己位置を推定し始めるほうが危ないため。
+  `site:` は 1 段目に書ける予約節（`RESERVED_SECTIONS`）で、パッケージ名の段には
+  並べない。`overrides` は
   **置き換え**（追加ではない）で、重ねないときは `overrides:=none`（空文字は
   `ros2 launch` が弾く）。**切り替えは `tools/site.sh <名前>`。** LiDAR の帯を読むのは
   `daifuku_bringup`（= 常駐している raspicat サービス）で**起動時にしか読まない**ので、
@@ -142,6 +148,14 @@ Docker 越しに叩く形は
   生成時に焼かれるので作り直しが要り、かつ「仕立てるときに 1 度決める」値と混ざって
   忘れやすかった。**環境変数 `OVERRIDES` 自体はファイルより強いまま残してある**が、
   compose はもう渡さない（`simulator/` が 1 回きりの構成を渡す口）。
+- **`site_manager` を立てるのは `robot_bringup` の 1 か所だけ。** 2 つ立てると同じ
+  `config/site` を 2 つのノードが書きに行く。機体は常駐しているので、人が navigation を
+  立てていないあいだも `ros2 param set /site_manager site <名前>` が通る。対になる
+  `config_sentinel` は逆に**各 top-level launch が 1 つずつ**立てる（`sentinel_actions`
+  を `include` される側でも呼ぶと、1 つの launch 木に見張りが 3 つ立ってそれぞれが
+  勝手に落としにかかる）。落とす合図の `SENTINEL_RESTART_CODE` を **0 にしないこと** —
+  `OnProcessExit` → `EmitEvent(Shutdown)` が 0 で発火すると、ノードがバグで落ちただけでも
+  機体が上がり直し、`restart: unless-stopped` と組んで止まらなくなる。
 - **`overrides/*.yaml` の行き先はパッケージ名とノード名で決まる。** 1 段目が
   `daifuku_bringup:` か `daifuku_stack:` で、各 launch は**自分のパッケージ名の
   部分木しか読まない**。2 段目がノード名で、同じノード名を宣言している設定ファイル
@@ -267,10 +281,10 @@ Docker 越しに叩く形は
   絶対名なので、`namespace:=` を付けた構成でも噛み合わない）。**`nav2:=false` では
   この穴は無い** — `follow_waypoints` を `vi_planner` 自身が受けるので、順路はゴールと
   同じ経路で入る（トピックはもう 1 つの入口として残る）。**ノード側の宣言と
-  `config/nav2/vi_planner.yaml` は `false` だが、既定の overrides である
-  `overrides/map_19f.yaml` が `true` へ上書きしている**ので、既定の構成では
-  効いている（`map_tsudanuma` へ替えると overrides が置き換わって自動的に外れる。
-  あちらは外れたままが正しい）。価値関数が同時に 2 つ生きるので、**密ソルバでは
+  `config/nav2/vi_planner.yaml` は `false` だが、同梱の overrides は
+  `map_19f` も `map_tsudanuma` も `true` へ上書きしている**ので、どちらの場所でも
+  効いている（津田沼は 2026-08-07 から。消える待ちは 19F が 29 秒、津田沼が
+  87 秒）。価値関数が同時に 2 つ生きるので、**密ソルバでは
   メモリが 2 倍要る**。compact でも同梱の 2 地図は sink が RAM なので（2026-08-04 に
   津田沼の `compact_sink_dir` を外した）、そのまま 2 倍が匿名メモリに乗る
   （津田沼 648MB×2 = 1.3GB、19F 95MB×2）。**Pi 4 (4GB) では `true` に
@@ -283,14 +297,14 @@ Docker 越しに叩く形は
   再発したらまずここを疑う。
 - **`vi_planner` の `early_start` は compact では効かない地図がある。** ゴールまで
   方策が繋がった時点で solve を打ち切る機能だが、compact（同梱の既定 solver）の確定は
-  値バンド単位でしか進まず、そのバンド幅は `safety_radius_penalty` と 1 手の最大移動
-  セル数（`action_forward_m` ÷ 解像度）の**両方に比例して広がる**。**地図の値域が丸ごと
-  1 バンドに収まると波 2 つで解き終わって打ち切る隙が無く、エラーも警告も出ないまま何も
-  短くならない**（建物 1 フロア程度はこちら側の見込み。効くのは津田沼のような広域地図と、
-  密ソルバ）。距離への換算は [`docs/usage/navigation.md`](docs/usage/navigation.md) だが、
-  **そちらの「1 バンド ≒ 500 ステップ = 150m」は前進量が 0.3m だった頃のもので、0.5m に
-  した今は測り直していない**（前進量は両辺に効くので、掛け直すだけでは合わない）。
-  効いたかはログの `cut short` / `truncated` で見る。もう 1 つ、打ち切った場は**経路の外が
+  値バンド単位でしか進まず、そのバンド幅は「4 × 1 手の最大移動セル数（`action_forward_m`
+  ÷ 解像度）× 最大ペナルティ（`safety_radius_penalty`）」（`couple_margin`）。**地図の値域が
+  丸ごと 1 バンドに収まると波 2 つで解き終わって打ち切る隙が無く、エラーも警告も出ないまま
+  何も短くならない**（建物 1 フロア程度はこちら側の見込み。効くのは津田沼のような広域地図と、
+  密ソルバ）。距離への換算は [`docs/usage/navigation.md`](docs/usage/navigation.md)（19F で
+  600 ステップ ≒ 300m）だが、**あれは式に値を入れただけで実測ではない**。前進量は
+  バンド幅と 1 ステップの距離の両方に効くので、値を変えたら掛け直すのではなく式から出し直す
+  こと。効いたかはログの `cut short` / `truncated` で見る。もう 1 つ、打ち切った場は**経路の外が
   未確定**なので、機体が経路から外れて方策が引けなくなると捨てて解き直す
   （`dropped the truncated value function`）。そのとき機体は**走行中に止まったまま**
   フルの solve を待つ（津田沼で 87 秒）ので、打ち切らなかったときより待ちは長い。

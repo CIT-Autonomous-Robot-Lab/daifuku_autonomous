@@ -8,8 +8,9 @@ Raspberry Pi本体にSSHでつなぎ、`docker/raspberrypi/`環境で地図を�
 そのまま貼り付けて実行できます。tmuxの基本操作は[日常操作と確認](operations.md#tmuxで作業する)を
 参照してください。
 
-まずコンテナを起動します。`raspicat`サービスが機体ドライバを立ち上げるため、これで
-モーターと車輪オドメトリが使える状態になります。
+まずコンテナを起動します。`raspicat`サービスが`robot_bringup.launch.py`を立ち上げるので、
+これでモーターと車輪オドメトリに加えて**LiDARとEKF**——つまりSLAMの入力になる`/scan`と
+`/odom`——が揃います。
 
 ```bash
 cd ~/daifuku_autonomous   # リポジトリを置いた場所
@@ -45,12 +46,13 @@ tmux attach -t mapping
 TELEOP_LINEAR_SPEED=0.1 bash docker/raspberrypi/tools/control.sh teleop keyboard
 ```
 
-走り終えたら`check`の窓で地図を保存します。
+走り終えたら`check`の窓で地図を保存します。**保存先は`src/`側**です（コンテナが
+マウントしているので、そのままホストに残ります）。
 
 ```bash
 docker compose exec ros2 \
   /ros_entrypoint.sh ros2 run nav2_map_server map_saver_cli \
-  -f /opt/ros_ws/install/share/daifuku_stack/maps/map_19f
+  -f /opt/ros_ws/src/daifuku_stack/maps/map_19f
 ```
 
 保存を確認してから片付けます。`kill-session`はセッション内のノードもまとめて止めるため、
@@ -72,21 +74,24 @@ Mid-360のIMU融合（`use_mid360_imu`）は既定の`true`のまま使ってい
 **起動時は機体を静止させておいてください。** Mid-360のジャイロの電源投入時バイアス
 （実測+0.80 deg/s = 48 deg/min）を`prepare_mid360_imu`が測って引きます。
 
-`lidar:=mid360`、`use_rviz:=false`、`publish_lidar_tf:=true`、`lidar_z:=0.275`は
-すべてlaunchの既定値になったため、上のコマンドでは省いています。`lidar_z`の既定
-0.275はこの機体のMid-360の搭載高さ（接地面から275mm、2026-08-03実測）です。機体を
-変えたら実測し直してください。2D LiDAR構成では`lidar:=2d`を渡します（`urg_node`が
-起動します）。ネイティブ環境では[コマンドの読み替え](README.md#コマンドの読み替え)に
-従って前置きの`docker compose`部分を外し、地図の様子を見るなら`use_rviz:=true`を
-足してください。
+**LiDARの引数は`mapping.launch.py`にはありません。** センサーを立てるのは
+`raspicat`サービス（`robot_bringup.launch.py`）のほうで、`lidar`も`lidar_z`も
+`publish_lidar_tf`もそちらの引数です。2D LiDAR構成で地図を作るならリポジトリルートの
+`.env`に`LIDAR=2d`を書いて`docker compose up -d`してください（ネイティブ環境では
+`robot_bringup.launch.py`へ`lidar:=2d`を渡します）。`lidar_z`の既定0.275はこの機体の
+Mid-360の搭載高さ（接地面から275mm、2026-08-03実測）なので、機体を変えたら実測し
+直してください。**上のコマンド自体はLiDARの構成によらず同じです。**
+
+ネイティブ環境では[コマンドの読み替え](README.md#コマンドの読み替え)に従って前置きの
+`docker compose`部分を外します。地図の様子を見るなら`use_rviz:=true`を足してください。
 
 以降の節では、各手順の内容と選べる引数を説明します。
 
 ## 1. 機体側ドライバを起動する
 
 `docker/raspberrypi/`環境では、Composeの`raspicat`サービスが`robot_bringup.launch.py`
-（本体ドライバと`robot_state_publisher`）を起動します。どの本体ドライバになるかは
-`.env`の`COMPOSE_FILE`で決まります（既定は自前実装の`compose.original.yaml`。公式実装は
+（本体ドライバ、`robot_state_publisher`、**LiDAR**、**EKF**）を起動します。どの本体
+ドライバになるかは`.env`の`COMPOSE_FILE`で決まります（既定は自前実装の`compose.original.yaml`。公式実装は
 `compose.rt.yaml`で、rtmouse 入りの Pi 4 専用。
 [Pi 4](../setup/raspberry-pi-4.md) / [Pi 5](../setup/raspberry-pi-5.md)）。
 
@@ -116,22 +121,13 @@ Mid-360 + IMUの場合:
 
 ## 2. SLAMを起動する
 
-Mid-360（既定）:
-
 ```bash
 ros2 launch daifuku_stack mapping.launch.py use_sim_time:=false
 ```
 
-`lidar_z`の既定0.275はこの機体の実測値です。別の機体では`lidar_z:=<実測値>`を渡します。
-
-2D LiDAR（raspicatのURGが起動します）:
-
-```bash
-ros2 launch daifuku_stack mapping.launch.py \
-  lidar:=2d use_sim_time:=false
-```
-
-地図の様子をその場で見るなら`use_rviz:=true`を足します（既定は`false`）。
+**LiDARの構成によらず同じコマンドです。** `/scan`を出すのは機体側なので、Mid-360でも
+2D LiDARでもこちらは変わりません（構成の切り替えは前節）。地図の様子をその場で見るなら
+`use_rviz:=true`を足します（既定は`false`）。
 
 SLAM Toolboxの値を差し替えるなら、`slam_params_file:=`でファイルごと渡すほかに、
 `overrides:=`で一部のキーだけを重ねられます（`slam_toolbox:`の節を書きます。
@@ -144,7 +140,7 @@ SLAM Toolboxの値を差し替えるなら、`slam_params_file:=`でファイル
 ```bash
 docker compose exec ros2 \
   /ros_entrypoint.sh ros2 launch daifuku_stack mapping.launch.py \
-  lidar:=2d use_sim_time:=false
+  use_sim_time:=false
 ```
 
 ## 3. 地図を作る
@@ -188,19 +184,28 @@ ros2 run nav2_map_server map_saver_cli \
 ```bash
 docker compose exec ros2 \
   /ros_entrypoint.sh ros2 run nav2_map_server map_saver_cli \
-  -f /opt/ros_ws/install/share/daifuku_stack/maps/map_19f
+  -f /opt/ros_ws/src/daifuku_stack/maps/map_19f
 ```
 
-`src/daifuku_stack`はコンテナへマウントされているため、次のファイルがホスト側にも残ります。
+**`src/`側へ書いてください。** `src/daifuku_stack`はコンテナへマウントされているので、
+次のファイルがそのままホスト側に残ります（`install/`側の`maps/`はビルド時に張った
+symlinkなので、そちらへ書くとホストに残るかどうかがsymlinkの張り方に依存します）。
 
 - `src/daifuku_stack/maps/map_19f.yaml`
 - `src/daifuku_stack/maps/map_19f.pgm`
 
 `map_19f`は19Fの地図の名前で、`config/site`の既定値でもあります。別の場所の地図を
 作るときは名前を変えてください。そのとき`config/overrides/<同じ名前>.yaml`も用意し、
-`tools/site.sh <名前>`で切り替えます——地図と調整は同じ名前で対にする決まりで、
-食い違ったまま`map:=`だけ渡すと起動時にエラーで止まります。詳細は
-[設定](configuration.md)と`src/daifuku_stack/config/README.md`を参照してください。
+`tools/site.sh <名前>`で切り替えます。**どの地図を読むかは、そのoverridesの`site:`節に
+書きます**（`site: map: <ファイル名>`。`maps/`からの相対パス）。overridesの名前と地図の
+ファイル名は揃っていなくて構いませんが、**書き忘れると起動時にエラーで止まります**
+（既定の地図へは落としません）。
+
+**新しい名前で保存したときと`overrides/`にファイルを足したときは、一度ビルドを通して
+ください**（`docker compose up -d`。`install/`のsymlinkはビルド時に張られ、
+`daifuku_config_manager`の`setup.py`の`glob`もビルド時にしか展開されません）。既にある
+名前へ上書きしたときは要りません。詳細は[設定](configuration.md)と
+`src/daifuku_stack/config/README.md`を参照してください。
 
 保存が終わったらモーター電源を切ります。
 

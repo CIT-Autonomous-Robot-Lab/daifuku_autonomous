@@ -106,6 +106,15 @@ docker compose up -d    # 環境変数は起動時に読まれるのでコンテ
 配線と、`true`のときの注意（**機体の電源投入時に静止させること**——バイアス測定は
 bootのタイミングになりました）は[LiDARとオドメトリ](lidar.md#imuと車輪オドメトリ)。
 
+もう1つ`LIDAR`（既定`mid360`。`2d`はraspicatのURG）があり、`raspicat`サービスの
+`lidar:=`へ展開されます。**LiDARを立てるのもこのサービスだけ**なので、
+`navigation.launch.py`や`mapping.launch.py`へ`lidar:=`を渡しても何も起きません。
+
+```bash
+sed -i 's|^#*LIDAR=.*|LIDAR=2d|' .env
+docker compose up -d
+```
+
 **`.env`は2つ読まれ、値は合成されます。** リポジトリルートのものと、
 `docker/raspberrypi/.env`（`provision.sh`が`ROS_DOMAIN_ID`と`BUILD_JOBS`を書いて生成する）
 の両方で、**同じキーが両方にあるとあちらが勝ちます**。`COMPOSE_FILE`だけはルート側でしか

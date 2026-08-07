@@ -500,7 +500,7 @@ launch_ros は global params (SetParameter / SetParametersFromFile) を先に、
 **`params_file` に既にあるキーは上書きできない**。`bond_timeout` が効くのは
 `config/nav2/*.yaml` のどこにも無いキーだからで、`solver` や `map_scale` は効かない
 (実測: overlay を書いても `map_scale=1` のまま起動した)。
-`navigation.launch.py` は `daifuku_stack_launch/params.py` の `compose` で YAML の
+`navigation.launch.py` は `daifuku_config_manager` の `params.py` の `compose` で YAML の
 段階でマージし、`params_file` 自体を作っている (`overrides:=` / `extra_params_file:=`
 の両方がこの経路)。BT XML の 2 キーは `config/nav2/*.yaml` に無いので `SetParameter` で
 足りる (`planner:=vi` の bringup はこれで通る)。

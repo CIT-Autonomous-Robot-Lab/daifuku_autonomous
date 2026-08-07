@@ -33,5 +33,17 @@ setup(
     description="設定ファイルの合成規則と、場所ごとの調整 (overrides) を持つ共有パッケージ",
     license="Apache-2.0",
     tests_require=["pytest"],
-    # 立てるノードは無い。launch から import されるだけ。
+    # **ここを足したときはビルドが要る** (entry_points はビルド時にしか展開されない。
+    # --symlink-install でも同じ)。
+    #
+    #   site_manager    今どこかを ROS から読み書きできるようにする。機体側
+    #                   (robot_bringup.launch.py) が 1 つだけ立てる
+    #   config_sentinel 起動時に読んだ設定が書き変わっていないか見張る。
+    #                   top-level の launch がそれぞれ 1 つ立てる
+    entry_points={
+        "console_scripts": [
+            "site_manager = daifuku_config_manager.site_manager:main",
+            "config_sentinel = daifuku_config_manager.config_sentinel:main",
+        ],
+    },
 )

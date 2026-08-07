@@ -2,16 +2,19 @@
 #
 #   * LiDAR の帯 (仰角と高さ)   … 機体側。docker compose で常駐している
 #   * emcl2 と価値反復の調整      … 自律移動側。人が navigation を立てるとき
-#   * 地図 (navigation の map:=) … 同名の maps/<名前>.yaml
+#   * 地図 (navigation の map:=) … その overrides の site: map: が指すもの
 #
-# 名前は config/overrides/<名前>.yaml と daifuku_stack の maps/<名前>.yaml の
-# 両方に対応する (2 つで名前を分けない)。
+# 名前は config/overrides/<名前>.yaml のこと。**地図の名前とは揃っていなくてよい**
+# (どの地図を読むかは、その overrides 自身が site: 節に書いている)。
 #
 # **書き換えるのは tools/site.sh。** 機体側は起動時に読むので、ファイルを直しても
-# 立て直さなければ変わらない。スクリプトはその立て直しまでやる。
+# 立て直さなければ変わらない。機体が上がっていれば site_manager がこれを見張って
+# いて、書き変わると config_sentinel が (止まっているのを確かめてから) 機体を
+# 上げ直す。
 #
 #   tools/site.sh                 今の値と、選べる名前
-#   tools/site.sh map_tsudanuma   書き換えて機体を立て直す
+#   tools/site.sh map_tsudanuma   切り替える (機体は自分で上がり直す)
+#   ros2 param set /site_manager site map_tsudanuma   同じことを ROS から
 #
 # 1 つめの空でない行 (# で始まらないもの) が値。
 map_19f

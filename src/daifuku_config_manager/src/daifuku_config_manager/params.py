@@ -19,6 +19,12 @@
 同じノード名を宣言している設定ファイル (自分の config_root の下のどれか) の上に
 後勝ちで深くマージされ、一時ファイルになって launch 引数が差し替わる。
 
+1 段目にはもう 1 つ **`site:` という予約節**が書ける (RESERVED_SECTIONS)。ノードの
+パラメータではなく「その場所そのもの」に付く値の置き場で、今のところ地図
+(`site: map:`) だけが入っている。**どのパッケージのものでもない**ので、パッケージ名
+の段には並べない。読むのは site_meta で、意味付け (どこからの相対パスか、無いときに
+どうするか) は使う側 (daifuku_stack の nav2_params.resolve_map) が決める。
+
   1. 土台 = 各 launch が渡している設定ファイル。navigation の params_file だけは
      base_resolvers 経由で params_dir/*.yaml を合成したもの
   2. overrides:=<名前> -> <このパッケージの share>/config/overrides/<名前>.yaml
@@ -52,12 +58,22 @@ nav2 の断片合成のようなパッケージ固有の規則は、そちら側
 
 import difflib
 import glob
+import hashlib
+import json
 import os
 import tempfile
 
 import yaml
 from ament_index_python.packages import PackageNotFoundError, get_package_share_directory
-from launch.actions import DeclareLaunchArgument, LogInfo, SetLaunchConfiguration
+from launch.actions import (
+    DeclareLaunchArgument,
+    EmitEvent,
+    LogInfo,
+    RegisterEventHandler,
+    SetLaunchConfiguration,
+)
+from launch.event_handlers import OnProcessExit
+from launch.events import Shutdown
 
 from . import env_default, value
 
@@ -72,6 +88,24 @@ def site_file():
     )
 
 
+def read_site_file(path):
+    """site ファイルの 1 行 (1 つめの空でない非コメント行) を読む。
+
+    書き手 (site_manager、tools/site.sh) と読み手がこの規則を共有する。
+    読めない・空なら "" を返す — **投げない**。落とすかどうかは呼び元が決める。
+    """
+    try:
+        with open(path, "rb") as f:
+            body = f.read().decode("utf-8")
+    except OSError:
+        return ""
+    for raw in body.splitlines():
+        line = raw.strip()
+        if line and not line.startswith("#"):
+            return line
+    return ""
+
+
 def _read_site():
     """config/site の 1 行を読む。**読めなくても落とさない。**
 
@@ -80,15 +114,10 @@ def _read_site():
     ここでやるのは「読めたか」だけでよい。
     """
     try:
-        with open(site_file(), "rb") as f:
-            body = f.read().decode("utf-8")
-    except (OSError, PackageNotFoundError):
+        path = site_file()
+    except PackageNotFoundError:
         return _FALLBACK_SITE
-    for raw in body.splitlines():
-        line = raw.strip()
-        if line and not line.startswith("#"):
-            return line
-    return _FALLBACK_SITE
+    return read_site_file(path) or _FALLBACK_SITE
 
 
 # overrides の既定値。**場所が変わったら変えるもの**なので、リポジトリの中の
@@ -116,6 +145,20 @@ DEFAULT_OVERRIDES_ORIGIN = (
 # エラーも警告も出ずに消える (ノード名の綴り違いを _reject_unknown_nodes で
 # 潰しているのと同じ理由)。パッケージが増えたときだけここを足す。
 KNOWN_PACKAGES = ("daifuku_bringup", "daifuku_stack")
+
+# 1 段目に書ける、パッケージ名ではない節。**ノードのパラメータではないもの**を
+# ここへ入れる (今は地図だけ)。パッケージ名の段に混ぜないのは、どちらのパッケージの
+# ものでもないから — 地図を読むのは daifuku_stack だが、「その場所の地図」という値は
+# 場所の属性であってノードの設定ではない。
+RESERVED_SECTIONS = ("site",)
+
+# config_sentinel が「設定が変わったので立て直したい」と言うときの終了コード。
+#
+# **0 ではない値にしてあるのが要点。** launch を落とすのは
+# OnProcessExit(...) -> EmitEvent(Shutdown) で、これが 0 で発火すると
+# **ノードがバグで落ちただけでも機体が上がり直す** (restart: unless-stopped と
+# 組み合わさると止まらない)。この値ちょうどのときだけ落とす。
+SENTINEL_RESTART_CODE = 42
 
 
 def overrides_dir():
@@ -160,7 +203,7 @@ def _dump_temp(prefix, body):
     return out.name
 
 
-def _available_overrides():
+def available_overrides():
     """overrides:= に渡せる名前を並べる。
 
     --show-args に出る一覧と、綴りを間違えたときのエラーに出る一覧は同じもので
@@ -177,7 +220,7 @@ def _available_overrides():
 
 def declare_args():
     """overrides / extra_params_file を宣言する (どの launch も同じものを使う)。"""
-    available = ", ".join(_available_overrides())
+    available = ", ".join(available_overrides())
     return [
         DeclareLaunchArgument(
             "overrides",
@@ -216,28 +259,55 @@ def site_name(context):
     return ""
 
 
-def _select(body, label, package):
-    """1 ファイルから package の部分木を取り出す。
+def _check_sections(body, label):
+    """1 段目に知らない名前が無いか見る。
 
-    1 段目はパッケージ名でなければならない。知らない名前は**どの launch からも
-    読まれない**ので、綴り違いが黙って消える前にここで止める。
+    知らない名前は**どの launch からも読まれない**ので、綴り違いが黙って消える
+    前にここで止める。
     """
-    unknown = [k for k in body if k not in KNOWN_PACKAGES]
+    unknown = [
+        k for k in body if k not in KNOWN_PACKAGES and k not in RESERVED_SECTIONS
+    ]
     if unknown:
         raise RuntimeError(
             f"{label}: これらは知らないパッケージ名です: {', '.join(sorted(unknown))}\n"
-            f"overrides の 1 段目は {' / '.join(KNOWN_PACKAGES)} のいずれかです "
-            "(2 段目がノード名)。どの launch も自分のパッケージ名の部分木しか "
-            "読まないので、名前を間違えるとエラーも警告も出ないまま消えます。"
+            f"overrides の 1 段目は {' / '.join(KNOWN_PACKAGES)} "
+            f"(2 段目がノード名) か、予約節の {' / '.join(RESERVED_SECTIONS)} "
+            "です。どの launch も自分のパッケージ名の部分木しか読まないので、"
+            "名前を間違えるとエラーも警告も出ないまま消えます。"
         )
+
+
+def _select(body, label, package):
+    """1 ファイルから package の部分木を取り出す (1 段目の検査つき)。"""
+    _check_sections(body, label)
     return body.get(package) or {}
 
 
-def _resolve_layers(context, package):
-    """土台の上に重ねるものを、重ねる順に (表示名, 中身) で返す。
+def _meta(body):
+    """1 ファイルから site: 節 (ノードのパラメータではない値) を取り出す。"""
+    section = body.get("site")
+    return section if isinstance(section, dict) else {}
 
-    中身は package の部分木まで降りたもの。どの設定ファイルに重なるかは
-    ここでは決めない (ノード名で決まる)。
+
+def site_meta(context):
+    """重ねる順に site: 節をマージしたもの (後勝ち)。
+
+    地図のように「場所そのものに付く値」の入れ物。ここでは中身を解釈しない —
+    キーの意味も、相対パスの起点も、無いときにどうするかも読む側が決める
+    (daifuku_stack の nav2_params.resolve_map)。
+    """
+    merged = {}
+    for _label, body in _layer_bodies(context):
+        _overlay(merged, _meta(body))
+    return merged
+
+
+def _layer_bodies(context):
+    """重ねるファイルを、重ねる順に (表示名, ファイル全体) で返す。
+
+    1 段目の検査 (_check_sections) はここで済ませる。部分木まで降りるのは
+    _resolve_layers、site: 節を取るのは site_meta。
     """
     layers = []
     directory = overrides_dir()
@@ -250,7 +320,7 @@ def _resolve_layers(context, package):
             continue
         path = os.path.join(directory, f"{name}.yaml")
         if not os.path.isfile(path):
-            available = _available_overrides()
+            available = available_overrides()
             raise RuntimeError(
                 f"Unknown overrides name: {name}\n"
                 f"Available: {', '.join(available) or '(none)'}\n"
@@ -258,14 +328,29 @@ def _resolve_layers(context, package):
                 "config/overrides/."
             )
         label = f"overrides:{name}"
-        layers.append((label, _select(load(path), label, package)))
+        body = load(path)
+        _check_sections(body, label)
+        layers.append((label, body))
 
     for extra in [p.strip() for p in value(context, "extra_params_file").split(",") if p.strip()]:
         if not os.path.isfile(extra):
             raise RuntimeError(f"extra_params_file does not exist: {extra}")
-        layers.append((extra, _select(load(extra), extra, package)))
+        body = load(extra)
+        _check_sections(body, extra)
+        layers.append((extra, body))
 
     return layers
+
+
+def _resolve_layers(context, package):
+    """土台の上に重ねるものを、重ねる順に (表示名, 中身) で返す。
+
+    中身は package の部分木まで降りたもの。どの設定ファイルに重なるかは
+    ここでは決めない (ノード名で決まる)。
+    """
+    return [
+        (label, body.get(package) or {}) for label, body in _layer_bodies(context)
+    ]
 
 
 def _base(context, name, base_resolvers):
@@ -392,6 +477,220 @@ def compose(context, *args, package, config_root, targets,
 
     _reject_unknown_nodes(layers, hit, config_root)
     return actions
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 設定が書き変わったことを見つけるための道具 (config_sentinel / site_manager と共用)
+#
+# **ここは launch の中からもノードの中からも同じ答えを出さなければならない。**
+# launch は起動時に 1 度呼んで指紋を sentinel へ渡し、sentinel はそれを 2 秒ごとに
+# 計算し直して比べる。context を引かない (site 名と config_root だけで決まる) のは
+# そのため。
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def overrides_path(site):
+    """場所の名前から overrides のファイルパス。**実在は確かめない。**"""
+    return os.path.join(overrides_dir(), f"{site}.yaml")
+
+
+def is_site(name):
+    """場所を名乗っている名前か (none / 空は名乗っていない)。"""
+    return bool(name) and name.strip().lower() != "none"
+
+
+def _config_files(config_root):
+    """config_root の下の設定ファイル (overrides/ を除く) をパス順に。"""
+    pattern = os.path.join(config_root, "**", "*.yaml")
+    return [
+        path for path in sorted(glob.glob(pattern, recursive=True))
+        if os.path.basename(os.path.dirname(path)) != "overrides"
+    ]
+
+
+def config_digest(site, package, config_root):
+    """「今ディスクにある、このパッケージが読む設定」の指紋。
+
+    **中身を正規化してから取るので、コメントや並び順を直しただけでは変わらない。**
+    設定を書き換えたかどうかを見るためのものなので、注釈の推敲で機体が上がり直す
+    のは邪魔でしかない。
+
+    見るのは 2 つ:
+
+      * config_root の下の設定ファイル**全部**。この launch が実際に読むものだけに
+        絞らないのは、絞るには targets と base_resolvers を渡し回すことになり、
+        取りこぼしたときに**エラーも警告も出ないまま検出だけが効かなくなる**ため。
+        代償は、その launch が読まない設定 (navigation から見た
+        mapping/slam_toolbox.yaml) を直しても変わったと言うこと。
+      * overrides/<site>.yaml のうち**このパッケージの部分木と site: 節だけ**。
+        ファイルまるごとにすると、daifuku_stack: の数字を直しただけで機体が
+        上がり直す。
+
+    地図そのもの (maps/*.pgm) は見ていない。同じパスのまま作り直したときは
+    人が立て直すこと。
+
+    Raises:
+        yaml.YAMLError: どれかが壊れているとき。**呼び元は握って「壊れている」
+            として扱うこと** — 書きかけを読んだだけかもしれないので、これを
+            立て直しの理由にしてはいけない。
+    """
+    payload = {
+        "site": site,
+        "package": package,
+        "files": {
+            os.path.relpath(path, config_root).replace(os.sep, "/"): load(path)
+            for path in _config_files(config_root)
+        },
+    }
+    if is_site(site):
+        body = load(overrides_path(site))
+        payload["overrides"] = body.get(package) or {}
+        payload["meta"] = _meta(body)
+    blob = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
+
+
+def precheck(site, package, config_root):
+    """その場所でこのパッケージの launch が通るかを、立てずに確かめる。
+
+    **これが無いと、yaml の綴り違い 1 つで機体が上がり直し続ける。** sentinel が
+    launch を落とし、restart: unless-stopped が上げ直し、compose が同じ綴り違いで
+    投げ、また落ちる — 無人の実機でこれをやらせないための関門。site_manager が
+    書く前にも同じものを通すので、`ros2 param set` は**ファイルを書く前に**断る。
+
+    見るのは合成が起動時に落とす 2 つ (1 段目の名前、行き先の無いノード名) と、
+    そもそも読めるか。daifuku_stack の断片の重複検査 (fragments_resolver) までは
+    見ない — あちらはパッケージ固有の規則なので、ここからは呼べない。
+
+    Returns:
+        (通るか, 通らない理由)。通るなら理由は ""。
+    """
+    try:
+        for path in _config_files(config_root):
+            load(path)
+        if not is_site(site):
+            return True, ""
+        path = overrides_path(site)
+        if not os.path.isfile(path):
+            return False, f"{path} がありません"
+        label = f"overrides:{site}"
+        subtree = _select(load(path), label, package)
+        _reject_unknown_nodes([(label, subtree)], set(), config_root)
+    except (OSError, yaml.YAMLError, RuntimeError) as err:
+        return False, str(err)
+    return True, ""
+
+
+def follows_site(context):
+    """この launch が「場所の切り替えに黙って追随してよい」ものか。
+
+    追随するのは**人が構成を指定しなかったとき**だけ。`overrides:=` を明示した
+    人にも、`OVERRIDES` を渡した simulator にも、その構成で走らせたい理由が
+    あるはずで、config/site が変わったからといって勝手に落としてはいけない
+    (食い違いを言うのは、追随しないときも sentinel がやる)。
+
+    既定値ちょうどを明示したときは追随する側に入るが、それは同じ値なので害が無い。
+    """
+    return (
+        DEFAULT_OVERRIDES_ORIGIN == "config/site"
+        and value(context, "overrides").strip() == DEFAULT_OVERRIDES
+        and not value(context, "extra_params_file").strip()
+    )
+
+
+def _on_sentinel_exit(event, context):
+    """config_sentinel が終わったときに launch をどうするか。
+
+    **落とすのは SENTINEL_RESTART_CODE ちょうどのときだけ。** 0 でも落とすように
+    すると、ノードがバグで終わっただけで機体が上がり直す (restart: unless-stopped
+    と組み合わさると止まらない)。それ以外の異常終了では launch は生き続けるが、
+    **見張りが居なくなったことは言う** — 黙って検出だけが効かなくなるのが一番悪い。
+    """
+    if event.returncode == SENTINEL_RESTART_CODE:
+        return [
+            LogInfo(msg="config_sentinel: 設定が変わったので launch を終了します。"),
+            EmitEvent(event=Shutdown(reason="configuration changed")),
+        ]
+    # 0 は launch 自身の停止に巻き込まれた正常終了、負値はシグナル (SIGINT/SIGTERM)。
+    if event.returncode in (0, -2, -15):
+        return []
+    return [LogInfo(
+        msg=f"config_sentinel が rc={event.returncode} で落ちました。"
+            "以降、設定の書き換えは検出されません (launch はこのまま動きます)。",
+    )]
+
+
+def declare_watch_arg():
+    """config_watch を宣言する (config_sentinel を立てる launch が共有する)。"""
+    return DeclareLaunchArgument(
+        "config_watch",
+        default_value="shutdown",
+        description="起動後に設定ファイルが書き変わったときどうするか。"
+                    "shutdown (既定) = 大声で言い、追随してよい構成で・その設定でも"
+                    "立ち上がることを確かめ・機体が止まっていれば launch を終了する"
+                    "(機体は compose の restart で上がり直す)。"
+                    "warn = 言うだけ。off = 見張りごと立てない。",
+    )
+
+
+def sentinel_actions(context, *args, package, config_root, action=None,
+                     node_name=None, **kwargs):
+    """設定の書き換えを見張るノードと、その終了を launch の停止に繋ぐ handler。
+
+    **top-level の launch だけが呼ぶこと。** include される側 (lidar_bringup /
+    odom_fusion) でも呼ぶと、1 つの launch 木に見張りが 3 つ立って、それぞれが
+    勝手に launch を落としにかかる。
+
+    Args:
+        package: この launch のパッケージ名 (overrides のどの部分木を見るか)。
+        config_root: このパッケージの config/ (指紋を取る範囲)。
+        action: shutdown / warn / off。省略すると launch 引数 config_watch。
+        node_name: 既定は config_sentinel_<パッケージ名から daifuku_ を除いたもの>。
+
+    Returns:
+        action の並び (OpaqueFunction からそのまま返せる)。
+    """
+    # launch_ros はここでだけ要る。module の頭で読むと、ノード側
+    # (site_manager / config_sentinel が import する params) にも付いてくる。
+    from launch_ros.actions import Node
+
+    if action is None:
+        action = value(context, "config_watch").strip().lower()
+    if action == "off":
+        return []
+    if action not in ("shutdown", "warn"):
+        raise RuntimeError(
+            f"config_watch:={action} は未対応です (shutdown / warn / off)。"
+        )
+
+    site = site_name(context)
+    name = node_name or f"config_sentinel_{package.replace('daifuku_', '')}"
+    try:
+        digest = config_digest(site, package, config_root)
+    except (OSError, yaml.YAMLError) as err:
+        # ここで読めないなら合成も通っていないはずだが、順序に依らず言っておく。
+        raise RuntimeError(f"設定の指紋を取れません: {err}")
+
+    sentinel = Node(
+        package="daifuku_config_manager",
+        executable="config_sentinel",
+        name=name,
+        output="screen",
+        parameters=[{
+            "package": package,
+            "config_root": config_root,
+            "site": site,
+            "follow": follows_site(context),
+            "digest": digest,
+            "action": action,
+        }],
+    )
+    return [
+        sentinel,
+        RegisterEventHandler(OnProcessExit(
+            target_action=sentinel, on_exit=_on_sentinel_exit,
+        )),
+    ]
 
 
 def compose_path(context, path, *, name, package, config_root):

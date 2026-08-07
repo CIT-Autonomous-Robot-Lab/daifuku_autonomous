@@ -220,8 +220,13 @@ ros2 launch daifuku_bringup lidar_bringup.launch.py \
     >"$RUN/lidar.log" 2>&1 &
 LIDAR_PID=$!
 
+# config_watch:=off で設定の見張り (config_sentinel) を立てない。ここは 1 回きりの
+# 構成を OVERRIDES で渡すので追随の対象外だし (params.follows_site)、告知する
+# site_manager も居ない。**params_arg に混ぜないこと** — この引数を宣言している
+# のは navigation だけで、上の lidar_bringup にも渡ってしまう。
 ros2 launch daifuku_stack navigation.launch.py \
     use_rviz:=false \
+    config_watch:=off \
     map:="$MAP" "${params_arg[@]}" \
     planner:="$PLANNER" local_planner:="$LOCAL_PLANNER" nav2:="$NAV2" \
     localization:="$LOCALIZATION" >"$RUN/nav.log" 2>&1 &

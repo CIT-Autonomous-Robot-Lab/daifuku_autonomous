@@ -29,7 +29,7 @@ from ament_index_python.packages import get_package_share_directory
 from launch.actions import LogInfo, SetLaunchConfiguration
 
 from daifuku_config_manager import value
-from daifuku_config_manager.params import load, site_name
+from daifuku_config_manager.params import load, site_meta, site_name
 
 
 def fragments_resolver(context):
@@ -75,38 +75,64 @@ def fragments_resolver(context):
     return load(explicit), set(merged), explicit, False
 
 
+def declared_map(context):
+    """overrides の `site: map:` が指す地図のフルパス ("" なら書かれていない)。
+
+    値は maps/ からの相対パスか、絶対パス。**名前から導くのはやめた**
+    (2026-08-07) — 以前は maps/<overrides の名前>.yaml という規約で、地図と
+    overrides が同じ名前でなければならなかった。どの地図を読むかがファイルの
+    どこにも書かれておらず、地図を差し替えるには名前ごと揃え直す必要があった。
+    """
+    declared = str(site_meta(context).get("map") or "").strip()
+    if not declared:
+        return ""
+    if os.path.isabs(declared):
+        return os.path.normpath(declared)
+    maps_dir = os.path.join(get_package_share_directory("daifuku_stack"), "maps")
+    return os.path.normpath(os.path.join(maps_dir, declared))
+
+
 def resolve_map(context, *args, **kwargs):
     """map:= を決めて、overrides と食い違っていないか見る (OpaqueFunction)。
 
-    **地図と overrides は同じ名前で対にする。** 場所が変われば地図も LiDAR の帯も
-    emcl2 の調整も一緒に変わるので、人が動かす値は 1 つ (config/site、書き換えは
-    tools/site.sh) にしてある。map:= の既定が空なのはそのためで、空なら
-    maps/<overrides の 1 つめ>.yaml を採る。
+    **地図は overrides が持っている** (`site: map:`)。場所が変われば地図も
+    LiDAR の帯も emcl2 の調整も一緒に変わるので、そのひとまとまりを 1 ファイルに
+    入れてある。人が動かす値は今どこか (config/site) の 1 つだけで、map:= の既定が
+    空なのはそのため。
 
-    明示されたときは名前が overrides と一致しているかを見て、違えば止める。
-    **ここは今までエラーも警告も出なかった** — 地図だけ差し替えて overrides を
-    置き忘れると、別の場所の帯と emcl2 の調整を載せたまま走る。
+    明示されたときは overrides の宣言と同じものを指しているかを見て、違えば止める。
+    地図だけ差し替えて overrides を置き忘れると、別の場所の帯と emcl2 の調整を
+    載せたまま走るため。
 
-    導けないとき:
-      * overrides:=none        場所を名乗っていないので、既定の地図へ落とす
-      * 同名の地図が無い        overrides が場所ではない (将来の調整用など)。
-                               map:= を明示させる
+    地図が決まらないのは 2 通りで、**どちらも起動時に落とす**:
+      * overrides:=none (場所を名乗っていない)
+      * その overrides に site: map: が無い
+    どちらも map:= を明示すれば通る。**既定の地図へ落とさない** — 落とすと、
+    別の場所にいるのに 19F の地図で自己位置を推定し始める。
     """
-    maps_dir = os.path.join(get_package_share_directory("daifuku_stack"), "maps")
+    declared = declared_map(context)
     site = site_name(context)
     explicit = value(context, "map")
 
+    if declared and not os.path.isfile(declared):
+        raise RuntimeError(
+            f"overrides:{site or '?'} の site: map: が指す地図がありません: {declared}\n"
+            "値は daifuku_stack の maps/ からの相対パス (map_19f.yaml のように"
+            "拡張子まで書く) か、絶対パスです。"
+        )
+
     if explicit:
-        name = os.path.splitext(os.path.basename(explicit))[0]
-        if site and name != site:
+        if declared and os.path.realpath(explicit) != os.path.realpath(declared):
             raise RuntimeError(
-                f"map:= と overrides:= が食い違っています (地図 {name} / 調整 {site})。\n"
+                f"map:= と overrides:= が食い違っています。\n"
+                f"  map:=            {explicit}\n"
+                f"  overrides:{site} の site: map: -> {declared}\n"
                 "場所が決まれば地図も LiDAR の帯も emcl2 の調整も決まるので、"
-                "この 2 つは同じ名前で対にしてください。\n"
-                f"  ふつうは map:= を渡さない (overrides の {site} から導きます)\n"
-                f"  地図のほうが正しいなら overrides:={name}\n"
-                "  対にしないと分かっていてやるなら overrides:=none\n"
-                "既定そのものを変えるのは tools/site.sh です。"
+                "この 2 つは同じものを指していなければなりません。\n"
+                "  ふつうは map:= を渡さない (overrides が持っています)\n"
+                "  地図のほうが正しいなら overrides 側の site: map: を直す\n"
+                "  対にしないと分かっていてやるなら overrides:=none を添える\n"
+                "場所そのものを変えるのは tools/site.sh です。"
             )
         if not os.path.isfile(explicit):
             raise RuntimeError(
@@ -116,21 +142,17 @@ def resolve_map(context, *args, **kwargs):
             )
         return []
 
-    if not site:
-        fallback = os.path.join(maps_dir, "map_19f.yaml")
-        return [
-            LogInfo(msg=f"map: {fallback} (overrides が場所を指していないので既定)"),
-            SetLaunchConfiguration("map", fallback),
-        ]
-
-    derived = os.path.join(maps_dir, f"{site}.yaml")
-    if not os.path.isfile(derived):
+    if not declared:
         raise RuntimeError(
-            f"overrides:={site} から地図を導けません ({derived} が無い)。\n"
-            "地図と overrides は同じ名前で対にする決まりです。場所ではない "
-            "overrides を重ねているなら、map:= を明示してください。"
+            "どの地図を読むか決まりません。\n"
+            + (f"overrides:{site} に site: map: がありません。\n"
+               if site else "overrides:=none なので、場所から地図を導けません。\n")
+            + "overrides の 1 段目へ次のように書くか、map:= を明示してください。\n"
+              "  site:\n"
+              "    map: map_19f.yaml   # daifuku_stack の maps/ からの相対パス"
         )
+
     return [
-        LogInfo(msg=f"map: {derived} (overrides:={site} から)"),
-        SetLaunchConfiguration("map", derived),
+        LogInfo(msg=f"map: {declared} (overrides:{site} の site: map: から)"),
+        SetLaunchConfiguration("map", declared),
     ]

@@ -333,12 +333,33 @@ def launch_setup(context, *args, **kwargs):
         )
     )
 
+    # 今どこで走らせるかを ROS から読み書きできるようにする。**立てるのはここ
+    # 1 つだけ** — navigation 側にも置くと、2 つのノードが同じ config/site を
+    # 書きに行く。機体は docker compose で常駐しているので、人が navigation を
+    # 立てていないあいだも `ros2 param set /site_manager site <名前>` が通る。
+    site_manager = Node(
+        package="daifuku_config_manager",
+        executable="site_manager",
+        name="site_manager",
+        output="screen",
+    )
+
+    # 起動後に設定が書き変わったら言い、追随してよければこの launch を落とす。
+    # **落ちたあと上げ直すのは compose の restart: unless-stopped**（この launch は
+    # raspicat サービスの PID 1）。ドライバが finalized で落ちたときと同じ経路で、
+    # LiDAR も EKF も一緒に上がり直す。
+    sentinel = params.sentinel_actions(
+        context, package="daifuku_bringup",
+        config_root=os.path.join(pkg_share, "config"),
+    )
+
     return override_logs + mux_logs + joy_logs + mux_actions + joy_actions + [
         driver_node,
         register_activating_transition,
         register_shutting_down_transition,
         emit_configuring_event,
-    ]
+        site_manager,
+    ] + sentinel
 
 
 def generate_launch_description():
@@ -444,6 +465,7 @@ def generate_launch_description():
                         "両方に渡る)。空なら config/robot/joy_teleop.yaml を使う。",
         ),
         *params.declare_args(),
+        params.declare_watch_arg(),
         # LiDAR 構成の引数 (lidar / lidar_driver / scan_filter_* / mid360_* /
         # publish_lidar_tf / lidar_x..yaw / urg_*)。daifuku_bringup_launch/lidar.py。
         *lidar_common.declare_shared_args(pkg_share),

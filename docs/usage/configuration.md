@@ -39,7 +39,7 @@
 
 | 引数 | 既定値 | 説明 |
 |---|---|---|
-| `map` | 空（`overrides`から導く） | 使用する地図YAMLのフルパス。**空なら`maps/<overridesの1つめ>.yaml`。** 明示すると`overrides`と名前が一致しているかを見て、違えば起動時にエラー（別の場所の帯と`emcl2`の調整を載せたまま走るのを防ぐ）。既定の場所ごと変えるのは`tools/site.sh` |
+| `map` | 空（`overrides`の`site: map:`から導く） | 使用する地図YAMLのパス。**空なら重ねた`overrides`の`site: map:`。** 明示すると`site: map:`と同じファイルを指しているかを見て、違えば起動時にエラー（別の場所の帯と`emcl2`の調整を載せたまま走るのを防ぐ）。**地図が決まらないとき（`overrides:=none`、または`site: map:`の無いoverrides）は明示が要り、既定の地図へは落とさずに止まる。** 既定の場所ごと変えるのは`tools/site.sh` |
 | `params_dir` | `config/nav2` | 合成するNav2パラメータ断片のディレクトリ |
 | `params_file` | 空（`params_dir`を合成） | Nav2パラメータを1ファイルで与える。指定すると`params_dir`は無視 |
 | `overrides` | `config/site`の1行（既定`map_19f`） | `daifuku_config_manager`の`overrides/<名前>.yaml`を重ねる。カンマ区切りで複数可。**置き換え**なので`map_tsudanuma`にすると19F用の調整は外れる。何も重ねないなら`overrides:=none`。行き先は**パッケージ名とノード名**で決まる（下）。**機体側（LiDARの帯）はraspicatサービスが起動時に読むので、切り替えは`tools/site.sh`で**（下） |
@@ -56,7 +56,10 @@
 | `use_sim_time` | `false` | シミュレーション時刻を使うか |
 | `use_composition` | `False` | Nav2ノードを1プロセスへ合成するか（Pi 4では既定の分離を推奨） |
 
-このほかに`namespace`、`use_namespace`、`autostart`、`use_respawn`、`log_level`と、LiDARの搭載姿勢を指定する各種引数があります。全件は次のコマンドで確認できます。
+このほかに`namespace`、`use_namespace`、`autostart`、`use_respawn`、`log_level`、
+`rviz_config`と、EMCL2のノードを差し替える`emcl2_package` / `emcl2_executable` /
+`emcl2_node_name`があります。**LiDARの引数は1つもありません**（センサーを立てるのは
+`robot_bringup.launch.py`だけです）。全件は次のコマンドで確認できます。
 
 ```bash
 ros2 launch daifuku_stack navigation.launch.py --show-args

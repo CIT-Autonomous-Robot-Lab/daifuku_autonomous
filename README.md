@@ -9,7 +9,7 @@
 - キーボードとジョイスティックによる遠隔操作
 - Docker（ヘッドレス）またはUbuntu 22.04 / ROS 2 Humbleで実行可能
 
-> 本体ドライバは2つから選べます。標準は自前実装（`driver:=original`、[`src/raspicat_driver`](src/raspicat_driver/README.md)）で、モーター経路をこのリポジトリが持ちます。リポジトリの`.env`もこちら（`compose.original.yaml`）を指しています。もう一方の公式実装（rtmouse + raspimouse、`driver:=raspimouse`）を使う場合、モータードライバと車輪オドメトリはこのリポジトリに含まれず、rtmouseが動くRaspberry Pi 4に限られます（[Pi 4](docs/setup/raspberry-pi-4.md) / [Pi 5](docs/setup/raspberry-pi-5.md)）。`driver:=`という引数そのものの既定値は`raspimouse`ですが、Docker運用ではcomposeが`original`を渡すので、実際に立つのは自前実装です。
+> 本体ドライバは2つから選べます。標準は自前実装（`driver:=original`、[`src/raspicat_driver`](src/raspicat_driver/README.md)）で、モーター経路をこのリポジトリが持ちます。`.env`の雛形である`.env.example`もこちら（`compose.original.yaml`）を指しています（`.env`自体は`.gitignore`）。もう一方の公式実装（rtmouse + raspimouse、`driver:=raspimouse`）を使う場合、モータードライバと車輪オドメトリはこのリポジトリに含まれず、rtmouseが動くRaspberry Pi 4に限られます（[Pi 4](docs/setup/raspberry-pi-4.md) / [Pi 5](docs/setup/raspberry-pi-5.md)）。`driver:=`という引数そのものの既定値は`raspimouse`ですが、Docker運用ではcomposeが`original`を渡すので、実際に立つのは自前実装です。
 
 ## はじめる
 
@@ -35,6 +35,7 @@
   - [ゲームパッドで操作する](docs/usage/joystick.md)
   - [設定リファレンス](docs/usage/configuration.md)
   - [構成とパッケージ](docs/usage/architecture.md)
+  - [走行を記録して再生する](docs/usage/recording.md)
   - [トラブルシューティング](docs/usage/troubleshooting.md)
 
 `docker/`以下には、実機用（`raspberrypi/`）と開発用（`dev/`）の2つのDocker環境があります。

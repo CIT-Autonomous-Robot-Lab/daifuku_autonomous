@@ -63,8 +63,12 @@ ros2 launch daifuku_stack navigation.launch.py \
   planner:=navfn use_rviz:=true
 ```
 
-`lidar:=mid360`と`publish_lidar_tf:=true`、`lidar_z:=0.275`は既定値なので省略できます。
-`use_rviz`の既定は`false`なので、この環境で表示するなら明示します。
+`use_rviz`の既定は`false`なので、この環境で表示するなら明示します。**LiDARの引数は
+ありません**——`navigation.launch.py`はセンサーを1つも立てず、`/scan`と`/odom`の消費者に
+徹します。上の確認コマンドで`/scan`が来るのは実機の`raspicat`サービスが出しているから
+なので、実機につながずにこの環境だけでセンサーを立てたいときは
+`ros2 launch daifuku_bringup lidar_bringup.launch.py`を別に叩いてください
+（`robot_bringup.launch.py`のほうは本体ドライバも立てるのでPCでは上がりません）。
 
 キーボード操作の例:
 

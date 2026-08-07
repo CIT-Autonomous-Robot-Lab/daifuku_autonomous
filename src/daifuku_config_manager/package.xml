@@ -14,6 +14,17 @@
   <exec_depend>launch</exec_depend>
   <exec_depend>python3-yaml</exec_depend>
 
+  <!-- launch から config_sentinel を立てるため (params.sentinel_actions)。
+       import は関数の中に置いてあるので、ノードを立てない環境では読まれない。 -->
+  <exec_depend>launch_ros</exec_depend>
+
+  <!-- site_manager と config_sentinel。std_msgs は /daifuku/site の String、
+       nav_msgs は静止判定の Odometry、rcl_interfaces は SetParametersResult。 -->
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>rcl_interfaces</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+
   <!-- test/ の各 test_*.py と対。pep257 は外してある (理由は CLAUDE.md)。 -->
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

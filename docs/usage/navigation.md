@@ -74,43 +74,53 @@ Mid-360のIMU融合（`use_mid360_imu`）は既定の`true`のまま使ってい
 **起動時は機体を静止させておいてください。** Mid-360のジャイロの電源投入時バイアス
 （実測+0.80 deg/s = 48 deg/min）を`prepare_mid360_imu`が測って引きます。
 
-`lidar:=mid360`、`use_rviz:=false`、`publish_lidar_tf:=true`、`lidar_z:=0.275`は
-すべてlaunchの既定値になったため、上のコマンドでは省いています。`lidar_z`の既定
-0.275はこの機体のMid-360の搭載高さ（接地面から275mm、2026-08-03実測）です。機体を
-変えたら実測し直してください。2D LiDAR構成では`lidar:=2d`を渡します（`urg_node`が
-起動します）。広域地図
-`map_tsudanuma`を使う場合は、`map:`と`overrides:`を[広域地図（map_tsudanuma）で動かす](#広域地図map_tsudanumaで動かす)の
-とおりに差し替えてください。
+**LiDARの引数は`navigation.launch.py`にはありません。** センサーを立てるのは
+`raspicat`サービス（`robot_bringup.launch.py`）のほうで、`lidar`も`lidar_z`も
+`publish_lidar_tf`もそちらの引数です。2D LiDAR構成にするならリポジトリルートの
+`.env`に`LIDAR=2d`を書いて`docker compose up -d`してください（ネイティブ環境では
+`robot_bringup.launch.py`へ`lidar:=2d`を渡します）。`lidar_z`の既定0.275はこの機体の
+Mid-360の搭載高さ（接地面から275mm、2026-08-03実測）なので、機体を変えたら実測し
+直してください。`use_rviz`の既定は`false`です。
+
+広域地図`map_tsudanuma`で走らせるときは`tools/site.sh map_tsudanuma`で場所ごと
+切り替えます（[広域地図（map_tsudanuma）で動かす](#広域地図map_tsudanumaで動かす)）。
 
 ## 基本起動
 
 EMCL2、価値反復グローバル／ローカルプランナ、Mid-360が既定構成です。RVizは既定では
 起動しません（実機がheadlessのため。PC側から開きます）。
 
-**地図も調整も渡しません。** どちらも走らせる場所（`config/site`の1行。既定は19F）から
-決まります——`overrides`はその名前の`config/overrides/<名前>.yaml`、`map`は同じ名前の
-`maps/<名前>.yaml`です。場所の切り替えは`tools/site.sh <名前>`で、機体側（LiDARの帯）の
-立て直しまで含めて1コマンドです（[日常操作](operations.md#走らせる場所を切り替える)）。
+**地図も調整も渡しません。** 走らせる場所は`config/site`の1行（既定は`map_19f`）で、
+`overrides`はその名前の`config/overrides/<名前>.yaml`になります。**地図はその
+overrides自身が`site:`節で宣言します。**
 
-`map:=`を明示することもできますが、`overrides`と名前が食い違っていると**起動時にエラーで
-止まります**（別の場所の帯とEMCL2調整を載せたまま走るのを防ぐため）。承知のうえでやるなら
-`overrides:=none`を添えてください（`ros2 launch`は値が空の`overrides:=`を受け付けません）。
+```yaml
+site:
+  map: map_19f.yaml   # daifuku_stack の maps/ からの相対パス（絶対パスも可）
+```
 
-Mid-360 + IMU（既定）:
+`site:`はパッケージ名の段に並ばない予約節で、「その場所そのものに付く値」の置き場です
+（いまは地図だけ）。**overridesの名前と地図のファイル名は揃っていなくて構いません。**
+地図を差し替えるならこの1行を直します。場所の切り替えは`tools/site.sh <名前>`で、
+機体側（LiDARの帯）の立て直しまで含めて1コマンドです
+（[日常操作](operations.md#走らせる場所を切り替える)）。
+
+`map:=`を明示することもできますが、`site: map:`と別のファイルを指していると**起動時に
+エラーで止まります**（別の場所の帯とEMCL2調整を載せたまま走るのを防ぐため）。承知の
+うえでやるなら`overrides:=none`を添えてください（`ros2 launch`は値が空の`overrides:=`を
+受け付けません）。**そのときは`map:=`が要ります**——場所を名乗っていない以上、地図は
+決まりません。`site: map:`の無いoverridesを重ねたときも同じです。どちらも**既定の
+地図へ落とさずエラーで止めます**。別の場所にいるのに19Fの地図で自己位置を推定し始める
+ほうが危ないためです。
 
 ```bash
 ros2 launch daifuku_stack navigation.launch.py \
   use_sim_time:=false localization:=emcl2
 ```
 
-2D LiDAR（raspicatのURGが起動します）:
-
-```bash
-ros2 launch daifuku_stack navigation.launch.py \
-  use_sim_time:=false localization:=emcl2 lidar:=2d
-```
-
-RVizを同じ端末から開く場合は`use_rviz:=true`を渡します。
+**コマンドはLiDARの構成によらず同じです。** `/scan`を出すのは機体側なので、
+Mid-360でも2D LiDARでもこちらは変わりません。RVizを同じ端末から開く場合は
+`use_rviz:=true`を渡します。
 
 軽量Docker環境:
 
@@ -429,11 +439,17 @@ vi_planner: dropped the truncated value function (early_start) after 30 ticks wi
 タイル修復）。
 
 **効かない地図があります。** compact（同梱の既定）の確定は値バンド単位でしか進まず、
-0.1 m/cell・`safety_radius_penalty: 30`で1バンドが約500ステップ＝150 m相当です。
+バンド幅は`4 × 1手で進む最大セル数 × 最大ペナルティ`です
+（`frontier2d_sparse_compact.rs`の`couple_margin`）。`map_19f`の
+0.1 m/セル・`action_forward_m` 0.5 m・`safety_radius_penalty: 30`なら
+4×5×30＝600ステップ、1ステップ0.5 mなので**300 m相当**になります。**これは式に
+値を入れただけで、実測ではありません**（バンド幅の実測は取っていません）。
 地図の値域が丸ごと1バンドに収まると波2つで解き終わってしまい、打ち切る隙がありません。
 このとき**エラーも警告も出ず、ただ何も短くなりません**。建物1フロア程度の広さは
-こちら側の見込みで、効くのは津田沼のような広域地図です（`map_scale`を上げるほど
-バンドは狭くなるので効きやすくなります）。効いたかは上のログの`cut short` /
+こちら側の見込みで、効くのは津田沼のような広域地図です。前進量とペナルティを下げても
+`map_scale`を上げてもバンドは狭くなり、効きやすくなります（津田沼が
+`safety_radius_penalty: 1`なのは別の理由——貪欲ロールアウトが降下できないため——ですが、
+バンドもそのぶん狭くなります）。効いたかは上のログの`cut short` /
 `truncated`で判断してください。
 
 密ソルバ（`solver: "frontier2d_sparse"`に戻したとき）にはバンドが無いので、地図の

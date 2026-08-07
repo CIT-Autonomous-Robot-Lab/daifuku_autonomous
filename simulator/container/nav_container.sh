@@ -281,9 +281,16 @@ if [ "$LIDAR" = "mid360" ]; then
 fi
 
 # navigation は /scan と /odom の消費者に徹する (センサ関係の引数はもう無い)。
+#
+# config_watch:=off で設定の見張り (config_sentinel) を立てない。ここは 1 回きりの
+# 構成を OVERRIDES で渡すので追随の対象外だし (params.follows_site)、告知する
+# site_manager も居ない。DDS の参加者も 1 つ増やさずに済む。**params_arg に
+# 混ぜないこと** — この引数を宣言しているのは navigation だけで、上の
+# lidar_bringup / odom_fusion にも渡ってしまう。
 ros2 launch daifuku_stack navigation.launch.py \
     use_rviz:=false \
     use_sim_time:="$USE_SIM_TIME" \
+    config_watch:=off \
     map:="$MAP" "${params_arg[@]}" \
     planner:="$PLANNER" local_planner:="$LOCAL_PLANNER" nav2:="$NAV2" \
     localization:="$LOCALIZATION" >"$RUN/nav.log" 2>&1 &

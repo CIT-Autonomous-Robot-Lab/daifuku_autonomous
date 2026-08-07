@@ -21,7 +21,13 @@
 (daifuku_bringup の lidar.py、daifuku_stack の backends.py) は各パッケージの
 launch/ の下に残してある。
 
-  params.py  設定ファイルへの overrides の合成
+  params.py           設定ファイルへの overrides の合成
+  site_manager.py     今どこか (config/site) を ROS から読み書きできるようにするノード
+  config_sentinel.py  起動時に読んだ設定が書き変わっていないかを見張るノード
+
+**ノードを 2 つ持つが、葉であることは変わらない。** どちらも向こう 2 つの
+パッケージを import せず、見るのは overrides と、呼び元から渡された config_root
+だけ (パスの解決は ament の索引を引くだけで、依存にはならない)。
 """
 
 import os

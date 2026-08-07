@@ -285,7 +285,6 @@ ros2 topic hz /scan_raw
 置き場を確認します。
 
 ```bash
-ros2 pkg prefix daifuku_stack
 ls $(ros2 pkg prefix daifuku_bringup)/lib/daifuku_bringup/
 ```
 
@@ -317,6 +316,12 @@ RESETのログが毎スキャン出て、推定姿勢が回り続ける場合で
 
 ## `/scan`が配信されない
 
+**`/scan`を出すのは`raspicat`サービス（`robot_bringup.launch.py`）です。** 下の3つの
+引数もそちらのもので、`navigation.launch.py`や`mapping.launch.py`へ渡しても何も
+起きません（Dockerでは`.env`の`LIDAR`が`lidar:=`に展開されるので、変更後は
+`docker compose up -d`）。
+
+- まず`raspicat`サービスが上がっているか確認する（`docker compose logs raspicat`）
 - 2D LiDARドライバ（`lidar:=2d`では`urg_node`）が`/scan_raw`へ出しているか確認する
 - `lidar:=2d`または`lidar:=mid360`が構成と一致しているか確認する（既定は`mid360`）
 - 上流から順に確認する。2D LiDARは`/scan_raw` → `/scan`、Mid-360は`/livox/lidar` →
@@ -329,12 +334,9 @@ RESETのログが毎スキャン出て、推定姿勢が回り続ける場合で
 
 ## TFが競合または不安定になる
 
-**静止しているのに姿勢が細かく震える／追従を始めた瞬間に機体が回り出す**なら、まず
-`use_mid360_imu`を疑ってください。**`robot_bringup.launch.py`と
-`navigation.launch.py`（`mapping.launch.py`）が同じ値でなければならない引数**で、
-食い違うとEKFと車輪ノードが同時に`odom -> base_footprint`と`/odom`を配信します。
-tf2は届いた順に上書きするので、姿勢が2つの答えのあいだで振動します。しかもEKFの入力
-`/wheel/odom`は誰も出していないので、EKF側の答えはジャイロだけを積分した値です。
+**静止しているのに姿勢が細かく震える／追従を始めた瞬間に機体が回り出す**なら、
+`odom -> base_footprint`と`/odom`を2つのノードが出しています。EKFと車輪ノードが同時に
+配信すると、tf2は届いた順に上書きするので姿勢が2つの答えのあいだで振動します。
 **エラーも警告も出ません**（2026-08-05の実機の症状がこれでした）。
 
 ```bash
@@ -343,11 +345,19 @@ ros2 topic hz /wheel/odom      # use_mid360_imu:=true のときだけ出る
 ros2 run tf2_ros tf2_echo odom base_footprint
 ```
 
-> 2026-08-07より前は、`robot_bringup`と`navigation`の片方にだけ`use_mid360_imu:=`を
-> 書くとこの状態になりました。**いまはEKFもドライバも`robot_bringup.launch.py`が
-> 立てるので、片方だけ切り替わる状態は作れません。** それでも`/odom`のpublisherが2つ
-> あるなら、`docker exec`の残骸で`robot_bringup`が二重に走っている疑いがあります
-> （`docker compose exec raspicat ps -ef | grep ekf_node`）。
+**launch引数の食い違いではこの状態になりません。** `use_mid360_imu`は
+`robot_bringup.launch.py`1つに閉じていて、同じlaunchがドライバとEKFの両方を立てるためです
+（`navigation.launch.py`と`mapping.launch.py`はこの引数を持ちません）。それでも
+publisherが2つあるなら、`robot_bringup`が二重に走っている疑いがあります——`docker exec`の
+残骸が代表格です。
+
+```bash
+docker compose exec raspicat ps -ef | grep ekf_node
+```
+
+> 2026-08-07より前はEKFが`navigation`側にあり、`robot_bringup`と`navigation`の片方にだけ
+> `use_mid360_imu:=`を書くとこの状態になりました。EKFを機体側へ移したのでその穴は
+> ありません。
 
 切り替えは`.env`の`USE_MID360_IMU`で行ってください（変更後は`docker compose up -d`。
 環境変数は起動時にしか読まれません）。配線の詳細は

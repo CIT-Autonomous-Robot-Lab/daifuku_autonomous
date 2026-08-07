@@ -45,7 +45,13 @@ Mid-360は時刻同期がないためスタンプが実時計からずれてい�
 | --- | --- | --- |
 | `daifuku_bringup` | 駆動ドライバ・URDF・`twist_mux`・ゲームパッド・**LiDAR**・**EKF**。`src/`のPythonノード4本 | `docker compose up`で常駐 |
 | `daifuku_stack` | Nav2 / SLAM Toolbox / EMCL2の設定、地図、RViz、`behavior_trees/`、`waypoints/`、`src/system_monitor.py` | 人が`navigation` / `mapping`を立てる |
-| `daifuku_config_manager` | `overrides/*.yaml`と設定の合成規則 | 何も立てない（葉） |
+| `daifuku_config_manager` | `overrides/*.yaml`と設定の合成規則、走らせる場所を1行で持つ`config/site` | 何も立てない（葉） |
+
+`config/site`は3つのパッケージから同じものが見えます。すべてのlaunchが`overrides`の
+既定をここから取り、`navigation.launch.py`は`map`の既定もここから導きます。**場所が
+変わるとLiDARの帯・EMCL2と価値反復の調整・地図の3つが同時に変わるので、人が動かす値を
+1つにまとめてあります**（切り替えは`tools/site.sh <名前>`。
+[日常操作](operations.md#走らせる場所を切り替える)）。
 
 ### daifuku_bringupのPythonノード
 

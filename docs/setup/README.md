@@ -1,6 +1,7 @@
 # セットアップガイド
 
-Raspberry Pi CatとナビゲーションPCを同じROS 2ネットワークへ接続し、`daifuku_stack`を起動できる状態にするまでの手順です。
+Raspberry Pi CatとナビゲーションPCを同じROS 2ネットワークへ接続し、機体側
+（`daifuku_bringup`）と自律移動側（`daifuku_stack`）を起動できる状態にするまでの手順です。
 
 ## 1. 実行環境を選ぶ
 
@@ -20,8 +21,8 @@ Raspberry Pi 4 / 5のSDカードを一から用意する場合は、[`tools/imag
 機種ごとの手順と注意点は次にまとめています。本体ドライバは自前実装
 （[`src/raspicat_driver`](../../src/raspicat_driver/README.md)、`driver:=original`）と
 公式実装（rtmouse + `raspimouse`、`driver:=raspimouse`）から選べます。**標準は自前実装**で、
-リポジトリの`.env`（`COMPOSE_FILE`）もそちらを指しています。Pi 5ではrtmouseが動かないので
-選択肢がありません。
+`.env`の雛形である`.env.example`の`COMPOSE_FILE`もそちらを指しています。Pi 5ではrtmouseが
+動かないので選択肢がありません。
 
 - [Raspberry Pi 5で動かす](raspberry-pi-5.md)（自前実装のみ）
 - [Raspberry Pi 4で動かす](raspberry-pi-4.md)（どちらも選べる。公式実装にするなら`.env`を書き換える）

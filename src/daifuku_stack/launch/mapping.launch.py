@@ -17,8 +17,9 @@
 # docker compose up で常駐している。ここは slam_toolbox と RViz だけを足す。
 #
 # そのため、**地図を作る場所に合わせて LiDAR の帯 (仰角フィルタと高さ) を変えるには
-# .env の OVERRIDES を直して `docker compose up -d` する**必要がある。この launch へ
-# overrides:= を渡しても効くのは slam_toolbox の節だけ。
+# SLAM を始める前に `tools/site.sh <名前>` を通す**必要がある (config/site を書いて
+# raspicat を立て直すところまでやる)。この launch へ overrides:= を渡しても効くのは
+# daifuku_stack: の部分木、すなわち slam_toolbox の節だけ。
 
 import os
 import sys
@@ -61,6 +62,7 @@ def generate_launch_description():
         # 開く (navigation.launch.py と同じ既定)。
         DeclareLaunchArgument("use_rviz", default_value="false"),
         *params.declare_args(),
+        params.declare_watch_arg(),
 
         # slam_params_file へ overrides を重ねる (slam_toolbox: の節を持つものだけ
         # 効く)。LiDAR 側の設定ファイルは robot_bringup.launch.py が同じ overrides で
@@ -72,6 +74,13 @@ def generate_launch_description():
                 "config_root": config_root,
                 "targets": ["slam_params_file"],
             },
+        ),
+
+        # 起動後に設定が書き変わったら言い、追随してよければこの launch を落とす
+        # (地図を作っている最中に場所を切り替えたときなど)。**上げ直す人は居ない。**
+        OpaqueFunction(
+            function=params.sentinel_actions,
+            kwargs={"package": "daifuku_stack", "config_root": config_root},
         ),
 
         Node(

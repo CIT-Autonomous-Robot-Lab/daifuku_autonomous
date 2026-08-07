@@ -16,6 +16,15 @@
 #
 # 値の由来は daifuku_stack/config/README.md。
 
+# ── その場所そのものに付く値 (ノードのパラメータではない) ─────────────────────
+# **どの地図を読むかはここで決まる。** navigation の map:= の既定がこれで
+# (nav2_params.resolve_map)、明示したときは同じものを指しているかを見る。
+# 値は daifuku_stack の maps/ からの相対パス (絶対パスも可)。**名前から導くのは
+# やめた** (2026-08-07) ので、地図のファイル名と この overrides の名前は
+# 揃っていなくてよい。
+site:
+  map: map_19f.yaml
+
 # ── 機体側 (docker compose up で常駐する robot_bringup.launch.py) ─────────────
 # **ここを変えたら `docker compose restart raspicat` が要る。** navigation を立て直す
 # だけでは変わらない (読むのは raspicat サービスなので)。

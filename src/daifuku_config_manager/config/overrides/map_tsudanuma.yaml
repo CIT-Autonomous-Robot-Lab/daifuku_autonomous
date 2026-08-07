@@ -32,6 +32,12 @@
 #                      ピーク RSS 1.60GB、sink 648MB、oom_kill 0
 #   ▲ この RSS はディスク退避していた頃のもの。RAM 化した今は**未計測**。
 
+# ── その場所そのものに付く値 (ノードのパラメータではない) ─────────────────────
+# **どの地図を読むかはここで決まる。** 値は daifuku_stack の maps/ からの相対パス
+# (絶対パスも可)。navigation へ map:= を渡す必要はもう無い。
+site:
+  map: map_tsudanuma.yaml
+
 # ── 機体側 (docker compose up で常駐する robot_bringup.launch.py) ─────────────
 # **ここを変えたら `docker compose restart raspicat` が要る。** navigation を立て直す
 # だけでは変わらない (読むのは raspicat サービスなので)。

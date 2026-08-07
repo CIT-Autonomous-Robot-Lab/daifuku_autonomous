@@ -500,15 +500,15 @@ def generate_launch_description():
         DeclareLaunchArgument("use_namespace", default_value="false"),
         DeclareLaunchArgument(
             "map",
-            # **既定は空 = overrides から導く** (nav2_params.resolve_map)。
+            # **既定は空 = overrides の site: map: を読む** (nav2_params.resolve_map)。
             # 地図と overrides を別々に渡させると、片方だけ差し替えて別の場所の
-            # 帯と emcl2 の調整を載せたまま走れてしまう。明示したときは名前が
-            # overrides と一致しているかを見て、違えば起動時に止める。
+            # 帯と emcl2 の調整を載せたまま走れてしまう。明示したときは overrides の
+            # 宣言と同じものを指しているかを見て、違えば起動時に止める。
             default_value="",
-            description="地図の yaml (フルパス)。**空 (既定) なら "
-                        "maps/<overrides の 1 つめ>.yaml。** 明示すると overrides と"
-                        "名前が一致しているかを見る (違えば起動時にエラー)。"
-                        "既定の場所ごと変えるのは tools/site.sh。",
+            description="地図の yaml (フルパス)。**空 (既定) なら overrides の "
+                        "site: map: が指すもの。** 明示すると overrides の宣言と"
+                        "同じものかを見る (違えば起動時にエラー)。"
+                        "場所ごと変えるのは tools/site.sh。",
         ),
 
         # --- パラメータの合成 (daifuku_config_manager/params.py) ---
@@ -525,6 +525,7 @@ def generate_launch_description():
                         "*.yaml をファイル名順に深くマージする (config/README.md)。",
         ),
         *params.declare_args(),
+        params.declare_watch_arg(),
         DeclareLaunchArgument("emcl2_params_file", default_value=default_emcl2_params),
         DeclareLaunchArgument("bond_params_file", default_value=default_bond_params),
 
@@ -621,6 +622,13 @@ def generate_launch_description():
         # 後**に置くこと: overrides:= を読むのはどちらも同じだが、ここで失敗させる
         # なら先に overrides の名前そのものを検査させたほうがエラーが分かりやすい。
         OpaqueFunction(function=nav2_params.resolve_map),
+        # 起動後に設定が書き変わったら言い、追随してよければこの launch を落とす。
+        # **こちらは誰も上げ直さない** (人が docker compose exec で立てているので)。
+        # 落ちたら立て直すこと — 古い設定のまま走り続けるよりはよい。
+        OpaqueFunction(
+            function=params.sentinel_actions,
+            kwargs={"package": "daifuku_stack", "config_root": config_root},
+        ),
         OpaqueFunction(function=backends.validate_localization),
         OpaqueFunction(function=backends.validate_planner),
         OpaqueFunction(
