@@ -33,9 +33,9 @@ IMU（Mid-360）: /livox/imu → prepare_mid360_imu.py → /imu/mid360 ┐
                 → /odom、odom → base_footprint
 ```
 
-**LiDARの帯（仰角と高さ）を場所ごとに変えるには、リポジトリルートの`.env`の
-`OVERRIDES`を直して`docker compose up -d`します。** 読むのは常駐している
-raspicatサービスなので、`navigation`や`mapping`を立て直すだけでは変わりません。
+**LiDARの帯（仰角と高さ）を場所ごとに変えるには`tools/site.sh <名前>`を使います。**
+読むのは常駐しているraspicatサービスなので、`navigation`や`mapping`を立て直すだけでは
+変わりません（スクリプトは`raspicat`の立て直しまでやります）。
 
 `elevation_filter:=false`にすると仰角フィルタは立たず、`/livox/lidar`が
 `pointcloud_to_laserscan`へ直接入ります（relayは挟みません）。

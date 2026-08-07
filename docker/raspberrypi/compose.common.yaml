@@ -106,9 +106,10 @@ services:
       # robot_bringup.launch.py だけで、navigation / mapping はセンサも EKF も
       # 立てない (消費するだけ)。
       #
-      # overrides は OVERRIDES で配る。navigation を人が exec で叩くときの既定に
-      # なるので、raspicat の command に渡すのと同じ値がここからも見える。
-      OVERRIDES: ${OVERRIDES:-map_19f}
+      # **場所 (overrides と map) もここには要らない。** どちらの launch も
+      # daifuku_config_manager の config/site を既定として読む。src/ をマウント
+      # しているのでファイルは両サービスから同じものが見えるし、環境変数と違って
+      # コンテナを作り直さなくてよい (書き換えは tools/site.sh)。
     volumes:
       - ./fastdds_udp_whitelist.xml:/etc/fastdds/udp_whitelist.xml:ro
       # 入力デバイス。cgroup 規則のほうは、コンテナ生成時に居なかった
@@ -192,9 +193,6 @@ services:
       # 「ドライバが /wheel/odom を出して TF を止める」と「EKF が /odom と TF を
       # 出す」が同時に切り替わる。以前のように 2 つのサービスへ配る必要は無い。
       USE_MID360_IMU: ${USE_MID360_IMU:-true}
-      # 下の command が ${OVERRIDES} を展開するので、これは launch 引数としては
-      # 要らない。ros2 サービス側と同じ値が見えるように置いてある。
-      OVERRIDES: ${OVERRIDES:-map_19f}
     volumes:
       - ./fastdds_udp_whitelist.xml:/etc/fastdds/udp_whitelist.xml:ro
       - ../../src:/opt/ros_ws/src

@@ -135,8 +135,8 @@ ros2 launch daifuku_stack mapping.launch.py \
 
 SLAM Toolboxの値を差し替えるなら、`slam_params_file:=`でファイルごと渡すほかに、
 `overrides:=`で一部のキーだけを重ねられます（`slam_toolbox:`の節を書きます。
-`mapping.launch.py`も既定で`overrides:=map_19f`を受けるので、別の場所を測るときは
-`overrides:=none`か、その場所用の名前を渡してください）。書きかたは
+`mapping.launch.py`も既定で`config/site`の名前を受けるので、別の場所を測るときは
+先に`tools/site.sh`で切り替えるか、`overrides:=none`を渡してください）。書きかたは
 [設定](configuration.md)の「上書き（overrides）の行き先」にあります。
 
 軽量Docker環境:
@@ -196,10 +196,10 @@ docker compose exec ros2 \
 - `src/daifuku_stack/maps/map_19f.yaml`
 - `src/daifuku_stack/maps/map_19f.pgm`
 
-`map_19f`は19Fの地図の名前で、`navigation.launch.py`の`map`の既定値です。別の場所の
-地図を作るときは名前を変えてください。その場合、自律移動では`map:=`と一緒に
-`overrides:=`も指定し直します（既定の`overrides:=map_19f`が載ったままになると、
-19F向けのEMCL2調整が別の地図に適用されます）。詳細は
+`map_19f`は19Fの地図の名前で、`config/site`の既定値でもあります。別の場所の地図を
+作るときは名前を変えてください。そのとき`config/overrides/<同じ名前>.yaml`も用意し、
+`tools/site.sh <名前>`で切り替えます——地図と調整は同じ名前で対にする決まりで、
+食い違ったまま`map:=`だけ渡すと起動時にエラーで止まります。詳細は
 [設定](configuration.md)と`src/daifuku_stack/config/README.md`を参照してください。
 
 保存が終わったらモーター電源を切ります。

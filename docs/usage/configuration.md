@@ -39,10 +39,10 @@
 
 | 引数 | 既定値 | 説明 |
 |---|---|---|
-| `map` | パッケージ内`maps/map_19f.yaml` | 使用する地図YAMLのフルパス |
+| `map` | 空（`overrides`から導く） | 使用する地図YAMLのフルパス。**空なら`maps/<overridesの1つめ>.yaml`。** 明示すると`overrides`と名前が一致しているかを見て、違えば起動時にエラー（別の場所の帯と`emcl2`の調整を載せたまま走るのを防ぐ）。既定の場所ごと変えるのは`tools/site.sh` |
 | `params_dir` | `config/nav2` | 合成するNav2パラメータ断片のディレクトリ |
 | `params_file` | 空（`params_dir`を合成） | Nav2パラメータを1ファイルで与える。指定すると`params_dir`は無視 |
-| `overrides` | `.env`の`OVERRIDES`（無ければ`map_19f`） | `daifuku_config_manager`の`overrides/<名前>.yaml`を重ねる。カンマ区切りで複数可。**置き換え**なので`map_tsudanuma`にすると19F用の調整は外れる。何も重ねないなら`overrides:=none`。行き先は**パッケージ名とノード名**で決まる（下）。**機体側（LiDARの帯）は`.env`＋`docker compose up -d`でしか変わらない** |
+| `overrides` | `config/site`の1行（既定`map_19f`） | `daifuku_config_manager`の`overrides/<名前>.yaml`を重ねる。カンマ区切りで複数可。**置き換え**なので`map_tsudanuma`にすると19F用の調整は外れる。何も重ねないなら`overrides:=none`。行き先は**パッケージ名とノード名**で決まる（下）。**機体側（LiDARの帯）はraspicatサービスが起動時に読むので、切り替えは`tools/site.sh`で**（下） |
 | `extra_params_file` | 空（無効） | `overrides`の後に重ねる任意パスのファイル。カンマ区切りで複数可 |
 | `emcl2_params_file` | `config/localization/emcl2.yaml` | EMCL2パラメータ |
 | `bond_params_file` | `config/lifecycle_bond.yaml` | ライフサイクルマネージャのbondタイムアウト |
@@ -67,7 +67,7 @@ ros2 launch daifuku_stack navigation.launch.py --show-args
 引数は`slam_params_file`、`rviz_config`、`use_sim_time`、`use_rviz`、`namespace`、
 `overrides`、`extra_params_file`だけです。**LiDARの引数はありません**（センサーは
 `robot_bringup.launch.py`が立てます）。そのため、**新しい場所で地図を作るときは
-`.env`の`OVERRIDES`を直して`docker compose up -d`してから**SLAMを始めてください。
+`tools/site.sh <名前>`で切り替えてから**SLAMを始めてください。
 この launch へ`overrides:=`を渡しても効くのは`daifuku_stack:`の部分木だけです。
 
 ```bash
@@ -178,7 +178,7 @@ daifuku_stack:              # 自律移動側
       resolution: 0.03
 ```
 
-`overrides`と`extra_params_file`はすべてのlaunchが同じ既定（`.env`の`OVERRIDES`）で
+`overrides`と`extra_params_file`はすべてのlaunchが同じ既定（`config/site`の1行）で
 受けます。同じパッケージの中で、その launch が読まない設定ファイル宛の節は何も
 起こしません（`mapping.launch.py`に`emcl2:`を渡しても害はない）。**パッケージが違う
 節はそもそも読まれません。** 上書きできないのは`config/sensors/MID360_config.json`

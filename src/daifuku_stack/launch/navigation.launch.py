@@ -77,7 +77,6 @@ def generate_launch_description():
     default_bond_params = os.path.join(pkg_share, "config", "lifecycle_bond.yaml")
     default_emcl2_params = os.path.join(pkg_share, "config", "localization", "emcl2.yaml")
     default_rviz_config = os.path.join(pkg_share, "rviz", "navigation.rviz")
-    default_map = os.path.join(pkg_share, "maps", "map_19f.yaml")
 
     bringup_launch = os.path.join(nav2_share, "launch", "bringup_launch.py")
     navigation_launch = os.path.join(nav2_share, "launch", "navigation_launch.py")
@@ -488,8 +487,15 @@ def generate_launch_description():
         DeclareLaunchArgument("use_namespace", default_value="false"),
         DeclareLaunchArgument(
             "map",
-            default_value=default_map,
-            description="Full path to the map yaml file.",
+            # **既定は空 = overrides から導く** (nav2_params.resolve_map)。
+            # 地図と overrides を別々に渡させると、片方だけ差し替えて別の場所の
+            # 帯と emcl2 の調整を載せたまま走れてしまう。明示したときは名前が
+            # overrides と一致しているかを見て、違えば起動時に止める。
+            default_value="",
+            description="地図の yaml (フルパス)。**空 (既定) なら "
+                        "maps/<overrides の 1 つめ>.yaml。** 明示すると overrides と"
+                        "名前が一致しているかを見る (違えば起動時にエラー)。"
+                        "既定の場所ごと変えるのは tools/site.sh。",
         ),
 
         # --- パラメータの合成 (daifuku_config_manager/params.py) ---
@@ -598,7 +604,10 @@ def generate_launch_description():
                 "base_resolvers": {"params_file": nav2_params.fragments_resolver},
             },
         ),
-        OpaqueFunction(function=nav2_params.validate_map_file),
+        # map:= を overrides から導く (明示されていれば食い違いを見る)。**compose の
+        # 後**に置くこと: overrides:= を読むのはどちらも同じだが、ここで失敗させる
+        # なら先に overrides の名前そのものを検査させたほうがエラーが分かりやすい。
+        OpaqueFunction(function=nav2_params.resolve_map),
         OpaqueFunction(function=backends.validate_localization),
         OpaqueFunction(function=backends.validate_planner),
         OpaqueFunction(

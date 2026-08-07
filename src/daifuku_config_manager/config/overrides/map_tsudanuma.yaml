@@ -4,15 +4,13 @@
 # daifuku_stack/config/nav2/vi_planner.yaml (= ノードの既定) と
 # config/localization/emcl2.yaml。
 #
-#   # .env の OVERRIDES=map_tsudanuma にして機体側を作り直してから
-#   docker compose up -d
-#   ros2 launch daifuku_stack navigation.launch.py \
-#       map:=<share>/maps/map_tsudanuma.yaml \
-#       overrides:=map_tsudanuma planner:=vi local_planner:=vi
+#   tools/site.sh map_tsudanuma                    # config/site を書いて機体を立て直す
+#   ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=vi
+#   # map も overrides も config/site から来るので渡さない
 #
 # **1 段目はパッケージ名。** 各 launch は自分の名前の部分木しか読まない。
 # 機体側 (daifuku_bringup:) は docker compose up で常駐しているので、そちらを
-# 変えたときは `docker compose up -d` が要る。
+# 変えたときは `docker compose restart raspicat` が要る (tools/site.sh がやる)。
 #
 # 0.05m のまま解くと 14.1 億状態 = 密ソルバで 79GB を確保して起動と同時に死ぬ。
 # プランナ内部だけ粗くし (map_scale)、密な states を確保しない compact で解くことで通す。
@@ -35,8 +33,8 @@
 #   ▲ この RSS はディスク退避していた頃のもの。RAM 化した今は**未計測**。
 
 # ── 機体側 (docker compose up で常駐する robot_bringup.launch.py) ─────────────
-# **ここを変えたら `docker compose up -d` が要る。** navigation を立て直すだけでは
-# 変わらない (読むのは raspicat サービスなので)。
+# **ここを変えたら `docker compose restart raspicat` が要る。** navigation を立て直す
+# だけでは変わらない (読むのは raspicat サービスなので)。
 daifuku_bringup:
   # ── スキャンの切り出し ──────────────────────────────────────────────────────
   # 2026-08-05 に走行中の自己位置の飛びが出たときの対処。この地図には勾配があり、

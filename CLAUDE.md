@@ -106,12 +106,20 @@ Docker 越しに叩く形は
   分けるのが前提で、**同じノード名が 2 つの断片にあると起動時にエラーで止まる**。
   キーが重なっていなくても止まるので、1 つのノードの設定を 2 ファイルに割れない。
   断片どうしは深くマージしない（深いマージが効くのは `overrides` を重ねるときだけ）。
-- **`overrides` の既定はリポジトリルートの `.env` の `OVERRIDES`**（無ければ
-  `map_19f`）で、**置き換え**（追加ではない）。`map:=` を変えたら `OVERRIDES` も
-  必ず変える。重ねないときは `overrides:=none`（空文字は `ros2 launch` が弾く）。
-  すべての launch が同じ既定で受ける。**LiDAR の帯を読むのは `daifuku_bringup`
-  （= 常駐している raspicat サービス）なので、`.env` を直したら
-  `docker compose up -d` が要る。** navigation を立て直すだけでは変わらない。
+- **場所は 1 つの値で決まる — `daifuku_config_manager` の `config/site` の 1 行。**
+  すべての launch が `overrides` の既定をここから取り、`navigation.launch.py` は
+  `map` の既定もここから導く（`maps/<名前>.yaml`。`nav2_params.resolve_map`）。
+  だから**地図と overrides は同じ名前でなければならない**。`map:=` を明示したときに
+  名前が食い違うと**起動時にエラーで止まる**（別の場所の帯と emcl2 の調整を載せた
+  まま走るのを防ぐため。承知でやるなら `overrides:=none` を添える）。`overrides` は
+  **置き換え**（追加ではない）で、重ねないときは `overrides:=none`（空文字は
+  `ros2 launch` が弾く）。**切り替えは `tools/site.sh <名前>`。** LiDAR の帯を読むのは
+  `daifuku_bringup`（= 常駐している raspicat サービス）で**起動時にしか読まない**ので、
+  素手でファイルを直したときは `docker compose restart raspicat` が要る（スクリプトは
+  そこまでやる）。`.env` の `OVERRIDES` は 2026-08-07 に廃止した — 環境変数はコンテナ
+  生成時に焼かれるので作り直しが要り、かつ「仕立てるときに 1 度決める」値と混ざって
+  忘れやすかった。**環境変数 `OVERRIDES` 自体はファイルより強いまま残してある**が、
+  compose はもう渡さない（`simulator/` が 1 回きりの構成を渡す口）。
 - **`overrides/*.yaml` の行き先はパッケージ名とノード名で決まる。** 1 段目が
   `daifuku_bringup:` か `daifuku_stack:` で、各 launch は**自分のパッケージ名の
   部分木しか読まない**。2 段目がノード名で、同じノード名を宣言している設定ファイル

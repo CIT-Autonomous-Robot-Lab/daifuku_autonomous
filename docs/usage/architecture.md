@@ -107,7 +107,7 @@ Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。
 | --- | --- | --- |
 | `params.py` | `daifuku_config_manager` | 設定ファイルへの上書きの合成（土台 → `overrides` → `extra_params_file`）。**すべてのlaunchが使う共有部品** |
 | `backends.py` | `daifuku_stack/launch/daifuku_stack_launch/` | `localization`／`planner`／`local_planner`／`nav2`の解決と起動前チェック |
-| `nav2_params.py` | `daifuku_stack/launch/daifuku_stack_launch/` | `config/nav2/*.yaml`の合成と`map:=`の存在確認。`params.py`へ`base_resolvers`で渡す |
+| `nav2_params.py` | `daifuku_stack/launch/daifuku_stack_launch/` | `config/nav2/*.yaml`の合成と、`overrides`からの`map:=`の決定。`params.py`へ`base_resolvers`で渡す |
 | `lidar.py` | `daifuku_bringup/launch/daifuku_bringup_launch/` | LiDAR構成の共通引数と`lidar_bringup`の`include` |
 
 `lidar`や`lidar_z`のようなLiDAR構成の引数は、`robot_bringup`と`lidar_bringup`の

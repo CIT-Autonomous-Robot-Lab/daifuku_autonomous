@@ -23,7 +23,7 @@ docker compose up -d
 ```bash
 cd ~/daifuku_autonomous
 tmux new-session -d -s nav -c "$PWD" -n nav
-tmux send-keys -t nav:nav 'docker compose exec ros2 /ros_entrypoint.sh ros2 launch daifuku_stack navigation.launch.py map:=/opt/ros_ws/install/share/daifuku_stack/maps/map_19f.yaml use_sim_time:=false localization:=emcl2 planner:=vi' Enter
+tmux send-keys -t nav:nav 'docker compose exec ros2 /ros_entrypoint.sh ros2 launch daifuku_stack navigation.launch.py use_sim_time:=false localization:=emcl2 planner:=vi' Enter
 
 tmux new-window -t nav -c "$PWD" -n motor
 tmux send-keys -t nav:motor 'bash docker/raspberrypi/tools/control.sh motor on'
@@ -85,18 +85,21 @@ Mid-360のIMU融合（`use_mid360_imu`）は既定の`true`のまま使ってい
 ## 基本起動
 
 EMCL2、価値反復グローバル／ローカルプランナ、Mid-360が既定構成です。RVizは既定では
-起動しません（実機がheadlessのため。PC側から開きます）。地図は
-`maps/map_19f.yaml`（19F）が既定で、その地図向けの調整をまとめた
-`config/overrides/map_19f.yaml`も`overrides`の既定値として一緒に載ります。
-`overrides`は**置き換え**なので、別の地図では`overrides:=map_tsudanuma`のように
-指定し直してください。何も重ねないなら`overrides:=none`です（`ros2 launch`は値が
-空の`overrides:=`を受け付けません）。
+起動しません（実機がheadlessのため。PC側から開きます）。
+
+**地図も調整も渡しません。** どちらも走らせる場所（`config/site`の1行。既定は19F）から
+決まります——`overrides`はその名前の`config/overrides/<名前>.yaml`、`map`は同じ名前の
+`maps/<名前>.yaml`です。場所の切り替えは`tools/site.sh <名前>`で、機体側（LiDARの帯）の
+立て直しまで含めて1コマンドです（[日常操作](operations.md#走らせる場所を切り替える)）。
+
+`map:=`を明示することもできますが、`overrides`と名前が食い違っていると**起動時にエラーで
+止まります**（別の場所の帯とEMCL2調整を載せたまま走るのを防ぐため）。承知のうえでやるなら
+`overrides:=none`を添えてください（`ros2 launch`は値が空の`overrides:=`を受け付けません）。
 
 Mid-360 + IMU（既定）:
 
 ```bash
 ros2 launch daifuku_stack navigation.launch.py \
-  map:=$PWD/src/daifuku_stack/maps/map_19f.yaml \
   use_sim_time:=false localization:=emcl2
 ```
 
@@ -104,7 +107,6 @@ ros2 launch daifuku_stack navigation.launch.py \
 
 ```bash
 ros2 launch daifuku_stack navigation.launch.py \
-  map:=$PWD/src/daifuku_stack/maps/map_19f.yaml \
   use_sim_time:=false localization:=emcl2 lidar:=2d
 ```
 
@@ -115,7 +117,6 @@ RVizを同じ端末から開く場合は`use_rviz:=true`を渡します。
 ```bash
 docker compose exec ros2 \
   /ros_entrypoint.sh ros2 launch daifuku_stack navigation.launch.py \
-  map:=/opt/ros_ws/install/share/daifuku_stack/maps/map_19f.yaml \
   use_sim_time:=false localization:=emcl2
 ```
 
@@ -125,7 +126,6 @@ Nav2標準AMCLへ変更する場合:
 
 ```bash
 ros2 launch daifuku_stack navigation.launch.py \
-  map:=$PWD/src/daifuku_stack/maps/map_19f.yaml \
   localization:=amcl
 ```
 
@@ -139,7 +139,6 @@ NavFnとNav2 DWBへ切り替える場合:
 
 ```bash
 ros2 launch daifuku_stack navigation.launch.py \
-  map:=$PWD/src/daifuku_stack/maps/map_19f.yaml \
   planner:=navfn nav2:=auto
 ```
 
@@ -147,7 +146,6 @@ ros2 launch daifuku_stack navigation.launch.py \
 
 ```bash
 ros2 launch daifuku_stack navigation.launch.py \
-  map:=$PWD/src/daifuku_stack/maps/map_19f.yaml \
   planner:=vi local_planner:=nav2 nav2:=auto
 ```
 
@@ -171,13 +169,10 @@ RVizの「Nav2 Goal」もパネルもパッドも、操作は何も変わりま�
 
 ```bash
 # 何も付けなければ Nav2 抜き（vi_planner 1 ノード）
+ros2 launch daifuku_stack navigation.launch.py
 ros2 launch daifuku_stack navigation.launch.py \
-  map:=$PWD/src/daifuku_stack/maps/map_19f.yaml
-ros2 launch daifuku_stack navigation.launch.py \
-  map:=$PWD/src/daifuku_stack/maps/map_19f.yaml \
   nav2:=true                     # 従来どおりBTを挟む構成に戻す
 ros2 launch daifuku_stack navigation.launch.py \
-  map:=$PWD/src/daifuku_stack/maps/map_19f.yaml \
   velocity_smoother:=false       # 残る唯一のlifecycleノードも外す
 ```
 
@@ -242,9 +237,8 @@ BTを外すと、VIが損をしていた点が消えます。**毎秒の再計�
 `compact_sink_dir`を戻してください。**
 
 ```bash
+tools/site.sh map_tsudanuma   # 場所を切り替える（機体も立て直す）
 ros2 launch daifuku_stack navigation.launch.py \
-  map:=$PWD/src/daifuku_stack/maps/map_tsudanuma.yaml \
-  overrides:=map_tsudanuma \
   planner:=vi
 ```
 
@@ -266,14 +260,15 @@ ros2 launch daifuku_stack navigation.launch.py \
 変えますが、**上限を決めているのはCPUではなく追従ループと共有するMutex**です
 （[`config/README.md`](../../src/daifuku_stack/config/README.md)の`global_sweep`の節）。
 
-NavFnとDWBで動かす場合、`map_tsudanuma`の価値反復向け設定は要りませんが、
-`overrides:=none`を渡してください。省略すると既定の`map_19f`が載り、この地図には
-合わない19F用のEMCL2調整が適用されます。
+NavFnとDWBで動かす場合、`map_tsudanuma`の価値反復向け設定は要りません。ただし
+`overrides:=none`はEMCL2の調整も一緒に落とすので、**ふつうは場所を切り替えたまま
+`planner:=navfn`だけを渡してください**（VI向けの節は`vi_planner`／`vi_global_planner`宛で、
+それらが立たない構成では宛先が無いだけです）。どうしても何も重ねたくないときは
+`map:=`を自分で渡します——`overrides:=none`は場所を名乗らないので、地図を導けません。
 
 ```bash
+tools/site.sh map_tsudanuma
 ros2 launch daifuku_stack navigation.launch.py \
-  map:=$PWD/src/daifuku_stack/maps/map_tsudanuma.yaml \
-  overrides:=none \
   planner:=navfn
 ```
 
@@ -373,8 +368,8 @@ RVizのFixed Frameとwaypointの`frame_id`が一致している必要があり�
 
 **`map_19f`（`overrides`の既定）では`true`です。** 断片（`config/nav2/vi_planner.yaml`）の
 ほうは`false`のままで、`overrides/map_19f.yaml`が上書きしています。`overrides`は
-置き換えなので、`map:=`を津田沼へ替えれば自動的に外れます（あちらは場が1.3 GBに
-なるため、外れたままが正しい）。2026-08-04に一度**断片**で`true`へ反転しましたが、
+置き換えなので、`tools/site.sh map_tsudanuma`で場所を替えれば自動的に外れます
+（あちらは場が1.3 GBになるため、外れたままが正しい）。2026-08-04に一度**断片**で`true`へ反転しましたが、
 同日の実機で走行中の固まりが出たため容疑者の1つとして戻した経緯があります
 （切り分けは未了）。効いた回はログに出ます。
 

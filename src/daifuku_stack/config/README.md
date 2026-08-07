@@ -192,34 +192,38 @@ override も**通ります**（そして黙って無視されます）。
 `ros__parameters` も無い）ので、この仕組みに乗りません。`mid360_config:=<パス>` で
 ファイルごと差し替えてください。
 
-`overrides` の既定値は**リポジトリルートの `.env` の `OVERRIDES`**（無ければ
-`map_19f`）で、すべての launch が同じものを見ます。既定の地図
-（`maps/map_19f.yaml`）に対応する調整を、素の起動でも載せるためです。地図を
-変えるときは**置き換え**になります（追加ではありません）。
+`overrides` の既定値は **`daifuku_config_manager` の `config/site` の 1 行**（既定
+`map_19f`）で、すべての launch が同じものを見ます。さらに `navigation.launch.py` は
+`map` の既定もここから導きます（`maps/<同じ名前>.yaml`）。場所が変われば LiDAR の帯も
+EMCL2 の調整も地図も一緒に変わるので、**人が動かす値を 1 つにしてある**という趣旨です。
+`overrides` は地図を変えると**置き換え**になります（追加ではありません）。
 
-**機体側（LiDAR の帯）を変えるには `.env` を直して `docker compose up -d` が
-要ります。** そちらを読むのは常駐している raspicat サービスなので、`overrides:=` を
-navigation へ渡しても効くのは `daifuku_stack:` の部分木だけです。`mapping` から
-LiDAR の帯を変えられないのも同じ理由です（新しい場所で地図を作るときは、SLAM を
-始める前に `.env` と `docker compose up -d` を通してください）。
+**切り替えは `tools/site.sh <名前>`。** 機体側（LiDAR の帯）を読むのは常駐している
+raspicat サービスで、**起動時にしか読みません**。スクリプトはファイルの書き換えと
+`docker compose restart raspicat` の両方をやります。`overrides:=` を navigation へ
+渡しても効くのは `daifuku_stack:` の部分木だけで、`mapping` から LiDAR の帯を
+変えられないのも同じ理由です（新しい場所で地図を作るときは、SLAM を始める前に
+`tools/site.sh` を通してください）。
 
 ```bash
-# 機体側 (LiDAR の帯) を切り替える
-sed -i 's/^#\?OVERRIDES=.*/OVERRIDES=map_tsudanuma/' .env && docker compose up -d
+# 場所を切り替える (config/site を書いて raspicat を立て直す)
+tools/site.sh map_tsudanuma
 
-# 自律移動側。overrides:= を明示しなければ .env の値が既定として入る
-ros2 launch daifuku_stack navigation.launch.py \
-    map:=$PWD/src/daifuku_stack/maps/map_tsudanuma.yaml \
-    planner:=vi local_planner:=nav2
+# 自律移動側。map も overrides も config/site から来るので渡さない
+ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=nav2
 ```
 
 何も重ねないときは `overrides:=none` です。`ros2 launch` は値が空の
 `overrides:=` を malformed として弾くので、空文字ではなく `none` を使います。
+`none` は場所を名乗らないので、そのときは `map` が導けず既定の `map_19f.yaml` に
+落ちます（対応する override を持たない `maps/turtlebot3.yaml` などを使うときは、
+`overrides:=none` と `map:=` を対で渡してください）。
 
-**地図を渡し替えて `overrides` を放置しないでください。** 別の地図に 19F 用の
-EMCL2 調整（リセット閾値など）が載ったまま走ります。対応する override を持たない
-地図（`maps/turtlebot3.yaml` など）では `overrides:=none` を明示してください。
-存在しない名前を渡した場合は、選べる名前を並べたエラーで止まります。
+**地図を渡し替えて `overrides` を放置することはもうできません。** `map:=` を明示した
+ときは名前が `overrides` と一致しているかを見て、違えば起動時にエラーで止まります
+（`nav2_params.resolve_map`）。以前は別の地図に 19F 用の EMCL2 調整が載ったまま
+黙って走っていました。存在しない override 名を渡した場合は、選べる名前を並べた
+エラーで止まります。
 
 `simulator/container/nav_container.sh` と `simulator/container/run_case.sh` は、
 `MAP_NAME` と同名の override があればそれを、無ければ `none` を**必ず明示的に**

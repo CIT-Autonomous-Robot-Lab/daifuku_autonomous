@@ -53,8 +53,6 @@ services:
       - daifuku_bringup
       - robot_bringup.launch.py
       - driver:=original
-      # LiDAR もこの launch が立てる。overrides は環境変数 OVERRIDES から
-      # 既定として読まれるので、ここには要らない (compose.common.yaml)。
       - lidar:=${LIDAR:-mid360}
     security_opt:
       - apparmor=unconfined

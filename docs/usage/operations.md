@@ -136,8 +136,9 @@ TELEOP_LINEAR_SPEED=0.1 bash docker/raspberrypi/tools/control.sh teleop keyboard
 | 変更したもの | やること |
 |---|---|
 | `src/daifuku_stack`配下のlaunch、config、behavior_trees、maps、rviz、src | 何もしない。`--symlink-install`なのでノードを再起動するだけで反映される |
-| `src/daifuku_bringup`配下（LiDAR・EKF・ドライバ）と`src/daifuku_config_manager`の`overrides/`の**値** | **`docker compose up -d`**。ファイル自体は再ビルド不要だが、読むのは常駐している`raspicat`サービスなので作り直しが要る |
+| `src/daifuku_bringup`配下（LiDAR・EKF・ドライバ）と`src/daifuku_config_manager`の`overrides/`の**値** | **`docker compose restart raspicat`**。ファイル自体は再ビルド不要だが、読むのは常駐している`raspicat`サービスなので立て直しが要る |
 | `src/daifuku_config_manager/config/overrides/`に**ファイルを新しく足した** | 一度ビルドを通す（`setup.py`の`glob`はビルド時にしか展開されない）。そのあと`docker compose up -d` |
+| `src/daifuku_config_manager/config/site`（走らせる場所） | **`tools/site.sh <名前>`**。書き換えと`raspicat`の立て直しを両方やる（下） |
 | `src/raspicat_driver`のPython | 何もしない。ただし`setup.py`の`entry_points`を増やしたときはビルドが要る |
 | C++やRustのコード、`CMakeLists.txt`、外部パッケージのソース | `docker compose up`で差分ビルドする |
 | aptの依存、`Dockerfile`、`package.xml`の依存、`docker/`配下のスクリプト | `docker compose build`からやり直す |
@@ -174,6 +175,40 @@ docker volume ls | grep autonomous-install
 docker volume rm <上で出た名前>
 docker compose up -d
 ```
+
+## 走らせる場所を切り替える
+
+19Fと津田沼のように場所が変わると、**LiDARの帯（仰角と高さ）・`emcl2`と価値反復の調整・
+地図**が3つとも変わります。これは1つの話なので、人が動かす値も1つだけです——
+`src/daifuku_config_manager/config/site`の1行です。
+
+```bash
+tools/site.sh                 # 今の値と、選べる名前
+tools/site.sh map_tsudanuma   # 書き換えて raspicat を立て直す
+```
+
+名前は`config/overrides/<名前>.yaml`と`daifuku_stack`の`maps/<名前>.yaml`の両方に対応
+します。切り替えたあとは`navigation`を立て直すだけで、`map:=`も`overrides:=`も渡す必要は
+ありません（どちらもこの1行から来ます）。**立て直したときは機体を静止させておいてください**
+——Mid-360のジャイロの電源投入時バイアスをそこで測ります。
+
+**機体側は起動時にしかこの値を読みません。** ファイルを直しただけで`raspicat`を立て直さないと、
+LiDARの帯だけが前の場所のまま走ります（エラーも警告も出ません）。`tools/site.sh`が立て直しまで
+やるのはこのためで、素手で直したときは自分で`docker compose restart raspicat`してください。
+
+`map:=`を明示することもできますが、`overrides`と名前が食い違っていると**起動時にエラーで
+止まります**。地図だけ差し替えて調整を置き忘れると、別の場所の帯と`emcl2`のリセット閾値を
+載せたまま走ることになるためです。承知のうえでやるなら`overrides:=none`を添えてください。
+
+**この1行に入っていない場所依存が1つあります**——`joy_teleop`の`waypoints_file`
+（パッド巡回の順路）です。既定は空で、空のあいだはSTART+BACKが巡回を断ります。絶対パスな
+ので場所ごとの`overrides`には書きにくく、いまは手で渡す扱いのままです
+（`config/robot/joy_teleop.yaml`）。
+
+> かつてはリポジトリルートの`.env`の`OVERRIDES`でした（2026-08-07まで）。`.env`は
+> `COMPOSE_FILE`や`INPUT_GID`のように「機体を仕立てるときに1度決める」値の置き場で、
+> 運ぶたびに変わるものを混ぜると忘れます。加えて環境変数はコンテナ生成時に焼かれるため、
+> 変えるのに`docker compose up -d`（作り直し）が要りました。ファイルなら`restart`で足ります。
 
 ## ログを見る
 

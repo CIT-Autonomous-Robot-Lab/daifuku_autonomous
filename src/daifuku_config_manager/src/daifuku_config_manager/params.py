@@ -16,6 +16,11 @@
 1 つのファイルへ入れてある。パッケージ名の段は、その 1 ファイルをどちらの launch が
 どこまで読むかを**明示するため**にある。
 
+**どの launch も overrides:= の既定を config/site から取る。** 場所は人が運ぶたびに
+変わるので、機体側と自律移動側で別々に指定させない。navigation の map:= もこの値に
+追随する (daifuku_stack の nav2_params.resolve_map) ので、切り替えで人が動かす値は
+1 つだけになる。
+
 落ちるのは 2 通り。どちらも「書いたのに効かない」を起動時に見つけるためのもの。
 
   * 知らないパッケージ名 (KNOWN_PACKAGES に無い) -> **誰も読まない部分木**に
@@ -38,16 +43,58 @@ import os
 import tempfile
 
 import yaml
-from ament_index_python.packages import get_package_share_directory
+from ament_index_python.packages import PackageNotFoundError, get_package_share_directory
 from launch.actions import DeclareLaunchArgument, LogInfo, SetLaunchConfiguration
 
 from . import env_default, value
 
-# overrides の既定値。**場所が変わったら変えるもの**なので、Compose の .env 1 行で
-# 配れるよう環境変数から取る。raspicat サービス (LiDAR の帯) と、人が exec で叩く
-# navigation (emcl2 と vi の調整) の両方がこれを既定として読むので、片方だけ古い値で
-# 走ることが無い。環境変数も無いときの map_19f は既定の地図 (maps/map_19f.yaml)。
-DEFAULT_OVERRIDES = env_default("OVERRIDES", "map_19f")
+# 読めなかったときの最後の砦 (同梱の既定の地図)。
+_FALLBACK_SITE = "map_19f"
+
+
+def site_file():
+    """今どこで走らせるかを 1 行で持つファイル (このパッケージの share)。"""
+    return os.path.join(
+        get_package_share_directory("daifuku_config_manager"), "config", "site"
+    )
+
+
+def _read_site():
+    """config/site の 1 行を読む。**読めなくても落とさない。**
+
+    ここは params.py の import 時に走るので、投げるとワークスペース中の launch が
+    全部立たなくなる。名前そのものの妥当性は後段 (_resolve_layers) が見るので、
+    ここでやるのは「読めたか」だけでよい。
+    """
+    try:
+        with open(site_file(), "rb") as f:
+            body = f.read().decode("utf-8")
+    except (OSError, PackageNotFoundError):
+        return _FALLBACK_SITE
+    for raw in body.splitlines():
+        line = raw.strip()
+        if line and not line.startswith("#"):
+            return line
+    return _FALLBACK_SITE
+
+
+# overrides の既定値。**場所が変わったら変えるもの**なので、リポジトリの中の
+# 1 ファイル (config/site) から取る。機体側 (LiDAR の帯) も、人が exec で叩く
+# navigation (emcl2 と vi の調整) も、navigation の map:= も同じ値を見るので、
+# 片方だけ古い場所で走ることが無い。書き換えは tools/site.sh。
+#
+# **.env に置くのはやめた** (2026-08-07)。あちらは COMPOSE_FILE や INPUT_GID の
+# ような「機体を仕立てるときに 1 度決める」値の置き場で、運ぶたびに変わる場所を
+# 混ぜると忘れる。加えて環境変数はコンテナ生成時に焼かれるので、変えるのに
+# `docker compose up -d` (作り直し) が要った — ファイルなら restart で足りる。
+#
+# 環境変数 OVERRIDES はファイルより強い。**人が書く口ではなく**、
+# simulator/ が 1 回きりの構成をコンテナへ渡すためのもの (compose は渡さない)。
+_SITE = _read_site()
+DEFAULT_OVERRIDES = env_default("OVERRIDES", _SITE)
+DEFAULT_OVERRIDES_ORIGIN = (
+    "環境変数 OVERRIDES" if os.environ.get("OVERRIDES", "").strip() else "config/site"
+)
 
 # overrides ファイルの 1 段目に書けるパッケージ名。
 #
@@ -122,15 +169,16 @@ def declare_args():
         DeclareLaunchArgument(
             "overrides",
             # 地図を変えるときは overrides:=map_tsudanuma のように**置き換える** —
-            # 追加ではないので、19F 用の調整は自動的に外れる。地図を渡し替えて
-            # overrides を放置すると別の地図の調整が載るので注意。
+            # 追加ではないので、19F 用の調整は自動的に外れる。navigation では
+            # map:= がこの値に追随する (nav2_params.resolve_map) ので、ここだけ
+            # 渡せばよい。既定を変えるのは tools/site.sh。
             default_value=DEFAULT_OVERRIDES,
             description=f"daifuku_config_manager の overrides/<名前>.yaml を重ねる "
                         f"({available})。カンマ区切りで複数可。行き先はパッケージ名と"
                         "ノード名で決まるので、この launch が読まない設定ファイル宛の"
                         "節は何も起きない。"
-                        f"既定は {DEFAULT_OVERRIDES} (環境変数 OVERRIDES。"
-                        "Compose なら .env の 1 行)。"
+                        f"既定は {DEFAULT_OVERRIDES} ({DEFAULT_OVERRIDES_ORIGIN}。"
+                        "書き換えは tools/site.sh)。"
                         "何も重ねないなら overrides:=none "
                         "(ros2 launch は値が空の overrides:= を受け付けない)。",
         ),
@@ -141,6 +189,18 @@ def declare_args():
                         "複数可)。書き方と行き先の決まりかたは overrides と同じ。",
         ),
     ]
+
+
+def site_name(context):
+    """overrides:= の 1 つめ、すなわち「今どこか」。
+
+    重ねる順の先頭を場所とみなす (2 つめ以降はその上の微調整という扱い)。
+    none / 空のときは場所を名乗っていないので "" を返す — 呼び元はそこから
+    地図を導いてはいけない。
+    """
+    for name in [n.strip() for n in value(context, "overrides").split(",") if n.strip()]:
+        return "" if name.lower() == "none" else name
+    return ""
 
 
 def _select(body, label, package):

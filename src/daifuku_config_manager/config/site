@@ -1,0 +1,17 @@
+# 今どこで走らせるか。**場所に関わる値はここ 1 つで決まる。**
+#
+#   * LiDAR の帯 (仰角と高さ)   … 機体側。docker compose で常駐している
+#   * emcl2 と価値反復の調整      … 自律移動側。人が navigation を立てるとき
+#   * 地図 (navigation の map:=) … 同名の maps/<名前>.yaml
+#
+# 名前は config/overrides/<名前>.yaml と daifuku_stack の maps/<名前>.yaml の
+# 両方に対応する (2 つで名前を分けない)。
+#
+# **書き換えるのは tools/site.sh。** 機体側は起動時に読むので、ファイルを直しても
+# 立て直さなければ変わらない。スクリプトはその立て直しまでやる。
+#
+#   tools/site.sh                 今の値と、選べる名前
+#   tools/site.sh map_tsudanuma   書き換えて機体を立て直す
+#
+# 1 つめの空でない行 (# で始まらないもの) が値。
+map_19f
