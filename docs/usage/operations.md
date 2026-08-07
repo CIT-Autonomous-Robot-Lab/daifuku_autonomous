@@ -135,8 +135,10 @@ TELEOP_LINEAR_SPEED=0.1 bash docker/raspberrypi/tools/control.sh teleop keyboard
 
 | 変更したもの | やること |
 |---|---|
-| `src/daifuku_stack`配下のlaunch、config、behavior_trees、maps、rviz、src | 何もしない。`--symlink-install`なのでノードを再起動するだけで反映される |
-| `src/daifuku_bringup`配下（LiDAR・EKF・ドライバ）と`src/daifuku_config_manager`の`overrides/`の**値** | 再ビルドは不要だが、読むのは常駐している`raspicat`サービスなので立て直しが要る。**`config_sentinel`が変化に気づいて自分で上がり直します**（機体が止まっていて、その設定でも立つときだけ。`config_watch:=warn`で止められる）。コメントだけの変更には反応しません |
+| `src/daifuku_stack`配下のlaunch、behavior_trees、maps、rviz、src | 何もしない。`--symlink-install`なのでノードを再起動するだけで反映される |
+| `src/daifuku_stack/config/`の**値**（`nav2/`・`localization/`・`mapping/`・`lifecycle_bond.yaml`） | 同じく再ビルドは不要。ただし**走らせたまま直すと`config_sentinel`がそのlaunchを終了します**（下） |
+| `src/daifuku_bringup/config/`（LiDAR・EKF・ドライバ）と`src/daifuku_config_manager`の`overrides/`の**値** | 再ビルドは不要だが、読むのは常駐している`raspicat`サービスなので立て直しが要る。**`config_sentinel`が変化に気づいて自分で上がり直します**（機体が止まっていて、その設定でも立つときだけ。`config_watch:=warn`で止められる）。コメントだけの変更には反応しません |
+| `src/daifuku_bringup`配下のlaunchと`src/`のPython | 再ビルドは不要だが、**`config_sentinel`は気づきません**（見張っているのは`config/`の`*.yaml`だけ）。`docker compose up -d`で自分で立て直す |
 | `src/daifuku_config_manager/config/overrides/`に**ファイルを新しく足した** | 一度ビルドを通す（`setup.py`の`glob`はビルド時にしか展開されない）。そのあと`docker compose up -d` |
 | `src/daifuku_config_manager/config/site`（走らせる場所） | **`tools/site.sh <名前>`**。書き換えと`raspicat`の立て直しを両方やる（下） |
 | `src/raspicat_driver`のPython | 何もしない。ただし`setup.py`の`entry_points`を増やしたときはビルドが要る |

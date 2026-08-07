@@ -45,13 +45,32 @@ Mid-360は時刻同期がないためスタンプが実時計からずれてい�
 | --- | --- | --- |
 | `daifuku_bringup` | 駆動ドライバ・URDF・`twist_mux`・ゲームパッド・**LiDAR**・**EKF**。`src/`のPythonノード4本 | `docker compose up`で常駐 |
 | `daifuku_stack` | Nav2 / SLAM Toolbox / EMCL2の設定、地図、RViz、`behavior_trees/`、`waypoints/`、`src/system_monitor.py` | 人が`navigation` / `mapping`を立てる |
-| `daifuku_config_manager` | `overrides/*.yaml`と設定の合成規則、走らせる場所を1行で持つ`config/site` | 何も立てない（葉） |
+| `daifuku_config_manager` | `overrides/*.yaml`と設定の合成規則、走らせる場所を1行で持つ`config/site`、`src/`のPythonノード2本 | 上2つのlaunchが立てる（自前の入口は無い） |
 
 `config/site`は3つのパッケージから同じものが見えます。すべてのlaunchが`overrides`の
 既定をここから取り、`navigation.launch.py`は`map`の既定もここから導きます。**場所が
 変わるとLiDARの帯・EMCL2と価値反復の調整・地図の3つが同時に変わるので、人が動かす値を
 1つにまとめてあります**（切り替えは`tools/site.sh <名前>`。
 [日常操作](operations.md#走らせる場所を切り替える)）。
+
+### daifuku_config_managerのPythonノード
+
+**葉のパッケージですが、ノードを2本持ちます。** どちらも自分では入口を持たず、
+上2つのlaunchが立てます。
+
+- `site_manager`は`config/site`の読み書きと告知（`/daifuku/site`）を受け持ちます。
+  **立てるのは`robot_bringup.launch.py`の1か所だけ**です。2つ立てると同じファイルを
+  2つのノードが書きに行きます。機体は常駐しているので、navigationを立てていない
+  あいだも`ros2 param set /site_manager site <名前>`が通ります
+- `config_sentinel`は、自分のlaunchが起動時に読んだ設定が書き変わっていないかを
+  見張ります。**top-levelのlaunchが1つずつ**立てます（`robot_bringup`、
+  `navigation`、`mapping`）。`include`される側でも立てると、1つのlaunch木に見張りが
+  3つ並んでそれぞれが勝手に落としにかかります
+
+見ているのは自分のパッケージの`config/`全体（`overrides/`を除く`*.yaml`）と、
+重ねている`overrides`のうち自分の部分木です。**中身を正規化してから指紋を取るので、
+コメントや並び順を直しただけでは反応しません。** 落とすかどうかの判断と、落ちた
+あと誰が上げ直すかは[日常操作](operations.md#設定変更を反映する)。
 
 ### daifuku_bringupのPythonノード
 
@@ -111,7 +130,7 @@ Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。
 
 | モジュール | 場所 | 内容 |
 | --- | --- | --- |
-| `params.py` | `daifuku_config_manager` | 設定ファイルへの上書きの合成（土台 → `overrides` → `extra_params_file`）。**すべてのlaunchが使う共有部品** |
+| `params.py` | `daifuku_config_manager` | 設定ファイルへの上書きの合成（土台 → `overrides` → `extra_params_file`）と、`config_sentinel`の起動・停止の配線（`sentinel_actions`）。**すべてのlaunchが使う共有部品** |
 | `backends.py` | `daifuku_stack/launch/daifuku_stack_launch/` | `localization`／`planner`／`local_planner`／`nav2`の解決と起動前チェック |
 | `nav2_params.py` | `daifuku_stack/launch/daifuku_stack_launch/` | `config/nav2/*.yaml`の合成と、`overrides`からの`map:=`の決定。`params.py`へ`base_resolvers`で渡す |
 | `lidar.py` | `daifuku_bringup/launch/daifuku_bringup_launch/` | LiDAR構成の共通引数と`lidar_bringup`の`include` |
