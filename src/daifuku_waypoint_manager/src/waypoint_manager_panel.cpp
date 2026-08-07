@@ -35,6 +35,13 @@ constexpr char kMarkerTopic[] = "/waypoint_markers";
 // そろえてある。片方だけ変えると先読みが黙って効かなくなる。
 constexpr char kWaypointPathTopic[] = "/waypoints";
 constexpr char kActionName[] = "/follow_waypoints";
+// 取り消しは単発ゴール側にも投げる。**nav2:=true では follow_waypoints の下に
+// navigate_to_pose の子ゴールがぶら下がる**ので、waypoint_follower が固まって
+// いると上だけ止めても bt_navigator 側が走り続ける。nav2:=false でも、Nav2 Goal
+// から出した単発ゴールがここで止まる。
+constexpr char kNavigateActionName[] = "/navigate_to_pose";
+// action の裏にあるキャンセルサービス。空の goal_info = そのサーバの全ゴール。
+constexpr char kCancelServiceSuffix[] = "/_action/cancel_goal";
 constexpr char kClickedPointTopic[] = "/clicked_point";
 constexpr char kWaypointPoseTopic[] = "/waypoint_pose";
 // 機体の位置を取る TF フレーム。本リポジトリの約束は base_footprint だが、それを出さない
@@ -44,9 +51,11 @@ constexpr char kRobotFrameFallback[] = "base_link";
 constexpr int kLeadIntervalMs = 500;
 // これ未満しか機体が動いていなければマーカを出し直さない。
 constexpr double kLeadMoveThreshold = 0.05;
-// Cancel を投げてから、サーバの応答も結果も来ないまま待つ上限。過ぎたら
-// 「もう一度押せば諦められる」ことをステータス行に出す。
-constexpr int kCancelTimeoutMs = 5000;
+// 取り消しを投げ直す間隔と回数 (250ms × 8 = 2 秒)。1 発で済ませると、無線で
+// その 1 発が落ちたときに**エラーも出ないまま何も止まらない**。joy_teleop の
+// cancel_window と同じ考え方で、届くまで繰り返す。
+constexpr int kCancelBurstIntervalMs = 250;
+constexpr int kCancelBursts = 8;
 // 巡回中に action サーバが見えない状態がこの tick 数続いたら、結果はもう来ないと
 // 見なして表示を戻す (kLeadIntervalMs × 20 = 10 秒)。無線のディスカバリが一瞬
 // 途切れただけで戻さないよう長めに取ってある。
@@ -133,6 +142,13 @@ void WaypointManagerPanel::onInitialize()
       QMetaObject::invokeMethod(this, [this, pose]() {addClickedPose(*pose);}, Qt::QueuedConnection);
     });
   action_client_ = rclcpp_action::create_client<FollowWaypoints>(node_, kActionName);
+  // Cancel が名指しではなくこちらを使う。action クライアントを 2 つ持たずに済む
+  // (NavigateToPose 側は送る用が無いのに購読とクライアントが一式生える)。
+  for (const char * action : {kActionName, kNavigateActionName}) {
+    cancel_clients_.push_back(
+      node_->create_client<CancelGoalSrv>(std::string(action) + kCancelServiceSuffix));
+    cancel_client_names_.push_back(QString::fromUtf8(action));
+  }
   lead_timer_ = new QTimer(this);
   // 同じタイマで 2 つ回す。サーバの見張りは waypoint が 1 点も無くても要るので、
   // 早期に return する updateLead とは別のスロットにしてある。
@@ -140,8 +156,7 @@ void WaypointManagerPanel::onInitialize()
   connect(lead_timer_, &QTimer::timeout, this, &WaypointManagerPanel::updateLead);
   lead_timer_->start(kLeadIntervalMs);
   cancel_timer_ = new QTimer(this);
-  cancel_timer_->setSingleShot(true);
-  connect(cancel_timer_, &QTimer::timeout, this, &WaypointManagerPanel::cancelWaitTimedOut);
+  connect(cancel_timer_, &QTimer::timeout, this, &WaypointManagerPanel::sendCancelBurst);
   publishMarkers();
   setStatus("Waiting");
   updateButtons();
@@ -723,6 +738,12 @@ void WaypointManagerPanel::startFollowing()
     setStatus("Error: /follow_waypoints action server is unavailable");
     return;
   }
+  // 取り消しを投げているあいだは受け付けない。いま出しているゴールを、まだ
+  // 飛んでいる取り消しが巻き込む (joy_teleop._start_waypoints と同じ理由)。
+  if (cancel_bursts_ > 0) {
+    setStatus("Error: still cancelling - try again in a moment");
+    return;
+  }
   FollowWaypoints::Goal goal;
   goal.poses = waypoints_;
   for (auto & pose : goal.poses) {
@@ -731,8 +752,10 @@ void WaypointManagerPanel::startFollowing()
   }
   QPointer<WaypointManagerPanel> panel(this);
   // この Start ぶんの世代。諦めた後 (resetGoalState) に届いたコールバックは、
-  // これが合わないので捨てる。
+  // これが合わないので捨てる (feedback だけは readoptGoal が拾い直す)。
   const std::uint64_t epoch = ++goal_epoch_;
+  latest_goal_epoch_ = epoch;
+  abandoned_goal_.reset();
   rclcpp_action::Client<FollowWaypoints>::SendGoalOptions options;
   options.goal_response_callback =
     [panel, epoch](GoalHandleFollowWaypoints::SharedPtr goal_handle) {
@@ -760,15 +783,25 @@ void WaypointManagerPanel::startFollowing()
         panel->updateButtons();
       }, Qt::QueuedConnection);
     };
-  options.feedback_callback = [panel, epoch](GoalHandleFollowWaypoints::SharedPtr,
+  options.feedback_callback = [panel, epoch](GoalHandleFollowWaypoints::SharedPtr goal_handle,
       const std::shared_ptr<const FollowWaypoints::Feedback> feedback) {
       if (!panel) {return;}
       const int current = static_cast<int>(feedback->current_waypoint);
-      QMetaObject::invokeMethod(panel, [panel, epoch, current]() {
-        if (!panel || panel->goal_epoch_ != epoch) {return;}
-        panel->setStatus(
-          QString("Following waypoint %1 / %2").arg(current + 1).arg(
-            static_cast<int>(panel->waypoints_.size())));
+      QMetaObject::invokeMethod(panel, [panel, epoch, current, goal_handle]() {
+        if (!panel) {return;}
+        bool readopted = false;
+        if (panel->goal_epoch_ != epoch) {
+          // 諦めたはずのゴールから feedback が来た = 巡回はまだ続いている。
+          // 拾い直せなければ (追い越された・取り消し中) 何も出さない。
+          if (!panel->readoptGoal(epoch, goal_handle)) {return;}
+          readopted = true;
+        }
+        QString status = QString("Following waypoint %1 / %2").arg(current + 1).arg(
+          static_cast<int>(panel->waypoints_.size()));
+        if (readopted) {
+          status += " (still running - the panel picked the goal back up)";
+        }
+        panel->setStatus(status);
       }, Qt::QueuedConnection);
     };
   options.result_callback =
@@ -777,7 +810,20 @@ void WaypointManagerPanel::startFollowing()
       const int code = static_cast<int>(result.code);
       const int missed = result.result ? static_cast<int>(result.result->missed_waypoints.size()) : 0;
       QMetaObject::invokeMethod(panel, [panel, epoch, code, missed]() {
-        if (!panel || panel->goal_epoch_ != epoch) {return;}
+        if (!panel) {return;}
+        if (panel->goal_epoch_ != epoch) {
+          // 諦めたゴールの結果。表示は戻してあるので拾い直さないが、どう終わった
+          // かは出す (取り消しが効いたのかどうかがこれで分かる)。追い越された
+          // ゴールのぶんは黙って捨てる。
+          if (epoch == panel->latest_goal_epoch_ && !panel->active_goal_ &&
+            !panel->goal_pending_)
+          {
+            panel->abandoned_goal_.reset();
+            panel->setStatus(
+              "The goal we had given up on ended: " + panel->resultText(code, missed));
+          }
+          return;
+        }
         panel->handleResult(code, missed);
       }, Qt::QueuedConnection);
     };
@@ -789,64 +835,81 @@ void WaypointManagerPanel::startFollowing()
 
 void WaypointManagerPanel::cancelFollowing()
 {
-  if (!action_client_) {
-    resetGoalState();
-    setStatus("Error: no FollowWaypoints action client");
+  // **ゴールを名指しでは止めない。** パネルがゴールを持っていない場面 —
+  // joy_teleop の START+BACK で始まった巡回、RViz を立て直した後、サーバが
+  // 見えなくなって諦めた後 — でも同じ 1 つの経路で止めたいため。名指しでしか
+  // 止められない作りだと、そのどれもが「Cancel が効かない」になる。
+  if (cancel_clients_.empty()) {
+    setStatus("Error: no cancel service client (the panel failed to initialize)");
     return;
   }
-  if (active_goal_ && !cancel_requested_) {
-    QPointer<WaypointManagerPanel> panel(this);
-    const std::uint64_t epoch = goal_epoch_;
-    try {
-      action_client_->async_cancel_goal(
-        active_goal_, [panel, epoch](CancelResponse::SharedPtr response) {
-          if (!panel) {return;}
-          const int code = response ? static_cast<int>(response->return_code) : -1;
-          QMetaObject::invokeMethod(panel, [panel, epoch, code]() {
-            if (!panel || panel->goal_epoch_ != epoch) {return;}
-            if (code == static_cast<int>(CancelResponse::ERROR_NONE)) {
-              // 受理された (goals_canceling が空でも待つ。サーバ側の
-              // handle_cancel が断っただけのことがある)。結果を待つ。
-              panel->setStatus("Cancelling...");
-              return;
-            }
-            // ERROR_UNKNOWN_GOAL_ID / ERROR_GOAL_TERMINATED = 巡回はもう終わって
-            // いて、結果だけが届いていない。ここで戻さないと Cancel 待ちのまま残る。
-            panel->resetGoalState();
-            panel->setStatus(
-              QString("The goal had already finished on the server (cancel return_code %1)")
-              .arg(code));
-          }, Qt::QueuedConnection);
-        });
-      cancel_requested_ = true;
-      if (cancel_timer_) {
-        cancel_timer_->start(kCancelTimeoutMs);
-      }
-      setStatus("Cancellation requested");
-      updateButtons();
-      return;
-    } catch (const rclcpp_action::exceptions::UnknownGoalHandleError &) {
-      // クライアントが既に捨てたゴール。名指しでは止められないので下へ落とす。
-    }
+  cancel_bursts_ = kCancelBursts;
+  cancel_sent_any_ = false;
+  setStatus("Cancelling every goal on /follow_waypoints and /navigate_to_pose...");
+  // 1 発目はその場で。残りをタイマで投げ直す。
+  sendCancelBurst();
+  if (cancel_bursts_ > 0 && cancel_timer_) {
+    cancel_timer_->start(kCancelBurstIntervalMs);
   }
-  // ここに来るのは (1) 2 度目の Cancel (応答も結果も来ないまま待たされている)、
-  // (2) ゴール送信中の窓 (active_goal_ がまだ無い)、(3) クライアントが知らない
-  // ゴール。いずれも「このゴール」を名指しできないので、全部止めて表示を戻す。
-  // **この action サーバのゴールを全部止める**ので、joy_teleop が始めた巡回も止まる。
-  action_client_->async_cancel_all_goals();
-  resetGoalState();
-  setStatus(
-    "Cancelled every FollowWaypoints goal and reset the panel - if the server is gone, "
-    "the robot may still be moving (stop it with the joystick or the motor power).");
+  updateButtons();
 }
 
-void WaypointManagerPanel::cancelWaitTimedOut()
+void WaypointManagerPanel::sendCancelBurst()
 {
-  if (!cancel_requested_) {
+  if (cancel_bursts_ > 0) {
+    --cancel_bursts_;
+  }
+  QPointer<WaypointManagerPanel> panel(this);
+  for (size_t i = 0; i < cancel_clients_.size(); ++i) {
+    const auto & client = cancel_clients_[i];
+    // 居ないサーバへ出すと応答の来ない要求がクライアントに溜まり続けるだけ。
+    if (!client || !client->service_is_ready()) {
+      continue;
+    }
+    cancel_sent_any_ = true;
+    const QString name = cancel_client_names_[i];
+    // 空の goal_info (goal_id も stamp もゼロ) = そのサーバの全ゴール。
+    client->async_send_request(
+      std::make_shared<CancelGoalSrv::Request>(),
+      [panel, name](rclcpp::Client<CancelGoalSrv>::SharedFuture future) {
+        if (!panel) {return;}
+        const auto response = future.get();
+        const int count = response ? static_cast<int>(response->goals_canceling.size()) : 0;
+        // 止めるものが無かった応答は出さない (投げ直すたびに上書きされてしまう)。
+        if (count == 0) {return;}
+        QMetaObject::invokeMethod(panel, [panel, name, count]() {
+          if (!panel) {return;}
+          panel->setStatus(QString("Cancelling %1 goal(s) on %2").arg(count).arg(name));
+        }, Qt::QueuedConnection);
+      });
+  }
+  if (cancel_bursts_ > 0) {
     return;
   }
-  setStatus(
-    "No response to the cancel request - press Cancel again to give up on this goal.");
+
+  // ── 投げ切った ──
+  //
+  // **ここで表示を戻さない。** 2 秒は「1 発落ちたから投げ直す」の尺であって、
+  // サーバが取り消して結果を返すまでの尺ではない (VI の solve 境界で数十秒、
+  // 無線が詰まっていればさらに乗る)。戻すと、効いた取り消しに対して
+  // 「結果が来ないので諦めた」と出したあとで結果が届く形になる。結果が本当に
+  // 来ないサーバは watchActionServer が 10 秒で戻すし、Cancel は常に押せる。
+  if (cancel_timer_) {
+    cancel_timer_->stop();
+  }
+  if (!cancel_sent_any_) {
+    // どちらのサービスも見えなかった = サーバが落ちている。取り消しは届いて
+    // いないので、機体が走っていれば走ったままになる。
+    setStatus(
+      "Neither cancel service is reachable - the servers are gone, so nothing was "
+      "cancelled. If the robot is still moving, stop it with the joystick or the "
+      "motor power.");
+  } else if (active_goal_ || goal_pending_) {
+    setStatus(
+      "Cancel requests were sent - waiting for the result. "
+      "Press Cancel again if the robot is still moving.");
+  }
+  updateButtons();
 }
 
 void WaypointManagerPanel::watchActionServer()
@@ -863,30 +926,60 @@ void WaypointManagerPanel::watchActionServer()
     return;
   }
   // サーバが居なくなった = 結果も cancel の応答も二度と来ない。巡回が終わって
-  // いても表示は「巡回中」のまま残り、Cancel も応答待ちで固まるので、ここで戻す。
+  // いても表示は「巡回中」のまま残るので、ここで戻す。**巡回が続いていた場合は
+  // feedback が来た時点で readoptGoal が「巡回中」へ戻す**ので、戻し過ぎても
+  // 表示が嘘のまま固まることはない。
   resetGoalState();
   setStatus(
     "The /follow_waypoints server is gone - its result will never arrive, "
-    "so the panel state was reset.");
+    "so the panel state was reset. Cancel still works (it cancels every goal).");
 }
 
 void WaypointManagerPanel::resetGoalState()
 {
   // 世代を進めて、諦めたゴールのコールバックを以後拾わないようにする。
   ++goal_epoch_;
+  // ただしゴールそのものは捨てない (abandoned_goal_ の宣言を参照)。持ったままに
+  // しておくと feedback が届き続け、巡回がまだ続いていれば readoptGoal が戻せる。
+  if (active_goal_) {
+    abandoned_goal_ = std::move(active_goal_);
+  }
   active_goal_.reset();
   goal_pending_ = false;
-  cancel_requested_ = false;
   server_gone_ticks_ = 0;
-  if (cancel_timer_) {
-    cancel_timer_->stop();
-  }
+  // **投げている途中の取り消しは止めない。** ここへは結果が届いたときにも来るが、
+  // そこで打ち切ると、別に走っている navigate_to_pose のゴールへ投げ直す残りが
+  // 消える (1 発しか届かなかったのと同じになる)。止めるのは sendCancelBurst。
   updateButtons();
 }
 
-void WaypointManagerPanel::handleResult(int result_code, int missed_count)
+bool WaypointManagerPanel::readoptGoal(
+  std::uint64_t epoch, const GoalHandleFollowWaypoints::SharedPtr & goal_handle)
 {
-  resetGoalState();
+  if (!goal_handle) {
+    return false;
+  }
+  // 追い越されたゴール。もっと新しい Start があるので、そちらの表示を奪わない。
+  if (epoch != latest_goal_epoch_) {
+    return false;
+  }
+  // いま何かを追っている / 取り消しの最中なら触らない。取り消し中に戻すと、
+  // 止めようとしている巡回が「巡回中」に戻って見えるだけになる。
+  if (active_goal_ || goal_pending_ || cancel_bursts_ > 0) {
+    return false;
+  }
+  // 世代を巻き戻す。ここへ戻せる epoch は 1 度しか払い出していないので、次の
+  // Start が同じ番号を取ることはない (払い出しは常に ++goal_epoch_)。
+  goal_epoch_ = epoch;
+  active_goal_ = goal_handle;
+  abandoned_goal_.reset();
+  server_gone_ticks_ = 0;
+  updateButtons();
+  return true;
+}
+
+QString WaypointManagerPanel::resultText(int result_code, int missed_count) const
+{
   QString status;
   if (result_code == static_cast<int>(rclcpp_action::ResultCode::SUCCEEDED)) {
     status = "Succeeded";
@@ -903,7 +996,15 @@ void WaypointManagerPanel::handleResult(int result_code, int missed_count)
   if (missed_count > 0) {
     status += QString(" - %1 waypoint(s) missed").arg(missed_count);
   }
-  setStatus(status);
+  return status;
+}
+
+void WaypointManagerPanel::handleResult(int result_code, int missed_count)
+{
+  resetGoalState();
+  // 終わったゴールに feedback は来ないので、持ち直す先も要らない。
+  abandoned_goal_.reset();
+  setStatus(resultText(result_code, missed_count));
 }
 
 void WaypointManagerPanel::setStatus(const QString & status)
@@ -913,12 +1014,13 @@ void WaypointManagerPanel::setStatus(const QString & status)
 
 void WaypointManagerPanel::updateButtons()
 {
-  const bool busy = active_goal_ || goal_pending_ || cancel_requested_;
+  const bool busy = active_goal_ || goal_pending_ || cancel_bursts_ > 0;
   start_button_->setEnabled(!waypoints_.empty() && !busy && action_client_);
-  // 巡回中でなくても押せる場面がある。ゴール送信中の窓 (active_goal_ がまだ無い) と、
-  // 応答の来ない cancel を諦めるための 2 度目。押せないままだと、サーバが落ちた
-  // 後に Start も Cancel も効かず RViz を立て直すしかなくなる。
-  cancel_button_->setEnabled(busy);
+  // **Cancel は常に押せる。** パネルが巡回を持っているかどうかと、機体が走って
+  // いるかどうかは別のこと — joy_teleop が始めた巡回、RViz を立て直した後、
+  // サーバが見えなくなって諦めた後は、どれもパネルがゴールを持っていないまま
+  // 機体だけが走っている。押せなくすると、その全部が「Cancel が効かない」になる。
+  cancel_button_->setEnabled(!cancel_clients_.empty());
 }
 
 }  // namespace daifuku_waypoint_manager

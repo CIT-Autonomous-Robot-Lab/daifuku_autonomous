@@ -344,6 +344,11 @@ RVizで次の順に操作します。
 2. 「Move Up」「Move Down」で順番を、「Delete Selected」などで不要な点を整理
 3. 「Start」で巡回開始、「Cancel」で停止
 
+**「Cancel」はいつでも押せて、`/follow_waypoints`と`/navigate_to_pose`の
+ゴールを全部止めます。** パネルから始めていない巡回——ゲームパッドのSTART+BACK、
+RVizを立て直したあと、「Nav2 Goal」の単発ゴール——もこれで止まります。詳細は
+[`src/daifuku_waypoint_manager/README.md`](../../src/daifuku_waypoint_manager/README.md)。
+
 `daifuku_stack/waypoints/waypoints_tsudanuma.yaml`に津田沼の73点を置いてあります。
 パネルの「Load YAML」で読みます（`map_19f`では座標が地図の外に出るため使えません）。
 
