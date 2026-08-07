@@ -178,6 +178,36 @@ docker volume rm <上で出た名前>
 docker compose up -d
 ```
 
+### 走らせたまま設定を直したとき
+
+top-levelのlaunchはそれぞれ`config_sentinel`を1つ立てていて、**自分が起動時に読んだ
+設定が書き変わると、まずログに出したうえで自分のlaunchを終了します。** 落ちたあと誰が
+上げ直すかは、そのlaunchを誰が立てたかで変わります。
+
+- **機体**（`raspicat`サービス）は`restart: unless-stopped`なので、そのまま新しい設定で
+  上がり直します。上の表の`src/daifuku_bringup/config/`の行がこれです
+- **`navigation`と`mapping`は人が立てたものなので、上げ直す人が居ません。** 終わったまま
+  です。とくに`mapping`では、**そこまで作った地図が消えます**（SLAM Toolboxは終了時に
+  保存しません）
+
+見張っているのは自分のパッケージの`config/`の`*.yaml`（`overrides/`は除く）と、重ねて
+いる`overrides`のうち自分の部分木です。**そのlaunchが実際に読まないファイルも入ります**
+——`navigation`を走らせたまま`config/mapping/slam_toolbox.yaml`を直しても落ちます
+（取りこぼして黙るより、余分に反応するほうを選んでいます）。**値を正規化してから指紋を
+取るので、コメントや並び順の変更には反応しません。**
+
+落とさせたくないときは、そのlaunchへ`config_watch:=warn`（言うだけ）か`off`（見張りごと
+立てない）を渡します。長丁場の地図作成のように、途中で落ちる代償が大きいときはこちらを
+使ってください。
+
+```bash
+ros2 launch daifuku_stack mapping.launch.py config_watch:=warn
+```
+
+なお`config_watch:=shutdown`（既定）でも、落ちるのは**追随してよい構成で・その設定でも
+立つことを確かめ・機体が止まっている**ときだけです。`overrides:=`を明示して立てたlaunchは
+そもそも追随しません。
+
 ## 走らせる場所を切り替える
 
 19Fと津田沼のように場所が変わると、**LiDARの帯（仰角と高さ）・`emcl2`と価値反復の調整・
@@ -187,7 +217,13 @@ docker compose up -d
 ```bash
 tools/site.sh                 # 今の値と、選べる名前
 tools/site.sh map_tsudanuma   # 切り替えて、機体が上がり直すところまで面倒を見る
+tools/site.sh map_19f --file-only    # ファイルを書くだけ（ROSにもDockerにも触らない）
+tools/site.sh map_19f --no-restart   # ファイル経由に落ちたとき、機体は立て直さない
 ```
+
+`--file-only`は開発ホスト向けで、`--no-restart`が効くのは`site_manager`へ届かず
+ファイル経由になったときだけです（ROS経由で通った場合、立て直すかどうかを決めるのは
+機体側の`config_sentinel`なので、こちらからは止められません）。
 
 名前は`config/overrides/<名前>.yaml`を指します。**地図はそのファイル自身が`site:`節で
 宣言します**（`site: map: <ファイル名>`。`daifuku_stack`の`maps/`からの相対パス）ので、

@@ -135,6 +135,19 @@ SLAM Toolboxの値を差し替えるなら、`slam_params_file:=`でファイル
 先に`tools/site.sh`で切り替えるか、`overrides:=none`を渡してください）。書きかたは
 [設定](configuration.md)の「上書き（overrides）の行き先」にあります。
 
+**ただし、走らせたまま直さないでください。** `mapping.launch.py`も`config_sentinel`を
+1つ立てていて、`daifuku_stack`の`config/`の値が書き変わると**このlaunchごと終了します**。
+`navigation`と違って地図作成は途中経過に価値があるのに、上げ直す人は居らず、SLAM Toolboxは
+終了時に保存しないので、**そこまで走った分が消えます**。長丁場のときは見張りを黙らせて
+おくのが安全です。
+
+```bash
+ros2 launch daifuku_stack mapping.launch.py use_sim_time:=false config_watch:=warn
+```
+
+`warn`は変化をログに出すだけ、`off`は見張りごと立てません。値を反映するには、どちらでも
+地図を保存してから立て直してください（[日常操作](operations.md#走らせたまま設定を直したとき)）。
+
 軽量Docker環境:
 
 ```bash

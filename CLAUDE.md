@@ -61,7 +61,8 @@ bash tools/setup/setup_native.sh              # --jobs 1 / --no-livox / --no-vi
 
 | 変えたもの | やること |
 | --- | --- |
-| `daifuku_bringup` / `daifuku_stack` / `daifuku_config_manager` / `raspicat_driver` の Python・launch・config・overrides・地図など | 何もしない。ノード再起動だけで反映される（`--symlink-install` のため）。ただし `raspicat_driver` の `setup.py` に `entry_points` を足したとき、**`daifuku_config_manager` の `overrides/` にファイルを新しく足したとき**（`setup.py` の `glob` はビルド時にしか展開されない）はビルドが要る |
+| `daifuku_bringup` / `daifuku_stack` / `daifuku_config_manager` / `raspicat_driver` の Python・launch・地図など | 何もしない。ノード再起動だけで反映される（`--symlink-install` のため）。ただし `raspicat_driver` の `setup.py` に `entry_points` を足したとき、**`daifuku_config_manager` の `overrides/` にファイルを新しく足したとき**（`setup.py` の `glob` はビルド時にしか展開されない）はビルドが要る |
+| `daifuku_bringup` / `daifuku_stack` の `config/` の値と、`daifuku_config_manager` の `overrides/` の値 | 同上（ビルドは要らない）。ただし**走らせたまま直すと `config_sentinel` がその launch を落とす**。機体は `restart: unless-stopped` が上げ直すが、**`navigation` と `mapping` は人が立てたものなので終わったまま**になる（mapping では作りかけの地図が消える）。長丁場は `config_watch:=warn` |
 | C++ / Rust のコード、`CMakeLists.txt`、外部パッケージのソース | `docker compose up`（差分ビルド） |
 | apt 依存、`Dockerfile`、`package.xml`、`docker/` 配下のスクリプト | `docker compose build` からやり直す |
 

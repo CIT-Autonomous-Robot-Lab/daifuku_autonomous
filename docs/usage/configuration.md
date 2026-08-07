@@ -11,6 +11,7 @@
 
 | ファイル | パッケージ | 内容 |
 |---|---|---|
+| `config/site` | `config_manager` | 走らせる場所を1行で持つ。すべてのlaunchが`overrides`の既定をここから取り、`navigation.launch.py`は`map`の既定もここから導く。**書き換えは`tools/site.sh`** |
 | `config/overrides/*.yaml` | `config_manager` | 地図・環境ごとの上書き（`overrides:=`で重ねる）。行き先は**パッケージ名とノード名**で決まるので、この表の`MID360_config.json`以外すべてを上書きできる |
 | `config/nav2/*.yaml` | `stack` | Nav2、価値反復プランナ、コストマップ、速度、ゴール判定（起動時に1つへ合成） |
 | `behavior_trees/*.xml` | `stack` | `planner:=vi`用のビヘイビアツリー（起動時に自動で選択）。**`nav2:=true`のときだけ読まれる**（既定では`bt_navigator`が立たない） |
@@ -44,6 +45,7 @@
 | `params_file` | 空（`params_dir`を合成） | Nav2パラメータを1ファイルで与える。指定すると`params_dir`は無視 |
 | `overrides` | `config/site`の1行（既定`map_19f`） | `daifuku_config_manager`の`overrides/<名前>.yaml`を重ねる。カンマ区切りで複数可。**置き換え**なので`map_tsudanuma`にすると19F用の調整は外れる。何も重ねないなら`overrides:=none`。行き先は**パッケージ名とノード名**で決まる（下）。**機体側（LiDARの帯）はraspicatサービスが起動時に読むので、切り替えは`tools/site.sh`で**（下） |
 | `extra_params_file` | 空（無効） | `overrides`の後に重ねる任意パスのファイル。カンマ区切りで複数可 |
+| `config_watch` | `shutdown` | 起動後に設定ファイルが書き変わったときどうするか。`shutdown`（既定）は大声で言ったうえで**このlaunchを終了する**（`navigation`は人が立てたものなので、上げ直す人は居ません）。`warn`は言うだけ、`off`は見張り（`config_sentinel`）ごと立てない。[日常操作](operations.md#走らせたまま設定を直したとき) |
 | `emcl2_params_file` | `config/localization/emcl2.yaml` | EMCL2パラメータ |
 | `bond_params_file` | `config/lifecycle_bond.yaml` | ライフサイクルマネージャのbondタイムアウト |
 | `localization` | `emcl2` | `emcl2` / `emcl` / `amcl` |
@@ -68,10 +70,14 @@ ros2 launch daifuku_stack navigation.launch.py --show-args
 ## mapping.launch.py
 
 引数は`slam_params_file`、`rviz_config`、`use_sim_time`、`use_rviz`、`namespace`、
-`overrides`、`extra_params_file`だけです。**LiDARの引数はありません**（センサーは
-`robot_bringup.launch.py`が立てます）。そのため、**新しい場所で地図を作るときは
-`tools/site.sh <名前>`で切り替えてから**SLAMを始めてください。
+`overrides`、`extra_params_file`、`config_watch`だけです。**LiDARの引数はありません**
+（センサーは`robot_bringup.launch.py`が立てます）。そのため、**新しい場所で地図を作る
+ときは`tools/site.sh <名前>`で切り替えてから**SLAMを始めてください。
 この launch へ`overrides:=`を渡しても効くのは`daifuku_stack:`の部分木だけです。
+
+`config_watch`の既定は`shutdown`で、**SLAM中に`daifuku_stack`の`config/`を直すと
+このlaunchごと終了します**。上げ直す人は居ないので、そこまで作った地図は消えます
+（[地図作成](mapping.md#2-slamを起動する)）。
 
 ```bash
 ros2 launch daifuku_stack mapping.launch.py --show-args
@@ -106,6 +112,7 @@ ros2 launch daifuku_stack mapping.launch.py --show-args
 | `urg_interface` | `serial` | `lidar:=2d`のときのURGの接続方式（`serial` / `ethernet`）。`raspicat_bringup`の`config/urg_<方式>.param.yaml`を選ぶ |
 | `urg_params_file` | 空（上記から決める） | URGのパラメータファイルを直接指定する |
 | `wheel_odom_topic` | `/wheel/odom` | EKFへ渡す車輪オドメトリ |
+| `config_watch` | `shutdown` | 起動後に`daifuku_bringup`の`config/`や`overrides`が書き変わったときどうするか。`shutdown`（既定）は**このlaunchを終了する**が、`raspicat`サービスは`restart: unless-stopped`なので新しい設定で上がり直す。`warn`は言うだけ、`off`は見張りごと立てない |
 
 どちらのドライバも、相対名`cmd_vel`を購読し`/odom`と`odom -> base_footprint` TFを配信する
 lifecycleノードという同じ契約です（`twist_mux:=true`なら購読先が`/cmd_vel_mux`へ
