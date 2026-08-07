@@ -77,6 +77,7 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.actions import EmitEvent
+from launch.actions import GroupAction
 from launch.actions import IncludeLaunchDescription
 from launch.actions import OpaqueFunction
 from launch.actions import RegisterEventHandler
@@ -372,15 +373,31 @@ def generate_launch_description():
     use_joint_state_publisher = LaunchConfiguration("use_joint_state_publisher")
 
     # URDF / TF ツリー。上流のものをそのまま使う (競合するパラメータが無い)。
-    robot_state_publisher_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(bringup_launch_dir, "robot_state_publisher.launch.py")
+    #
+    # **GroupAction で囲むこと。** IncludeLaunchDescription の launch_arguments は
+    # SetLaunchConfiguration として親と同じ文脈に積まれるので、囲まないと**後ろに
+    # 並ぶ include まで巻き添えになる**。ここで渡す上流の引数名 `lidar_frame` は
+    # lidar_bringup.launch.py が Mid-360 用に宣言している名前とぶつかっていて、
+    # 素で並べると向こうの DeclareLaunchArgument が既定 (livox_frame) を入れられず
+    # lidar_link のまま走る。そうなると Livox ドライバの frame_id と
+    # base_footprint -> * の静的 TF が両方 lidar_link になる一方、**IMU だけは
+    # livox_ros_driver2 が frame_id を無視して "livox_frame" をべた書きする**
+    # (lddc.cpp の Lddc::PublishImuData) ので、EKF が引くべき TF が存在しなくなる。
+    # robot_localization は transform_timeout (0.1 秒) ぶん毎回ブロックするだけで
+    # **エラーも警告も出さない**ため、IMU が丸ごと捨てられたまま 30 Hz が 5 Hz に
+    # 落ち、odom -> base_footprint が 0.5 秒古くなり、emcl2 が map -> odom を
+    # 出せなくなって RViz から地図ごと消える (2026-08-07 の実機)。
+    robot_state_publisher_launch = GroupAction([
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(bringup_launch_dir, "robot_state_publisher.launch.py")
+            ),
+            launch_arguments={
+                "lidar_frame": urdf_lidar_frame,
+                "use_joint_state_publisher": use_joint_state_publisher,
+            }.items(),
         ),
-        launch_arguments={
-            "lidar_frame": urdf_lidar_frame,
-            "use_joint_state_publisher": use_joint_state_publisher,
-        }.items(),
-    )
+    ])
 
     # 車輪オドメトリと Mid-360 IMU の融合。**ドライバと同じ launch に置くのが要点**で、
     # use_mid360_imu 1 つで「ドライバが TF を止める」と「EKF が TF を出す」が同時に
@@ -472,8 +489,9 @@ def generate_launch_description():
         DeclareLaunchArgument("use_sim_time", default_value="false"),
         # URDF が持つ 2D LiDAR のリンク名 (上流 raspicat_description)。
         # **lidar_bringup.launch.py の lidar_frame (Mid-360 の livox_frame) とは
-        # 別物。** 同じ名前にすると、include したときに親のこの値が子へ漏れて
-        # Mid-360 の TF とドライバの frame_id が lidar_link になる。
+        # 別物。** ここで名前を分けているのは人が読むためだけで、漏れを止めて
+        # いるのは上の GroupAction のほう (上流へ渡すときの名前は lidar_frame の
+        # ままなので、囲まないと名前を分けても同じことが起きる)。
         DeclareLaunchArgument("urdf_lidar_frame", default_value="lidar_link"),
         DeclareLaunchArgument("use_joint_state_publisher", default_value="True"),
 

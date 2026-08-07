@@ -387,6 +387,24 @@ Docker 越しに叩く形は
   `odom→base_footprint` は本体ドライバ（raspimouse / raspicat_driver）または EKF、
   リンク間は robot_state_publisher）。
   二重に出すと**自己位置だけが静かに壊れる**。
+- **`IncludeLaunchDescription` の `launch_arguments` は親と同じ文脈に積まれる。**
+  囲まないと**後ろに並ぶ include まで巻き添えになり**、向こうの
+  `DeclareLaunchArgument` は既定を入れられない（宣言済みの値が勝つ）。
+  `robot_bringup.launch.py` は上流の robot_state_publisher へ `lidar_frame` を
+  渡すが、これは `lidar_bringup.launch.py` が Mid-360 用に宣言している名前と
+  同じなので、**`GroupAction` で囲むこと**（引数名を分けても、上流へ渡すときの
+  名前は変えられないので止まらない）。漏れると Livox ドライバの `frame_id` と
+  `base_footprint→*` の静的 TF が `lidar_link` になる一方、**IMU だけは
+  `livox_ros_driver2` が `frame_id` を無視して `livox_frame` をべた書きする**
+  （`lddc.cpp` の `Lddc::PublishImuData`）ので、EKF が引く TF が消える。
+  `robot_localization` は `transform_timeout`（0.1 秒）ぶん毎回ブロックするだけで
+  **エラーも警告も出さない**ため、IMU が丸ごと捨てられたまま 30 Hz が 5 Hz に落ち、
+  `odom→base_footprint` が 0.5 秒古くなる。すると emcl2 の `publishOdomFrame` は
+  スキャンの時刻（`restamp_scan` が `now()` で打ち直すので**系内で最も新しい**）で
+  `base_footprint→odom` をタイムアウト 0 で引いて必ず extrapolation で落ち、
+  それを `RCLCPP_DEBUG` で握り潰すので、**`/mcl_pose` は 20 Hz で出続けるのに
+  `map→odom` だけが 1 度も出ない**（RViz は Fixed Frame が `map` なので全部消える。
+  2026-08-07 の実機）。
 
 ## 設定ファイル (`src/daifuku_{bringup,stack}/config/**/*.yaml` と `src/daifuku_config_manager/config/overrides/*.yaml`) のコメント
 
