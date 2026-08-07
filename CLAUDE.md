@@ -19,9 +19,19 @@ Raspberry Pi Cat を ROS 2 Humble / Nav2 で自律移動させる colcon ワー�
 
 ## リポジトリの範囲
 
-`src/` の下で自前なのは `daifuku_stack` と `raspicat_driver` と `daifuku_rqt` と
+`src/` の下で自前なのは `daifuku_bringup` と `daifuku_stack` と
+`daifuku_config_manager` と `raspicat_driver` と `daifuku_rqt` と
 `daifuku_waypoint_manager` だけで、
-残りは `autonomous_bot.repos` からの `vcs import` です。`vcs import` で入るものを直しても本
+残りは `autonomous_bot.repos` からの `vcs import` です。
+
+自前パッケージの役割分担は次のとおりで、**`daifuku_bringup` と `daifuku_stack` は
+互いに依存しません**（どちらも `daifuku_config_manager` にだけ依存する）。
+
+| パッケージ | 持つもの |
+| --- | --- |
+| `daifuku_bringup` | 機体。駆動ドライバ・URDF・cmd_vel の仲裁・ゲームパッド・**LiDAR**・**EKF**。`docker compose up` で常駐する |
+| `daifuku_stack` | 自律移動。Nav2 / emcl2 / VI の設定と launch、地図、ウェイポイント、RViz |
+| `daifuku_config_manager` | 設定の合成規則（`params.py`）と、場所ごとの調整（`overrides/`）。何も起動しない葉 |`vcs import` で入るものを直しても本
 リポジトリのコミットには入らないので、上流を直す必要があれば向こうで作業してください。
 
 罠が 2 つあります。`raspicat_ros` / `raspicat_description` / `raspimouse2` は
@@ -51,7 +61,7 @@ bash tools/setup/setup_native.sh              # --jobs 1 / --no-livox / --no-vi
 
 | 変えたもの | やること |
 | --- | --- |
-| `daifuku_stack` / `raspicat_driver` の Python・launch・config・地図など | 何もしない。ノード再起動だけで反映される（`--symlink-install` のため）。ただし `raspicat_driver` の `setup.py` に `entry_points` を足したときはビルドが要る |
+| `daifuku_bringup` / `daifuku_stack` / `daifuku_config_manager` / `raspicat_driver` の Python・launch・config・overrides・地図など | 何もしない。ノード再起動だけで反映される（`--symlink-install` のため）。ただし `raspicat_driver` の `setup.py` に `entry_points` を足したとき、**`daifuku_config_manager` の `overrides/` にファイルを新しく足したとき**（`setup.py` の `glob` はビルド時にしか展開されない）はビルドが要る |
 | C++ / Rust のコード、`CMakeLists.txt`、外部パッケージのソース | `docker compose up`（差分ビルド） |
 | apt 依存、`Dockerfile`、`package.xml`、`docker/` 配下のスクリプト | `docker compose build` からやり直す |
 
@@ -96,15 +106,24 @@ Docker 越しに叩く形は
   分けるのが前提で、**同じノード名が 2 つの断片にあると起動時にエラーで止まる**。
   キーが重なっていなくても止まるので、1 つのノードの設定を 2 ファイルに割れない。
   断片どうしは深くマージしない（深いマージが効くのは `overrides` を重ねるときだけ）。
-- `overrides` の既定は **`map_19f`** で、**置き換え**（追加ではない）。`map:=` を
-  変えたら `overrides:=` も必ず変える。重ねないときは `overrides:=none`（空文字は
-  `ros2 launch` が弾く）。4 つの launch すべてが同じ既定で受ける。
-- **`overrides/*.yaml` の行き先はノード名だけで決まる。** 同じノード名を宣言して
-  いる設定ファイル（`config/` の下のどれか）に重なるので、`emcl2:` も
-  `slam_toolbox:` も `raspicat_driver:` も 1 つの override に書ける。どの設定
-  ファイルにも無いノード名は**起動時にエラーで止まる**（綴り違いが黙って消えると
-  探せないため）。ノード名を持たない `sensors/MID360_config.json` だけは上書き
-  できない。
+- **`overrides` の既定はリポジトリルートの `.env` の `OVERRIDES`**（無ければ
+  `map_19f`）で、**置き換え**（追加ではない）。`map:=` を変えたら `OVERRIDES` も
+  必ず変える。重ねないときは `overrides:=none`（空文字は `ros2 launch` が弾く）。
+  すべての launch が同じ既定で受ける。**LiDAR の帯を読むのは `daifuku_bringup`
+  （= 常駐している raspicat サービス）なので、`.env` を直したら
+  `docker compose up -d` が要る。** navigation を立て直すだけでは変わらない。
+- **`overrides/*.yaml` の行き先はパッケージ名とノード名で決まる。** 1 段目が
+  `daifuku_bringup:` か `daifuku_stack:` で、各 launch は**自分のパッケージ名の
+  部分木しか読まない**。2 段目がノード名で、同じノード名を宣言している設定ファイル
+  （そのパッケージの `config/` の下のどれか）に重なる。落ちるのは 2 通り:
+  **知らないパッケージ名**（`params.py` の `KNOWN_PACKAGES`。誰も読まない部分木に
+  なるため）と、**そのパッケージのどの設定ファイルにも無いノード名**。どちらも
+  綴り違いが黙って消えるのを防ぐため。ノード名を持たない
+  `sensors/MID360_config.json` だけは上書きできない。
+- **`overrides/*.yaml` の実体は `daifuku_config_manager` にある。** 地図ごとの調整は
+  LiDAR の帯（機体側）と emcl2 / VI（自律移動側）にまたがるので、どちらかに置くと
+  他方がそちらへ依存してしまう。1 地図 = 1 ファイルのまま、葉のパッケージに置いて
+  ある。
 - `vi_planner`（`local_planner:=auto|vi`）と `vi_global_planner`（`local_planner:=nav2`）は
   **排他**。両方立てると `compute_path_to_pose` にサーバが 2 つ載る。
 - **`nav2` の既定は `false` で、そのとき Nav2 の navigation は BT ごと
@@ -154,7 +173,10 @@ Docker 越しに叩く形は
 - **`daifuku_rqt` と `daifuku_waypoint_manager` は Pi では建てない。** 実機イメージ
   (`ros:humble-ros-base`) に rqt と RViz が無いため。両方の `build-workspace.sh` が
   `--packages-select` で名前を並べているので、Pi 側の一覧に足すと**ビルドが通らなく
-  なる**。
+  なる**。逆に `daifuku_bringup` と `daifuku_config_manager` は**両方の一覧に要る**
+  （実機はこの 2 つが無いと機体が上がらない）。一覧は 3 か所
+  ——`docker/raspberrypi/scripts/build-workspace.sh`、`docker/dev/tools/build-workspace.sh`、
+  `tools/setup/setup_native_base.sh`。
 - **`docker/raspberrypi/` に `compose.yaml` は無い。** 入口は本体ドライバ別の
   `compose.rt.yaml`（公式実装 + rtmouse。Pi 4 専用）と `compose.original.yaml`
   （自前実装。既定、Pi 5 では必須）の 2 つで、どちらも `compose.common.yaml` を
@@ -180,7 +202,17 @@ Docker 越しに叩く形は
   そのとき `workspace-build` は走らない。** デーモンが上げ直すときは `depends_on`
   が効かず、各コンテナが独立に上がるため。`install/` が名前付きボリュームに残るので
   それで動くが、**C++ / Rust を直した分は再起動しても反映されない**（`docker compose
-  up -d` を人手で通すこと）。`workspace-build` 側に `restart` を足してはいけない
+  up -d` を人手で通すこと）。**LiDAR と EKF も `raspicat` サービスに入ったので、この
+  性質はセンサ側にも及ぶ。**
+- **ドライバが `finalized` まで落ちると launch ごと終了する**
+  （`robot_bringup.launch.py` の `register_shutting_down_transition`）。LiDAR と EKF が
+  同じ launch に居るので、**駆動の障害はセンサも道連れにし、`restart: unless-stopped`
+  で全部が上がり直す**。踏むのは Pi 5 で `driver:=raspimouse` を選んだときのような
+  設定の取り違えで、そこは直せば直る。
+- **Mid-360 が LAN に居ないまま boot すると、コンテナは正常に上がったように見える。**
+  `ros2 launch` は子ノードが死んでも終了しないので、`/livox/lidar` が来ないまま
+  `restart: unless-stopped` の出番も無い。センサが「人が navigation を立てるとき」
+  ではなく「boot 時」に上がるようになった副作用。**未検証**。`workspace-build` 側に `restart` を足してはいけない
   （正常終了でも上げ直すので、ビルドが終わるたびに次が始まる）。
 - **`planner:=vi`（既定）では `navigate_through_poses` が使えない。** VI 系は
   `compute_path_to_pose` しか持たないので、`nav2:=true` では `navigation.launch.py` が
@@ -268,29 +300,33 @@ Docker 越しに叩く形は
   下限が距離とともに上がるので、**`max_height` をその下に置くと帯が潰れ、
   `range_max` を伸ばしてもエラーも警告も出ないまま手前で何も入らなくなる**
   （5 度なら 70m 先の実効下限は 6.40m）。地図ごとの角度は `overrides/` 側。
+  設定は `daifuku_bringup/config/sensors/` で、**変えたら `docker compose up -d`**
+  （読むのは常駐している raspicat サービス）。
   `range_max` の既定 70.0 はセンサの測距上限だが、**そこまで使うのは `emcl2` だけ**
   （costmap は `obstacle_max_range: 2.5`、SLAM は `max_laser_range: 10.0` で頭打ち）。
   **`map_tsudanuma` の `max_height` は仰角 5 度と対の 8.30m** なので、そこで
   `elevation_filter:=false` にすると**高さで切っていないのと同じ**になる（床も天井も
   全距離で帯に入る）。外すなら `max_height` / `range_max` も組で戻すこと。
-- **`use_mid360_imu` は launch 2 つが同じ値でないと壊れる。** `robot_bringup.launch.py`
-  と `navigation.launch.py`（`mapping.launch.py`）の両方が持つ同名の引数で、**既定は
-  どちらも `true`**（`odom→base_footprint` と `/odom` の所有者は EKF で、ドライバ側は
-  `/wheel/odom` を出すだけ。自前実装は `publish_tf: false`、公式実装は `publish_tf`
-  が無いのでノードの `/tf` を捨て先へ remap）。**ナビゲーション側だけ `false`**
-  ——または片方だけ `true`——にすると EKF の入力を誰も出さないまま `/odom` と TF の
-  配信元が 2 つになり、**エラーも警告も出ない**（tf2 は届いた順に上書きするので姿勢が
-  2 つの答えの間で震え、追従を始めると回り出す。2026-08-05 の実機）。車輪側だけ
-  `true` なら TF が繋がらないので気付ける。
-  **人が 2 か所に書かなくて済むよう、既定値は環境変数 `USE_MID360_IMU` から取る**
-  （`daifuku_stack_launch.env_bool_default`）。`docker/raspberrypi/compose.common.yaml`
-  が `ros2` と `raspicat` の両サービスへ配るので、切り替えるのは**リポジトリルートの
-  `.env` の 1 行**（変えたら `docker compose up -d` でコンテナを作り直すこと。環境変数は
-  起動時にしか読まれない）。読めない綴りは黙って既定に落とさず起動時に落とす。
-  **`raspicat` サービスだけを立てても `odom→base_footprint` は出ない**（既定 `true`
-  では EKF が出すため）。`simulator/` の Isaac ハーネスは Isaac が `/wheel/odom` を
-  出す側なので、環境変数の無い環境でも変わらないよう `nav_container.sh` が
-  `use_mid360_imu:=true` を明示している。
+- **センサを立てるのは `robot_bringup.launch.py` だけ。** LiDAR（`/scan`）も EKF
+  （`/odom`・`odom→base_footprint`）もそちらが `include` していて、**`docker compose up`
+  で常駐している**。`navigation.launch.py` / `mapping.launch.py` は消費者に徹し、
+  センサの引数を 1 つも持たない。手元で単独に立てるなら先に
+  `ros2 launch daifuku_bringup robot_bringup.launch.py` を通すこと（`/scan` が
+  来ないと emcl2 も costmap も動かない）。`simulator/` は駆動ドライバが要らないので、
+  `nav_container.sh` / `run_case.sh` が `lidar_bringup.launch.py` と
+  `odom_fusion.launch.py` を直接立てている。
+- **`use_mid360_imu` は 1 つの launch に閉じている。** `robot_bringup.launch.py` が
+  ドライバと EKF（`odom_fusion.launch.py`）の両方を立てるので、**片方だけ切り替わる
+  状態は作れない**。`true`（既定）では `odom→base_footprint` と `/odom` の所有者が EKF
+  になり、ドライバは `/wheel/odom` を出すだけになる（自前実装は `publish_tf: false`、
+  公式実装は `publish_tf` が無いのでノードの `/tf` を捨て先へ remap）。既定値は環境
+  変数 `USE_MID360_IMU` から取る（`daifuku_config_manager.env_bool_default`。読めない
+  綴りは黙って既定に落とさず起動時に落とす）。**2026-08-07 より前は EKF が
+  `lidar_bringup` 側に居て、2 つの launch へ同じ値を渡さないとエラーも警告も出ないまま
+  自己位置が壊れた**（2026-08-05 の実機）。同じ launch に入れたのでその穴は無い。
+- **`lidar:=2d` と `use_mid360_imu:=true` は同時に指定できない**（`robot_bringup` の
+  `validate` が起動時に落とす）。URG に IMU は無いので、通すと EKF が `imu0` を一度も
+  受け取らないまま車輪だけで回り、**融合しているつもりで融合していない**状態になる。
 - **Mid-360 のジャイロは電源投入時バイアスが大きい**（この個体は z 軸
   +0.013960 rad/s = +0.800 deg/s = 48 deg/min。2026-08-05 実測）。
   `robot_localization` はセンサのバイアスを推定しないので、`prepare_mid360_imu` が
@@ -302,7 +338,7 @@ Docker 越しに叩く形は
   リンク間は robot_state_publisher）。
   二重に出すと**自己位置だけが静かに壊れる**。
 
-## 設定ファイル (`src/daifuku_stack/config/**/*.yaml`) のコメント
+## 設定ファイル (`src/daifuku_{bringup,stack}/config/**/*.yaml` と `src/daifuku_config_manager/config/overrides/*.yaml`) のコメント
 
 - **1 行でまとめる。** キーの右に `# 既定 <ノード既定値>: <説明>` の形で書き、既存の行と
   同じ書式・同じ語彙にそろえる。キーの上に段落を積まない。実測値は 1 行に収まる範囲で
@@ -318,10 +354,12 @@ Docker 越しに叩く形は
 
 | 触るもの | 先に読む |
 | --- | --- |
-| `config/` の yaml の値 | [`src/daifuku_stack/config/README.md`](src/daifuku_stack/config/README.md)（合成・override の仕組みと、各値の由来） |
+| `config/` の yaml の値（両パッケージ） | [`src/daifuku_stack/config/README.md`](src/daifuku_stack/config/README.md)（合成・override の仕組みと、各値の由来。機体側の値もここにまとまっている） |
+| `overrides/` / 設定の合成そのもの | `src/daifuku_config_manager/src/daifuku_config_manager/params.py` の冒頭 |
 | `launch/` | [`docs/usage/architecture.md`](docs/usage/architecture.md#launchファイルの構成) |
 | `simulator/`（Isaac 版 / pi4_sim 版） | [`simulator/docs/pi4_sim.md`](simulator/docs/pi4_sim.md) を先に、次に [`simulator/README.md`](simulator/README.md) |
 | `docker/` | [`docker/README.md`](docker/README.md)（実機用と開発用の 2 環境） |
+| `src/daifuku_bringup/`（LiDAR・EKF・駆動の launch） | [`docs/setup/lidar.md`](docs/setup/lidar.md)、次に [`docs/usage/architecture.md`](docs/usage/architecture.md#launchファイルの構成) |
 | `src/raspicat_driver/` / `tools/image/udev/` | [`src/raspicat_driver/README.md`](src/raspicat_driver/README.md)、次に [`docs/setup/raspberry-pi-4.md`](docs/setup/raspberry-pi-4.md) と [`raspberry-pi-5.md`](docs/setup/raspberry-pi-5.md)（未検証の項目付き） |
 | `src/daifuku_rqt/` | [`src/daifuku_rqt/README.md`](src/daifuku_rqt/README.md)、次に [`docs/usage/control-panel.md`](docs/usage/control-panel.md) |
 | `src/daifuku_waypoint_manager/` / `daifuku_stack/waypoints/` | [`src/daifuku_waypoint_manager/README.md`](src/daifuku_waypoint_manager/README.md) |

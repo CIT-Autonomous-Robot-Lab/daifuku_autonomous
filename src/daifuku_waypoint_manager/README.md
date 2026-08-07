@@ -142,7 +142,7 @@ latch して出す。**これは他ノードが読むためのもの**で、い�
 1 つとして戻した）。先読みを試すときにこのパネルが出す順路が要るので、ここを直すと
 `planner:=vi` + `nav2:=true` の挙動が変わる。代償（メモリ 2 倍）は上の yaml 側に書いてある。
 
-同じものを `daifuku_stack/src/joy_teleop.py`（START+BACK での巡回開始）も出す。
+同じものを `daifuku_bringup/src/joy_teleop.py`（START+BACK での巡回開始）も出す。
 **実機のイメージにこのパネルは入らない**ので、機体だけで走らせるときはあちらが
 出どころになる。トピック名はパネルの `kWaypointPathTopic`・`joy_teleop` の
 publisher・`vi_planner` の `waypoint_topic` の 3 か所にあり、1 つだけ変えると
@@ -164,7 +164,7 @@ RViz の Fixed Frame と waypoint の `frame_id` が一致している必要が�
 ## YAML の受け入れ規則
 
 読み手が 2 つある。このパネルの `readYamlFile` と、実機で巡回を始める
-`daifuku_stack/src/joy_teleop.py` の `load_waypoints` である。**両方が同じ規則で
+`daifuku_bringup/src/joy_teleop.py` の `load_waypoints` である。**両方が同じ規則で
 受けること。** 片方だけが通す形にすると、手で書いた順路が「実機では走るのに
 パネルでは開けない」（あるいはその逆）になり、しかもどちらの側にも異常が出ない。
 

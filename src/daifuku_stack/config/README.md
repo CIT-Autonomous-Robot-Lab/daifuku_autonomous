@@ -1,21 +1,36 @@
 # config/
 
+**設定は 3 つのパッケージに分かれています。** このファイルは 3 つとも扱います
+（値の由来を 1 か所にまとめておきたいため）。
+
+| パッケージ | 持つもの | 立てるもの |
+| --- | --- | --- |
+| `daifuku_stack` | Nav2 / emcl2 / SLAM | 人が立てる `navigation` / `mapping` |
+| `daifuku_bringup` | 駆動ドライバ / LiDAR / EKF / 仲裁 / ゲームパッド | **`docker compose up` で常駐**する `robot_bringup` |
+| `daifuku_config_manager` | `overrides/*.yaml` と合成規則 | 何も立てない |
+
+**機体側 (`daifuku_bringup`) の値を変えたら `docker compose up -d` が要ります。**
+navigation を立て直しても、常駐している raspicat サービスは読み直しません。
+
 ディレクトリは**どの launch がどう読むか**で分かれています。`overrides/*.yaml` は
 このうち `MID360_config.json` を除く全部に重ねられます（下の「上書き」）。
 
 | 場所 | 読む launch | 渡し方 |
 | --- | --- | --- |
-| `nav2/*.yaml` | `navigation.launch.py` | 起動時に 1 つへ合成して `params_file` に渡る |
-| `overrides/*.yaml` | 4 つすべて | 下のどれかへ重ねる（`overrides:=`）。行き先はノード名で決まる |
-| `localization/emcl2.yaml` | `navigation.launch.py` | `emcl2_params_file` でノードへ直接 |
-| `lifecycle_bond.yaml` | `navigation.launch.py` | `bond_params_file` を `SetParametersFromFile` でグループ内の全ノードへ注入 |
-| `sensors/*.yaml` | `lidar_bringup.launch.py` | 各ノードへ直接（`scan_filter_params_file` など） |
-| `sensors/MID360_config.json` | `lidar_bringup.launch.py` | `livox_ros_driver2` へ直接。**ROS のパラメータファイルではない**ので上書きの対象外 |
-| `mapping/slam_toolbox.yaml` | `mapping.launch.py` | `slam_params_file` でノードへ直接 |
-| `robot/raspicat_driver.yaml` | `robot_bringup.launch.py` | `raspicat_driver` (LifecycleNode) へ直接。`driver:=original` (自前実装 / 標準 / Pi 4・Pi 5) |
-| `robot/raspicat.yaml` | `robot_bringup.launch.py` | `raspimouse` (LifecycleNode) へ直接。`driver:=raspimouse` (公式実装 / rtmouse 入りの Pi 4 のみ) |
-| `robot/twist_mux.yaml` | `robot_bringup.launch.py` | `twist_mux` へ直接。`twist_mux:=true` (既定) のときだけ |
-| `robot/joy_teleop.yaml` | `robot_bringup.launch.py` | `joy_node` と `joy_teleop` の**両方**へ直接（1 ファイルに 2 ノード分）。`joy:=true` (既定) のときだけ |
+| `daifuku_config_manager` の `overrides/*.yaml` | すべて | 下のどれかへ重ねる（`overrides:=`）。行き先はパッケージ名とノード名で決まる |
+| `daifuku_stack` の `nav2/*.yaml` | `navigation.launch.py` | 起動時に 1 つへ合成して `params_file` に渡る |
+| `daifuku_stack` の `localization/emcl2.yaml` | `navigation.launch.py` | `emcl2_params_file` でノードへ直接 |
+| `daifuku_stack` の `lifecycle_bond.yaml` | `navigation.launch.py` | `bond_params_file` を `SetParametersFromFile` でグループ内の全ノードへ注入 |
+| `daifuku_stack` の `mapping/slam_toolbox.yaml` | `mapping.launch.py` | `slam_params_file` でノードへ直接 |
+| `daifuku_bringup` の `sensors/*.yaml` | `lidar_bringup.launch.py` / `odom_fusion.launch.py` | 各ノードへ直接（`scan_filter_params_file`、`mid360_ekf_params_file` など） |
+| `daifuku_bringup` の `sensors/MID360_config.json` | `lidar_bringup.launch.py` | `livox_ros_driver2` へ直接。**ROS のパラメータファイルではない**ので上書きの対象外 |
+| `daifuku_bringup` の `robot/raspicat_driver.yaml` | `robot_bringup.launch.py` | `raspicat_driver` (LifecycleNode) へ直接。`driver:=original` (自前実装 / 標準 / Pi 4・Pi 5) |
+| `daifuku_bringup` の `robot/raspicat.yaml` | `robot_bringup.launch.py` | `raspimouse` (LifecycleNode) へ直接。`driver:=raspimouse` (公式実装 / rtmouse 入りの Pi 4 のみ) |
+| `daifuku_bringup` の `robot/twist_mux.yaml` | `robot_bringup.launch.py` | `twist_mux` へ直接。`twist_mux:=true` (既定) のときだけ |
+| `daifuku_bringup` の `robot/joy_teleop.yaml` | `robot_bringup.launch.py` | `joy_node` と `joy_teleop` の**両方**へ直接（1 ファイルに 2 ノード分）。`joy:=true` (既定) のときだけ |
+
+`lidar_bringup.launch.py` と `odom_fusion.launch.py` は `robot_bringup.launch.py` が
+include します。単独でも立てられます（`simulator/` はそうしています）。
 
 `robot/raspicat.yaml` だけは**上流ファイルの完全なコピー**で、差分ではありません。
 launch_ros はノード自身の `parameters=` をグローバル (`SetParametersFromFile`) より
@@ -150,16 +165,23 @@ override も**通ります**（そして黙って無視されます）。
 2. `overrides:=<名前>` → `overrides/<名前>.yaml`（カンマ区切りで複数可）
 3. `extra_params_file:=<パス>` → 任意のファイル（リポジトリ外の一時的な上書き用）
 
-**行き先はノード名だけで決まります。** override に書いた `emcl2:` の節は
-`localization/emcl2.yaml` へ、`slam_toolbox:` は `mapping/slam_toolbox.yaml` へ、
-`raspicat_driver:` は `robot/raspicat_driver.yaml` へ、というように、同じノード名を
+**行き先はパッケージ名とノード名で決まります。** 1 段目が `daifuku_bringup:` か
+`daifuku_stack:` で、**各 launch は自分のパッケージ名の部分木しか読みません**。
+2 段目がノード名で、`emcl2:` の節は `localization/emcl2.yaml` へ、`slam_toolbox:` は
+`mapping/slam_toolbox.yaml` へ、`pointcloud_to_laserscan:` は
+`daifuku_bringup` の `sensors/mid360_scan.yaml` へ、というように、同じノード名を
 宣言している設定ファイルの上に深くマージされます。書きかたと重ね方は 3 つとも
 同じで、`extra_params_file` も同じ規則で配られます。
 
-そのため、1 つの override ファイルに全部書いておけば、どの launch でも同じ名前で
-通ります。その launch が読まない設定ファイル宛の節は何も起こしません
+**1 地図 = 1 ファイル**です。場所が決まれば LiDAR の帯（機体側）も emcl2 の調整
+（自律移動側）も決まる、という 1 つの話なので、パッケージでは割っていません。
+パッケージ名の段は、その 1 ファイルをどちらの launch がどこまで読むかを
+**明示するため**にあります。
+
+その launch が読まない設定ファイル宛の節は何も起こしません
 （`mapping.launch.py` に `overrides:=map_19f` を渡しても、`emcl2:` と `vi_planner:` は
-単に行き先が無いだけで害はありません）。
+単に行き先が無いだけで害はありません）。**パッケージが違う節はそもそも読まれません**
+（`lidar_bringup` は `daifuku_stack:` の下を見ません）。
 
 `params_file:=` で土台を差し替えても行き先は変わりません。渡したファイルに
 書かれていなくても、`nav2/*.yaml` が宣言しているノードの節はそこへ載ります
@@ -170,14 +192,25 @@ override も**通ります**（そして黙って無視されます）。
 `ros__parameters` も無い）ので、この仕組みに乗りません。`mid360_config:=<パス>` で
 ファイルごと差し替えてください。
 
-`overrides` の既定値は 4 つの launch すべてで **`map_19f`** です。既定の地図
+`overrides` の既定値は**リポジトリルートの `.env` の `OVERRIDES`**（無ければ
+`map_19f`）で、すべての launch が同じものを見ます。既定の地図
 （`maps/map_19f.yaml`）に対応する調整を、素の起動でも載せるためです。地図を
 変えるときは**置き換え**になります（追加ではありません）。
 
+**機体側（LiDAR の帯）を変えるには `.env` を直して `docker compose up -d` が
+要ります。** そちらを読むのは常駐している raspicat サービスなので、`overrides:=` を
+navigation へ渡しても効くのは `daifuku_stack:` の部分木だけです。`mapping` から
+LiDAR の帯を変えられないのも同じ理由です（新しい場所で地図を作るときは、SLAM を
+始める前に `.env` と `docker compose up -d` を通してください）。
+
 ```bash
+# 機体側 (LiDAR の帯) を切り替える
+sed -i 's/^#\?OVERRIDES=.*/OVERRIDES=map_tsudanuma/' .env && docker compose up -d
+
+# 自律移動側。overrides:= を明示しなければ .env の値が既定として入る
 ros2 launch daifuku_stack navigation.launch.py \
     map:=$PWD/src/daifuku_stack/maps/map_tsudanuma.yaml \
-    overrides:=map_tsudanuma planner:=vi local_planner:=nav2
+    planner:=vi local_planner:=nav2
 ```
 
 何も重ねないときは `overrides:=none` です。`ros2 launch` は値が空の
@@ -208,30 +241,41 @@ EMCL2 調整（リセット閾値など）が載ったまま走ります。対�
 
 ### 新しい override を足す
 
-`overrides/<地図名や状況>.yaml` を作り、**変えたいキーだけ**を書きます。
-ノード名と `ros__parameters` の 2 段は必要です。ノード名が行き先を決めるので、
-`nav2` 以外を狙うときも書きかたは同じです。
+`src/daifuku_config_manager/config/overrides/<地図名や状況>.yaml` を作り、
+**変えたいキーだけ**を書きます。パッケージ名・ノード名・`ros__parameters` の 3 段が
+必要です。
 
 ```yaml
-vi_global_planner:        # -> nav2/vi_planner.yaml (params_file の合成結果)
-  ros__parameters:
-    safety_radius_penalty: 1
-
-emcl2:                    # -> localization/emcl2.yaml
-  ros__parameters:
-    alpha_threshold: 0.2
-
-local_costmap:            # -> nav2/costmaps.yaml (1 段深い形もそのまま書く)
-  local_costmap:
+daifuku_bringup:            # 機体側。変えたら docker compose up -d
+  elevation_filter:         # -> daifuku_bringup の sensors/mid360_elevation.yaml
     ros__parameters:
-      inflation_layer:
-        inflation_radius: 0.45
+      min_elevation_deg: 5.0
+
+daifuku_stack:              # 自律移動側
+  vi_global_planner:        # -> nav2/vi_planner.yaml (params_file の合成結果)
+    ros__parameters:
+      safety_radius_penalty: 1
+
+  emcl2:                    # -> localization/emcl2.yaml
+    ros__parameters:
+      alpha_threshold: 0.2
+
+  local_costmap:            # -> nav2/costmaps.yaml (1 段深い形もそのまま書く)
+    local_costmap:
+      ros__parameters:
+        inflation_layer:
+          inflation_radius: 0.45
 ```
 
-ノード名を間違えると、どの設定ファイルにも行き先が無いので**起動時にエラーで
-止まります**（近い名前を出します）。黙って消えると「書いたのに効かない」を
-探せないためで、その launch が読まないだけの節（`mapping` での `emcl2:`）は
-エラーにしません。
+**ファイルを新しく足したときは 1 度ビルドを通してください。** `setup.py` の `glob` は
+ビルド時にしか展開されないので、足しただけでは `overrides:=` の一覧に出てきません
+（既にあるファイルの値を直すだけならビルドは要りません）。
+
+間違えると起動時にエラーで止まります。**パッケージ名**が `KNOWN_PACKAGES`
+（`params.py`）に無い場合——どの launch からも読まれない部分木になるため——と、
+**ノード名**がそのパッケージのどの設定ファイルにも無い場合（近い名前を出します）の
+2 通りです。黙って消えると「書いたのに効かない」を探せないためで、その launch が
+読まないだけの節（`mapping` での `emcl2:`）はエラーにしません。
 
 `nav2/*.yaml` を丸ごと複製しないでください。既定値が変わったときに追従できません。
 

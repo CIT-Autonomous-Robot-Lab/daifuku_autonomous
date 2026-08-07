@@ -1,8 +1,13 @@
 # 保存済みの地図で自律移動する。
 #
-# 選べる組み合わせは 3 通り (localization x planner)。どれを選んでも
-# lidar_bringup.launch.py と RViz (use_rviz:=true のとき) は共通で、違うのは
-# その下のスタックだけ。
+# **センサは立てない。** LiDAR (/scan) も EKF (/odom, odom -> base_footprint) も
+# robot_bringup.launch.py の受け持ちで、そちらは docker compose up で常駐している。
+# ここはその消費者に徹する。手元で単独に立てるときは先に
+# `ros2 launch daifuku_bringup robot_bringup.launch.py` を通しておくこと
+# (/scan が来ないと emcl2 も costmap も動かない)。
+#
+# 選べる組み合わせは 3 通り (localization x planner)。どれを選んでも RViz
+# (use_rviz:=true のとき) は共通で、違うのはその下のスタックだけ。
 #
 #   localization:=amcl  + planner:=navfn -> nav2 の bringup_launch.py をそのまま
 #   localization:=amcl  + planner:=vi    -> nav2 の localization_launch.py +
@@ -23,7 +28,7 @@
 # velocity_smoother 1 つだけになる (velocity_smoother:=false なら消える)。
 # 何が変わるか・何を読まなくてよくなるかは docs/usage/architecture.md。
 #
-# パラメータの合成規則は daifuku_stack_launch/params.py と config/README.md、
+# パラメータの合成規則は daifuku_config_manager/params.py と config/README.md、
 # バックエンドの選択規則は daifuku_stack_launch/backends.py を参照。
 
 import os
@@ -56,8 +61,8 @@ _LAUNCH_DIR = os.path.dirname(os.path.realpath(__file__))
 if _LAUNCH_DIR not in sys.path:
     sys.path.insert(0, _LAUNCH_DIR)
 
-from daifuku_stack_launch import backends, params  # noqa: E402
-from daifuku_stack_launch import lidar as lidar_common  # noqa: E402
+from daifuku_config_manager import params  # noqa: E402
+from daifuku_stack_launch import backends, nav2_params  # noqa: E402
 
 
 def generate_launch_description():
@@ -65,7 +70,7 @@ def generate_launch_description():
     nav2_share = get_package_share_directory("nav2_bringup")
 
     default_params_dir = os.path.join(pkg_share, "config", "nav2")
-    overrides_dir = os.path.join(pkg_share, "config", "overrides")
+    config_root = os.path.join(pkg_share, "config")
     # Pi4 高負荷時の bond 4 秒タイムアウト対策 (詳細はファイル内コメント参照)。
     # nav2 の navigation_launch.py はマネージャに bond_timeout を渡せないため、
     # SetParametersFromFile でグループスコープ内の全ノードに注入する。
@@ -487,7 +492,7 @@ def generate_launch_description():
             description="Full path to the map yaml file.",
         ),
 
-        # --- パラメータの合成 (daifuku_stack_launch/params.py) ---
+        # --- パラメータの合成 (daifuku_config_manager/params.py) ---
         DeclareLaunchArgument(
             "params_file",
             default_value="",
@@ -500,7 +505,7 @@ def generate_launch_description():
             description="合成する nav2 パラメータ断片のディレクトリ。"
                         "*.yaml をファイル名順に深くマージする (config/README.md)。",
         ),
-        *params.declare_args(overrides_dir),
+        *params.declare_args(),
         DeclareLaunchArgument("emcl2_params_file", default_value=default_emcl2_params),
         DeclareLaunchArgument("bond_params_file", default_value=default_bond_params),
 
@@ -573,8 +578,6 @@ def generate_launch_description():
         # 増える。ディスカバリが不安定なときはここを false にして切り分ける。
         DeclareLaunchArgument("use_system_monitor", default_value="true"),
 
-        # --- LiDAR (daifuku_stack_launch/lidar.py。lidar_bringup と共通) ---
-        *lidar_common.declare_shared_args(pkg_share),
     ]
 
     return LaunchDescription([
@@ -588,11 +591,14 @@ def generate_launch_description():
         OpaqueFunction(
             function=params.compose,
             kwargs={
-                "overrides_dir": overrides_dir,
+                "package": "daifuku_stack",
+                "config_root": config_root,
                 "targets": ["params_file", "emcl2_params_file", "bond_params_file"],
+                # params_file だけは config/nav2/*.yaml の合成が土台になる。
+                "base_resolvers": {"params_file": nav2_params.fragments_resolver},
             },
         ),
-        OpaqueFunction(function=params.validate_map_file),
+        OpaqueFunction(function=nav2_params.validate_map_file),
         OpaqueFunction(function=backends.validate_localization),
         OpaqueFunction(function=backends.validate_planner),
         OpaqueFunction(
@@ -606,8 +612,6 @@ def generate_launch_description():
                 "effective_local_planner": effective_local_planner,
             },
         ),
-
-        lidar_common.include_lidar_bringup(pkg_share),
 
         amcl_navfn_stack,
         amcl_vi_stack,

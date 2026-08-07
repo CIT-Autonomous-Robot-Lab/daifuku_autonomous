@@ -10,8 +10,10 @@
 #                  -> /scan_raw -> 角度フィルタ -> /scan
 #                  (elevation_filter:=false なら /livox/lidar が直接 2 段目へ入る)
 #
-# lidar:=mid360 では加えて IMU 経路 (prepare_mid360_imu.py -> ekf_node) が立ち、
-# 車輪オドメトリと融合した /odom と odom -> base_footprint TF を配信する。
+# **IMU 経路 (prepare_mid360_imu.py -> ekf_node) はここには無い。**
+# odom_fusion.launch.py が持ち、robot_bringup.launch.py が include する。入力の
+# /livox/imu を出すのはここの livox ドライバだが、それはトピックの縁だけで、EKF を
+# 本体ドライバと同じ launch に置かないと use_mid360_imu の切り替えが割れるため。
 
 import os
 import sys
@@ -28,18 +30,19 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 from ament_index_python.packages import get_package_share_directory
 
-# 共通部品はこの launch ディレクトリの直下 (daifuku_stack_launch/) にある。
+# 共通部品はこの launch ディレクトリの直下 (daifuku_bringup_launch/) にある。
 _LAUNCH_DIR = os.path.dirname(os.path.realpath(__file__))
 if _LAUNCH_DIR not in sys.path:
     sys.path.insert(0, _LAUNCH_DIR)
 
-from daifuku_stack_launch import lidar as lidar_common, params  # noqa: E402
+from daifuku_config_manager import params  # noqa: E402
+from daifuku_bringup_launch import lidar as lidar_common  # noqa: E402
 
 
 def generate_launch_description():
-    pkg_share = get_package_share_directory("daifuku_stack")
+    pkg_share = get_package_share_directory("daifuku_bringup")
     sensors_dir = os.path.join(pkg_share, "config", "sensors")
-    overrides_dir = os.path.join(pkg_share, "config", "overrides")
+    config_root = os.path.join(pkg_share, "config")
 
     lidar = LaunchConfiguration("lidar")
     lidar_driver = LaunchConfiguration("lidar_driver")
@@ -50,13 +53,9 @@ def generate_launch_description():
     scan_filter_params_file = LaunchConfiguration("scan_filter_params_file")
     mid360_config = LaunchConfiguration("mid360_config")
     mid360_scan_params_file = LaunchConfiguration("mid360_scan_params_file")
-    mid360_ekf_params_file = LaunchConfiguration("mid360_ekf_params_file")
     mid360_elevation_params_file = LaunchConfiguration("mid360_elevation_params_file")
-    use_mid360_imu = LaunchConfiguration("use_mid360_imu")
     elevation_filter = LaunchConfiguration("elevation_filter")
     publish_lidar_tf = LaunchConfiguration("publish_lidar_tf")
-    wheel_odom_topic = LaunchConfiguration("wheel_odom_topic")
-    odom_topic = LaunchConfiguration("odom_topic")
     lidar_frame = LaunchConfiguration("lidar_frame")
     base_frame = LaunchConfiguration("base_frame")
     urg_params_file = LaunchConfiguration("urg_params_file")
@@ -84,10 +83,6 @@ def generate_launch_description():
     use_urg_driver = PythonExpression([
         "'", lidar, "' == '2d' and '", lidar_driver, "'.lower() == 'true'",
     ])
-    use_mid360_ekf = PythonExpression([
-        "'", lidar, "' == 'mid360' and '", use_mid360_imu,
-        "'.lower() == 'true'",
-    ])
     use_elevation_filter = PythonExpression([
         "'", lidar, "' == 'mid360' and '", elevation_filter,
         "'.lower() == 'true'",
@@ -100,12 +95,12 @@ def generate_launch_description():
     # ------------------------------------------------------------------
     # 起動引数
     #
-    # navigation / mapping と共有するものは daifuku_stack_launch.lidar が持つ。
+    # navigation / mapping と共有するものは daifuku_bringup_launch.lidar が持つ。
     # ここで宣言するのは、親が素通ししない (このファイルの中だけで完結する) 分。
     # ------------------------------------------------------------------
     declare_args = lidar_common.declare_shared_args(pkg_share) + [
         # 親 (navigation / mapping) から素通しされる。単独起動でも同じ既定。
-        *params.declare_args(overrides_dir),
+        *params.declare_args(),
         DeclareLaunchArgument("use_sim_time", default_value="false"),
         DeclareLaunchArgument(
             "scan_raw_topic",
@@ -122,15 +117,12 @@ def generate_launch_description():
             default_value=os.path.join(sensors_dir, "mid360_scan.yaml"),
             description="pointcloud_to_laserscan の設定 (点群からスキャンへの変換)。",
         ),
-        DeclareLaunchArgument(
-            "mid360_ekf_params_file",
-            default_value=os.path.join(sensors_dir, "mid360_ekf.yaml"),
-            description="robot_localization の EKF 設定 (車輪 + Mid-360 IMU)。",
-        ),
         DeclareLaunchArgument("mid360_publish_freq", default_value="10.0"),
+        # Mid-360 のフレーム。**robot_bringup.launch.py の urdf_lidar_frame
+        # (既定 lidar_link) とは別物**で、あちらは URDF が持つ 2D LiDAR の
+        # リンク名。同じ名前にすると include したときに親の値が漏れてくる。
         DeclareLaunchArgument("lidar_frame", default_value="livox_frame"),
         DeclareLaunchArgument("base_frame", default_value="base_footprint"),
-        DeclareLaunchArgument("odom_topic", default_value="/odom"),
     ]
 
     # ------------------------------------------------------------------
@@ -197,7 +189,7 @@ def generate_launch_description():
     # ------------------------------------------------------------------
     elevation_filter_node = Node(
         condition=IfCondition(use_elevation_filter),
-        package="daifuku_stack",
+        package="daifuku_bringup",
         executable="elevation_filter.py",
         name="elevation_filter",
         output="screen",
@@ -243,7 +235,7 @@ def generate_launch_description():
 
     restamp_scan = Node(
         condition=IfCondition(use_livox_driver),
-        package="daifuku_stack",
+        package="daifuku_bringup",
         executable="restamp_scan.py",
         name="restamp_scan",
         output="screen",
@@ -279,40 +271,6 @@ def generate_launch_description():
         arguments=[scan_raw_topic, scan_topic],
     )
 
-    # ------------------------------------------------------------------
-    # Mid-360 IMU + 車輪オドメトリの融合 (use_mid360_imu:=true)
-    # 車輪ノード側の odom -> base_footprint TF は止めておくこと (二重配信)。
-    # ------------------------------------------------------------------
-    prepare_imu = Node(
-        condition=IfCondition(use_mid360_ekf),
-        package="daifuku_stack",
-        executable="prepare_mid360_imu.py",
-        name="prepare_mid360_imu",
-        output="screen",
-        # EKF と同じファイルを渡す。節はノード名で分かれるので互いに影響せず、
-        # overrides/ から両方のノードを 1 つのファイルで触れる (行き先はノード名で
-        # 決まるので、どの設定ファイルにも無いノード名は起動時に弾かれる)。
-        parameters=[mid360_ekf_params_file, {"use_sim_time": use_sim_time}],
-        remappings=[("imu_in", "/livox/imu"), ("imu_out", "/imu/mid360")],
-    )
-    ekf = Node(
-        condition=IfCondition(use_mid360_ekf),
-        package="robot_localization",
-        executable="ekf_node",
-        name="ekf_filter_node",
-        output="screen",
-        parameters=[
-            mid360_ekf_params_file,
-            {
-                "use_sim_time": use_sim_time,
-                "odom0": wheel_odom_topic,
-                "imu0": "/imu/mid360",
-                "base_link_frame": base_frame,
-            },
-        ],
-        remappings=[("odometry/filtered", odom_topic)],
-    )
-
     return LaunchDescription([
         *declare_args,
 
@@ -324,12 +282,12 @@ def generate_launch_description():
         OpaqueFunction(
             function=params.compose,
             kwargs={
-                "overrides_dir": overrides_dir,
+                "package": "daifuku_bringup",
+                "config_root": config_root,
                 "targets": [
                     "scan_filter_params_file",
                     "mid360_scan_params_file",
                     "mid360_elevation_params_file",
-                    "mid360_ekf_params_file",
                     "urg_params_file",
                 ],
             },
@@ -344,7 +302,4 @@ def generate_launch_description():
 
         scan_filter,
         scan_relay,
-
-        prepare_imu,
-        ekf,
     ])

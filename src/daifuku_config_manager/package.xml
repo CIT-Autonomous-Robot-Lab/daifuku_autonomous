@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>daifuku_config_manager</name>
+  <version>0.1.0</version>
+  <description>設定ファイルの合成規則と、場所ごとの調整 (overrides) を持つ共有パッケージ</description>
+  <maintainer email="noplab90@gmail.com">Keita Sekiguchi / nop</maintainer>
+  <license>Apache-2.0</license>
+
+  <!-- 葉のパッケージ。daifuku_bringup と daifuku_stack の両方がこれに依存し、
+       この 2 つは互いに依存しない。ここから両者を参照してはいけない
+       (参照した瞬間に循環する)。 -->
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

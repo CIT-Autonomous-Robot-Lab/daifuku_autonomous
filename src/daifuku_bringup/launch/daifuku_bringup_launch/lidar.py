@@ -1,10 +1,10 @@
 """LiDAR 構成の共通部品。
 
-lidar_bringup.launch.py と、それを include する navigation / mapping の 3 ファイルが
-同じ引数を宣言する。以前は 3 箇所に同じ既定値を手で書いていて、mapping にだけ
-lidar_driver が無い、lidar_z の実測値が片方だけ古い、といったずれが実際に起きた。
-引数表 (_shared_arg_specs) をここに 1 つだけ置き、宣言も親から子への素通しも
-そこから機械的に作る。
+lidar_bringup.launch.py と、それを include する robot_bringup.launch.py が同じ
+引数を宣言する。以前は 3 つの launch (navigation / mapping / lidar_bringup) に
+同じ既定値を手で書いていて、mapping にだけ lidar_driver が無い、lidar_z の実測値が
+片方だけ古い、といったずれが実際に起きた。引数表 (_shared_arg_specs) をここに 1 つ
+だけ置き、宣言も親から子への素通しもそこから機械的に作る。
 
 lidar_bringup.launch.py だけが使う引数 (scan_raw_topic / lidar_frame など、
 親が触らないもの) は向こうに置いたままにしてある。
@@ -24,7 +24,7 @@ from launch.actions import (
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 
-from . import env_bool_default, is_true, value
+from daifuku_config_manager import is_true, value
 
 
 def _shared_arg_specs(pkg_share):
@@ -54,24 +54,6 @@ def _shared_arg_specs(pkg_share):
          "点群を仰角で切るか (勾配の床を落とす。lidar:=mid360 のときだけ効く)。"),
         ("mid360_elevation_params_file", os.path.join(sensors, "mid360_elevation.yaml"),
          "仰角フィルタの設定 (点群を pointcloud_to_laserscan へ渡す前に切る)。"),
-        # true では EKF が odom -> base_footprint と /odom を出す側になるので、車輪
-        # ノードは /wheel/odom を出して TF を止めていなければならない。それをやるのは
-        # robot_bringup.launch.py の同名の引数で、**2 つの launch が同じ値でないと
-        # 壊れる**。こちらだけ true にすると EKF が入力を得られないまま TF と /odom の
-        # 配信元が二重になり、エラーも警告も出ないまま自己位置が壊れる (2026-08-05 の
-        # 実機: 静止中に姿勢が震え、追従開始で回り出した)。逆に車輪側だけ true なら
-        # odom -> base_footprint を誰も出さないので、TF が繋がらず気付ける。
-        #
-        # その「両方に渡す」を人手でやらずに済ませるため、既定は環境変数
-        # USE_MID360_IMU から取る。Compose が .env の 1 行を ros2 と raspicat の
-        # 両サービスへ配るので、launch を 2 つとも書き換えなくても揃う
-        # (docker/raspberrypi/compose.common.yaml。変えたら up -d で作り直すこと)。
-        # 環境変数も無いときの既定 true は実機構成 (Mid-360 + 自前ドライバ)。
-        ("use_mid360_imu", env_bool_default("USE_MID360_IMU", "true"),
-         "Mid-360 の IMU と車輪オドメトリを EKF で融合するか。既定は環境変数 "
-         "USE_MID360_IMU (Compose なら .env の 1 行で両サービスに効く)。"
-         "引数で渡すときは robot_bringup.launch.py にも同じ値を渡すこと "
-         "(あちらが車輪オドメトリを /wheel/odom へ移し、TF の配信を止める)。"),
 
         # 既定 true は mid360 構成の都合。URDF は base_footprint -> lidar_link
         # (2D LiDAR のフレーム) しか配信しておらず、Mid-360 の livox_frame は
@@ -90,9 +72,6 @@ def _shared_arg_specs(pkg_share):
         ("lidar_roll", "0.0", None),
         ("lidar_pitch", "0.0", None),
         ("lidar_yaw", "0.0", None),
-
-        ("wheel_odom_topic", "/wheel/odom",
-         "EKF に入れる車輪オドメトリ (use_mid360_imu:=true のとき)。"),
 
         ("urg_interface", "serial",
          "lidar:=2d のときの URG の接続方式: serial または ethernet。"
@@ -115,15 +94,15 @@ def declare_shared_args(pkg_share):
 
 
 def include_lidar_bringup(pkg_share):
-    """親 (navigation / mapping) から lidar_bringup.launch.py を include する。
+    """親 (robot_bringup) から lidar_bringup.launch.py を include する。
 
     共通引数はすべて素通しする。素通しの一覧を人手で書くと引数を足したときに
-    片方の親へ入れ忘れるので、引数表からそのまま作る。use_sim_time は共通引数の
-    表には無い (親も子もそれぞれの意味で宣言している) ので明示的に足す。
+    入れ忘れるので、引数表からそのまま作る。use_sim_time は共通引数の表には無い
+    (親も子もそれぞれの意味で宣言している) ので明示的に足す。
 
     overrides / extra_params_file も素通しする。親と同じ overrides で、子が読む
-    設定ファイル (scan_filter / mid360_scan / mid360_ekf / urg) も上書きできる
-    ようにするため。表に入れずここで足しているのは、親 (navigation) が
+    設定ファイル (scan_filter / mid360_scan / mid360_elevation / urg) も上書き
+    できるようにするため。表に入れずここで足しているのは、親が
     params.declare_args で先に宣言しているから (二重宣言になる)。
     """
     names = [name for name, _, _ in _shared_arg_specs(pkg_share)]
@@ -203,8 +182,6 @@ def validate(context, *args, **kwargs):
         # lidar_driver:=false (シム) では driver を立てないので要求しない。
         if driver:
             files.append(("mid360_config", value(context, "mid360_config")))
-        if is_true(context, "use_mid360_imu"):
-            files.append(("mid360_ekf_params_file", value(context, "mid360_ekf_params_file")))
         if is_true(context, "elevation_filter"):
             files.append((
                 "mid360_elevation_params_file",

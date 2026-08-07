@@ -66,9 +66,9 @@ tmux kill-session -t nav
 Mid-360のIMU融合（`use_mid360_imu`）は既定の`true`のまま使っています。`/odom`と
 `odom -> base_footprint`を出すのはEKFで、`raspicat`サービスの本体ドライバは
 `/wheel/odom`を出すだけです。**切り替えはリポジトリルートの`.env`の`USE_MID360_IMU`で**
-行ってください（Composeが`ros2`と`raspicat`の両サービスへ配ります。変えたら
-`docker compose up -d`）。launch引数で片方だけ`true`にすると、EKFが入力を受け取れない
-まま`/odom`とTFの配信元が二重になり、エラーも警告も出ません
+行ってください（読むのは`raspicat`サービス1つだけです。変えたら
+`docker compose up -d`）。**ドライバとEKFは同じlaunchが立てるので、片方だけ
+切り替わる状態は作れません**
 （[LiDARとオドメトリ](../setup/lidar.md#imuと車輪オドメトリ)）。
 
 **起動時は機体を静止させておいてください。** Mid-360のジャイロの電源投入時バイアス

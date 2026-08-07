@@ -14,11 +14,16 @@ TF                ─── odom → base_footprint → センサーフレーム
 ```
 
 上の図は`use_mid360_imu:=false`のときの構成です。**既定は`true`**で、そのときは車輪入力が
-`/wheel/odom`に変わり、EKFが最終的な`/odom`と`odom -> base_footprint`を生成します
-（車輪側をそちらへ移してTFの配信を止めるのは`robot_bringup.launch.py`の仕事です）。
-**2つのlaunchが同じ値でなければ壊れる**ので、既定値は環境変数`USE_MID360_IMU`から取り、
-Composeが`.env`の1行を両サービスへ配ります。片方だけ`true`にしたときに何が起きるかは
-[LiDARとオドメトリ](../setup/lidar.md#imuと車輪オドメトリ)。
+`/wheel/odom`に変わり、EKFが最終的な`/odom`と`odom -> base_footprint`を生成します。
+**車輪側の付け替えもEKFの起動も`robot_bringup.launch.py`ひとつの仕事**なので、引数1つで
+両方が同時に切り替わります。既定値は環境変数`USE_MID360_IMU`（`.env`の1行）から
+取ります。詳細は[LiDARとオドメトリ](../setup/lidar.md#imuと車輪オドメトリ)。
+
+**センサーを立てるのは`daifuku_bringup`だけです。** LiDARの前処理もEKFも
+`robot_bringup.launch.py`が`include`していて、`docker compose up`で常駐します。
+`navigation.launch.py`と`mapping.launch.py`は`/scan`と`/odom`の消費者に徹し、
+センサーの引数を1つも持ちません。**この配置のおかげで、navigationを立て直しても
+LiDARの初期化待ちは入らず、EKFが再起動して`/odom`が原点へ飛ぶこともありません。**
 
 速度指令は`twist_mux`が優先度で1本に束ねます（`robot_bringup.launch.py`の
 `twist_mux:=true`が既定）。自律側は`/cmd_vel`（優先度10）、遠隔操作は
@@ -31,29 +36,35 @@ Mid-360は時刻同期がないためスタンプが実時計からずれてい�
 経路になります。詳細は[LiDARとオドメトリ](../setup/lidar.md#タイムスタンプの打ち直し)を
 参照してください。
 
-## daifuku_stack
+## 自前パッケージの分担
 
-このリポジトリの設定パッケージです。独自のC++ノードは持たず、次のものをまとめています。
+独自のC++ノードは持たず、設定とlaunchとPythonノードだけです。**`daifuku_bringup`と
+`daifuku_stack`は互いに依存しません**（どちらも`daifuku_config_manager`にだけ依存）。
 
-- Nav2、SLAM Toolbox、EMCL2の設定
-- LiDAR前処理とEKF
-- launchファイル
-- 地図とRViz設定
-- `planner:=vi`用のビヘイビアツリー（`behavior_trees/`）と保存済みwaypoint（`waypoints/`）
-- `src/`のPythonノード4本
+| パッケージ | 持つもの | 立てかた |
+| --- | --- | --- |
+| `daifuku_bringup` | 駆動ドライバ・URDF・`twist_mux`・ゲームパッド・**LiDAR**・**EKF**。`src/`のPythonノード4本 | `docker compose up`で常駐 |
+| `daifuku_stack` | Nav2 / SLAM Toolbox / EMCL2の設定、地図、RViz、`behavior_trees/`、`waypoints/`、`src/system_monitor.py` | 人が`navigation` / `mapping`を立てる |
+| `daifuku_config_manager` | `overrides/*.yaml`と設定の合成規則 | 何も立てない（葉） |
 
-このうち2本は`lidar:=mid360`のときだけ立ちます。`restamp_scan.py`がスキャンの
+### daifuku_bringupのPythonノード
+
+2本は`lidar:=mid360`のときだけ立ちます。`restamp_scan.py`がスキャンの
 スタンプを打ち直し（実機ドライバを立てる`lidar_driver:=true`のときのみ。既定は`true`）、
 `prepare_mid360_imu.py`が生のIMUメッセージに共分散を付け、ジャイロのバイアスを引き、
 加速度をgから m/s² へ直してEKFへ渡します（`use_mid360_imu:=true`のときのみ。既定は
-`true`）。
+`true`）。`elevation_filter.py`は点群を仰角で切ります（`elevation_filter:=true`が既定）。
+`joy_teleop.py`は`joy:=true`（既定）で`joy_node`と一緒に立ち、`/joy`のボタンの長押しで
+teleopと自律走行を切り替えます（[ゲームパッドで操作する](joystick.md)）。
 
-残る2本はLiDAR構成によりません。`system_monitor.py`は`navigation.launch.py`だけが
-立てます（`use_system_monitor:=true`が既定）。`/proc`を1 Hzで読み、CPUと温度を
-`/diagnostics`へ出す役で、受け取るのは[操作パネル（rqt）](control-panel.md)です。
-`joy_teleop.py`は`robot_bringup.launch.py`が`joy:=true`（既定）で`joy_node`と一緒に
-立てます。`/joy`のボタンの長押しでteleopと自律走行を切り替える役で、詳細は
-[ゲームパッドで操作する](joystick.md)にあります。
+### daifuku_stackのPythonノード
+
+`system_monitor.py`は`navigation.launch.py`だけが立てます（`use_system_monitor:=true`が
+既定）。`/proc`を1 Hzで読み、CPUと温度を`/diagnostics`へ出す役で、受け取るのは
+[操作パネル（rqt）](control-panel.md)です。**機体側へ移していないのは、プロセス別の
+内訳がPID名前空間の中しか見えないため**です（`pid: host`は設定していないので、
+`raspicat`コンテナへ移すとNav2とVIが内訳から消えます）。ホスト全体のCPUと
+ロードアベレージのほうは`/proc/stat`が名前空間化されないのでどちらでも同じです。
 
 ## raspicat_driver
 
@@ -75,27 +86,36 @@ Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。
 
 ## launchファイルの構成
 
-`src/daifuku_stack/launch/`の中身です。
+**機体側（`daifuku_bringup`）と自律移動側（`daifuku_stack`）に分かれています。**
+入口は2つで、`robot_bringup`が`docker compose up`で常駐し、`navigation`／`mapping`を
+人が立てます。
 
-| ファイル | 役割 |
-| --- | --- |
-| `navigation.launch.py` | 自律移動。地図と自己位置推定、その上のNav2／価値反復スタック |
-| `mapping.launch.py` | 地図作成。SLAM Toolboxとその入力 |
-| `lidar_bringup.launch.py` | LiDARの前処理一式。上の2つから`include`される |
-| `robot_bringup.launch.py` | 機体ドライバとURDF。`driver:=original`（標準 / 自前実装 / [Pi 4](../setup/raspberry-pi-4.md)・[Pi 5](../setup/raspberry-pi-5.md)）または`driver:=raspimouse`（公式実装 / rtmouse入りのPi 4のみ。引数そのものの既定値はこちら） |
+| パッケージ | ファイル | 役割 |
+| --- | --- | --- |
+| `daifuku_bringup` | `robot_bringup.launch.py` | **入口。** 機体ドライバとURDF、下2つの`include`。`driver:=original`（標準 / 自前実装 / [Pi 4](../setup/raspberry-pi-4.md)・[Pi 5](../setup/raspberry-pi-5.md)）または`driver:=raspimouse`（公式実装 / rtmouse入りのPi 4のみ。引数そのものの既定値はこちら） |
+| `daifuku_bringup` | `lidar_bringup.launch.py` | LiDARの前処理一式（点群→スキャン→角度フィルタ） |
+| `daifuku_bringup` | `odom_fusion.launch.py` | 車輪オドメトリとMid-360 IMUのEKF融合 |
+| `daifuku_stack` | `navigation.launch.py` | **入口。** 自律移動。地図と自己位置推定、その上のNav2／価値反復スタック |
+| `daifuku_stack` | `mapping.launch.py` | **入口。** 地図作成。SLAM Toolboxとその入力 |
 
-引数の合成やチェックといった補助的な処理は、launchファイル本体から
-`launch/daifuku_stack_launch/`へ切り出しています。
+下2つは単独でも立てられます。`simulator/`は駆動ドライバが要らないので、
+`robot_bringup`を通さずこの2つを直接立てています。
 
-| モジュール | 内容 |
-| --- | --- |
-| `params.py` | 設定ファイルへの上書きの合成（土台 → `overrides` → `extra_params_file`）。4つのlaunchすべてが使う |
-| `backends.py` | `localization`／`planner`／`local_planner`／`nav2`の解決と起動前チェック |
-| `lidar.py` | LiDAR構成の共通引数と`lidar_bringup`の`include` |
+引数の合成やチェックといった補助的な処理は、launchファイル本体から切り出しています。
 
-`lidar`や`lidar_z`のようなLiDAR構成の引数は、`navigation`・`mapping`・
-`lidar_bringup`の3ファイルが同じものを宣言します。既定値の出どころは
-`lidar.py`の1箇所だけです。
+| モジュール | 場所 | 内容 |
+| --- | --- | --- |
+| `params.py` | `daifuku_config_manager` | 設定ファイルへの上書きの合成（土台 → `overrides` → `extra_params_file`）。**すべてのlaunchが使う共有部品** |
+| `backends.py` | `daifuku_stack/launch/daifuku_stack_launch/` | `localization`／`planner`／`local_planner`／`nav2`の解決と起動前チェック |
+| `nav2_params.py` | `daifuku_stack/launch/daifuku_stack_launch/` | `config/nav2/*.yaml`の合成と`map:=`の存在確認。`params.py`へ`base_resolvers`で渡す |
+| `lidar.py` | `daifuku_bringup/launch/daifuku_bringup_launch/` | LiDAR構成の共通引数と`lidar_bringup`の`include` |
+
+`lidar`や`lidar_z`のようなLiDAR構成の引数は、`robot_bringup`と`lidar_bringup`の
+2ファイルが同じものを宣言します。既定値の出どころは`lidar.py`の1箇所だけです。
+
+> `robot_bringup`の`urdf_lidar_frame`（URDFの2D LiDARリンク名。既定`lidar_link`）と
+> `lidar_bringup`の`lidar_frame`（Mid-360のフレーム。既定`livox_frame`）は**別物**です。
+> 同じ名前にすると`include`のときに親の値が子へ漏れます。
 
 これらのモジュールは`launch/`の下にあるので、launchやconfigと同じく、編集だけなら
 再ビルドは要りません（`colcon build --symlink-install`）。ただし`install/`のsymlinkは

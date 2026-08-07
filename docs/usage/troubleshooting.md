@@ -279,14 +279,14 @@ ros2 topic hz /scan_raw
 ```
 
 `/scan_mid360_prestamp`だけが流れて`/scan_raw`が止まっている場合は、中継ノードが
-起動していません。中継は他のノードと同じ`Node`（`lib/daifuku_stack/restamp_scan.py`）
+起動していません。中継は他のノードと同じ`Node`（`lib/daifuku_bringup/restamp_scan.py`）
 なので、実行ファイルが無ければ**launchごとエラーで止まります**。黙って`/scan_raw`だけが
 欠けることは無いので、まず`ros2 launch`のログを見てください。それでも見当たらなければ
 置き場を確認します。
 
 ```bash
 ros2 pkg prefix daifuku_stack
-ls $(ros2 pkg prefix daifuku_stack)/lib/daifuku_stack/
+ls $(ros2 pkg prefix daifuku_bringup)/lib/daifuku_bringup/
 ```
 
 見つからなければ、`restamp_scan.py`を`install(PROGRAMS)`へ足す前の`install/`が
@@ -343,16 +343,20 @@ ros2 topic hz /wheel/odom      # use_mid360_imu:=true のときだけ出る
 ros2 run tf2_ros tf2_echo odom base_footprint
 ```
 
-食い違うのは、片方のlaunchにだけ`use_mid360_imu:=`を書いたときです。既定値は環境変数
-`USE_MID360_IMU`から取り、Composeが`.env`の1行を両サービスへ配るので、**切り替えは
-`.env`で行ってください**（変更後は`docker compose up -d`。環境変数は起動時にしか
-読まれません）。配線の詳細と、片方だけ`true`にしたときにどちらが気付けるかは
+> 2026-08-07より前は、`robot_bringup`と`navigation`の片方にだけ`use_mid360_imu:=`を
+> 書くとこの状態になりました。**いまはEKFもドライバも`robot_bringup.launch.py`が
+> 立てるので、片方だけ切り替わる状態は作れません。** それでも`/odom`のpublisherが2つ
+> あるなら、`docker exec`の残骸で`robot_bringup`が二重に走っている疑いがあります
+> （`docker compose exec raspicat ps -ef | grep ekf_node`）。
+
+切り替えは`.env`の`USE_MID360_IMU`で行ってください（変更後は`docker compose up -d`。
+環境変数は起動時にしか読まれません）。配線の詳細は
 [LiDARとオドメトリ](../setup/lidar.md#imuと車輪オドメトリ)。
 
-逆に**`odom -> base_footprint`がまったく出ない**ときは、`raspicat`サービスだけが
-立っている状態です。既定（`USE_MID360_IMU=true`）ではこのTFを出すのはナビゲーション側の
-EKFなので、`navigation.launch.py`か`mapping.launch.py`が要ります。ドライバ単体で
-TFが欲しいときは`.env`で`USE_MID360_IMU=false`にしてください。
+逆に**`odom -> base_footprint`がまったく出ない**ときは、`raspicat`サービスが
+立っていないか、その中でEKFが上がっていません（`docker compose logs raspicat`）。
+このTFを出すのは`robot_bringup`が`include`するEKFで、`navigation.launch.py`側では
+ありません。
 
 センサーTFもURDFと`publish_lidar_tf:=true`の両方から配信しないでください。
 

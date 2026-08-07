@@ -1,7 +1,11 @@
 # SLAM Toolbox で地図を作る。
 #
-# LiDAR まわりは lidar_bringup.launch.py に任せ (引数はすべて素通しする)、
-# ここは slam_toolbox と RViz だけを足す。
+# **センサは立てない。** LiDAR も EKF も robot_bringup.launch.py の受け持ちで、
+# docker compose up で常駐している。ここは slam_toolbox と RViz だけを足す。
+#
+# そのため、**地図を作る場所に合わせて LiDAR の帯 (仰角フィルタと高さ) を変えるには
+# .env の OVERRIDES を直して `docker compose up -d` する**必要がある。この launch へ
+# overrides:= を渡しても効くのは slam_toolbox の節だけ。
 
 import os
 import sys
@@ -19,13 +23,13 @@ _LAUNCH_DIR = os.path.dirname(os.path.realpath(__file__))
 if _LAUNCH_DIR not in sys.path:
     sys.path.insert(0, _LAUNCH_DIR)
 
-from daifuku_stack_launch import lidar as lidar_common, params  # noqa: E402
+from daifuku_config_manager import params  # noqa: E402
 
 
 def generate_launch_description():
     pkg_share = get_package_share_directory("daifuku_stack")
 
-    overrides_dir = os.path.join(pkg_share, "config", "overrides")
+    config_root = os.path.join(pkg_share, "config")
     default_slam_params = os.path.join(pkg_share, "config", "mapping", "slam_toolbox.yaml")
     default_rviz_config = os.path.join(pkg_share, "rviz", "mapping.rviz")
 
@@ -43,23 +47,19 @@ def generate_launch_description():
         # 実機 (Raspberry Pi) は headless。表示は同じ ROS_DOMAIN_ID の PC 側から
         # 開く (navigation.launch.py と同じ既定)。
         DeclareLaunchArgument("use_rviz", default_value="false"),
-        # LiDAR 構成の引数 (lidar / lidar_driver / scan_filter_* / mid360_* /
-        # publish_lidar_tf / lidar_x..yaw / wheel_odom_topic / urg_*)。
-        *lidar_common.declare_shared_args(pkg_share),
-        *params.declare_args(overrides_dir),
+        *params.declare_args(),
 
         # slam_params_file へ overrides を重ねる (slam_toolbox: の節を持つものだけ
-        # 効く)。LiDAR 側の設定ファイルは lidar_bringup.launch.py が同じ overrides で
+        # 効く)。LiDAR 側の設定ファイルは robot_bringup.launch.py が同じ overrides で
         # 重ねるので、ここでは対象にしない。
         OpaqueFunction(
             function=params.compose,
             kwargs={
-                "overrides_dir": overrides_dir,
+                "package": "daifuku_stack",
+                "config_root": config_root,
                 "targets": ["slam_params_file"],
             },
         ),
-
-        lidar_common.include_lidar_bringup(pkg_share),
 
         Node(
             package="slam_toolbox",

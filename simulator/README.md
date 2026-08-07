@@ -56,7 +56,7 @@ nav2 側の構成・制約・キャリブレーションはそのまま引き継
 | `src/daifuku_sim/configs/*.json` | 生成ロジックは検証済みだが、**Isaac の RTX LiDAR プロファイルのスキーマとの適合は未検証**。6.0 でプロファイル探索パスの機構が変わったかは NVIDIA のドキュメントに記載が無く、確認できていない |
 | `src/daifuku_sim/isaac_raspicat.py` | **未検証** (GPU 必須)。5.x 向けに書き、6.0 の変更 2 点 (RTX LiDAR API / TransformTree の分割) への分岐を後から入れた。**分岐の条件は実行時判定だが、6.0 側の分岐が通ることは一度も確かめていない** |
 | `scripts/run_isaac_case.sh` / `container/nav_container.sh` | 構文チェックのみ。**未実行** |
-| `lidar_bringup.launch.py` / `navigation.launch.py` の変更 | 構文チェックのみ。既定値は現行のままで実機の挙動は変えていない |
+| `lidar_bringup.launch.py` / `robot_bringup.launch.py` / `navigation.launch.py` の変更 | 構文チェックのみ。既定値は現行のままで実機の挙動は変えていない |
 
 最初に動かすときは、下の「立ち上げ順序」に従って**段階的に**確認すること。
 
@@ -449,11 +449,19 @@ launch 側の配線が構成によって変わる。`run_isaac_case.sh` は明�
 | `lidar:=mid360` + EKF | `/wheel/odom` | **ekf_node が出す** (Isaac は出さない) |
 
 MID360 構成では `robot_localization` の `ekf_node` が `/wheel/odom` と `/imu/mid360` を
-融合して `odometry/filtered` → `/odom` に remap している。launch の既定は `use_mid360_imu:=true` (環境変数 `USE_MID360_IMU` で切り替わる) だが、
-コンテナに環境変数が無い環境でも変わらないよう、`nav_container.sh` は `lidar:=mid360`
-のときだけ `use_mid360_imu:=true` を明示している。ここを取り違えると
-`odom → base_footprint` の TF が二重に出る (または出ない) が、どちらも
-**「なんとなく動いて見えるのに自己位置だけ壊れる」**形で失敗するので気づきにくい。
+融合して `odometry/filtered` → `/odom` に remap している。**実機ではこれを立てるのは
+`daifuku_bringup` の `robot_bringup.launch.py`** (docker compose up で常駐) だが、シムは
+駆動ドライバが要らないので `nav_container.sh` が `odom_fusion.launch.py` を直接立てて
+いる。launch の既定は `use_mid360_imu:=true` (環境変数 `USE_MID360_IMU` で切り替わる)
+だが、コンテナに環境変数が無い環境でも変わらないよう `lidar:=mid360` のときだけ
+明示している。**渡し先を `navigation.launch.py` に戻さないこと** — あちらはもう
+`use_mid360_imu` を宣言していないので、黙って EKF が立たなくなる。そうなると
+`odom → base_footprint` を誰も出さない (逆に Isaac 側にも出させると二重になる) が、
+どちらも **「なんとなく動いて見えるのに自己位置だけ壊れる」** 形で失敗する。
+
+同じ理由で `nav_container.sh` と `run_case.sh` は `lidar_bringup.launch.py` も直接
+立てている (`/scan` の出どころ)。**`navigation.launch.py` はセンサーを 1 つも
+立てない。**
 
 ## 再現できないもの
 

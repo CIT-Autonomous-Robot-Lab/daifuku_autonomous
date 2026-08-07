@@ -101,8 +101,10 @@ sed -i 's|^#*USE_MID360_IMU=.*|USE_MID360_IMU=false|' .env
 docker compose up -d    # 環境変数は起動時に読まれるのでコンテナを作り直す
 ```
 
-配線と、`true`のときの注意（起動時に機体を静止させること、`raspicat`単体では
-`odom -> base_footprint`が出ないこと）は[LiDARとオドメトリ](lidar.md#imuと車輪オドメトリ)。
+読むのは`raspicat`サービス1つだけです。**ドライバもEKFも同じlaunch
+（`robot_bringup.launch.py`）が立てるので、片方だけ切り替わる状態は作れません。**
+配線と、`true`のときの注意（**機体の電源投入時に静止させること**——バイアス測定は
+bootのタイミングになりました）は[LiDARとオドメトリ](lidar.md#imuと車輪オドメトリ)。
 
 **`.env`は2つ読まれ、値は合成されます。** リポジトリルートのものと、
 `docker/raspberrypi/.env`（`provision.sh`が`ROS_DOMAIN_ID`と`BUILD_JOBS`を書いて生成する）

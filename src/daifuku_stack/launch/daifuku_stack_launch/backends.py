@@ -25,7 +25,7 @@ behavior_server / waypoint_follower / smoother_server が丸ごと不要にな�
 from ament_index_python.packages import PackageNotFoundError, get_package_prefix
 from launch.substitutions import PythonExpression
 
-from . import value
+from daifuku_config_manager import value
 
 
 def resolve_local_planner(planner, local_planner):

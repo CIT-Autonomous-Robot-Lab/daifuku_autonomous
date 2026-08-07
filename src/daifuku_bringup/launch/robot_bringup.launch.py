@@ -1,4 +1,21 @@
-# Raspberry Pi Cat 本体ドライバの起動。
+# 機体の起動。**docker compose up で立つのはこれ**（raspicat サービス）。
+#
+# 「機体としてのロボット」を丸ごと持つ: 駆動ドライバ、URDF/TF、cmd_vel の仲裁、
+# ゲームパッド、**LiDAR 一式**、**オドメトリ融合**。ナビゲーション
+# (navigation.launch.py / mapping.launch.py) はここが出すトピックの消費者に徹し、
+# センサは一切立てない。
+#
+#   include lidar_bringup.launch.py   LiDAR -> /scan
+#   include odom_fusion.launch.py     車輪 + IMU -> /odom, odom -> base_footprint
+#
+# LiDAR をここに置いてあるのは、(1) 人が navigation を立てるまでセンサが上がらない
+# のを避けるため、(2) navigation を立て直すたびに EKF が再起動して /odom が原点へ
+# 飛ぶのを避けるため、(3) use_mid360_imu の切り替えを 1 つの launch に閉じるため。
+#
+# **ドライバが finalized まで落ちると launch ごと終了する** (下の
+# register_shutting_down_transition)。したがってドライバの障害は LiDAR も道連れに
+# し、restart: unless-stopped で両方が上がり直す。踏むのは Pi 5 で
+# driver:=raspimouse を選んだときのような設定の取り違えで、そこは直せば直る。
 #
 # 上流 raspicat_ros の raspicat.launch.py 相当だが、raspimouse ノードを自前で
 # 立てている。上流は parameters= に raspicat/config/raspicat.param.yaml を直接
@@ -7,7 +24,7 @@
 # 方式では use_pulse_counters を上書きできないため。詳細は
 # config/robot/raspicat.yaml のコメント。
 #
-# 自前化のついでに urg_node 関連は落としてある (本機の LiDAR は MID360 で、
+# 自前化のついでに urg_node 関連は落としてある (LiDAR はどちらの構成でも
 # lidar_bringup.launch.py が扱う)。robot_state_publisher / joint_state_publisher は
 # パラメータ競合が無いので上流の launch をそのまま include する。
 #
@@ -34,10 +51,10 @@
 #
 # use_mid360_imu:= (既定 true) は上の契約のうち odom の担当を EKF へ譲る。true では
 # ドライバは /wheel/odom を出すだけになり、odom -> base_footprint TF を出さない。
-# **この launch だけを立てたときは odom -> base_footprint が出ない** (navigation /
-# mapping 側の EKF が出す)。既定は環境変数 USE_MID360_IMU から取るので、Compose では
-# .env の 1 行で両サービスに効く。引数で渡すときは **navigation / mapping 側にも同じ
-# 値を渡すこと** (詳細は launch_setup のコメント)。
+# **その EKF を立てるのもこの launch** (odom_fusion.launch.py を include する) なので、
+# 引数 1 つで両側が同時に切り替わる。以前は EKF が lidar_bringup 側に居て、2 つの
+# launch へ同じ値を渡さないとエラーも警告も出ないまま自己位置が壊れた。既定を環境変数
+# USE_MID360_IMU から取るのは、その名残と Compose の .env 1 行で切れる操作性のため。
 
 import os
 import sys
@@ -62,12 +79,32 @@ from launch_ros.events import lifecycle
 
 from lifecycle_msgs.msg import Transition
 
-# 共通部品はこの launch ディレクトリの直下 (daifuku_stack_launch/) にある。
+# 共通部品はこの launch ディレクトリの直下 (daifuku_bringup_launch/) にある。
 _LAUNCH_DIR = os.path.dirname(os.path.realpath(__file__))
 if _LAUNCH_DIR not in sys.path:
     sys.path.insert(0, _LAUNCH_DIR)
 
-from daifuku_stack_launch import env_bool_default, is_true, params  # noqa: E402
+from daifuku_config_manager import env_bool_default, is_true, params, value  # noqa: E402
+from daifuku_bringup_launch import lidar as lidar_common  # noqa: E402
+
+
+def validate(context, *args, **kwargs):
+    """構成の組み合わせを起動前に見る (OpaqueFunction)。
+
+    lidar:=2d に IMU は無い。それでも use_mid360_imu:=true のままだと、ドライバは
+    車輪オドメトリを /wheel/odom へ移して TF を止めるのに、EKF は imu0 が一度も
+    来ないまま車輪だけで回り続ける。**エラーも警告も出ないまま「IMU 融合している
+    つもりで融合していない」状態**になるので、ここで落とす。
+    """
+    if value(context, "lidar") == "2d" and is_true(context, "use_mid360_imu"):
+        raise RuntimeError(
+            "lidar:=2d と use_mid360_imu:=true は同時に指定できません。\n"
+            "2D LiDAR (URG) に IMU は無いので、EKF は車輪オドメトリだけで回り、"
+            "融合しているつもりで融合していない状態になります。\n"
+            "use_mid360_imu:=false を渡すか (Compose なら .env の "
+            "USE_MID360_IMU=false)、lidar:=mid360 にしてください。"
+        )
+    return []
 
 
 # twist_mux を挟むときにドライバが購読するトピック。仲裁の入力 (/cmd_vel と
@@ -87,7 +124,7 @@ DRIVERS = {
 }
 
 
-def _params_file(context, pkg_share, overrides_dir, argument, default_name):
+def _params_file(context, pkg_share, argument, default_name):
     """launch 引数が指すパラメータファイルを解決し、overrides を重ねる。
 
     空なら config/robot/<default_name> に落とす。実在しないものをそのまま
@@ -103,11 +140,12 @@ def _params_file(context, pkg_share, overrides_dir, argument, default_name):
     if not os.path.isfile(path):
         raise RuntimeError(f"{argument} does not exist: {path}")
     return params.compose_path(
-        context, path, name=argument, overrides_dir=overrides_dir
+        context, path, name=argument, package="daifuku_bringup",
+        config_root=os.path.join(pkg_share, "config"),
     )
 
 
-def _twist_mux(context, pkg_share, overrides_dir):
+def _twist_mux(context, pkg_share):
     """cmd_vel の仲裁ノードを組み立てる (twist_mux:=false なら何も作らない)。
 
     自律走行 (/cmd_vel) と遠隔操作 (/cmd_vel_teleop) を優先度で 1 本に束ね、
@@ -123,7 +161,7 @@ def _twist_mux(context, pkg_share, overrides_dir):
         return [], []
 
     params_file, logs = _params_file(
-        context, pkg_share, overrides_dir,
+        context, pkg_share,
         "twist_mux_params_file", "twist_mux.yaml",
     )
 
@@ -139,7 +177,7 @@ def _twist_mux(context, pkg_share, overrides_dir):
     ], logs
 
 
-def _joy_teleop(context, pkg_share, overrides_dir):
+def _joy_teleop(context, pkg_share):
     """ゲームパッドのドライバと、その入力をモードに変えるノードを組み立てる。
 
     joy_node は /joy を出すだけ。速度の写像と、START 長押しでの teleop 切り替え・
@@ -163,7 +201,7 @@ def _joy_teleop(context, pkg_share, overrides_dir):
         return [], []
 
     params_file, logs = _params_file(
-        context, pkg_share, overrides_dir,
+        context, pkg_share,
         "joy_teleop_params_file", "joy_teleop.yaml",
     )
 
@@ -178,7 +216,7 @@ def _joy_teleop(context, pkg_share, overrides_dir):
             respawn_delay=5.0,
         ),
         Node(
-            package="daifuku_stack",
+            package="daifuku_bringup",
             executable="joy_teleop.py",
             name="joy_teleop",
             output="screen",
@@ -193,8 +231,7 @@ def launch_setup(context, *args, **kwargs):
     lifecycle のイベントハンドラは対象のノードオブジェクトを直接参照するので、
     IfCondition で 2 つ並べるとハンドラも二重になる。ここで 1 つに決める。
     """
-    pkg_share = get_package_share_directory("daifuku_stack")
-    overrides_dir = os.path.join(pkg_share, "config", "overrides")
+    pkg_share = get_package_share_directory("daifuku_bringup")
 
     driver = LaunchConfiguration("driver").perform(context)
     if driver not in DRIVERS:
@@ -207,7 +244,7 @@ def launch_setup(context, *args, **kwargs):
     # overrides を重ねる。行き先はノード名で決まるので、driver:= で選ばなかった
     # ほうの節 (raspimouse: / raspicat_driver:) は自動的に外れる。
     params_file, override_logs = _params_file(
-        context, pkg_share, overrides_dir, "params_file", default_params_name
+        context, pkg_share, "params_file", default_params_name
     )
 
     parameters = [params_file]
@@ -221,7 +258,7 @@ def launch_setup(context, *args, **kwargs):
     # 仲裁を挟むときだけ、ドライバの購読先を仲裁の出力へ振り替える。両ドライバとも
     # 相対名の "cmd_vel" で購読している (raspimouse_component.cpp / raspicat_driver の
     # node.py) ので、この remap で両方に効く。
-    mux_actions, mux_logs = _twist_mux(context, pkg_share, overrides_dir)
+    mux_actions, mux_logs = _twist_mux(context, pkg_share)
     remappings = [("cmd_vel", MUXED_CMD_VEL)] if mux_actions else []
 
     # use_mid360_imu:=true では odom -> base_footprint の所有者が EKF に移る。
@@ -230,11 +267,8 @@ def launch_setup(context, *args, **kwargs):
     # 自前実装には publish_tf があるが、公式実装 (raspimouse) には無いので
     # ノードの /tf を捨て先へ remap する (あちらが出す TF はこれだけ)。
     #
-    # 同じ引数を navigation / mapping 側にも渡すこと。片方だけ true にしても
-    # エラーにはならない: 両方 false なら従来どおり、こちらだけ true なら
-    # odom -> base_footprint を誰も出さず (TF が繋がらないので気付ける)、
-    # navigation 側だけ true なら EKF が入力を得られないまま TF と /odom の
-    # 配信元が二重になる (**気付けない**。自己位置だけが静かに壊れる)。
+    # EKF を立てるのは同じ launch が include する odom_fusion.launch.py で、同じ
+    # use_mid360_imu を見る。**片方だけ true という状態は作れない。**
     if is_true(context, "use_mid360_imu"):
         remappings.append(
             ("odom", LaunchConfiguration("wheel_odom_topic").perform(context))
@@ -244,7 +278,7 @@ def launch_setup(context, *args, **kwargs):
         else:
             remappings.append(("/tf", "/wheel/tf_unused"))
 
-    joy_actions, joy_logs = _joy_teleop(context, pkg_share, overrides_dir)
+    joy_actions, joy_logs = _joy_teleop(context, pkg_share)
 
     driver_node = LifecycleNode(
         namespace="",
@@ -295,11 +329,12 @@ def launch_setup(context, *args, **kwargs):
 
 
 def generate_launch_description():
+    pkg_share = get_package_share_directory("daifuku_bringup")
     bringup_launch_dir = os.path.join(
         get_package_share_directory("raspicat_bringup"), "launch"
     )
 
-    lidar_frame = LaunchConfiguration("lidar_frame")
+    urdf_lidar_frame = LaunchConfiguration("urdf_lidar_frame")
     use_joint_state_publisher = LaunchConfiguration("use_joint_state_publisher")
 
     # URDF / TF ツリー。上流のものをそのまま使う (競合するパラメータが無い)。
@@ -308,9 +343,23 @@ def generate_launch_description():
             os.path.join(bringup_launch_dir, "robot_state_publisher.launch.py")
         ),
         launch_arguments={
-            "lidar_frame": lidar_frame,
+            "lidar_frame": urdf_lidar_frame,
             "use_joint_state_publisher": use_joint_state_publisher,
         }.items(),
+    )
+
+    # 車輪オドメトリと Mid-360 IMU の融合。**ドライバと同じ launch に置くのが要点**で、
+    # use_mid360_imu 1 つで「ドライバが TF を止める」と「EKF が TF を出す」が同時に
+    # 切り替わる。use_mid360_imu:=false なら向こうで何も立たない。
+    odom_fusion_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(pkg_share, "launch", "odom_fusion.launch.py")
+        ),
+        launch_arguments=[
+            (name, LaunchConfiguration(name))
+            for name in ("use_mid360_imu", "wheel_odom_topic", "use_sim_time",
+                         "overrides", "extra_params_file")
+        ],
     )
 
     return LaunchDescription([
@@ -365,10 +414,9 @@ def generate_launch_description():
             default_value=env_bool_default("USE_MID360_IMU", "true"),
             description="Mid-360 の IMU 融合に合わせた配線にするか。true にすると "
                         "ドライバは車輪オドメトリを wheel_odom_topic へ出し、"
-                        "odom -> base_footprint TF を出さなくなる (ナビゲーション "
-                        "側の EKF が両方を出す)。既定は環境変数 USE_MID360_IMU。"
-                        "**引数で渡すときは navigation / mapping にも同じ値を "
-                        "渡すこと。**",
+                        "odom -> base_footprint TF を出さなくなる (この launch が "
+                        "include する odom_fusion.launch.py の EKF が両方を出す)。"
+                        "既定は環境変数 USE_MID360_IMU。",
         ),
         DeclareLaunchArgument(
             "wheel_odom_topic",
@@ -382,13 +430,22 @@ def generate_launch_description():
             description="ゲームパッドのパラメータファイル (joy_node と joy_teleop の "
                         "両方に渡る)。空なら config/robot/joy_teleop.yaml を使う。",
         ),
-        *params.declare_args(
-            os.path.join(
-                get_package_share_directory("daifuku_stack"), "config", "overrides"
-            )
-        ),
-        DeclareLaunchArgument("lidar_frame", default_value="lidar_link"),
+        *params.declare_args(),
+        # LiDAR 構成の引数 (lidar / lidar_driver / scan_filter_* / mid360_* /
+        # publish_lidar_tf / lidar_x..yaw / urg_*)。daifuku_bringup_launch/lidar.py。
+        *lidar_common.declare_shared_args(pkg_share),
+        DeclareLaunchArgument("use_sim_time", default_value="false"),
+        # URDF が持つ 2D LiDAR のリンク名 (上流 raspicat_description)。
+        # **lidar_bringup.launch.py の lidar_frame (Mid-360 の livox_frame) とは
+        # 別物。** 同じ名前にすると、include したときに親のこの値が子へ漏れて
+        # Mid-360 の TF とドライバの frame_id が lidar_link になる。
+        DeclareLaunchArgument("urdf_lidar_frame", default_value="lidar_link"),
         DeclareLaunchArgument("use_joint_state_publisher", default_value="True"),
+
+        OpaqueFunction(function=validate),
+
         robot_state_publisher_launch,
+        odom_fusion_launch,
+        lidar_common.include_lidar_bringup(pkg_share),
         OpaqueFunction(function=launch_setup),
     ])

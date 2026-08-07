@@ -59,6 +59,7 @@ cleanup_ros() {
     pkill -f '/opt/ros/humble/lib/' 2>/dev/null
     pkill -f '/opt/ros_ws/install/lib/' 2>/dev/null
     pkill -f 'ros2 launch daifuku_stack' 2>/dev/null
+    pkill -f 'ros2 launch daifuku_bringup' 2>/dev/null
     sleep 2
     pkill -9 -f '/opt/ros/humble/lib/' 2>/dev/null
     pkill -9 -f '/opt/ros_ws/install/lib/' 2>/dev/null
@@ -242,6 +243,14 @@ if [ "$tf_ok" != "1" ]; then
     exit 6
 fi
 
+# --- センサとオドメトリ融合 -------------------------------------------------
+#
+# **実機ではこの 2 つは docker compose up で常駐している robot_bringup.launch.py の
+# 一部**で、navigation.launch.py はセンサを一切立てない。ここは実機の raspicat
+# サービスに相当する分を自前で上げる (robot_state_publisher を上で上げているのと
+# 同じ理由)。robot_bringup.launch.py そのものを使わないのは、駆動ドライバ
+# (実機の GPIO を掴む) まで立てようとしてしまうため。
+#
 # lidar_driver:=false が要点。実機ドライバ (livox_ros_driver2 / urg_node) と
 # restamp_scan.py を起動せず、Isaac が出す /livox/lidar と /livox/imu (または
 # /scan_raw) をそのまま使う。
@@ -249,17 +258,31 @@ fi
 # publish_lidar_tf:=false も必須。launch の既定は true (実機の URDF は
 # livox_frame を出さないため) だが、こちらは上で robot_state_publisher が
 # base_footprint -> $lidar_frame を出しており、二重配信になる。
-#
-# use_mid360_imu:=true も lidar:=mid360 では必須。Isaac は上の ODOM_TOPIC=/wheel/odom
+ros2 launch daifuku_bringup lidar_bringup.launch.py \
+    lidar:="$LIDAR" lidar_driver:=false publish_lidar_tf:=false \
+    use_sim_time:="$USE_SIM_TIME" "${params_arg[@]}" \
+    >"$RUN/lidar.log" 2>&1 &
+LIDAR_PID=$!
+echo "  lidar_bringup pid=$LIDAR_PID"
+
+# use_mid360_imu:=true は lidar:=mid360 では必須。Isaac は上の ODOM_TOPIC=/wheel/odom
 # と PUBLISH_ODOM_TF=false で EKF に譲る側に回っているので、これが立たないと
 # odom -> base_footprint を誰も出さない。launch の既定も true だが、そちらは環境変数
 # USE_MID360_IMU 次第で変わる (実機は Compose が配る) ので、ここでは明示しておく。
-imu_arg=()
-[ "$LIDAR" = "mid360" ] && imu_arg=(use_mid360_imu:=true)
+# lidar:=2d には IMU が無いので立てない (そのときは Isaac が odom -> base_footprint
+# を出す側に回る)。
+ODOM_PID=""
+if [ "$LIDAR" = "mid360" ]; then
+    ros2 launch daifuku_bringup odom_fusion.launch.py \
+        use_mid360_imu:=true use_sim_time:="$USE_SIM_TIME" "${params_arg[@]}" \
+        >"$RUN/odom_fusion.log" 2>&1 &
+    ODOM_PID=$!
+    echo "  odom_fusion pid=$ODOM_PID"
+fi
 
+# navigation は /scan と /odom の消費者に徹する (センサ関係の引数はもう無い)。
 ros2 launch daifuku_stack navigation.launch.py \
-    lidar:="$LIDAR" lidar_driver:=false publish_lidar_tf:=false use_rviz:=false \
-    "${imu_arg[@]}" \
+    use_rviz:=false \
     use_sim_time:="$USE_SIM_TIME" \
     map:="$MAP" "${params_arg[@]}" \
     planner:="$PLANNER" local_planner:="$LOCAL_PLANNER" nav2:="$NAV2" \
@@ -281,7 +304,7 @@ python3 /opt/sim/probe.py \
     --settle "$SETTLE" --timeout "$TIMEOUT" 2>&1 | tee "$RUN/probe.log"
 rc=${PIPESTATUS[0]}
 
-kill $MON_PID $NAV_PID $RSP_PID 2>/dev/null
+kill $MON_PID $NAV_PID $ODOM_PID $LIDAR_PID $RSP_PID 2>/dev/null
 sleep 3
 cleanup_ros
 
@@ -293,7 +316,8 @@ grep -h -E 'connected with bond|Managed nodes are active|Aborting bringup|Failed
     "$RUN/nav.log" | tail -12 || true
 
 echo "=== KILLED (OOM 等でプロセスが落ちていないか) ==="
-grep -h -i -E 'error|killed|terminated|exited with|abort' "$RUN"/nav.log | tail -25
+grep -h -i -E 'error|killed|terminated|exited with|abort' \
+    "$RUN"/nav.log "$RUN"/lidar.log "$RUN"/odom_fusion.log 2>/dev/null | tail -25
 echo "=== peak mem: $(sort -t= -k3 -n "$RUN/load.log" 2>/dev/null | tail -1)"
 echo "=== CASE=$CASE done rc=$rc, logs in $RUN"
 exit $rc

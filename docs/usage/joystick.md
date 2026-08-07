@@ -71,7 +71,7 @@
 自律側の加減速は`velocity_smoother`の担当です。
 
 制限を外すには該当のキーを0以下にします。実装は
-[`src/joy_buttons.py`](../../src/daifuku_stack/src/joy_buttons.py)の`RateLimiter`で、
+[`src/joy_buttons.py`](../../src/daifuku_bringup/src/joy_buttons.py)の`RateLimiter`で、
 rclpyを持ち込んでいないので開発ホストからそのまま呼んで検算できます。
 
 ## モードは音で分かります
@@ -254,7 +254,7 @@ ros2 topic echo /cmd_vel_mux               # 仲裁を抜けてドライバへ�
 ## 使わないとき
 
 ```bash
-ros2 launch daifuku_stack robot_bringup.launch.py joy:=false
+ros2 launch daifuku_bringup robot_bringup.launch.py joy:=false
 ```
 
 とはいえ、**挿していなくても他は動きます**。`joy_teleop`は`/joy`が一度も来なければ何も
@@ -269,5 +269,5 @@ publishしないので、自律走行の邪魔をしません（`start_enabled: 
 ros2 topic hz /joy      # 挿してから数秒待つ。出れば拾えている
 ```
 
-設定値は[`config/robot/joy_teleop.yaml`](../../src/daifuku_stack/config/robot/joy_teleop.yaml)、
-実装は[`src/joy_teleop.py`](../../src/daifuku_stack/src/joy_teleop.py)にあります。
+設定値は[`config/robot/joy_teleop.yaml`](../../src/daifuku_bringup/config/robot/joy_teleop.yaml)、
+実装は[`src/joy_teleop.py`](../../src/daifuku_bringup/src/joy_teleop.py)にあります。

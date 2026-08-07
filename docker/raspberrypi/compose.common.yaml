@@ -102,12 +102,13 @@ services:
       # Restrict DDS to lo/eth0 so wlan0 locators are never advertised
       # (unreachable locators made discovery flap under load).
       FASTRTPS_DEFAULT_PROFILES_FILE: /etc/fastdds/udp_whitelist.xml
-      # Mid-360 の IMU 融合。**2 つのサービスに同じ値が要る**ので、launch 引数では
-      # なく環境変数で配る (navigation は人が exec で叩くため、compose の command
-      # には書けない)。launch 側はこれを use_mid360_imu の既定として読む。
-      # 片方だけ true にすると /odom と TF の配信元が二重になり、エラーも警告も
-      # 出ないまま自己位置が壊れる (docs/setup/lidar.md)。
-      USE_MID360_IMU: ${USE_MID360_IMU:-true}
+      # **USE_MID360_IMU はここには要らない。** 立てるのは raspicat 側の
+      # robot_bringup.launch.py だけで、navigation / mapping はセンサも EKF も
+      # 立てない (消費するだけ)。
+      #
+      # overrides は OVERRIDES で配る。navigation を人が exec で叩くときの既定に
+      # なるので、raspicat の command に渡すのと同じ値がここからも見える。
+      OVERRIDES: ${OVERRIDES:-map_19f}
     volumes:
       - ./fastdds_udp_whitelist.xml:/etc/fastdds/udp_whitelist.xml:ro
       # 入力デバイス。cgroup 規則のほうは、コンテナ生成時に居なかった
@@ -126,13 +127,18 @@ services:
     device_cgroup_rules:
       - "c 13:* r"
 
-  # Raspberry Pi Cat 本体ドライバ (本体ドライバ + robot_state_publisher)。
+  # 機体まるごと。**駆動ドライバ + robot_state_publisher + LiDAR + EKF。**
   # 従来はホストの ~/raspicat2 ワークスペースから直接起動していたものを、
   # ナビゲーションと同じイメージ・同じ compose に取り込んだもの。
   #
   # ナビゲーションとは別サービスにしてある。ros2 サービスだけを
-  # `docker compose restart ros2` で入れ替えてもドライバは生き続けるため、
-  # odom の累積が落ちない/取り違える事故が起きにくい。
+  # `docker compose restart ros2` で入れ替えても機体側は生き続けるため、
+  # odom の累積が落ちない/取り違える事故が起きにくい。**LiDAR と EKF をこちらに
+  # 置いてあるのも同じ理由**で、navigation を立て直すたびに /odom が原点へ飛んだり
+  # LiDAR の初期化を待たされたりしなくなる。
+  #
+  # 裏返しとして、**ドライバが finalized まで落ちると launch ごと終了し、LiDAR も
+  # 一緒に上がり直す** (robot_bringup.launch.py の register_shutting_down_transition)。
   #
   # 前提 (driver:=raspimouse のときだけ): rtmouse カーネルモジュールがホストで
   # insmod 済みであること (コンテナからは insmod できない。
@@ -181,9 +187,14 @@ services:
       ROS_LOCALHOST_ONLY: "0"
       RMW_IMPLEMENTATION: rmw_fastrtps_cpp
       FASTRTPS_DEFAULT_PROFILES_FILE: /etc/fastdds/udp_whitelist.xml
-      # ros2 サービスと同じ値を渡すこと (上のコメント)。こちらが true のときだけ
-      # ドライバは /wheel/odom を出し、odom -> base_footprint を出さなくなる。
+      # Mid-360 の IMU 融合。**ここ 1 か所だけが読む。** robot_bringup.launch.py は
+      # ドライバと EKF (odom_fusion.launch.py) の両方を立てるので、この 1 つの値で
+      # 「ドライバが /wheel/odom を出して TF を止める」と「EKF が /odom と TF を
+      # 出す」が同時に切り替わる。以前のように 2 つのサービスへ配る必要は無い。
       USE_MID360_IMU: ${USE_MID360_IMU:-true}
+      # 下の command が ${OVERRIDES} を展開するので、これは launch 引数としては
+      # 要らない。ros2 サービス側と同じ値が見えるように置いてある。
+      OVERRIDES: ${OVERRIDES:-map_19f}
     volumes:
       - ./fastdds_udp_whitelist.xml:/etc/fastdds/udp_whitelist.xml:ro
       - ../../src:/opt/ros_ws/src

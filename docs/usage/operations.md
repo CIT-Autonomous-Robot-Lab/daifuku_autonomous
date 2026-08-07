@@ -136,7 +136,9 @@ TELEOP_LINEAR_SPEED=0.1 bash docker/raspberrypi/tools/control.sh teleop keyboard
 | 変更したもの | やること |
 |---|---|
 | `src/daifuku_stack`配下のlaunch、config、behavior_trees、maps、rviz、src | 何もしない。`--symlink-install`なのでノードを再起動するだけで反映される |
-| `src/raspicat_driver`のPython | 同上。ただし`setup.py`の`entry_points`を増やしたときはビルドが要る |
+| `src/daifuku_bringup`配下（LiDAR・EKF・ドライバ）と`src/daifuku_config_manager`の`overrides/`の**値** | **`docker compose up -d`**。ファイル自体は再ビルド不要だが、読むのは常駐している`raspicat`サービスなので作り直しが要る |
+| `src/daifuku_config_manager/config/overrides/`に**ファイルを新しく足した** | 一度ビルドを通す（`setup.py`の`glob`はビルド時にしか展開されない）。そのあと`docker compose up -d` |
+| `src/raspicat_driver`のPython | 何もしない。ただし`setup.py`の`entry_points`を増やしたときはビルドが要る |
 | C++やRustのコード、`CMakeLists.txt`、外部パッケージのソース | `docker compose up`で差分ビルドする |
 | aptの依存、`Dockerfile`、`package.xml`の依存、`docker/`配下のスクリプト | `docker compose build`からやり直す |
 

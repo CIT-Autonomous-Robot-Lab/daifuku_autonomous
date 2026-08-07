@@ -1,8 +1,23 @@
 # LiDARとオドメトリ
 
-`mapping.launch.py`と`navigation.launch.py`は`lidar:=2d|mid360`でセンサー構成を切り替えます。既定は本機の構成に合わせて`mid360`です。どちらも入力を`/scan_raw`へ集約し、角度フィルタ後の`/scan`をSLAMとNav2へ渡します。
+**LiDARとEKFを立てるのは`daifuku_bringup`の`robot_bringup.launch.py`です。**
+`docker compose up`で常駐しているので、`navigation.launch.py`と`mapping.launch.py`は
+`/scan`と`/odom`の消費者に徹し、センサーの引数を1つも持ちません。手元で単独に
+立てるときは先に次を通してください。
 
-既定の`config/sensors/scan_filter.yaml`は、コネクタがある後方60度（+150度から-150度まで、±180度をまたぐ範囲）を除外します。
+```bash
+ros2 launch daifuku_bringup robot_bringup.launch.py
+```
+
+内訳は`lidar_bringup.launch.py`（LiDAR一式）と`odom_fusion.launch.py`（車輪＋IMUの
+EKF）の2つで、どちらも単独でも立てられます（`simulator/`はそうしています）。
+
+`lidar:=2d|mid360`でセンサー構成を切り替えます。既定は本機の構成に合わせて`mid360`
+です。どちらも入力を`/scan_raw`へ集約し、角度フィルタ後の`/scan`をSLAMとNav2へ
+渡します。
+
+既定の`daifuku_bringup/config/sensors/scan_filter.yaml`は、コネクタがある後方60度
+（+150度から-150度まで、±180度をまたぐ範囲）を除外します。
 
 センサーごとのトピックの流れは次のとおりです。
 
@@ -12,7 +27,15 @@ Mid-360       : /livox/lidar → elevation_filter.py（仰角フィルタ）
                 → /livox/lidar_elevation → pointcloud_to_laserscan
                 → /scan_mid360_prestamp → restamp_scan.py
                 → /scan_raw → 角度フィルタ → /scan
+IMU（Mid-360）: /livox/imu → prepare_mid360_imu.py → /imu/mid360 ┐
+                                                                  ├ ekf_node
+                車輪ドライバ → /wheel/odom ──────────────────────┘
+                → /odom、odom → base_footprint
 ```
+
+**LiDARの帯（仰角と高さ）を場所ごとに変えるには、リポジトリルートの`.env`の
+`OVERRIDES`を直して`docker compose up -d`します。** 読むのは常駐している
+raspicatサービスなので、`navigation`や`mapping`を立て直すだけでは変わりません。
 
 `elevation_filter:=false`にすると仰角フィルタは立たず、`/livox/lidar`が
 `pointcloud_to_laserscan`へ直接入ります（relayは挟みません）。
@@ -44,7 +67,7 @@ costmapから消え、近くはセンサーの垂直FOVから外れて死角に�
 実効下限は距離とともに上がるので、`max_height`をそれより下に置くと帯が潰れ、
 `range_max`を伸ばしても**エラーも警告も出ないまま**その手前で何も入らなくなります
 （5度なら70m先の実効下限は6.40m）。地図ごとの値は
-`config/overrides/map_tsudanuma.yaml`にあります。
+`daifuku_config_manager/config/overrides/map_tsudanuma.yaml`にあります。
 
 `range_max`の既定はセンサの測距上限に合わせた70m（反射率80%で70m、10%では40m）です。
 ただし実際に70mを使うのは`emcl2`だけで、costmapは`obstacle_max_range: 2.5`、
@@ -58,21 +81,16 @@ SLAMは`max_laser_range: 10.0`で頭打ちになります。
 `/scan_raw`へremapされます。
 
 ```bash
-ros2 launch daifuku_stack navigation.launch.py lidar:=2d
+ros2 launch daifuku_bringup robot_bringup.launch.py lidar:=2d
 ```
 
 Ethernet接続のURGでは`urg_interface:=ethernet`を指定します。別のパラメータファイルを
 使う場合は`urg_params_file:=/path/to/urg.param.yaml`を渡します。
 
-`docker/raspberrypi/`環境では、既定がMid-360（Ethernet）のため`/dev/ttyACM0`を
-コンテナへ渡していません。シリアル接続のURGを使うときは`compose.common.yaml`の`ros2`
-サービスへ次を足してください。存在しないデバイスを書くと`compose up`自体が
-失敗するので、URGを挿したときだけ有効にします。
-
-```yaml
-    devices:
-      - /dev/ttyACM0:/dev/ttyACM0
-```
+`docker/raspberrypi/`環境でLiDARを立てるのは`raspicat`サービスです。このサービスは
+モータ制御の都合で`/dev`を丸ごとマウントし`device_cgroup_rules: c *:* rwm`を持って
+いるので、**シリアル接続のURGでも追加のデバイス設定は要りません**。見えているかは
+`docker compose exec raspicat ls -l /dev/ttyACM0`で確認できます。
 
 イメージには`ros-humble-urg-node`が要ります。入っていない場合は
 `docker compose build`からやり直してください。
@@ -95,7 +113,7 @@ ros2 run <2d_lidar_package> <2d_lidar_node> \
 
 ### IPアドレス
 
-`src/daifuku_stack/config/sensors/MID360_config.json`を実ネットワークに合わせます。
+`src/daifuku_bringup/config/sensors/MID360_config.json`を実ネットワークに合わせます。
 
 - `host_net_info`内の4個の`*_data_ip`: ドライバを動かすPCの固定IP
 - `lidar_configs[0].ip`: Mid-360本体のIP
@@ -108,15 +126,16 @@ ros2 run <2d_lidar_package> <2d_lidar_node> \
 Nav2コストマップのメッセージフィルタが、起動から数分でデータを「古すぎる」
 「未来の時刻」として破棄します。
 
-対策として、`lidar:=mid360`で実機ドライバを立てるときだけ`src/restamp_scan.py`が
+対策として、`lidar:=mid360`で実機ドライバを立てるときだけ`daifuku_bringup`の
+`src/restamp_scan.py`が
 `/scan_mid360_prestamp`を購読し、受信時刻でスタンプを打ち直して`/scan_raw`へ再配信
 します。こうするとスキャンのスタンプが、車輪オドメトリ・TF・Nav2と同じ時計に
 そろいます。ドリフトのないシミュレータやバッグ再生（`lidar_driver:=false`）では中継を
 挟まず、`pointcloud_to_laserscan`が`/scan_raw`へ直接出します。センサー側をPTP同期
 できるようになれば、この中継は不要になります。
 
-中継は`prepare_mid360_imu.py`・`system_monitor.py`・`joy_teleop.py`と同じく通常の
-`Node`として起動します（`lib/daifuku_stack/restamp_scan.py`。トピックは相対名の
+中継は`prepare_mid360_imu.py`・`joy_teleop.py`と同じく通常の
+`Node`として起動します（`lib/daifuku_bringup/restamp_scan.py`。トピックは相対名の
 `scan_in` / `scan_out`で、launch側が remap します）。実行ファイルが無ければlaunchごと
 エラーで止まるので、古い`install/`が残っていても黙って`/scan_raw`だけが欠けることは
 ありません。切り分けは
@@ -145,17 +164,27 @@ base_footprint`と`/odom`の所有者はEKFで、EKFが車輪の並進速度とM
 `false`にすると2D LiDAR構成と同様に、車輪ノードが`/odom`と`odom -> base_footprint`を
 自分で配信する形に戻ります。
 
-**この引数は`robot_bringup.launch.py`と`navigation.launch.py`（`mapping.launch.py`）の
-両方が持ち、同じ値でなければ壊れます。** 車輪側の配線を切り替えるのは前者で、`true`の
-ときだけドライバの`odom`を`/wheel/odom`へremapし、TF配信を止めます（自前実装は
+**この引数は`robot_bringup.launch.py`ひとつに閉じています。** 同じlaunchがドライバと
+EKF（`odom_fusion.launch.py`）の両方を立てるので、**片方だけ切り替わる状態は作れません**。
+`true`のときだけドライバの`odom`を`/wheel/odom`へremapし、TF配信を止めます（自前実装は
 `publish_tf: false`、公式実装は`publish_tf`を持たないのでノードの`/tf`を
 `/wheel/tf_unused`へ捨てます）。
 
+> 2026-08-07より前はEKFが`lidar_bringup`側（ナビゲーションが起動する側）にあり、
+> `robot_bringup`と`navigation`の両方へ同じ値を渡さないと壊れました。ナビゲーション側
+> だけ`true`にするとEKFが入力を得られないまま`/odom`とTFの配信元が二重になり、
+> **エラーも警告も出ませんでした**。2026-08-05の実機では静止中に姿勢が細かく震え、
+> ウェイポイント追従を始めた瞬間に機体が回り出しました。EKFを機体側へ移したので
+> この穴はありません。
+
+**`lidar:=2d`と`use_mid360_imu:=true`は同時に指定できません**（起動時にエラーで
+止まります）。URGにIMUは無いので、通すとEKFが`imu0`を一度も受け取らないまま車輪だけで
+回り、融合しているつもりで融合していない状態になります。
+
 ### 切り替えは`.env`で
 
-引数を2か所に手で書かなくて済むよう、**既定値は環境変数`USE_MID360_IMU`から取ります**。
-Composeがこれをリポジトリルートの`.env`から`ros2`と`raspicat`の両サービスへ配るので、
-1行直せば両方に効きます。
+**既定値は環境変数`USE_MID360_IMU`から取ります**。読むのは`raspicat`サービス1つだけ
+です。
 
 ```bash
 # リポジトリルートの .env
@@ -168,25 +197,19 @@ docker compose up -d   # 環境変数は起動時に読まれるのでコンテ�
 
 `true` / `false`のほか`1` / `0` / `yes` / `no` / `on` / `off`も受けます。**読めない値は
 起動時にエラーで止まります**（既定へ黙って落とすと、`USE_MID360_IMU=TRUE`のつもりが
-違う構成で走ってしまうため）。launch引数`use_mid360_imu:=`を明示すればそちらが勝ちますが、
-そのときは**2か所とも**渡してください。
-
-片方だけ`true`にしてもエラーにはなりません。**車輪側だけ`true`**なら
-`odom -> base_footprint`を誰も出さないのでTFが繋がらず（すぐ気付けます）、
-**ナビゲーション側だけ`true`**ならEKFが入力を得られないまま`/odom`とTFの配信元が
-二重になります。後者は**エラーも警告も出ません**。2026-08-05の実機では、静止中に姿勢が
-細かく震え、ウェイポイント追従を始めた瞬間に機体が回り出しました。
-
-**`raspicat`サービスだけを立てても`odom -> base_footprint`は出ません。** 既定では
-出すのがEKF側だからです。ドライバ単体でTFを見たいときは`USE_MID360_IMU=false`にします。
+違う構成で走ってしまうため）。launch引数`use_mid360_imu:=`を明示すればそちらが勝ちます。
 
 ### ジャイロのバイアス
 
-**起動時は機体を静止させておいてください。** Mid-360のジャイロには大きな電源投入時
+**機体の電源投入時（`docker compose up`とPiの再起動）は静止させておいてください。**
+EKFは常駐する`raspicat`サービスの一部になったので、**測定のタイミングは
+navigationを立てるときではなくbootのとき**です。Mid-360のジャイロには大きな電源投入時
 バイアスがあり、この個体はZ軸で+0.013960 rad/s（+0.800 deg/s、5001サンプル、2026-08-05実測）
 でした。放置すると静止しているだけで48 deg/minヨーが回ります。`robot_localization`は
 センサのバイアスを推定しないので、`prepare_mid360_imu`が起動後の静止区間から測って
-引きます（`config/sensors/mid360_ekf.yaml`の`prepare_mid360_imu`節）。
+引きます（`daifuku_bringup/config/sensors/mid360_ekf.yaml`の`prepare_mid360_imu`節）。
+測定はメッセージ駆動（静止した400サンプルが溜まるまで待つ）なので、`/livox/imu`が
+後から来ても取りこぼしません。
 
 測れたかはログで分かります。
 
@@ -200,31 +223,32 @@ prepare_mid360_imu: gyro bias = [+0.000112, -0.000305, +0.013960] rad/s
 
 ## スキャンフィルタを変更する
 
-恒久的に除外角度を変える場合は`src/daifuku_stack/config/sensors/scan_filter.yaml`の`angle_min`と`angle_max`をラジアンで編集します。別ファイルを使う場合:
+恒久的に除外角度を変える場合は`src/daifuku_bringup/config/sensors/scan_filter.yaml`の`angle_min`と`angle_max`をラジアンで編集します。別ファイルを使う場合:
 
 ```bash
-ros2 launch daifuku_stack mapping.launch.py \
+ros2 launch daifuku_bringup robot_bringup.launch.py \
   lidar:=2d scan_filter_params_file:=/path/to/scan_filter.yaml
 ```
 
 一時的に無効化する場合:
 
 ```bash
-ros2 launch daifuku_stack mapping.launch.py \
+ros2 launch daifuku_bringup robot_bringup.launch.py \
   lidar:=2d scan_filter_enabled:=false
 ```
 
 角度だけを変えたいならファイルごと渡さずに済みます。`overrides:=`は`sensors/`の
-パラメータファイルにも重なるので、変えたいキーだけを書けます。行き先はノード名で
-決まるので、節の名前はファイル名ではなくノード名です。
+パラメータファイルにも重なるので、変えたいキーだけを書けます。行き先は
+**パッケージ名とノード名**で決まるので、節の名前はファイル名ではありません。
 
 ```yaml
-scan_to_scan_filter_chain:   # -> config/sensors/scan_filter.yaml
-  ros__parameters:
-    filter1:
-      params:
-        angle_min: 2.617993878
-        angle_max: -2.617993878
+daifuku_bringup:
+  scan_to_scan_filter_chain:   # -> daifuku_bringup の sensors/scan_filter.yaml
+    ros__parameters:
+      filter1:
+        params:
+          angle_min: 2.617993878
+          angle_max: -2.617993878
 ```
 
 `pointcloud_to_laserscan`（`mid360_scan.yaml`）、`ekf_filter_node`

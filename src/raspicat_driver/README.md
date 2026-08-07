@@ -10,8 +10,8 @@ Docker の入口（`.env` の `COMPOSE_FILE`）も `compose.original.yaml` を�
 `robot_bringup.launch.py` を手で叩くときは明示してください。
 
 ```bash
-ros2 launch daifuku_stack robot_bringup.launch.py driver:=original
-ros2 launch daifuku_stack robot_bringup.launch.py driver:=original model:=pi4
+ros2 launch daifuku_bringup robot_bringup.launch.py driver:=original
+ros2 launch daifuku_bringup robot_bringup.launch.py driver:=original model:=pi4
 ```
 
 ## 公式実装との関係
@@ -104,7 +104,7 @@ Pi 4 では `buzzer_pwm_channel` を 0 以上にすると `configure` を拒否�
 
 ## パラメータと前提
 
-パラメータは `src/daifuku_stack/config/robot/raspicat_driver.yaml`（全キーを既定値の
+パラメータは `src/daifuku_bringup/config/robot/raspicat_driver.yaml`（全キーを既定値の
 まま列挙。値の由来は同ディレクトリの `README.md`）。
 
 ホスト側に要るものは 2 つです。どちらも `tools/image/` が入れます。

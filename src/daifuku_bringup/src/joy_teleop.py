@@ -123,7 +123,7 @@ from std_srvs.srv import SetBool
 
 import yaml
 
-# joy_buttons.py は同じ lib/daifuku_stack に入る (CMakeLists.txt の install(PROGRAMS))。
+# joy_buttons.py は同じ lib/daifuku_bringup に入る (CMakeLists.txt の install(PROGRAMS))。
 # share/ 側の src/ から直接叩かれることもあるので、両方で通るように自分の隣を見る。
 _HERE = os.path.dirname(os.path.realpath(__file__))
 if _HERE not in sys.path:
@@ -165,7 +165,7 @@ def load_waypoints(path):
     # encoding を明示する。同梱の waypoints_tsudanuma.yaml は冒頭に日本語の注記を
     # 持っていて、ロケールが C の環境 (実機のコンテナは LANG を持たない) では
     # 既定の encoding が ASCII になり、**読み込みごと失敗する**。
-    # daifuku_stack_launch/params.py が同じ理由で明示しているのと同じ。
+    # daifuku_config_manager/params.py が同じ理由で明示しているのと同じ。
     with open(path, encoding="utf-8") as handle:
         document = yaml.safe_load(handle)
     if not isinstance(document, dict):

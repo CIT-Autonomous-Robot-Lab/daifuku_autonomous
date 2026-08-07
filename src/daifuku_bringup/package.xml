@@ -1,0 +1,52 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>daifuku_bringup</name>
+  <version>0.1.0</version>
+  <description>Raspberry Pi Cat の機体の起動 (駆動ドライバ・LiDAR・オドメトリ融合)</description>
+  <maintainer email="noplab90@gmail.com">Keita Sekiguchi / nop</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>ament_index_python</exec_depend>
+  <!-- launch が設定の合成 (overrides) に使う。daifuku_stack も同じものに依存し、
+       その 2 つは互いに依存しない。 -->
+  <exec_depend>daifuku_config_manager</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <!-- joy:=true (既定) で立てるゲームパッドのドライバ。src/joy_teleop.py が /joy を購読する。 -->
+  <exec_depend>joy</exec_depend>
+  <exec_depend>laser_filters</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <!-- robot_bringup.launch.py が Transition を import する。 -->
+  <exec_depend>lifecycle_msgs</exec_depend>
+  <exec_depend>livox_ros_driver2</exec_depend>
+  <!-- src/joy_teleop.py が FollowWaypoints のゴールを投げ、順路を /waypoints へ latch する。
+       メッセージ定義だけで、Nav2 の実行系には依存しない。 -->
+  <exec_depend>nav2_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>pointcloud_to_laserscan</exec_depend>
+  <!-- src/joy_teleop.py がウェイポイントの YAML を読む。 -->
+  <exec_depend>python3-yaml</exec_depend>
+  <!-- driver:=original で立てる自前ドライバ。 -->
+  <exec_depend>raspicat_driver</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>robot_localization</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>topic_tools</exec_depend>
+  <!-- twist_mux:=true (既定) で立てる cmd_vel の仲裁。 -->
+  <exec_depend>twist_mux</exec_depend>
+  <!-- lidar:=2d のときだけ使う。既定パラメータは raspicat_bringup の
+       config/urg_<urg_interface>.param.yaml (ワークスペース内のパッケージ)。 -->
+  <exec_depend>urg_node</exec_depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

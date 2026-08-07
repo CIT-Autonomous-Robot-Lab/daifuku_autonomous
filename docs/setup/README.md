@@ -67,6 +67,7 @@ ros2 topic hz /odom
 ros2 run tf2_ros tf2_echo odom base_footprint
 ```
 
-Mid-360 + IMU構成では`/wheel/odom`を確認し、最終的な`/odom`はナビゲーション側のEKF起動後に確認します。
+Mid-360 + IMU構成では`/wheel/odom`と`/odom`の両方が`raspicat`サービス側から出ます
+（ドライバが前者、同じlaunchが立てるEKFが後者）。`/odom`のpublisherは1つが正です。
 
 準備ができたら[利用ガイド](../usage/README.md)へ進んでください。

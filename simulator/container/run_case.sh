@@ -67,6 +67,7 @@ cleanup_ros() {
     pkill -f '/opt/ros_ws/install/lib/' 2>/dev/null
     pkill -f 'fake_robot.py' 2>/dev/null
     pkill -f 'ros2 launch daifuku_stack' 2>/dev/null
+    pkill -f 'ros2 launch daifuku_bringup' 2>/dev/null
     sleep 2
     pkill -9 -f '/opt/ros/humble/lib/' 2>/dev/null
     pkill -9 -f '/opt/ros_ws/install/lib/' 2>/dev/null
@@ -208,10 +209,19 @@ python3 "$(dirname "$0")/fake_robot.py" --ros-args \
 SIM_PID=$!
 sleep 3
 
+# 角度フィルタ (/scan_raw -> /scan)。**実機ではこれも robot_bringup.launch.py が
+# 立てる**ので、navigation.launch.py からは出ていった。
 # lidar_driver:=false: /scan_raw は fake_robot.py が出すので、lidar:=2d の
 # 実機ドライバ (urg_node) は立てない。
+# odom_fusion は立てない (2D LiDAR に IMU は無く、odom -> base_footprint は
+# fake_robot.py が出す)。
+ros2 launch daifuku_bringup lidar_bringup.launch.py \
+    lidar:=2d lidar_driver:=false "${params_arg[@]}" \
+    >"$RUN/lidar.log" 2>&1 &
+LIDAR_PID=$!
+
 ros2 launch daifuku_stack navigation.launch.py \
-    lidar:=2d lidar_driver:=false use_rviz:=false \
+    use_rviz:=false \
     map:="$MAP" "${params_arg[@]}" \
     planner:="$PLANNER" local_planner:="$LOCAL_PLANNER" nav2:="$NAV2" \
     localization:="$LOCALIZATION" >"$RUN/nav.log" 2>&1 &
@@ -231,7 +241,7 @@ python3 "$(dirname "$0")/probe.py" \
     --settle "$SETTLE" --timeout "$TIMEOUT" 2>&1 | tee "$RUN/probe.log"
 rc=${PIPESTATUS[0]}
 
-kill $MON_PID $NAV_PID $SIM_PID 2>/dev/null
+kill $MON_PID $NAV_PID $LIDAR_PID $SIM_PID 2>/dev/null
 sleep 3
 cleanup_ros
 
@@ -244,7 +254,8 @@ grep -h -E 'connected with bond|Managed nodes are active|Aborting bringup|Failed
 
 echo "=== KILLED (OOM 等でプロセスが落ちていないか) ==="
 dmesg 2>/dev/null | tail -20 | grep -i -E 'oom|killed' || echo "(dmesg unavailable in container)"
-grep -h -i -E 'error|killed|terminated|exited with|abort' "$RUN"/nav.log | tail -25
+grep -h -i -E 'error|killed|terminated|exited with|abort' \
+    "$RUN"/nav.log "$RUN"/lidar.log 2>/dev/null | tail -25
 echo "=== peak mem: $(sort -t= -k3 -n "$RUN/load.log" 2>/dev/null | tail -1)"
 echo "=== CASE=$CASE done rc=$rc, logs in $RUN"
 exit $rc
