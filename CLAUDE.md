@@ -153,7 +153,12 @@ Docker 越しに叩く形は
   立てていないあいだも `ros2 param set /site_manager site <名前>` が通る。対になる
   `config_sentinel` は逆に**各 top-level launch が 1 つずつ**立てる（`sentinel_actions`
   を `include` される側でも呼ぶと、1 つの launch 木に見張りが 3 つ立ってそれぞれが
-  勝手に落としにかかる）。落とす合図の `SENTINEL_RESTART_CODE` を **0 にしないこと** —
+  勝手に落としにかかる）。指紋を取るのは `config_root` の下の yaml **全部**だが、
+  **リンク切れは飛ばす**（設定を別のパッケージへ移すと `install/` に古い symlink が
+  残り、読みにいくと launch ごと落ちる。2026-08-07 の実機で `daifuku_stack` の share に
+  `config/robot/joy_teleop.yaml` が居た）。飛ばしたものは起動時のログに出るので、
+  `find <install> -xtype l -delete` で掃除すること — **そのファイルは見張りの対象にも
+  入っていない**。落とす合図の `SENTINEL_RESTART_CODE` を **0 にしないこと** —
   `OnProcessExit` → `EmitEvent(Shutdown)` が 0 で発火すると、ノードがバグで落ちただけでも
   機体が上がり直し、`restart: unless-stopped` と組んで止まらなくなる。
 - **`overrides/*.yaml` の行き先はパッケージ名とノード名で決まる。** 1 段目が

@@ -423,10 +423,7 @@ def _reject_unknown_nodes(layers, hit, config_root):
         return
 
     declared = {}
-    pattern = os.path.join(config_root, "**", "*.yaml")
-    for path in sorted(glob.glob(pattern, recursive=True)):
-        if os.path.basename(os.path.dirname(path)) == "overrides":
-            continue
+    for path in _config_files(config_root)[0]:
         for node_name in load(path):
             declared.setdefault(node_name, os.path.relpath(path, config_root))
 
@@ -500,12 +497,26 @@ def is_site(name):
 
 
 def _config_files(config_root):
-    """config_root の下の設定ファイル (overrides/ を除く) をパス順に。"""
+    """config_root の下の設定ファイル (overrides/ を除く) をパス順に。
+
+    **開けないものは飛ばす。** `--symlink-install` の install/ は src/ への
+    symlink なので、設定ファイルを別のパッケージへ移すと**古い symlink が
+    install/ に残る** (2026-08-07 の実機: daifuku_stack の share にまだ
+    config/robot/joy_teleop.yaml が居た。移したのは f922a80)。glob には出るが
+    開けないので、読みにいくと launch ごと落ちる。ここは「今ある設定」を数える
+    ところなので、リンク切れは設定ではないと見なす。
+
+    Returns:
+        (読めたファイル, リンク切れなどで飛ばしたもの)。飛ばしたほうは呼び元が
+        言うためのもので、**黙って捨てない**。
+    """
     pattern = os.path.join(config_root, "**", "*.yaml")
-    return [
-        path for path in sorted(glob.glob(pattern, recursive=True))
-        if os.path.basename(os.path.dirname(path)) != "overrides"
-    ]
+    found, stale = [], []
+    for path in sorted(glob.glob(pattern, recursive=True)):
+        if os.path.basename(os.path.dirname(path)) == "overrides":
+            continue
+        (found if os.path.isfile(path) else stale).append(path)
+    return found, stale
 
 
 def config_digest(site, package, config_root):
@@ -539,7 +550,7 @@ def config_digest(site, package, config_root):
         "package": package,
         "files": {
             os.path.relpath(path, config_root).replace(os.sep, "/"): load(path)
-            for path in _config_files(config_root)
+            for path in _config_files(config_root)[0]
         },
     }
     if is_site(site):
@@ -566,7 +577,7 @@ def precheck(site, package, config_root):
         (通るか, 通らない理由)。通るなら理由は ""。
     """
     try:
-        for path in _config_files(config_root):
+        for path in _config_files(config_root)[0]:
             load(path)
         if not is_site(site):
             return True, ""
@@ -671,6 +682,20 @@ def sentinel_actions(context, *args, package, config_root, action=None,
         # ここで読めないなら合成も通っていないはずだが、順序に依らず言っておく。
         raise RuntimeError(f"設定の指紋を取れません: {err}")
 
+    logs = []
+    stale = _config_files(config_root)[1]
+    if stale:
+        # 設定ファイルを別のパッケージへ移したときの残骸 (install/ の symlink は
+        # ビルド時に張られ、ソースが消えてもそのまま残る)。**見張りの対象からは
+        # 外れている**ので、そのぶんだけ検出も効かない。消し方は
+        # `find <install> -xtype l -delete` か、install/ を消して建て直す。
+        logs.append(LogInfo(msg=(
+            f"config_sentinel: リンク切れの設定ファイルを飛ばしました "
+            f"({len(stale)} 個): {', '.join(stale)}\n"
+            "  install/ に古い symlink が残っています "
+            "(設定ファイルを別のパッケージへ移した残骸)。"
+        )))
+
     sentinel = Node(
         package="daifuku_config_manager",
         executable="config_sentinel",
@@ -685,7 +710,7 @@ def sentinel_actions(context, *args, package, config_root, action=None,
             "action": action,
         }],
     )
-    return [
+    return logs + [
         sentinel,
         RegisterEventHandler(OnProcessExit(
             target_action=sentinel, on_exit=_on_sentinel_exit,

@@ -66,7 +66,7 @@ vi_planner:
     # ── 可視化 (経路計算には影響しない) ──
     publish_value_function: true  # 既定 true: /value_function を配信するか。追従中の出し直しは掃きスレッドが行うので、global_sweep が false だと固まる
     value_publish_interval_ms: 500  # 既定 500 [ms]: solve 途中経過の配信間隔 (0 で完了時のみ。追従中の出し直しも止まる)。掃きスレッドが全域スライス (19F 13 万 / 津田沼 94 万セル) をロック内で 2 秒ごとに作るので、2026-08-04 の「2 秒おきに固まる」の容疑者。0 が戻し方
-    cost_drawing_threshold: 60    # 既定 60: 色スケール上限 [ステップ数≒秒]。**地図ごとに測り直す値**で、同梱の 2 地図はどちらも ../overrides/ で上げてある (19F 180 / 津田沼 600)。この 60 が出るのはどちらでもない地図のとき (../README.md)
+    cost_drawing_threshold: 60    # 既定 60: 色スケール上限 [ステップ数≒秒]。**地図ごとに測り直す値**で、同梱の 2 地図はどちらも ../overrides/ で上げてある (19F 108 / 津田沼 600)。この 60 が出るのはどちらでもない地図のとき (../README.md)
     window_cost_drawing_threshold: 10  # 既定 60: /local_window_value (±1m 窓) の色スケール上限
     # ── 行動集合 (前進量と回転量の組。3 つの配列で要素数を揃えること。6 個でなくてよい) ──
     # 前進量は**価値反復の 1 手の長さであると同時に linear.x の指令値そのもの**で、1 手 = 1 秒。
@@ -87,7 +87,9 @@ vi_planner:
     # map_scale: 1                # プランナ内部で地図を粗くする倍率 (1 = /map のまま)
     # downsample_policy: "conservative"  # map_scale > 1 のときの縮小方針 (障害物優先。optimistic は free 優先)
     # compact_sink_dir: ""        # compact 解の置き場 ("" = RAM)。追従が置き直しのたびに読むので、遅い先だと制御周期に響く
-    #     ▲ 上 3 つの実例は ../overrides/map_tsudanuma.yaml (scale 5 + 楽観 + ディスク退避)。
+    #     ▲ 上 3 つの実例は ../overrides/map_tsudanuma.yaml (scale 5 + 楽観)。**あちらも
+    #       compact_sink_dir は空**で、2026-08-04 に外して RAM 出力にした (Pi 5 の 8GB が前提。
+    #       sink 648MB が下の compact_ram_limit_mb に収まる)。4GB 機で使うなら書き戻すこと。
     #       map_scale だけなら ../overrides/map_19f.yaml (scale 2、保守のまま)。
     # pose_topic: "mcl_pose"      # 自己位置を読むトピック。launch が上書きする
     # scan_topic: "scan"          # スキャンを読むトピック。launch が上書きする
@@ -100,7 +102,7 @@ vi_global_planner:
     solver: "frontier2d_sparse_compact"  # 既定 frontier2d_sparse (密): vi_planner と揃える (理由は上のブロック)
     map_scale: 1                  # 既定 1: プランナ内部で地図を粗くする倍率 (1 = /map のまま)。19F は ../overrides/ で 2
     compact_sink_dir: ""          # 既定 "": compact の確定出力先 ("" = RAM)
-    compact_ram_limit_mb: 4096    # 既定 512 [MB]: sink を RAM に置ける上限 (超過分は /tmp/vi_global_planner_sink へ退避)。**上の compact_sink_dir が空でないと効かない**
+    compact_ram_limit_mb: 4096    # 既定 512 [MB]: sink を RAM に置ける上限 (超過分は /tmp/vi_global_planner_sink へ退避)。**上の compact_sink_dir を指定すると効かない** (明示指定が無条件に勝つ)
     theta_cell_num: 60            # 既定 60: 姿勢の離散数。360 を割り切ること
     safety_radius: 0.2            # 既定 0.2 [m]: 障害物近傍ペナルティの半径
     safety_radius_penalty: 30     # 既定 30 [秒/セル]: 障害物に近寄る代わりに払う迂回コスト
