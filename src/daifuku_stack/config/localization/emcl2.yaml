@@ -6,7 +6,7 @@
 emcl2:
   ros__parameters:
     use_sim_time: false
-    odom_freq: 20                       # 既定 20 [Hz]: 粒子を動かして姿勢を出す周期
+    odom_freq: 20                       # 既定 同左 [Hz]: 粒子を動かして姿勢を出す周期。/scan の 2 倍なので同じスキャンを 2 回食う (../README.md)
     num_particles: 500                  # 既定 500: 粒子数
     odom_frame_id: "odom"               # 既定 odom: オドメトリのフレーム
     footprint_frame_id: "base_footprint"  # 既定 base_footprint: 出力する姿勢のフレーム
@@ -15,10 +15,13 @@ emcl2:
     initial_pose_x: 0.0                 # 既定 0.0 [m]: 起動時の初期姿勢 (RViz で上書きする)
     initial_pose_y: 0.0                 # 既定 0.0 [m]
     initial_pose_a: 0.0                 # 既定 0.0 [rad]
-    odom_fw_dev_per_fw: 0.19            # 既定 0.19: 前進量あたりの前進の標準偏差 (運動モデル)
-    odom_fw_dev_per_rot: 0.0001         # 既定 0.0001: 回転量あたりの前進の標準偏差
-    odom_rot_dev_per_fw: 0.13           # 既定 0.13: 前進量あたりの回転の標準偏差
-    odom_rot_dev_per_rot: 0.2           # 既定 0.2: 回転量あたりの回転の標準偏差
+    # 運動モデルの 4 つ。既定はこの機体 (実測寸法のエンコーダ + ジャイロ融合) の
+    # 実力の 1 桁上で、emcl2 がオドメトリを捨てる形になっていたので下げた。
+    # **これ以上は下げないこと** — 粒子の多様性の唯一の供給源 (../README.md)。
+    odom_fw_dev_per_fw: 0.05            # 既定 0.19: 前進量あたりの前進の標準偏差。1m で 0.05m
+    odom_fw_dev_per_rot: 0.0001         # 既定 同左: 回転量あたりの前進の標準偏差 (実質 0)
+    odom_rot_dev_per_fw: 0.02           # 既定 0.13: 前進量あたりの回転の標準偏差。1m で 1.15 度
+    odom_rot_dev_per_rot: 0.05          # 既定 0.2: 回転量あたりの回転の標準偏差。90 度旋回で 3.6 度
     laser_likelihood_max_dist: 0.2      # 既定 0.2 [m]: 尤度場で壁の影響が届く距離
     scan_increment: 1                   # 既定 1: 何本に 1 本ビームを使うか (2 で半分に間引く)
     # リセット系の 3 つ (alpha_threshold / expansion_radius_orientation /
@@ -35,5 +38,5 @@ emcl2:
 
     # ── 未設定 (既定のまま) ──
     # transform_tolerance: 0.2          # [s] 発行する map -> odom TF に持たせる有効期限
-    # laser_min_range: 0.0              # [m] これより近いビームを捨てる
-    # laser_max_range: 100000000.0      # [m] これより遠いビームを捨てる
+    # laser_min_range: 0.0              # [m] これより近いビームを捨てる。**効かない** (../README.md)
+    # laser_max_range: 100000000.0      # [m] これより遠いビームを捨てる。**効かない** (同上)

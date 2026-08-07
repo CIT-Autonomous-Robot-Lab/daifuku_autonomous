@@ -245,6 +245,13 @@ Docker 越しに叩く形は
 - **teleop を出すものは自分で 0 を出して止める。** 自前実装（`driver:=original`）の
   `cmd_vel_timeout` は既定 60 秒で、指令が途切れてもその間は**走り続ける**。公式実装
   （既定の `driver:=raspimouse`）にはこのキーが無く、止まるかどうかは**未確認**。
+- **emcl2 は 1 枚のスキャンを `odom_freq ÷ /scan の周期` 回だけ食う。** 実際に
+  呼ばれる `ExpResetMcl2::sensorUpdate` には**「同じスキャンなら抜ける」ガードが
+  無い**（`Mcl::sensorUpdate` のほうにはある）ので、`loop()` は毎回そのときの
+  スキャンで重み付けとリサンプリングをやり直す。既定は `odom_freq` 20 Hz に対し
+  `/scan` が `mid360_publish_freq` の 10 Hz なので**2 回**。同じ観測を独立な証拠と
+  して二度数える形で、**エラーも警告も出ないまま自己位置がスキャン寄りに硬くなる**
+  だけなので気付けない。どちらかを変えるときは倍率が変わることを承知で。
 - **`elevation_filter`（既定 `true`）の `min_elevation_deg` と
   `pointcloud_to_laserscan` の `max_height` / `range_max` は組で決まる。** 仰角
   フィルタは `pointcloud_to_laserscan` の手前に入り、切り出しの下限を
