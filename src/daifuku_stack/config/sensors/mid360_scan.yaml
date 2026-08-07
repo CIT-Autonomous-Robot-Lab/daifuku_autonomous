@@ -17,7 +17,7 @@ pointcloud_to_laserscan:
     queue_size: 4                   # 既定 論理コア数: 点群購読キュー長
     scan_time: 0.10                 # 既定 1/30 (0.0333) [s]: 出力に載せる 1 スキャン所要時間
     range_min: 0.23                 # 既定 0.0 [m]: これより近い点を捨てる (機体の自己反射よけ)
-    range_max: 60.0                 # 既定 DBL_MAX [m]: これより遠い点を捨てる
+    range_max: 70.0                 # 既定 DBL_MAX [m]: これより遠い点を捨てる。Mid-360 の測距上限 (反射率 80% で 70m、10% では 40m)
     use_inf: true                   # 既定 true: 範囲外を inf にする (false なら range_max + inf_epsilon)
 
     # ── 未設定 (既定のまま) ──

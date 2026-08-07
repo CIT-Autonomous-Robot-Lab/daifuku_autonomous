@@ -43,8 +43,12 @@ costmapから消え、近くはセンサーの垂直FOVから外れて死角に�
 **`pointcloud_to_laserscan`の`max_height`と`range_max`は、この角度と組で決めます。**
 実効下限は距離とともに上がるので、`max_height`をそれより下に置くと帯が潰れ、
 `range_max`を伸ばしても**エラーも警告も出ないまま**その手前で何も入らなくなります
-（5度なら50m先の実効下限は4.65m）。地図ごとの値は
+（5度なら70m先の実効下限は6.40m）。地図ごとの値は
 `config/overrides/map_tsudanuma.yaml`にあります。
+
+`range_max`の既定はセンサの測距上限に合わせた70m（反射率80%で70m、10%では40m）です。
+ただし実際に70mを使うのは`emcl2`だけで、costmapは`obstacle_max_range: 2.5`、
+SLAMは`max_laser_range: 10.0`で頭打ちになります。
 
 ## 2D LiDAR
 

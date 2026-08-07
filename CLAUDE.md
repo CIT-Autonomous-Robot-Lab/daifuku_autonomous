@@ -252,7 +252,12 @@ Docker 越しに叩く形は
   高さで切る限り、相対傾斜 α の床は `min_height/tan α` の先で必ず入ってくる）。
   下限が距離とともに上がるので、**`max_height` をその下に置くと帯が潰れ、
   `range_max` を伸ばしてもエラーも警告も出ないまま手前で何も入らなくなる**
-  （5 度なら 50m 先の実効下限は 4.65m）。地図ごとの角度は `overrides/` 側。
+  （5 度なら 70m 先の実効下限は 6.40m）。地図ごとの角度は `overrides/` 側。
+  `range_max` の既定 70.0 はセンサの測距上限だが、**そこまで使うのは `emcl2` だけ**
+  （costmap は `obstacle_max_range: 2.5`、SLAM は `max_laser_range: 10.0` で頭打ち）。
+  **`map_tsudanuma` の `max_height` は仰角 5 度と対の 8.30m** なので、そこで
+  `elevation_filter:=false` にすると**高さで切っていないのと同じ**になる（床も天井も
+  全距離で帯に入る）。外すなら `max_height` / `range_max` も組で戻すこと。
 - **`use_mid360_imu` は launch 2 つが同じ値でないと壊れる。** `robot_bringup.launch.py`
   と `navigation.launch.py`（`mapping.launch.py`）の両方が持つ同名の引数で、**既定は
   どちらも `true`**（`odom→base_footprint` と `/odom` の所有者は EKF で、ドライバ側は
