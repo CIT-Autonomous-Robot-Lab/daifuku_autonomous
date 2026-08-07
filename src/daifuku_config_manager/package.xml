@@ -14,6 +14,8 @@
   <exec_depend>launch</exec_depend>
   <exec_depend>python3-yaml</exec_depend>
 
+  <!-- test/ の各 test_*.py と対。pep257 は外してある (理由は CLAUDE.md)。 -->
+  <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
   <test_depend>python3-pytest</test_depend>
 

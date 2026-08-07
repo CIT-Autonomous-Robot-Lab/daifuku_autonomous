@@ -44,8 +44,13 @@
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
 
+  <!-- ament_lint_common (詰め合わせ) は使わず、走らせるものだけを名指しする。
+       外してあるのは pep257 と C++ の書式 lint で、理由は CLAUDE.md。 -->
   <test_depend>ament_lint_auto</test_depend>
-  <test_depend>ament_lint_common</test_depend>
+  <test_depend>ament_cmake_copyright</test_depend>
+  <test_depend>ament_cmake_flake8</test_depend>
+  <test_depend>ament_cmake_lint_cmake</test_depend>
+  <test_depend>ament_cmake_xmllint</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

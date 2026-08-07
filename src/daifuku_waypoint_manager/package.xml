@@ -21,9 +21,13 @@
   <depend>visualization_msgs</depend>
   <depend>yaml-cpp</depend>
 
-  <!-- ament_lint_common は入れない。C++ 一式 (copyright / uncrustify / cpplint) が
-       走り、上流から移植したコードがライセンスヘッダ無しで即落ちるため。 -->
+  <!-- ament_lint_common (詰め合わせ) は使わず、走らせるものだけを名指しする。
+       flake8 は Python が無いので入れない。外してあるのは C++ の書式 lint
+       (uncrustify / cpplint) で、理由は CLAUDE.md。 -->
   <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_cmake_copyright</test_depend>
+  <test_depend>ament_cmake_lint_cmake</test_depend>
+  <test_depend>ament_cmake_xmllint</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

@@ -85,6 +85,28 @@ symlink になるので、効くのは**ソース側の権限**です。Windows 
 パッケージはありません。挙動の確認は実機か `simulator/` のハーネスで行います。例外は
 `map-to-usd` の出力検算で、これだけは単体で回せます。
 
+lint は詰め合わせ（`ament_lint_common`）を使わず、自前 6 パッケージが**同じものを
+名指し**しています。走るのは 6 つ全部で copyright、Python を持つ 5 つで flake8、
+`ament_cmake` の 3 つで lint_cmake と xmllint（`daifuku_waypoint_manager` は
+Python が無いので flake8 が無い）。踏むのは 4 つ:
+
+- **`.py` / `.cpp` / `.hpp` を足したら Apache-2.0 のヘッダが要る**（`# Copyright 2026
+  Keita Sekiguchi / nop` + `ament_copyright` のテンプレート逐語）。**置くのは
+  ファイルの先頭**で、`ament_copyright` は最初のコメント塊しか見ないので、`.hpp` の
+  `#ifndef` や launch 冒頭の説明コメントの下に置くと**見つからない**。逆に
+  `CMakeLists.txt` は見られない（拡張子で選ぶので `.cmake` だけ）し、`package.xml` の
+  隣の `setup.py` も除外される。
+- **`ament_lint_common` を戻さないこと。** C++ の書式 lint（uncrustify / cpplint）が
+  `daifuku_waypoint_manager` の移植コードで落ち、pep257 は「要約は 1 行目」と `。`
+  で終わる日本語 docstring を全部弾く（2026-08-07 の実測で 330 件）。同じ理由で
+  `ament_cmake_pep257` / `ament_pep257` も入れない。
+- **`ament_python` の 3 つは `test/test_*.py` が実体。** `test_depend` に足すだけでは
+  何も走らない（2026-08-07 まで `daifuku_rqt` が宣言だけで `test/` を持たず、lint が
+  一度も走っていなかった）。
+- **`daifuku_bringup` / `daifuku_stack` の flake8 は launch と `src/` の Python に
+  効く。** `ament_cmake` のパッケージだが中身は Python なので、`ament_cmake_flake8`
+  のほうを入れてある（`ament_flake8` は `ament_python` 用で、CMake からは走らない）。
+
 ```bash
 cd simulator && uv run python tests/verify_usda.py <map.yaml> <world.usda> free
 ```
