@@ -54,6 +54,15 @@ services:
       # colcon の並列数。Pi4 の 4 コアを使い切る。メモリ 4GB でも release の
       # rustc 2 本で available 2.5GB 残っていたので足りる。低メモリ時は絞る。
       BUILD_JOBS: ${BUILD_JOBS:-4}
+      # cargo を crates.io へ出さないか。**ロボット LAN にゲートウェイが無いので、
+      # 実機では true が要る。** キャッシュが揃っていても cargo はレジストリの
+      # index を更新しにいくので、名前が引けないと vi_planner が
+      # `unable to update registry` で落ち、`set -e` で up ごと止まる
+      # (vcs import 側と同じ穴。あちらは「揃っているときは呼ばない」で塞いである)。
+      # クレートは build ボリュームの .cargo に残るので、一度取れていれば true で
+      # 通る。**新しいクレートを足したときだけ** wlan0 を上げて false にすること
+      # (キャッシュに無いものは offline mode と明示して落ちる)。
+      CARGO_NET_OFFLINE: ${CARGO_NET_OFFLINE:-false}
     volumes:
       - ../../src:/opt/ros_ws/src
       - ../../autonomous_bot.repos:/opt/ros_ws/autonomous_bot.repos:ro
