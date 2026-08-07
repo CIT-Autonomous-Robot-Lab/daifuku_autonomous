@@ -114,6 +114,19 @@ daifuku_stack:
       #   (上の action_forward_m。断片と同値) なので、600 で 294.4x200m の地図をほぼ
       #   端まで階調に入れる。断片の 60 は 30m 相当しかなく、地図の大半が飽和して 1 色になる。
       #   **未計測** — 19F の 108 と違い実測の分布ではなく、地図の広がりから置いた見込み。
+      #
+      # 先読み。巡回では点が変わるたびに丸ごと 1 回の solve が入り、そのあいだ機体が
+      # 止まる (この地図の実測で 87 秒。19F は 29 秒)。走行中に次の点を解いておいて
+      # それを消す。代償は場が 2 本生きることで、**この地図は sink 648MB x2 = 1.3GB**
+      # が匿名メモリに居座る (断片の compact_ram_limit_mb 4096MB に収まるのでディスクへは
+      # 出ない)。加えて走行中ずっと 1 コア (waypoint_prefetch_threads の既定 1) を
+      # solve に取られる。**4GB 機では外すこと。**
+      # 効いたかはログの "prefetched the value function for" / "(..., prefetched)" で見る。
+      # **未検証** — 2026-08-04 に断片で一度 true にしたとき走行中の固まりが出て、容疑者の
+      # 1 つとして戻した経緯がある (切り分けは未了)。この地図には value_publish_interval_ms
+      # の全域スライスというもう 1 つの容疑者も残っている (下) ので、**固まったらまず
+      # ここを false に戻して切り分けること**。
+      waypoint_prefetch: true              # 断片 false: 次の点を走行中に解いておく。点あたり 87 秒の停止が消える代わりに場が 2 本 (1.3GB) + 1 コア
       # global_sweep と budget/idle は断片のまま (compact でもタイル修復として効く)。
       # **走行中に "global sweep done in" は出ない**のが設計どおりで、動いているかは
       # 2 秒ごとの "tile repair running for" のほうで見る (daifuku_stack/config/README.md)。
@@ -142,9 +155,6 @@ daifuku_stack:
 #   compact_ram_limit_mb … 断片が両ノードとも 4096MB。**この地図で効いている唯一の条件が
 #     「この値 > sink 648MB」**で、4096 である必要はない。ノード既定の 512MB まで下げると
 #     黙って /tmp/vi_*_sink = SD カードへ落ちる。
-#   waypoint_prefetch … 断片が false へ戻った (2026-08-04 の固まりの容疑者の 1 つ)。
-#     true にすると先読み中は価値関数が 2 つ = sink も 2 つで、648MB x2 = 1.3GB が
-#     匿名メモリに居座る。Pi 5 なら通るが**未計測**。4GB 機では足さないこと。
 #   publish_value_function / value_publish_interval_ms … 断片の true / 500ms のまま。
 #     **この地図では全域スライス 1 枚 (94 万セル) が重い**。掃きスレッドがそれをロックを
 #     握ったまま 2 秒ごとに作るので、走行中に /cmd_vel_mux が 2 秒おきに途切れる恐れが

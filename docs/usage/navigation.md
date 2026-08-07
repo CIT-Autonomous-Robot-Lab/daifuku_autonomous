@@ -366,10 +366,10 @@ RVizのFixed Frameとwaypointの`frame_id`が一致している必要があり�
 `config/nav2/vi_planner.yaml`の`waypoint_prefetch`を`true`にすると、いまの点へ
 走っているあいだに次の点を別スレッドで解いておき、着いたらsolveを飛ばして受け取ります。
 
-**`map_19f`（`overrides`の既定）では`true`です。** 断片（`config/nav2/vi_planner.yaml`）の
-ほうは`false`のままで、`overrides/map_19f.yaml`が上書きしています。`overrides`は
-置き換えなので、`tools/site.sh map_tsudanuma`で場所を替えれば自動的に外れます
-（あちらは場が1.3 GBになるため、外れたままが正しい）。2026-08-04に一度**断片**で`true`へ反転しましたが、
+**同梱の2地図はどちらも`true`です。** 断片（`config/nav2/vi_planner.yaml`）のほうは
+`false`のままで、`overrides/map_19f.yaml`と`overrides/map_tsudanuma.yaml`が上書き
+しています（津田沼は2026-08-07から。solveが87秒と長いぶん消える待ちも大きく、
+そのかわり場が1.3 GBになります）。2026-08-04に一度**断片**で`true`へ反転しましたが、
 同日の実機で走行中の固まりが出たため容疑者の1つとして戻した経緯があります
 （切り分けは未了）。効いた回はログに出ます。
 
@@ -390,9 +390,10 @@ vi_planner: path with 412 poses in 0.34s (solved_now=true, iters=0, prefetched)
 **同梱の2地図はいまどちらも出ません**。したがって2つとも丸ごとRAMに載ります
 （津田沼648 MB×2＝1.3 GB、19F 95 MB×2）。津田沼を巡回するなら、その1.3 GBが
 匿名メモリとして居座ることになります。solveのCPUも取られます（追従の`try_lock`は
-邪魔しませんが、10Hzの制御周期がずれ得ます）。**Pi 4（4 GB）で走らせるなら
-`overrides/map_19f.yaml`の`waypoint_prefetch`を`false`へ戻してください**（Pi 5の8 GBを
-前提にしている点は`dense_limit_mb`・`compact_ram_limit_mb`と同じ事情です）。
+邪魔しませんが、10Hzの制御周期がずれ得ます）。**Pi 4（4 GB）で走らせるなら、使う
+地図の`overrides`（`map_19f.yaml` / `map_tsudanuma.yaml`）の`waypoint_prefetch`を
+`false`へ戻してください**（Pi 5の8 GBを前提にしている点は`dense_limit_mb`・
+`compact_ram_limit_mb`と同じ事情です）。
 走行中に固まるようになったときも、まずここを戻して切り分けます。
 **まだ実機でもpi4_simでも通していません。**
 

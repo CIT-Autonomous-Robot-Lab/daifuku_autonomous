@@ -274,9 +274,9 @@ Docker 越しに叩く形は
   メモリが 2 倍要る**。compact でも同梱の 2 地図は sink が RAM なので（2026-08-04 に
   津田沼の `compact_sink_dir` を外した）、そのまま 2 倍が匿名メモリに乗る
   （津田沼 648MB×2 = 1.3GB、19F 95MB×2）。**Pi 4 (4GB) では `true` に
-  しないこと。ただし既定の `overrides:=map_19f` が `true` なので、引数を何も
-  足さずに立てると Pi 4 でもこれが効く。** 外すには `overrides/map_19f.yaml` の
-  `waypoint_prefetch` を消すしかない（キー 1 つだけ外す launch 引数は無い。
+  しないこと。ただし同梱の overrides が両方とも `true` なので、引数を何も
+  足さずに立てると Pi 4 でもこれが効く。** 外すには使う地図の
+  `overrides/*.yaml` の `waypoint_prefetch` を消すしかない（キー 1 つだけ外す launch 引数は無い。
   `overrides:=none` にすると emcl2 の 3 つの対症療法ごと落ちて、19F では自己位置が
   その場で回り出す）。2026-08-04 に一度**断片**で `true` へ反転したときは同日の実機で
   走行中の固まりが出て、容疑者の 1 つとして戻した（切り分けは未了）ので、
