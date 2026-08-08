@@ -68,7 +68,7 @@ services:
       # 設定の実体 (daifuku_config)。**src/ の外にあるので別に要る。**
       # ro にしないこと — site_manager が config/site を書く。
       - ../../config:/opt/ros_ws/config
-      - ../../autonomous_bot.repos:/opt/ros_ws/autonomous_bot.repos:ro
+      - ../../daifuku_autonomous.repos:/opt/ros_ws/daifuku_autonomous.repos:ro
       - autonomous-build:/opt/ros_ws/build
       - autonomous-install:/opt/ros_ws/install
       - autonomous-log:/opt/ros_ws/log
@@ -136,7 +136,7 @@ services:
       # 設定の実体 (daifuku_config)。**src/ の外にあるので別に要る。**
       # ro にしないこと — site_manager が config/site を書く。
       - ../../config:/opt/ros_ws/config
-      - ../../autonomous_bot.repos:/opt/ros_ws/autonomous_bot.repos:ro
+      - ../../daifuku_autonomous.repos:/opt/ros_ws/daifuku_autonomous.repos:ro
       - autonomous-build:/opt/ros_ws/build
       - autonomous-install:/opt/ros_ws/install
       - autonomous-log:/opt/ros_ws/log
@@ -214,7 +214,7 @@ services:
       # 設定の実体 (daifuku_config)。**src/ の外にあるので別に要る。**
       # ro にしないこと — site_manager が config/site を書く。
       - ../../config:/opt/ros_ws/config
-      - ../../autonomous_bot.repos:/opt/ros_ws/autonomous_bot.repos:ro
+      - ../../daifuku_autonomous.repos:/opt/ros_ws/daifuku_autonomous.repos:ro
       - autonomous-build:/opt/ros_ws/build
       - autonomous-install:/opt/ros_ws/install
       - autonomous-log:/opt/ros_ws/log

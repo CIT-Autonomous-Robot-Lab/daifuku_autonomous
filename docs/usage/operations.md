@@ -155,7 +155,7 @@ docker compose build
 docker compose up -d
 ```
 
-`autonomous_bot.repos`だけは、この3通りのどれにもきれいには収まりません。外部パッケージの取得は`up`のときの
+`daifuku_autonomous.repos`だけは、この3通りのどれにもきれいには収まりません。外部パッケージの取得は`up`のときの
 `vcs import --skip-existing`なので、リポジトリを新しく足しただけなら`up`で入ります。
 ただしそれが新しいapt依存を連れてくる場合や、`build-workspace.sh`の`--packages-select`へ
 追加が要る場合は`build`からやり直してください。既にある`src/`のリビジョン変更は

@@ -57,7 +57,7 @@ bash tools/setup/setup_native_ros2_rust.sh
 bash tools/setup/setup_native_vi.sh
 ```
 
-`setup_native_base.sh`は`vcs import . < autonomous_bot.repos`により`src/`へ次を取得します。
+`setup_native_base.sh`は`vcs import . < daifuku_autonomous.repos`により`src/`へ次を取得します。
 
 - `livox_ros_driver2` 1.2.6
 - `emcl2_ros2`

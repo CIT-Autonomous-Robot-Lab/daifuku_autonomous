@@ -39,9 +39,9 @@ mkdir -p "${CARGO_HOME}"
 #
 # 足りないものがあるときだけ import する。そこで失敗したら、名前を並べて落とす
 # (黙って進めると colcon が「そんなパッケージは無い」という無関係な顔で落ちる)。
-if [[ -f "${WS}/autonomous_bot.repos" ]]; then
+if [[ -f "${WS}/daifuku_autonomous.repos" ]]; then
   # repos ファイルのキーが取り込み先のパス (WS からの相対)。
-  mapfile -t repo_paths < <(python3 - "${WS}/autonomous_bot.repos" <<'PY'
+  mapfile -t repo_paths < <(python3 - "${WS}/daifuku_autonomous.repos" <<'PY'
 import sys
 import yaml
 
@@ -54,7 +54,7 @@ PY
   # mapfile は右辺が失敗しても成功するので、空なら自分で落とす (パースに失敗した
   # まま「揃っている」と見えると、上と同じ無関係な失敗に化ける)。
   if [[ ${#repo_paths[@]} -eq 0 ]]; then
-    echo "autonomous_bot.repos を読めませんでした" >&2
+    echo "daifuku_autonomous.repos を読めませんでした" >&2
     exit 1
   fi
 
@@ -67,7 +67,7 @@ PY
   if [[ ${#missing[@]} -eq 0 ]]; then
     echo "外部パッケージは揃っているので vcs import を省略します (ネットワーク不要)"
   else
-    vcs import . --skip-existing < "${WS}/autonomous_bot.repos" || true
+    vcs import . --skip-existing < "${WS}/daifuku_autonomous.repos" || true
     still_missing=()
     for repo_path in "${missing[@]}"; do
       [[ -n "$(ls -A "${WS}/${repo_path}" 2>/dev/null)" ]] || still_missing+=("${repo_path}")

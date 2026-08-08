@@ -156,7 +156,7 @@ def _resolve_urg_params(context):
         raise RuntimeError(
             "raspicat_bringup package is not available, so the default "
             "URG parameters cannot be located.\n"
-            "Import raspicat_ros (vcs import src < autonomous_bot.repos) "
+            "Import raspicat_ros (vcs import src < daifuku_autonomous.repos) "
             "and build it, or pass urg_params_file:=<path> explicitly."
         ) from exc
 

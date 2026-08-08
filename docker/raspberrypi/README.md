@@ -108,11 +108,11 @@ docker compose build --build-arg BUILD_JOBS=1
 `.dockerignore`でビルドコンテキストから除外してあり、イメージのビルド中に
 `vcs import`したものはrosdepにapt依存を解決させたあと捨てられます。
 実行時に使うのはホスト側の`src/`で、無ければ`build-workspace.sh`が
-`autonomous_bot.repos`にしたがって`vcs import`します。したがって特定の
+`daifuku_autonomous.repos`にしたがって`vcs import`します。したがって特定の
 リビジョンに固定したい場合は、ホスト側の`src/`のチェックアウトを合わせてください。
 
 **`vcs import`は`--skip-existing`付きで、既にあるリポジトリは更新しません。**
-一度cloneしたあとに`autonomous_bot.repos`のリビジョンを変えても、古いままの
+一度cloneしたあとに`daifuku_autonomous.repos`のリビジョンを変えても、古いままの
 チェックアウトがそのままビルドされます（起動時に「そんなパラメータは知らない」
 という顔をして出るので、設定の問題と取り違えやすい）。更新するときは各リポジトリで
 明示的に合わせてください。

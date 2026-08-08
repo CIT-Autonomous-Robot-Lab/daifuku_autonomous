@@ -261,7 +261,7 @@ PCなど余裕のある環境では`use_composition:=True`も利用できます�
 - `raspicat_description`: 機体のURDF
 - `raspicat_ros`: `raspicat_bringup`。`robot_state_publisher`のlaunch、`lidar:=2d`のURGパラメータ、公式のteleop
 
-外部ソースはDockerビルド時または`vcs import`時に`autonomous_bot.repos`から取得します。
+外部ソースはDockerビルド時または`vcs import`時に`daifuku_autonomous.repos`から取得します。
 `raspimouse2`が要るのは`driver:=raspimouse`のときだけです。`raspicat_ros`は`driver:=`に
 よらず要ります。`robot_bringup.launch.py`が`robot_state_publisher`の起動を
 `raspicat_bringup`のlaunchへ任せているためです。
