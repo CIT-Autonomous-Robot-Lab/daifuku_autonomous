@@ -273,7 +273,7 @@ Pi 4 でも Pi 5 でも走らせた実績はまだありません。見る順に
 | オンボード音声との競合 | オーバレイがあるのに `/sys/class/pwm` が空なら `config.txt` の `dtparam=audio=on` を疑う。Pi 4 のヘッドフォン出力は GPIO12/13 と同じ PWM ブロックを使う | `config.txt`（`dtparam=audio=off`） |
 | gpiochip | ノードの `configured: ...` ログ（`pinctrl-bcm2835` のはず） | `gpiochip_label` / `gpiochip_device` |
 | 方向の極性 | 前進を指令して両輪が同じ向きに回るか | `direction_*_forward_level` |
-| ステップ周波数と実速度 | 0.1 m/s を指令して巻尺で実測。実測較正は Pi 5 で済ませてあり（エンコーダ 1118 / ステップ 570、制御基板側の性質なので機種によらない）、ずれるなら脱調かすべり | `steps_per_revolution` |
+| ステップ周波数と実速度 | 0.1 m/s を指令して巻尺で実測。実測較正は Pi 5 で済ませてあり（**床の上で** エンコーダ 1073 / ステップ 447。2026-08-08。制御基板側の性質なので機種によらない）、ずれるなら脱調かすべり。**車輪を浮かせて測らないこと** — 浮かせて得た 1118 / 570 は床では 27% ずれていた | `steps_per_revolution` |
 | パルスカウンタ | モータ OFF で回転指令 → `odom` が動かないこと | `use_pulse_counters` |
 | I2C の安定性 | `pulse counters failed ...` が出ないか。出るなら `counter_error_limit` を 1〜2 へ | `counter_error_limit` |
 | 閉ループ | 既定で入っている（`control_mode: closed`）。上の実速度を無荷重と荷重で比べ、荷重側で巻尺が指令に追いつくなら効いている。**遅くなるなら脱調で、その場合は閉ループが悪化させる**ので `open` へ戻す | `control_mode` / `wheel_ki` |
