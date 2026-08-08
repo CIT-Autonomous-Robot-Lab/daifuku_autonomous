@@ -116,7 +116,7 @@ elif free_thresh:
     print(f"MAP_OVERRIDE {out} free_thresh={free_thresh}")
 
 # パラメータの上書きは launch と同じ経路 (extra_params_file) に載せる。ここで
-# nav2_params 相当を作り直すと config/nav2/*.yaml の合成を素通りしてしまうので、
+# nav2_params 相当を作り直すと config/stack/nav2/*.yaml の合成を素通りしてしまうので、
 # 環境変数で触るキーだけの overlay を書く。
 # BT の差し替え (planner:=vi 用) は navigation.launch.py 自身が behavior_trees/ を
 # 指すので、ハーネス側では何もしない。

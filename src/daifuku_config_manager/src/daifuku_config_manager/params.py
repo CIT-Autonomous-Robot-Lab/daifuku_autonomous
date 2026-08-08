@@ -27,7 +27,7 @@
 
   1. 土台 = 各 launch が渡している設定ファイル。navigation の params_file だけは
      base_resolvers 経由で params_dir/*.yaml を合成したもの
-  2. overrides:=<名前> -> <このパッケージの share>/config/overrides/<名前>.yaml
+  2. overrides:=<名前> -> <daifuku_config の share>/overrides/<名前>.yaml
   3. extra_params_file:=<パス>
 
 **1 地図 = 1 ファイル。** 場所が決まれば LiDAR の帯 (daifuku_bringup) も emcl2 の
@@ -52,8 +52,10 @@ SetParameter / SetParametersFromFile では設定ファイルに既にあるキ�
 一時ファイルを作る。
 
 **このモジュールはどのパッケージの中身も知らない。** 土台の解決を差し替える口
-(base_resolvers) と、宣言済みノード名を探す範囲 (config_root) は呼び元が渡す。
-nav2 の断片合成のようなパッケージ固有の規則は、そちら側に置くこと。
+(base_resolvers) は呼び元が渡す。nav2 の断片合成のようなパッケージ固有の規則は、
+そちら側に置くこと。宣言済みノード名を探す範囲 (config_root) だけは逆で、
+**組み立てるのはここ (config_root()) 1 か所**にしてある — 呼び元が作れると
+親の段を渡す事故が起き、検査が黙って広がるため。
 """
 
 import difflib
@@ -370,7 +372,7 @@ def _base(context, name, base_resolvers):
     """launch 引数 name が指す設定ファイルを読む。
 
     base_resolvers に name があれば、そちらへ丸ごと委ねる。ファイル 1 つでは
-    済まない土台 (navigation の params_file は config/nav2/*.yaml の合成) を、
+    済まない土台 (navigation の params_file は config/stack/nav2/*.yaml の合成) を、
     このモジュールがパッケージ構造を知らないまま扱うための口。
 
     Returns:
@@ -515,7 +517,7 @@ def _config_files(config_root):
     **開けないものは飛ばす。** `--symlink-install` の install/ は src/ への
     symlink なので、設定ファイルを別のパッケージへ移すと**古い symlink が
     install/ に残る** (2026-08-07 の実機: daifuku_stack の share にまだ
-    config/robot/joy_teleop.yaml が居た。移したのは f922a80)。glob には出るが
+    当時の config/robot/joy_teleop.yaml が居た。移したのは f922a80)。glob には出るが
     開けないので、読みにいくと launch ごと落ちる。ここは「今ある設定」を数える
     ところなので、リンク切れは設定ではないと見なす。
 

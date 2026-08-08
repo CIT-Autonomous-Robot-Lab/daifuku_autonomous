@@ -35,7 +35,7 @@
 # 渡しており、launch_ros のパラメータ優先順位 (ノード自身の parameters= が
 # グローバルの SetParametersFromFile に勝つ) の都合で、include して差分を重ねる
 # 方式では use_pulse_counters を上書きできないため。詳細は
-# config/robot/raspicat.yaml のコメント。
+# config/bringup/robot/raspicat.yaml のコメント。
 #
 # 自前化のついでに urg_node 関連は落としてある (LiDAR はどちらの構成でも
 # lidar_bringup.launch.py が扱う)。robot_state_publisher / joint_state_publisher は
@@ -141,7 +141,7 @@ DRIVERS = {
 def _params_file(context, argument, default_name):
     """launch 引数が指すパラメータファイルを解決し、overrides を重ねる。
 
-    空なら config/robot/<default_name> に落とす。実在しないものをそのまま
+    空なら config/bringup/robot/<default_name> に落とす。実在しないものをそのまま
     params.compose_path へ渡すと FileNotFoundError の traceback になり、**どの
     引数が悪いのか出ない**ので、ここで引数名を添えて落とす。
 

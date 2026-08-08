@@ -108,7 +108,7 @@ deactivate と、モータ ON/OFF。状態は 2 秒ごとに `get_state` で取�
 仲裁は**「出している間だけ勝つ」もので、非常停止ではありません。**
 `twist_mux` は勝っている入力を 1 対 1 で中継するだけで、途切れてもゼロを出しません。
 止めるのはドライバの仕事のままです。自前実装（`driver:=original`）の
-`config/robot/raspicat_driver.yaml` は `cmd_vel_timeout` = **60 秒**なので、指令が
+`config/bringup/robot/raspicat_driver.yaml` は `cmd_vel_timeout` = **60 秒**なので、指令が
 途切れてからモータが止まるまで 1 分あります。公式実装（`driver:=raspimouse`）は
 このキーを持たず、途切れたときに止まるかどうかは**未確認**です。いずれにせよ teleop の
 停止をドライバ側に任せられないので、パネルは次のすべてで 0 の `Twist` を自分で出します。

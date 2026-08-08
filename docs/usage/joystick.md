@@ -29,7 +29,7 @@
 ボタンと軸の番号が総入れ替えになります。左スティックと十字キーを入れ替えるモードを持つ
 機種もあるので、そちらも切っておいてください。番号が合わないときは**エラーが出ず、ただ
 効きません**。`ros2 topic echo /joy`で押しながら確かめ、
-`config/robot/joy_teleop.yaml`の`button_*` / `axis_*`を直します。
+`config/bringup/robot/joy_teleop.yaml`の`button_*` / `axis_*`を直します。
 
 速度は不感帯（スティックの傾き0.15）を出た**すぐ外側で下限値に飛び**、そこから上限まで
 線形です。下限未満はステップ周波数が低すぎて機体が唸るだけで進まないため、そこへ写しても
@@ -118,7 +118,7 @@ teleopへ移って巡回を**取り消した**ときは鳴りません。取り�
 
 鳴らしているのは本体ドライバで、自前実装（`driver:=original`）も公式実装
 （`driver:=raspimouse`）も同じトピック・同じ型で受けます。**鳴らなくても走行には何の影響も
-ありません。** うるさければ`config/robot/joy_teleop.yaml`の`buzzer: false`で止まります。
+ありません。** うるさければ`config/bringup/robot/joy_teleop.yaml`の`buzzer: false`で止まります。
 
 ## teleopは「モード」で、押している間だけではありません
 
@@ -273,5 +273,5 @@ publishしないので、自律走行の邪魔をしません（`start_enabled: 
 ros2 topic hz /joy      # 挿してから数秒待つ。出れば拾えている
 ```
 
-設定値は[`config/robot/joy_teleop.yaml`](../../src/daifuku_bringup/config/robot/joy_teleop.yaml)、
+設定値は[`config/bringup/robot/joy_teleop.yaml`](../../config/bringup/robot/joy_teleop.yaml)、
 実装は[`src/joy_teleop.py`](../../src/daifuku_bringup/src/joy_teleop.py)にあります。

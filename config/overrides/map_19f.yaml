@@ -1,7 +1,7 @@
 # map_19f.yaml (19F、915x577 @0.05m = 45.8m x 28.9m) 用の上書き。**overrides の既定値**。
 # 「断片」= 重ねる先の設定ファイルの値で、この地図では
-# daifuku_bringup/config/sensors/mid360_scan.yaml、
-# daifuku_stack/config/localization/emcl2.yaml と config/nav2/vi_planner.yaml。
+# config/bringup/sensors/mid360_scan.yaml、
+# config/stack/localization/emcl2.yaml と config/stack/nav2/vi_planner.yaml。
 #
 #   tools/site.sh map_19f                             # config/site (既定)。機体も立て直す
 #   ros2 launch daifuku_stack navigation.launch.py    # map も overrides も既定
@@ -14,7 +14,7 @@
 # 19F 用の調整は自動的に外れる。ここに置くのは「19F の地図だからこの値」というものだけ
 # で、機体固有 (base_frame_id) や Pi4 固有 (default_server_timeout) は断片側。
 #
-# 値の由来は daifuku_stack/config/README.md。
+# 値の由来は config/README.md。
 
 # ── その場所そのものに付く値 (ノードのパラメータではない) ─────────────────────
 # **どの地図を読むかはここで決まる。** navigation の map:= の既定がこれで
@@ -58,7 +58,7 @@ daifuku_stack:
   # 断片が compact になった今は必須ではないが、状態数が 1/4 になるぶん solve も伝播も速い。
   # **密に戻すならこの scale 2 とセット** (scale 1 は 2.5GB、2 は実測 655MB)。
   # 両ノードに同じ値を置くのは、片方だけだと同じ地図なのに 2 構成で別の経路が出るため。
-  # 代償・見積もり・先読みとの兼ね合いは daifuku_stack/config/README.md。**未検証** —
+  # 代償・見積もり・先読みとの兼ね合いは config/README.md。**未検証** —
   # この地図・この scale での solve 時間と経路、狭域 → 広域の伝播にかかる実時間は
   # 測っていない。
   #
@@ -98,7 +98,7 @@ daifuku_stack:
 #   emcl2.laser_likelihood_max_dist … 地図の壁の厚みが実物と違うとき。
 #     今の 19F はどちらも触らず、貫通が多いのを alpha_threshold 側で凌いでいる。
 #   costmaps.*.inflation_radius … 通路幅が足りず経路が出ないとき。ただし外接円 0.408m を
-#     下回らせないこと (daifuku_stack/config/nav2/costmaps.yaml)。
+#     下回らせないこと (config/stack/nav2/costmaps.yaml)。
 #   vi_planner.safety_radius_penalty … 通路が細くて貪欲ロールアウトが固着するとき。
 #     map_tsudanuma では 1 まで下げている。
 #   vi_*.compact_sink_dir … sink を RAM から追い出すとき。19F は scale 2 で 0.095GB なので

@@ -46,12 +46,12 @@ PWM チャネルに載せ替えられます（手順と理由は
 
 - **エンコーダとステッピングを別のパラメータで数えます。** この機体は車輪 1 回転が
   エンコーダ 1118 パルス・ステップ 570 回で、**1.96 倍違います**（2026-08-04 実測。
-  由来は [`config/README.md`](../../src/daifuku_stack/config/README.md)）。`odom` は
+  由来は [`config/README.md`](../../config/README.md)）。`odom` は
   `pulses_per_revolution`、`cmd_vel` → ステップ周波数は `steps_per_revolution`。
   上流の `raspimouse_component.cpp` は換算側に 400.0 を直書きしていてパラメータは
   オドメトリ側にしか効かないので、公式実装だとこの機体は指令の 70% で走ります。
 - パルスカウンタが生きているとき、`odom` の Twist は**指令値ではなく実測値**です。
-  `config/sensors/mid360_ekf.yaml` はこのメッセージから vx と vyaw だけを取るので、
+  `config/bringup/sensors/mid360_ekf.yaml` はこのメッセージから vx と vyaw だけを取るので、
   指令値を入れると自分の出力でループを閉じることになります。
 - `odom_hz` の既定は 50.0（raspimouse は 100.0）。1 周期あたり I2C を 6 トランザク
   ション使うので、62.5 kHz のバスの占有率を半分に落としてあります（カウンタ 1 個に
@@ -228,7 +228,7 @@ ros2 topic pub --times 20 /cmd_vel geometry_msgs/msg/Twist \
 2026-08-04 に Pi 5 Model B Rev 1.1（8GB・Ubuntu 24.04.4・6.8.0-1060-raspi）に
 Raspberry Pi Cat の HAT を載せ、**車輪を浮かせた状態でモータを回すところまで**
 確かめました。走行はまだです。ピン・チャネル・アドレス・デバイスパスはすべて
-パラメータに出してあるので、`config/robot/raspicat_driver.yaml` を直せばコードは
+パラメータに出してあるので、`config/bringup/robot/raspicat_driver.yaml` を直せばコードは
 触らずに済みます。
 
 `/cmd_vel` から PWM までは一致します。ステップ周波数は
@@ -240,7 +240,7 @@ Raspberry Pi Cat の HAT を載せ、**車輪を浮かせた状態でモータ�
 （9.972 回転）測り、`pulses_per_revolution = 1118`（エンコーダ）と
 `steps_per_revolution = 570`（ステップ）を得ました。この 2 つは **1.96 倍違う**ので、
 上流のように 1 つの数で兼ねられません。導出は
-[`config/README.md`](../../src/daifuku_stack/config/README.md)。
+[`config/README.md`](../../config/README.md)。
 
 同定と権限まわりは確認済み（どれも黙って失敗するので、ノードを立てる前に見ること）:
 
@@ -266,7 +266,7 @@ Raspberry Pi Cat の HAT を載せ、**車輪を浮かせた状態でモータ�
 
 ## 関連
 
-- [`src/daifuku_stack/config/README.md`](../../src/daifuku_stack/config/README.md) — 設定値の由来
+- [`config/README.md`](../../config/README.md) — 設定値の由来
 - [`tools/image/README.md`](../../tools/image/README.md) — SD カードの作成
 - [`docker/raspberrypi/README.md`](../../docker/raspberrypi/README.md) — コンテナ構成
 - [Raspberry Pi 4 で動かす](raspberry-pi-4.md) — Pi 4 での差分と、公式実装（rtmouse）を選ぶ場合

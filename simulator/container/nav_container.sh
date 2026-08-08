@@ -81,7 +81,7 @@ if [ ! -f "$MAP" ]; then
 fi
 
 # パラメータの上書きは launch と同じ経路 (extra_params_file) に載せる。
-# ここで nav2_params 相当を作り直すと config/nav2/*.yaml の合成を素通りするので、
+# ここで nav2_params 相当を作り直すと config/stack/nav2/*.yaml の合成を素通りするので、
 # 環境変数で触るキーだけの overlay を書く (run_case.sh と同じ方式)。
 python3 - "$RUN" <<'PY'
 import os, sys, yaml

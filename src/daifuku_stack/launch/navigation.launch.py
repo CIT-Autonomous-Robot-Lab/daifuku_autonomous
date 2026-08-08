@@ -203,7 +203,7 @@ def generate_launch_description():
         パラメータが無く through_poses を無効化できないので、木そのものを VI 用
         (behavior_trees/) に差し替える。
 
-        これらのキーは config/nav2/*.yaml に存在しないので SetParameter (グループ全体への
+        これらのキーは config/stack/nav2/*.yaml に存在しないので SetParameter (グループ全体への
         注入) で足りる。逆に params_file に**ある**キーは SetParameter /
         SetParametersFromFile では上書きできない (launch_ros は global params を先に、
         ノード個別の parameters= を後に渡すため、後勝ちでノード側が勝つ)。
@@ -614,7 +614,7 @@ def generate_launch_description():
                 "package": "daifuku_stack",
                 "config_root": config_root,
                 "targets": ["params_file", "emcl2_params_file", "bond_params_file"],
-                # params_file だけは config/nav2/*.yaml の合成が土台になる。
+                # params_file だけは config/stack/nav2/*.yaml の合成が土台になる。
                 "base_resolvers": {"params_file": nav2_params.fragments_resolver},
             },
         ),

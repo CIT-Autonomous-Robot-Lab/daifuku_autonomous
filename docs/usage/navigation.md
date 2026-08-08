@@ -202,8 +202,8 @@ BTを外すと、VIが損をしていた点が消えます。**毎秒の再計�
 取り込み続ける**ので、一度「通れない」と塗った場所のペナルティが実際に薄れていきます。
 投げ直しの上限は`goal_retry_limit`（既定3、負で無制限）です。
 
-読む設定ファイルも減ります。効くのは`config/nav2/vi_planner.yaml`と`map_server.yaml`、
-`config/localization/emcl2.yaml`、それに`behaviors.yaml`の`velocity_smoother`の節だけです。
+読む設定ファイルも減ります。効くのは`config/stack/nav2/vi_planner.yaml`と`map_server.yaml`、
+`config/stack/localization/emcl2.yaml`、それに`behaviors.yaml`の`velocity_smoother`の節だけです。
 `bt_navigator.yaml`・`controller_server.yaml`・`costmaps.yaml`と`behaviors.yaml`の
 残り3ノード分、`behavior_trees/`は**合成には入るが宛先の
 ノードが立たないので黙って無視されます**。`behaviors.yaml`の`waypoint_follower`にあった
@@ -224,7 +224,7 @@ BTを外すと、VIが損をしていた点が消えます。**毎秒の再計�
 ありません。密ソルバ（`frontier2d_sparse`）に戻すこともできますが、そちらは状態1つ
 あたり80バイト要るので`map_scale: 2`とセットです（実測655 MB。`dense_limit_mb`を
 超える地図では、確保してからOOMされる代わりに起動を止めます）。値の導出は
-[`config/README.md`](../../src/daifuku_stack/config/README.md)にあります。
+[`config/README.md`](../../config/README.md)にあります。
 
 ## 広域地図（map_tsudanuma）で動かす
 
@@ -268,7 +268,7 @@ ros2 launch daifuku_stack navigation.launch.py \
 出ません**（設計どおり）。動いているかは2秒ごとの`tile repair running for ...`のほうで
 見てください。長すぎるようなら`global_sweep_budget_ms`と`global_sweep_idle_ms`の比を
 変えますが、**上限を決めているのはCPUではなく追従ループと共有するMutex**です
-（[`config/README.md`](../../src/daifuku_stack/config/README.md)の`global_sweep`の節）。
+（[`config/README.md`](../../config/README.md)の`global_sweep`の節）。
 
 NavFnとDWBで動かす場合、`map_tsudanuma`の価値反復向け設定は要りません。ただし
 `overrides:=none`はEMCL2の調整も一緒に落とすので、**ふつうは場所を切り替えたまま
@@ -320,7 +320,7 @@ ros2 launch daifuku_stack navigation.launch.py \
   拠り所がほとんどありません（経路計画とは別の課題です）。
 
 実測値の出どころは`config/overrides/map_tsudanuma.yaml`のヘッダ（2026-08-01）と
-`src/daifuku_stack/config/README.md`です。`simulator/docs/pi4_sim.md`にもPi 4相当での
+`config/README.md`です。`simulator/docs/pi4_sim.md`にもPi 4相当での
 走行記録がありますが、そちらは`map_scale: 3`＋保守的プーリングだった頃のものなので、
 所要時間もメモリもここの値とは一致しません。
 
@@ -361,8 +361,8 @@ RVizのFixed Frameとwaypointの`frame_id`が一致している必要があり�
 追加も追加読み込みも拒否され、パネルのステータス行にだけ理由が出ます。
 
 点と点のあいだではいったん止まります。停止時間は既定（`nav2:=false`）では
-`config/nav2/vi_planner.yaml`の`waypoint_pause_sec`（0.2秒。この間も価値関数の更新は
-続きます）、`nav2:=true`では`config/nav2/behaviors.yaml`の`waypoint_pause_duration`
+`config/stack/nav2/vi_planner.yaml`の`waypoint_pause_sec`（0.2秒。この間も価値関数の更新は
+続きます）、`nav2:=true`では`config/stack/nav2/behaviors.yaml`の`waypoint_pause_duration`
 （200 ms）です。行けない点があっても巡回は続き、完了時に取りこぼした点数がステータス行に
 出ます（`stop_on_failure: false`。これも構成ごとに置き場が違い、既定では
 `vi_planner.yaml`の側です）。
@@ -373,10 +373,10 @@ RVizのFixed Frameとwaypointの`frame_id`が一致している必要があり�
 ゴールごとに価値関数を解き直すので、**点が変わるたびに丸ごと1回のsolveが入り、その
 間ずっと機体が止まっています**（実測で19Fが29秒、津田沼が87秒）。
 
-`config/nav2/vi_planner.yaml`の`waypoint_prefetch`を`true`にすると、いまの点へ
+`config/stack/nav2/vi_planner.yaml`の`waypoint_prefetch`を`true`にすると、いまの点へ
 走っているあいだに次の点を別スレッドで解いておき、着いたらsolveを飛ばして受け取ります。
 
-**同梱の2地図はどちらも`true`です。** 断片（`config/nav2/vi_planner.yaml`）のほうは
+**同梱の2地図はどちらも`true`です。** 断片（`config/stack/nav2/vi_planner.yaml`）のほうは
 `false`のままで、`overrides/map_19f.yaml`と`overrides/map_tsudanuma.yaml`が上書き
 しています（津田沼は2026-08-07から。solveが87秒と長いぶん消える待ちも大きく、
 そのかわり場が1.3 GBになります）。2026-08-04に一度**断片**で`true`へ反転しましたが、
@@ -415,7 +415,7 @@ vi_planner: path with 412 poses in 0.34s (solved_now=true, iters=0, prefetched)
 いるのは地図の全域ぶんの価値関数ですが、走り出すのに要るのは**いまの姿勢から
 ゴールまでの経路**だけなので、それが引けた時点でsolveを打ち切れます。
 
-`config/nav2/vi_planner.yaml`の`early_start`を`true`にすると打ち切ります。判定は
+`config/stack/nav2/vi_planner.yaml`の`early_start`を`true`にすると打ち切ります。判定は
 ロールアウトそのもの（`compute_path_to_pose`が返すのと同じ辿り方）なので、
 **打ち切った場でも経路は必ず引けます**。先読みとは別物なので、両方同時に有効に
 できます。

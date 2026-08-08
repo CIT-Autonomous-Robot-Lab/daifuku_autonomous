@@ -2,37 +2,39 @@
 
 ## 主なファイル
 
-**設定は3つのパッケージに分かれています。** `daifuku_stack`が自律移動、
-`daifuku_bringup`が機体（駆動・LiDAR・EKF）、`daifuku_config_manager`が
-`overrides/`です。下の表の`config/`は各パッケージのものです。
+**設定の実体はリポジトリルートの`config/`（パッケージ名は`daifuku_config`）に
+全部あります。** 1段目の`bringup/`と`stack/`は、どのlaunchが読むか
+（= `overrides/`の1段目、= `config_sentinel`が指紋を取る単位）で分けたものです。
+下の表の「パッケージ」列は、その値を読むlaunchを持つパッケージのことで、
+ファイルの置き場ではありません。
 
-**機体側（`daifuku_bringup`）の値を変えたら`docker compose up -d`が要ります。**
+**機体側（`bringup/`）の値を変えたら`docker compose up -d`が要ります。**
 読むのは常駐している`raspicat`サービスなので、navigationを立て直しても変わりません。
 
 | ファイル | パッケージ | 内容 |
 |---|---|---|
 | `config/site` | `config_manager` | 走らせる場所を1行で持つ。すべてのlaunchが`overrides`の既定をここから取り、`navigation.launch.py`は`map`の既定もここから導く。**書き換えは`tools/site.sh`** |
 | `config/overrides/*.yaml` | `config_manager` | 地図・環境ごとの上書き（`overrides:=`で重ねる）。行き先は**パッケージ名とノード名**で決まるので、この表の`MID360_config.json`以外すべてを上書きできる |
-| `config/nav2/*.yaml` | `stack` | Nav2、価値反復プランナ、コストマップ、速度、ゴール判定（起動時に1つへ合成） |
+| `config/stack/nav2/*.yaml` | `stack` | Nav2、価値反復プランナ、コストマップ、速度、ゴール判定（起動時に1つへ合成） |
 | `behavior_trees/*.xml` | `stack` | `planner:=vi`用のビヘイビアツリー（起動時に自動で選択）。**`nav2:=true`のときだけ読まれる**（既定では`bt_navigator`が立たない） |
-| `config/localization/emcl2.yaml` | `stack` | EMCL2のフレーム、初期姿勢、粒子数、オドメトリモデル |
-| `config/lifecycle_bond.yaml` | `stack` | ライフサイクルマネージャのbondタイムアウト |
-| `config/mapping/slam_toolbox.yaml` | `stack` | SLAM Toolboxのmapping設定 |
+| `config/stack/localization/emcl2.yaml` | `stack` | EMCL2のフレーム、初期姿勢、粒子数、オドメトリモデル |
+| `config/stack/lifecycle_bond.yaml` | `stack` | ライフサイクルマネージャのbondタイムアウト |
+| `config/stack/mapping/slam_toolbox.yaml` | `stack` | SLAM Toolboxのmapping設定 |
 | `rviz/mapping.rviz` | `stack` | 地図作成用RViz |
 | `rviz/navigation.rviz` | `stack` | 自律移動用RViz |
 | `maps/*.yaml`, `maps/*.pgm` | `stack` | 保存済み地図 |
-| `config/robot/raspicat.yaml` | `bringup` | 公式実装（`driver:=raspimouse`）のパラメータ。車輪径、トレッド、オドメトリ源 |
-| `config/robot/raspicat_driver.yaml` | `bringup` | 自前実装（`driver:=original`）のパラメータ。上に加えてGPIO・PWM・I2Cの配線 |
-| `config/robot/twist_mux.yaml` | `bringup` | 速度指令の仲裁（購読トピックと優先度）。`twist_mux:=true`（既定）のときだけ |
-| `config/robot/joy_teleop.yaml` | `bringup` | ゲームパッド。`joy_node`と`joy_teleop`の2ノード分が1ファイルに入る。`joy:=true`（既定）のときだけ |
-| `config/sensors/scan_filter.yaml` | `bringup` | LiDARの角度フィルタ |
-| `config/sensors/MID360_config.json` | `bringup` | Mid-360とホストのIP |
-| `config/sensors/mid360_scan.yaml` | `bringup` | 3D点群から2D LaserScanへの変換 |
-| `config/sensors/mid360_elevation.yaml` | `bringup` | 3D点群の仰角フィルタ（勾配のある床を落とす） |
-| `config/sensors/mid360_ekf.yaml` | `bringup` | Mid-360 IMUと車輪オドメトリの融合 |
+| `config/bringup/robot/raspicat.yaml` | `bringup` | 公式実装（`driver:=raspimouse`）のパラメータ。車輪径、トレッド、オドメトリ源 |
+| `config/bringup/robot/raspicat_driver.yaml` | `bringup` | 自前実装（`driver:=original`）のパラメータ。上に加えてGPIO・PWM・I2Cの配線 |
+| `config/bringup/robot/twist_mux.yaml` | `bringup` | 速度指令の仲裁（購読トピックと優先度）。`twist_mux:=true`（既定）のときだけ |
+| `config/bringup/robot/joy_teleop.yaml` | `bringup` | ゲームパッド。`joy_node`と`joy_teleop`の2ノード分が1ファイルに入る。`joy:=true`（既定）のときだけ |
+| `config/bringup/sensors/scan_filter.yaml` | `bringup` | LiDARの角度フィルタ |
+| `config/bringup/sensors/MID360_config.json` | `bringup` | Mid-360とホストのIP |
+| `config/bringup/sensors/mid360_scan.yaml` | `bringup` | 3D点群から2D LaserScanへの変換 |
+| `config/bringup/sensors/mid360_elevation.yaml` | `bringup` | 3D点群の仰角フィルタ（勾配のある床を落とす） |
+| `config/bringup/sensors/mid360_ekf.yaml` | `bringup` | Mid-360 IMUと車輪オドメトリの融合 |
 
 `config/`の分け方と合成順序、それぞれの値の由来は
-`src/daifuku_stack/config/README.md`に（3パッケージ分まとめて）あります。
+`config/README.md`に（3パッケージ分まとめて）あります。
 
 ## navigation.launch.py
 
@@ -46,8 +48,8 @@
 | `overrides` | `config/site`の1行（既定`map_19f`） | `daifuku_config_manager`の`overrides/<名前>.yaml`を重ねる。カンマ区切りで複数可。**置き換え**なので`map_tsudanuma`にすると19F用の調整は外れる。何も重ねないなら`overrides:=none`。行き先は**パッケージ名とノード名**で決まる（下）。**機体側（LiDARの帯）はraspicatサービスが起動時に読むので、切り替えは`tools/site.sh`で**（下） |
 | `extra_params_file` | 空（無効） | `overrides`の後に重ねる任意パスのファイル。カンマ区切りで複数可 |
 | `config_watch` | `shutdown` | 起動後に設定ファイルが書き変わったときどうするか。`shutdown`（既定）は大声で言ったうえで**このlaunchを終了する**（`navigation`は人が立てたものなので、上げ直す人は居ません）。`warn`は言うだけ、`off`は見張り（`config_sentinel`）ごと立てない。[日常操作](operations.md#走らせたまま設定を直したとき) |
-| `emcl2_params_file` | `config/localization/emcl2.yaml` | EMCL2パラメータ |
-| `bond_params_file` | `config/lifecycle_bond.yaml` | ライフサイクルマネージャのbondタイムアウト |
+| `emcl2_params_file` | `config/stack/localization/emcl2.yaml` | EMCL2パラメータ |
+| `bond_params_file` | `config/stack/lifecycle_bond.yaml` | ライフサイクルマネージャのbondタイムアウト |
 | `localization` | `emcl2` | `emcl2` / `emcl` / `amcl` |
 | `planner` | `vi` | `vi` / `navfn` |
 | `local_planner` | `auto` | `auto` / `vi` / `nav2` |
@@ -96,16 +98,16 @@ ros2 launch daifuku_stack mapping.launch.py --show-args
 |---|---|---|
 | `driver` | `raspimouse` | 本体ドライバ。`raspimouse`（公式実装。rtmouseが要る。Pi 4のみ）または`original`（自前実装。Pi 4 / Pi 5） |
 | `model` | 空（`raspicat_driver.yaml`の`model`に従う。既定は`auto`） | `driver:=original`のときの機種。`pi4` / `pi5` / `auto`。`driver:=raspimouse`に渡すとエラーになる |
-| `params_file` | 空（`driver:=`に応じて`config/robot/`から選ぶ） | ドライバのパラメータファイル |
+| `params_file` | 空（`driver:=`に応じて`config/bringup/robot/`から選ぶ） | ドライバのパラメータファイル |
 | `twist_mux` | `true` | 速度指令の仲裁を挟むか。`true`だと**ドライバが購読するのは`/cmd_vel`ではなく`/cmd_vel_mux`**になり、人が出す指令は`/cmd_vel_teleop`（優先度100）へ。`false`で全員が`/cmd_vel`へ書く従来の配線に戻る |
-| `twist_mux_params_file` | 空（`config/robot/twist_mux.yaml`） | `twist_mux`のパラメータファイル |
+| `twist_mux_params_file` | 空（`config/bringup/robot/twist_mux.yaml`） | `twist_mux`のパラメータファイル |
 | `joy` | `true` | ゲームパッドでの手動走行を立てるか。`joy_node`と`joy_teleop`が上がり、STARTの2秒長押しでteleopの入/切、BACK単体の2秒長押しでモータ電源の入/切、START+BACK同時2秒でウェイポイント巡回を始める（[ゲームパッドで操作する](joystick.md)）。挿していなくても他のノードは動く |
-| `joy_teleop_params_file` | 空（`config/robot/joy_teleop.yaml`） | ゲームパッドのパラメータファイル。`joy_node`と`joy_teleop`の両方に渡る |
+| `joy_teleop_params_file` | 空（`config/bringup/robot/joy_teleop.yaml`） | ゲームパッドのパラメータファイル。`joy_node`と`joy_teleop`の両方に渡る |
 | `urdf_lidar_frame` | `lidar_link` | URDFへ渡す2D LiDARのリンク名。**`lidar_bringup`の`lidar_frame`（Mid-360の`livox_frame`）とは別物** |
 | `use_joint_state_publisher` | `True` | `joint_state_publisher`を起動するか |
 | `lidar` | `mid360` | `mid360` / `2d`（`2d`ではraspicatのURG（`urg_node`）を起動する） |
 | `scan_filter_enabled` | `true` | 角度フィルタを使うか |
-| `elevation_filter` | `true` | 点群を仰角で切るか（`lidar:=mid360`のときだけ効く）。既定の設定`config/sensors/mid360_elevation.yaml`は0〜90度＝搭載高の水平面から上で、19Fの断片の`min_height: 0.275`と同じ切り方のため既定では挙動が変わらない。実際に狭めるのは`overrides/`の側（`map_tsudanuma`が5度）。**`pointcloud_to_laserscan`の`max_height`と組で決まる**（[LiDAR](../setup/lidar.md#仰角フィルタ勾配のある場所向け)） |
+| `elevation_filter` | `true` | 点群を仰角で切るか（`lidar:=mid360`のときだけ効く）。既定の設定`config/bringup/sensors/mid360_elevation.yaml`は0〜90度＝搭載高の水平面から上で、19Fの断片の`min_height: 0.275`と同じ切り方のため既定では挙動が変わらない。実際に狭めるのは`overrides/`の側（`map_tsudanuma`が5度）。**`pointcloud_to_laserscan`の`max_height`と組で決まる**（[LiDAR](../setup/lidar.md#仰角フィルタ勾配のある場所向け)） |
 | `use_mid360_imu` | `true`（環境変数`USE_MID360_IMU`） | Mid-360のIMU融合を使うか。`true`ではEKFが`/wheel/odom`と`/imu/mid360`を融合して`/odom`と`odom -> base_footprint`を出し、ドライバは車輪の生値を`/wheel/odom`へ出すだけになる。**この2つは同じlaunchが立てるので片方だけ切り替わる状態は作れない。** 切り替えは`.env`の`USE_MID360_IMU`で。**`lidar:=2d`とは併用できない**（URGにIMUが無いので起動時にエラーで止まる）（[LiDARとオドメトリ](../setup/lidar.md#imuと車輪オドメトリ)） |
 | `publish_lidar_tf` | `true` | センサーTFを配信するか。配信されるのは`lidar:=mid360`のときだけ（URDFは`lidar_link`しか出さず、`livox_frame`は誰も出さない） |
 | `lidar_driver` | `true` | LiDARの実機ドライバ（`mid360`: livox_ros_driver2 + restamp / `2d`: `urg_node`）を起動するか。シミュレータでは`false` |
@@ -140,7 +142,7 @@ PCなど余裕のある環境では`nav2_bringup`が配る値へ戻して構い�
 ## 自己位置推定の暫定設定
 
 EMCL2のリセット関連は、19Fの地図に合わせた**暫定値**です。地図固有の値なので
-`config/localization/emcl2.yaml`ではなく`daifuku_config_manager`の`overrides/map_19f.yaml`にあります。
+`config/stack/localization/emcl2.yaml`ではなく`daifuku_config_manager`の`overrides/map_19f.yaml`にあります。
 
 | パラメータ | `overrides/map_19f.yaml` | 断片側 | EMCL2の既定 |
 |---|---|---|---|
@@ -150,7 +152,7 @@ EMCL2のリセット関連は、19Fの地図に合わせた**暫定値**です�
 
 `sensor_reset`だけは断片側もEMCL2の既定と違います（上流READMEの表が`true`と
 書いているのに、コードの`declare_parameter`は`false`。経緯は
-`src/daifuku_stack/config/README.md`の「値の由来」）。
+`config/README.md`の「値の由来」）。
 
 有効ビームの28%が地図上の壁を貫通しており、非貫通率（alpha）が0.0〜0.4に張り付く
 状態でした。閾値0.5のままでは膨張リセットとセンサーリセットが毎スキャン発動し、
@@ -170,20 +172,20 @@ LiDARも機体ドライバも、1つのファイルにまとめて書けます�
 
 ```yaml
 daifuku_bringup:            # 機体側。変更後は docker compose up -d
-  elevation_filter:         # -> daifuku_bringup の config/sensors/mid360_elevation.yaml
+  elevation_filter:         # -> daifuku_bringup の config/bringup/sensors/mid360_elevation.yaml
     ros__parameters:
       min_elevation_deg: 5.0
 
 daifuku_stack:              # 自律移動側
-  vi_global_planner:        # -> config/nav2/vi_planner.yaml（params_fileの合成結果）
+  vi_global_planner:        # -> config/stack/nav2/vi_planner.yaml（params_fileの合成結果）
     ros__parameters:
       safety_radius_penalty: 1
 
-  emcl2:                    # -> config/localization/emcl2.yaml
+  emcl2:                    # -> config/stack/localization/emcl2.yaml
     ros__parameters:
       alpha_threshold: 0.2
 
-  slam_toolbox:             # -> config/mapping/slam_toolbox.yaml
+  slam_toolbox:             # -> config/stack/mapping/slam_toolbox.yaml
     ros__parameters:
       resolution: 0.03
 ```
@@ -191,7 +193,7 @@ daifuku_stack:              # 自律移動側
 `overrides`と`extra_params_file`はすべてのlaunchが同じ既定（`config/site`の1行）で
 受けます。同じパッケージの中で、その launch が読まない設定ファイル宛の節は何も
 起こしません（`mapping.launch.py`に`emcl2:`を渡しても害はない）。**パッケージが違う
-節はそもそも読まれません。** 上書きできないのは`config/sensors/MID360_config.json`
+節はそもそも読まれません。** 上書きできないのは`config/bringup/sensors/MID360_config.json`
 だけで、これはROSのパラメータファイルではないためです。
 
 間違えると起動時にエラーで止まります。**パッケージ名**が`KNOWN_PACKAGES`に無いとき
@@ -203,7 +205,7 @@ daifuku_stack:              # 自律移動側
 [INFO] [launch.user]: params: emcl2_params_file: .../emcl2.yaml -> /tmp/emcl2_params_file_xxxx.yaml (+ overrides:map_19f -> emcl2)
 ```
 
-書きかたと優先順位の詳細は`src/daifuku_stack/config/README.md`と
+書きかたと優先順位の詳細は`config/README.md`と
 `src/daifuku_config_manager/src/daifuku_config_manager/params.py`の冒頭にあります。
 
 ## 機体固有の調整
@@ -217,4 +219,4 @@ daifuku_stack:              # 自律移動側
 - LiDAR搭載位置と除外角度
 - ゴール許容誤差
 
-ソルバ、スレッド数、キャッシュ許容差、経路補間間隔、制御周期、局所反復時間などは`config/nav2/vi_planner.yaml`で設定します。同ファイルには`vi_planner`（既定の統合ノード）と`vi_global_planner`（`local_planner:=nav2`用の広域専用ノード）の2セクションがあり、同時に起動されることはありません。
+ソルバ、スレッド数、キャッシュ許容差、経路補間間隔、制御周期、局所反復時間などは`config/stack/nav2/vi_planner.yaml`で設定します。同ファイルには`vi_planner`（既定の統合ノード）と`vi_global_planner`（`local_planner:=nav2`用の広域専用ノード）の2セクションがあり、同時に起動されることはありません。

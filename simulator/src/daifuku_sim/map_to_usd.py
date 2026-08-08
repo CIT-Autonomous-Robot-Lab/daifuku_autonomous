@@ -54,7 +54,7 @@ from PIL import Image
 # 壁の高さの既定値。
 #
 # 「センサのスライスに合わせて薄く作る」は罠。mid360 経路は
-# config/sensors/mid360_scan.yaml が base_footprint 基準で min_height 0.30 /
+# config/bringup/sensors/mid360_scan.yaml が base_footprint 基準で min_height 0.30 /
 # max_height 0.50 を切り出し、2D 経路の LiDAR は URDF 上 base_link (0.0762) +
 # lidar_mount + 0.055 のあたりに来る。どちらか片方に合わせると、もう片方が
 # 空スキャンになって「自己位置推定が壊れた」ように見える。床から 2m 立てて
