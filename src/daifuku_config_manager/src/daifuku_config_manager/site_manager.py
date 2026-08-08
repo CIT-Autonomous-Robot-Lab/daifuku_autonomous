@@ -38,7 +38,6 @@ import os
 import tempfile
 
 import rclpy
-from ament_index_python.packages import PackageNotFoundError, get_package_share_directory
 from rcl_interfaces.msg import SetParametersResult
 from rclpy.node import Node
 from rclpy.parameter import Parameter
@@ -68,8 +67,10 @@ def validate(site):
     場所へ切り替えられてしまう。**その状態で sentinel が機体を落とすと、
     上がり直しては同じ理由で落ちる**ので、ここで止めるのが唯一の関門になる。
 
-    インストールされていないパッケージは飛ばす (実機イメージには
-    daifuku_stack が入っている前提だが、開発環境では片方だけのことがある)。
+    **どちらのパッケージの部分木も必ず見る。** 設定の実体は daifuku_config に
+    あるので、daifuku_stack が入っていない機械でも `daifuku_stack:` の下の綴り
+    違いは見つかる (設定が各パッケージの share に居たころは、入っていない側を
+    飛ばすしかなかった)。
 
     Returns:
         (通るか, 理由)。通るなら理由は ""。
@@ -82,11 +83,7 @@ def validate(site):
         return False, f"そんな場所はありません: {site} ({path} が無い)。選べるのは {available}"
 
     for package in params.KNOWN_PACKAGES:
-        try:
-            share = get_package_share_directory(package)
-        except PackageNotFoundError:
-            continue
-        ok, reason = params.precheck(site, package, os.path.join(share, "config"))
+        ok, reason = params.precheck(site, package, params.config_root(package))
         if not ok:
             return False, f"{package}: {reason}"
     return True, ""

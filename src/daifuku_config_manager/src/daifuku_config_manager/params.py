@@ -82,10 +82,8 @@ _FALLBACK_SITE = "map_19f"
 
 
 def site_file():
-    """今どこで走らせるかを 1 行で持つファイル (このパッケージの share)。"""
-    return os.path.join(
-        get_package_share_directory("daifuku_config_manager"), "config", "site"
-    )
+    """今どこで走らせるかを 1 行で持つファイル (daifuku_config の share)。"""
+    return os.path.join(get_package_share_directory("daifuku_config"), "site")
 
 
 def read_site_file(path):
@@ -138,13 +136,18 @@ DEFAULT_OVERRIDES_ORIGIN = (
     "環境変数 OVERRIDES" if os.environ.get("OVERRIDES", "").strip() else "config/site"
 )
 
-# overrides ファイルの 1 段目に書けるパッケージ名。
+# overrides ファイルの 1 段目に書けるパッケージ名と、そのパッケージの設定が
+# daifuku_config のどの段に居るか。
 #
 # **ここに無い名前は起動時に落とす。** 各 launch は自分の名前の部分木しか見ないので、
 # `daifuku_stak:` のような綴り違いを許すと、どの launch からも読まれないまま
 # エラーも警告も出ずに消える (ノード名の綴り違いを _reject_unknown_nodes で
 # 潰しているのと同じ理由)。パッケージが増えたときだけここを足す。
-KNOWN_PACKAGES = ("daifuku_bringup", "daifuku_stack")
+CONFIG_DIRS = {
+    "daifuku_bringup": "bringup",
+    "daifuku_stack": "stack",
+}
+KNOWN_PACKAGES = tuple(CONFIG_DIRS)
 
 # 1 段目に書ける、パッケージ名ではない節。**ノードのパラメータではないもの**を
 # ここへ入れる (今は地図だけ)。パッケージ名の段に混ぜないのは、どちらのパッケージの
@@ -162,15 +165,25 @@ SENTINEL_RESTART_CODE = 42
 
 
 def overrides_dir():
-    """overrides/*.yaml の置き場 (このパッケージの share)。
+    """overrides/*.yaml の置き場 (daifuku_config の share)。
 
     daifuku_bringup と daifuku_stack のどちらからも同じものを指す。地図ごとの
     調整が 2 つのパッケージにまたがるので、どちらか一方に置くと他方がそちらへ
-    依存してしまう (葉であるこのパッケージに置けば、その依存は起きない)。
+    依存してしまう (葉である daifuku_config に置けば、その依存は起きない)。
     """
-    return os.path.join(
-        get_package_share_directory("daifuku_config_manager"), "config", "overrides"
-    )
+    return os.path.join(get_package_share_directory("daifuku_config"), "overrides")
+
+
+def config_root(package):
+    """そのパッケージの設定の根 (daifuku_config の bringup/ か stack/)。
+
+    **設定のパスを組み立てるのはここだけ。** 呼び元が os.path.join で作れると、
+    親の daifuku_config/ を渡す事故が起きる。そうすると
+    _reject_unknown_nodes が両パッケージ分のノード名を認めてしまい、
+    `daifuku_bringup:` の下に nav2 のノード名を書いても**通ってしまう** (誰も
+    読まない部分木になるのを止める検査が、黙って効かなくなる)。
+    """
+    return os.path.join(get_package_share_directory("daifuku_config"), CONFIG_DIRS[package])
 
 
 def load(path):

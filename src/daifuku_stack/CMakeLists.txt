@@ -8,7 +8,7 @@ find_package(ament_cmake REQUIRED)
 # 実機で中身を読む・単体で叩くための控えなので、消しても起動は壊れない。
 # launch/daifuku_stack_launch/ を import すると launch/ の下に __pycache__ が
 # できる。install には要らないので落とす。
-install(DIRECTORY behavior_trees config launch maps rviz src waypoints
+install(DIRECTORY behavior_trees launch maps rviz src waypoints
   DESTINATION share/${PROJECT_NAME}
   PATTERN "__pycache__" EXCLUDE
 )

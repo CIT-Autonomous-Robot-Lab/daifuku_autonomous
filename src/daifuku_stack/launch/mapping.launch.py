@@ -43,8 +43,8 @@ from daifuku_config_manager import params  # noqa: E402
 def generate_launch_description():
     pkg_share = get_package_share_directory("daifuku_stack")
 
-    config_root = os.path.join(pkg_share, "config")
-    default_slam_params = os.path.join(pkg_share, "config", "mapping", "slam_toolbox.yaml")
+    config_root = params.config_root("daifuku_stack")
+    default_slam_params = os.path.join(config_root, "mapping", "slam_toolbox.yaml")
     default_rviz_config = os.path.join(pkg_share, "rviz", "mapping.rviz")
 
     namespace = LaunchConfiguration("namespace")

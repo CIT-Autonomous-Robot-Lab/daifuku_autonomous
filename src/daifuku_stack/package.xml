@@ -13,6 +13,7 @@
   <exec_depend>ament_index_python</exec_depend>
   <!-- launch が設定の合成 (overrides) に使う。daifuku_bringup も同じものに依存し、
        その 2 つは互いに依存しない。 -->
+  <exec_depend>daifuku_config</exec_depend>
   <exec_depend>daifuku_config_manager</exec_depend>
   <!-- src/system_monitor.py が /diagnostics に CPU を出す。 -->
   <exec_depend>diagnostic_updater</exec_depend>

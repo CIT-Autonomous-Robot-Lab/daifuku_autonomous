@@ -138,7 +138,7 @@ DRIVERS = {
 }
 
 
-def _params_file(context, pkg_share, argument, default_name):
+def _params_file(context, argument, default_name):
     """launch 引数が指すパラメータファイルを解決し、overrides を重ねる。
 
     空なら config/robot/<default_name> に落とす。実在しないものをそのまま
@@ -148,18 +148,19 @@ def _params_file(context, pkg_share, argument, default_name):
     Returns:
         (パス, ログの並び)。
     """
+    config_root = params.config_root("daifuku_bringup")
     path = LaunchConfiguration(argument).perform(context)
     if not path:
-        path = os.path.join(pkg_share, "config", "robot", default_name)
+        path = os.path.join(config_root, "robot", default_name)
     if not os.path.isfile(path):
         raise RuntimeError(f"{argument} does not exist: {path}")
     return params.compose_path(
         context, path, name=argument, package="daifuku_bringup",
-        config_root=os.path.join(pkg_share, "config"),
+        config_root=config_root,
     )
 
 
-def _twist_mux(context, pkg_share):
+def _twist_mux(context):
     """cmd_vel の仲裁ノードを組み立てる (twist_mux:=false なら何も作らない)。
 
     自律走行 (/cmd_vel) と遠隔操作 (/cmd_vel_teleop) を優先度で 1 本に束ね、
@@ -175,7 +176,7 @@ def _twist_mux(context, pkg_share):
         return [], []
 
     params_file, logs = _params_file(
-        context, pkg_share,
+        context,
         "twist_mux_params_file", "twist_mux.yaml",
     )
 
@@ -191,7 +192,7 @@ def _twist_mux(context, pkg_share):
     ], logs
 
 
-def _joy_teleop(context, pkg_share):
+def _joy_teleop(context):
     """ゲームパッドのドライバと、その入力をモードに変えるノードを組み立てる。
 
     joy_node は /joy を出すだけ。速度の写像と、START 長押しでの teleop 切り替え・
@@ -215,7 +216,7 @@ def _joy_teleop(context, pkg_share):
         return [], []
 
     params_file, logs = _params_file(
-        context, pkg_share,
+        context,
         "joy_teleop_params_file", "joy_teleop.yaml",
     )
 
@@ -245,7 +246,6 @@ def launch_setup(context, *args, **kwargs):
     lifecycle のイベントハンドラは対象のノードオブジェクトを直接参照するので、
     IfCondition で 2 つ並べるとハンドラも二重になる。ここで 1 つに決める。
     """
-    pkg_share = get_package_share_directory("daifuku_bringup")
 
     driver = LaunchConfiguration("driver").perform(context)
     if driver not in DRIVERS:
@@ -258,7 +258,7 @@ def launch_setup(context, *args, **kwargs):
     # overrides を重ねる。行き先はノード名で決まるので、driver:= で選ばなかった
     # ほうの節 (raspimouse: / raspicat_driver:) は自動的に外れる。
     params_file, override_logs = _params_file(
-        context, pkg_share, "params_file", default_params_name
+        context, "params_file", default_params_name
     )
 
     parameters = [params_file]
@@ -272,7 +272,7 @@ def launch_setup(context, *args, **kwargs):
     # 仲裁を挟むときだけ、ドライバの購読先を仲裁の出力へ振り替える。両ドライバとも
     # 相対名の "cmd_vel" で購読している (raspimouse_component.cpp / raspicat_driver の
     # node.py) ので、この remap で両方に効く。
-    mux_actions, mux_logs = _twist_mux(context, pkg_share)
+    mux_actions, mux_logs = _twist_mux(context)
     remappings = [("cmd_vel", MUXED_CMD_VEL)] if mux_actions else []
 
     # use_mid360_imu:=true では odom -> base_footprint の所有者が EKF に移る。
@@ -292,7 +292,7 @@ def launch_setup(context, *args, **kwargs):
         else:
             remappings.append(("/tf", "/wheel/tf_unused"))
 
-    joy_actions, joy_logs = _joy_teleop(context, pkg_share)
+    joy_actions, joy_logs = _joy_teleop(context)
 
     driver_node = LifecycleNode(
         namespace="",
@@ -351,7 +351,7 @@ def launch_setup(context, *args, **kwargs):
     # LiDAR も EKF も一緒に上がり直す。
     sentinel = params.sentinel_actions(
         context, package="daifuku_bringup",
-        config_root=os.path.join(pkg_share, "config"),
+        config_root=params.config_root("daifuku_bringup"),
     )
 
     return override_logs + mux_logs + joy_logs + mux_actions + joy_actions + [
@@ -430,7 +430,7 @@ def generate_launch_description():
             "params_file",
             default_value="",
             description="ドライバのパラメータファイル。空なら driver:= に応じて "
-                        "config/robot/raspicat.yaml か raspicat_driver.yaml を使う。",
+                        "config/bringup/robot/raspicat.yaml か raspicat_driver.yaml を使う。",
         ),
         DeclareLaunchArgument(
             "twist_mux",
@@ -445,7 +445,7 @@ def generate_launch_description():
             "twist_mux_params_file",
             default_value="",
             description="twist_mux のパラメータファイル。空なら "
-                        "config/robot/twist_mux.yaml を使う。",
+                        "config/bringup/robot/twist_mux.yaml を使う。",
         ),
         DeclareLaunchArgument(
             "joy",
@@ -479,13 +479,13 @@ def generate_launch_description():
             "joy_teleop_params_file",
             default_value="",
             description="ゲームパッドのパラメータファイル (joy_node と joy_teleop の "
-                        "両方に渡る)。空なら config/robot/joy_teleop.yaml を使う。",
+                        "両方に渡る)。空なら config/bringup/robot/joy_teleop.yaml を使う。",
         ),
         *params.declare_args(),
         params.declare_watch_arg(),
         # LiDAR 構成の引数 (lidar / lidar_driver / scan_filter_* / mid360_* /
         # publish_lidar_tf / lidar_x..yaw / urg_*)。daifuku_bringup_launch/lidar.py。
-        *lidar_common.declare_shared_args(pkg_share),
+        *lidar_common.declare_shared_args(),
         DeclareLaunchArgument("use_sim_time", default_value="false"),
         # URDF が持つ 2D LiDAR のリンク名 (上流 raspicat_description)。
         # **lidar_bringup.launch.py の lidar_frame (Mid-360 の livox_frame) とは

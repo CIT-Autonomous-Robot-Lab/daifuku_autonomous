@@ -41,7 +41,6 @@ from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
-from ament_index_python.packages import get_package_share_directory
 
 # 共通部品はこの launch ディレクトリの直下 (daifuku_bringup_launch/) にある。
 _LAUNCH_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -66,9 +65,8 @@ def validate(context, *args, **kwargs):
 
 
 def generate_launch_description():
-    pkg_share = get_package_share_directory("daifuku_bringup")
-    sensors_dir = os.path.join(pkg_share, "config", "sensors")
-    config_root = os.path.join(pkg_share, "config")
+    config_root = params.config_root("daifuku_bringup")
+    sensors_dir = os.path.join(config_root, "sensors")
 
     use_sim_time = LaunchConfiguration("use_sim_time")
     use_mid360_imu = LaunchConfiguration("use_mid360_imu")

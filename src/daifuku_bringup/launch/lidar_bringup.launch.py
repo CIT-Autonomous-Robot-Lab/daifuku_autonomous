@@ -42,8 +42,6 @@ from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
-from ament_index_python.packages import get_package_share_directory
-
 # 共通部品はこの launch ディレクトリの直下 (daifuku_bringup_launch/) にある。
 _LAUNCH_DIR = os.path.dirname(os.path.realpath(__file__))
 if _LAUNCH_DIR not in sys.path:
@@ -54,9 +52,8 @@ from daifuku_bringup_launch import lidar as lidar_common  # noqa: E402
 
 
 def generate_launch_description():
-    pkg_share = get_package_share_directory("daifuku_bringup")
-    sensors_dir = os.path.join(pkg_share, "config", "sensors")
-    config_root = os.path.join(pkg_share, "config")
+    config_root = params.config_root("daifuku_bringup")
+    sensors_dir = os.path.join(config_root, "sensors")
 
     lidar = LaunchConfiguration("lidar")
     lidar_driver = LaunchConfiguration("lidar_driver")
@@ -112,7 +109,7 @@ def generate_launch_description():
     # navigation / mapping と共有するものは daifuku_bringup_launch.lidar が持つ。
     # ここで宣言するのは、親が素通ししない (このファイルの中だけで完結する) 分。
     # ------------------------------------------------------------------
-    declare_args = lidar_common.declare_shared_args(pkg_share) + [
+    declare_args = lidar_common.declare_shared_args() + [
         # 親 (navigation / mapping) から素通しされる。単独起動でも同じ既定。
         *params.declare_args(),
         DeclareLaunchArgument("use_sim_time", default_value="false"),

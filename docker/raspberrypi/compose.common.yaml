@@ -65,6 +65,9 @@ services:
       CARGO_NET_OFFLINE: ${CARGO_NET_OFFLINE:-false}
     volumes:
       - ../../src:/opt/ros_ws/src
+      # 設定の実体 (daifuku_config)。**src/ の外にあるので別に要る。**
+      # ro にしないこと — site_manager が config/site を書く。
+      - ../../config:/opt/ros_ws/config
       - ../../autonomous_bot.repos:/opt/ros_ws/autonomous_bot.repos:ro
       - autonomous-build:/opt/ros_ws/build
       - autonomous-install:/opt/ros_ws/install
@@ -130,6 +133,9 @@ services:
       # (--symlink-install した install/ は src/ への symlink を含むため、
       # src をマウントし忘れるとリンク切れで launch も config も見えなくなる)。
       - ../../src:/opt/ros_ws/src
+      # 設定の実体 (daifuku_config)。**src/ の外にあるので別に要る。**
+      # ro にしないこと — site_manager が config/site を書く。
+      - ../../config:/opt/ros_ws/config
       - ../../autonomous_bot.repos:/opt/ros_ws/autonomous_bot.repos:ro
       - autonomous-build:/opt/ros_ws/build
       - autonomous-install:/opt/ros_ws/install
@@ -205,6 +211,9 @@ services:
     volumes:
       - ./fastdds_udp_whitelist.xml:/etc/fastdds/udp_whitelist.xml:ro
       - ../../src:/opt/ros_ws/src
+      # 設定の実体 (daifuku_config)。**src/ の外にあるので別に要る。**
+      # ro にしないこと — site_manager が config/site を書く。
+      - ../../config:/opt/ros_ws/config
       - ../../autonomous_bot.repos:/opt/ros_ws/autonomous_bot.repos:ro
       - autonomous-build:/opt/ros_ws/build
       - autonomous-install:/opt/ros_ws/install
