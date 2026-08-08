@@ -355,12 +355,12 @@ Docker 越しに叩く形は
   （読むのは常駐している raspicat サービス）。
   `range_max` の既定 70.0 はセンサの測距上限だが、**そこまで使うのは `emcl2` だけ**
   （costmap は `obstacle_max_range: 2.5`、SLAM は `max_laser_range: 10.0` で頭打ち）。
-  **`map_tsudanuma` の `max_height` は仰角 5 度と対の 5.00m**（2026-08-08 に 8.30 から
-  下げた）なので、そこで `elevation_filter:=false` にすると**高さで切っていないのと
-  同じ**になる（床も天井も全距離で帯に入る）。外すなら `max_height` / `range_max` も
-  組で戻すこと。逆に仰角フィルタを効かせたままなら、**この 5.00 は
-  `range_max: 70.0` より先に効く** — 実効下限がここへ達する 54.0m で帯が閉じ、
-  そこから先は 1 点も入らない。
+  **`map_tsudanuma` は 2026-08-08 に `min_elevation_deg` を 5.0 から断片と同じ 0.0 へ
+  戻したので、いまこの地図では仰角フィルタが実質素通し**（0.0 度 = 搭載高の水平面 =
+  断片の `min_height: 0.275` と同じ切り方）。帯は全距離で 0.275〜4.00m の高さ帯に
+  なっていて、`elevation_filter:=false` にしても**帯は変わらない**。組で決まるのは
+  5.0 へ戻したときの話で、そのときは `max_height`（同日に 8.30 → 5.00 → 4.00 と
+  下げた）が帯の届く距離をそのまま決める。**未検証**。
 - **センサを立てるのは `robot_bringup.launch.py` だけ。** LiDAR（`/scan`）も EKF
   （`/odom`・`odom→base_footprint`）もそちらが `include` していて、**`docker compose up`
   で常駐している**。`navigation.launch.py` / `mapping.launch.py` は消費者に徹し、
