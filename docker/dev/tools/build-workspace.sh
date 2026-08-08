@@ -9,7 +9,7 @@ source /opt/ros/humble/setup.bash
 source /opt/raspicat2/install/setup.bash
 
 mkdir -p src
-vcs import . --skip-existing < autonomous_bot.repos
+vcs import . --skip-existing < daifuku_autonomous.repos
 
 # livox_ros_driver2 keeps its ROS 2 manifest and launch files under alternate
 # names in the upstream repository.

@@ -21,7 +21,7 @@ Raspberry Pi Cat を ROS 2 Humble / Nav2 で自律移動させる colcon ワー�
 
 自前は 7 つです。`src/` の下が `daifuku_bringup` と `daifuku_stack` と
 `daifuku_config_manager` と `raspicat_driver` と `daifuku_rqt` と
-`daifuku_waypoint_manager` で、残りは `autonomous_bot.repos` からの
+`daifuku_waypoint_manager` で、残りは `daifuku_autonomous.repos` からの
 `vcs import` です。**7 つめの `daifuku_config` だけは `src/` の下ではなく
 `src/` と並ぶ `config/`**（設定はどのパッケージのものでもないので、`src/` の下に
 置くとどこでも嘘が残る）。

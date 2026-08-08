@@ -147,7 +147,7 @@ def validate_planner(context, *args, **kwargs):
         except PackageNotFoundError as exc:
             raise RuntimeError(
                 "vi_global_planner package is not available.\n"
-                "Import value_iteration3 (vcs import src < autonomous_bot.repos) and "
+                "Import value_iteration3 (vcs import src < daifuku_autonomous.repos) and "
                 "build it (colcon build --packages-select vi_global_planner) before launching "
                 "with planner:=vi, or fall back to planner:=navfn."
             ) from exc
@@ -196,7 +196,7 @@ def validate_local_planner(context, *args, effective_local_planner, **kwargs):
         raise RuntimeError(
             "vi_planner package is not available (local planner defaults to "
             "vi when planner:=vi).\n"
-            "Import value_iteration3 (vcs import src < autonomous_bot.repos) and "
+            "Import value_iteration3 (vcs import src < daifuku_autonomous.repos) and "
             "build it (colcon build --packages-select vi_planner), or "
             "fall back to local_planner:=nav2."
         ) from exc

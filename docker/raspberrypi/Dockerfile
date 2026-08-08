@@ -130,7 +130,7 @@ RUN --mount=type=cache,target=/opt/cargo/registry \
 # やり直しになっていた)。
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
-    --mount=type=bind,source=autonomous_bot.repos,target=/tmp/repos.yaml \
+    --mount=type=bind,source=daifuku_autonomous.repos,target=/tmp/repos.yaml \
     --mount=type=bind,source=src/daifuku_stack/package.xml,target=/tmp/stack/daifuku_stack/package.xml \
     source /opt/ros/${ROS_DISTRO}/setup.bash \
     && mkdir -p /tmp/vcs && cd /tmp/vcs \

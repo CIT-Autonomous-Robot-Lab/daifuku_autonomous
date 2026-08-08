@@ -72,7 +72,7 @@ fi
 
 WORKSPACE="$(cd -- "${WORKSPACE}" && pwd)"
 ROS_SETUP="/opt/ros/humble/setup.bash"
-REPOS_FILE="${WORKSPACE}/autonomous_bot.repos"
+REPOS_FILE="${WORKSPACE}/daifuku_autonomous.repos"
 
 if [[ ! -f "${ROS_SETUP}" ]]; then
   echo "ROS 2 Humble was not found: ${ROS_SETUP}" >&2
