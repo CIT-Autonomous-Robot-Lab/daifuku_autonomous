@@ -14,11 +14,12 @@
 
 """Hardware PWM through the kernel PWM subsystem (sysfs).
 
-The stepper drivers on the control board take a step clock, and rtmouse
-produces it by writing RNG/DAT on the SoC PWM block.  Both of the kernel
-drivers we go through instead -- pwm-bcm2835.c on a Pi 4 and pwm-rp1.c on a
-Pi 5 -- turn a period/duty pair into the same two register writes, so this
-module is model-independent; only the pwmchip that backs it differs.
+The control board takes a square wave and reads its frequency as a wheel speed
+command, closing its own loop around the encoders; rtmouse produces that wave
+by writing RNG/DAT on the SoC PWM block.  Both of the kernel drivers we go
+through instead -- pwm-bcm2835.c on a Pi 4 and pwm-rp1.c on a Pi 5 -- turn a
+period/duty pair into the same two register writes, so this module is
+model-independent; only the pwmchip that backs it differs.
 
 There is no character device for PWM, so sysfs is the only interface.  In a
 container that means /sys/class/pwm has to be mounted rw (see
@@ -66,9 +67,10 @@ def pwmchips():
 class StepClock:
     """One PWM channel at 50% duty.
 
-    A stepper's step clock, and -- where a channel is free for it -- the
-    buzzer's tone as well: both want a square wave at a frequency, and the
-    kernel makes no distinction.
+    A wheel speed command to the control board and -- where a channel is free
+    for it -- the buzzer's tone as well: both want a square wave at a
+    frequency, and the kernel makes no distinction.  The name is Raspberry Pi
+    Mouse inheritance; only there is this really a step clock.
     """
 
     # A freshly exported channel has period 0, and the kernel's PWM core
