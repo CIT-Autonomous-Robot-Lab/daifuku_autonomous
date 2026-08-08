@@ -112,7 +112,7 @@ sudo tail -f /var/log/daifuku-provision.log
 sudo reboot
 # 再ログイン後
 cd ~/daifuku_autonomous
-BUILD_JOBS=1 docker compose build
+docker compose build --build-arg BUILD_JOBS=1
 docker compose up -d
 ```
 

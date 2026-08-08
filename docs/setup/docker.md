@@ -60,11 +60,19 @@ docker compose ps
 1〜2時間、大半は価値反復プランナのRustのreleaseビルド）。2回目以降は変更のあった
 パッケージだけが建て直されます。成果物は名前付きボリュームに残ります。
 
-`BUILD_JOBS`はイメージのビルドと`up`のときの`colcon build`の両方に効きます
-（既定は4＝Pi 4の全コア）。メモリが不足してOOMで落ちるときだけ減らします。
+`BUILD_JOBS`が効くのは`up`のときの`colcon build`だけです（既定は4＝Pi 4の
+全コア）。メモリが不足してOOMで落ちるときだけ減らします。
 
 ```bash
 BUILD_JOBS=1 docker compose up -d
+```
+
+**イメージのビルドには効きません。**そちらを絞るときは`--build-arg`で明示します
+（環境変数を渡すだけで効いてしまうと、`up`を絞った瞬間にイメージのビルド
+キャッシュが全部外れて1〜2時間の焼き直しになるため）。
+
+```bash
+docker compose build --build-arg BUILD_JOBS=1
 ```
 
 PowerShellでは次のように指定します。

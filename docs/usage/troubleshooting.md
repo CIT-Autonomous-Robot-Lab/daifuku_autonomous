@@ -425,10 +425,11 @@ docker compose exec ros2 \
 
 ## Raspberry PiでDockerビルドが停止する
 
-メモリ不足の可能性があります。並列数を1にします。
+メモリ不足の可能性があります。並列数を1にします。**イメージのビルドには
+`--build-arg`が要ります**（環境変数の`BUILD_JOBS`は`up`のときのcolcon専用）。
 
 ```bash
-BUILD_JOBS=1 docker compose build
+docker compose build --build-arg BUILD_JOBS=1
 ```
 
 ## 価値反復の最初の経路計算が遅い
