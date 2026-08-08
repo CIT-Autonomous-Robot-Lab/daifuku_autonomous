@@ -95,9 +95,40 @@ check_odom_still() {
       exit !(d < 0.02 && (dy < 2 && dy > -2))
     }'
 }
-if confirm "機体は静止しているか (10 秒間そのままにする)"; then
+# ジャイロのバイアスが引けているかは、ログではなく値で見るのが確か。
+# **prepare_mid360_imu が通したあとの /imu/mid360 を見る** (生の /livox/imu には
+# バイアスが乗ったままなので、そちらを見ると常に落ちる)。この個体の生値は
+# z +0.013960 rad/s = +0.80 deg/s で、補正が効いていればその 1/10 以下に落ちる。
+# **1 発だけ取って判定しないこと。** 100Hz を超える MEMS の 1 サンプルは
+# それ自体が ±0.2 deg/s を軽く超えて散るので、健全な機体でも当たり外れで
+# WARN が出る。数秒ぶんを平均して初めて閾値が意味を持つ。
+check_gyro_bias() {
+  local vals
+  vals="$(ros_run 5 topic echo --field angular_velocity.z /imu/mid360 2>/dev/null |
+    grep -E '^-?[0-9]' | tr '\n' ' ')"
+  awk -v v="${vals}" '
+    BEGIN {
+      n = split(v, V, " ")
+      if (n < 20) { printf "/imu/mid360 を十分に読めない (%d 通)\n", n; exit 1 }
+      for (i = 1; i <= n; i++) s += V[i]
+      z = s / n * 180 / 3.14159265358979
+      printf "z 平均 %+.3f deg/s / %d 通 (無補正なら +0.80 前後)\n", z, n
+      exit !(z < 0.2 && z > -0.2)
+    }'
+}
+
+if confirm "機体は静止しているか (15 秒ほどそのままにする)"; then
+  if has_topic /imu/mid360; then
+    item_warn "静止時のジャイロにバイアスが残っていない" check_gyro_bias
+    on_fail && diagnose "ジャイロのバイアスが引けていない" \
+      "起動直後に機体が動いていたか|prepare_mid360_imu は起動後の静止区間から測る。動いていると測れないまま**補正なしで通り、ログに still moving が出るだけ**|機体を静止させたまま docker compose restart raspicat" \
+      "0.80 deg/s 前後そのままか|補正が 1 度も入っていない|prepare_mid360_imu が居るか (0301 のノード一覧) と、その起動ログを見る"
+  else
+    skip "静止時のジャイロ" "/imu/mid360 が無い (Mid-360 の構成ではない)"
+  fi
   item_warn "静止 10 秒で /odom が積算しない" check_odom_still
 else
+  skip "静止時のジャイロ" "静止を確認できない"
   skip "静止 10 秒で /odom が積算しない" "静止を確認できない"
 fi
 

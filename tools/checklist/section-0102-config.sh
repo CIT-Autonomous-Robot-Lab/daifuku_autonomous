@@ -159,6 +159,26 @@ else
   skip "ルートの .env" ".env が無い (.env.example から作る)"
 fi
 
+# ── compose の入口 ──────────────────────────────────────────────────────────
+# 入口 2 つは name: daifuku-autonomous をわざと揃えてある。違えるとドライバを
+# 替えた瞬間にビルドキャッシュの名前付きボリュームが別物になり、**1〜2 時間
+# かけて建て直しになる** (include: された側の name: は無視されるので、揃える
+# 必要があるのは入口の側)。
+check_compose_name() {
+  local f n names=()
+  for f in compose.rt.yaml compose.original.yaml; do
+    n="$(sed -n 's/^name:[[:space:]]*//p' "${ROOT}/docker/raspberrypi/${f}" 2>/dev/null | head -n 1)"
+    [[ -n "${n}" ]] || {
+      echo "${f} に name: が無い"
+      return 1
+    }
+    names+=("${n}")
+  done
+  echo "${names[*]}"
+  [[ "${names[0]}" == "${names[1]}" ]]
+}
+item "compose の入口 2 つで name: が揃っている" check_compose_name
+
 # ── 機種と設定の取り違え ────────────────────────────────────────────────────
 MODEL="$(pi_model)"
 if [[ -z "${MODEL}" ]]; then

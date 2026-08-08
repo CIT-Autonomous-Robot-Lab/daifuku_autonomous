@@ -102,4 +102,36 @@ check_disk() {
 }
 item_warn "ディスクの空きが 2GB 以上ある" check_disk
 
+# 価値反復は場を丸ごと匿名メモリに載せる (津田沼で 648MB、waypoint_prefetch:=true
+# ならその 2 倍)。足りないと **SIGKILL でノードだけが消える**が、ros2 launch は
+# 子が死んでも終了しないので**コンテナは running のまま**で、compose ps には
+# 何も出ない。
+check_memory() {
+  local kb mb
+  kb="$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo 2>/dev/null)"
+  [[ -n "${kb}" ]] || {
+    echo "/proc/meminfo を読めない"
+    return 0
+  }
+  mb=$((kb / 1024))
+  echo "${mb} MB 空き"
+  ((mb > 700))
+}
+item_warn "空きメモリが 700MB 以上ある" check_memory
+
+# 上の SIGKILL が残る唯一の場所がカーネルログ。読めないことのほうが多いので
+# WARN 止まりで、読めなければ黙って通す。
+check_no_oom_kill() {
+  local hit
+  hit="$( (dmesg 2>/dev/null || journalctl -k -b 2>/dev/null) |
+    grep -i 'killed process\|out of memory' | tail -n 2 | tr '\n' ' ')"
+  [[ -n "${hit}" ]] || {
+    echo "記録なし (または読めない)"
+    return 0
+  }
+  echo "${hit}"
+  return 1
+}
+item_warn "この起動で OOM killer が動いていない" check_no_oom_kill
+
 finish

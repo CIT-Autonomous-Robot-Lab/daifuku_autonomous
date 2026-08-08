@@ -428,7 +428,26 @@ tf_advancing() {
   awk -v a="${a}" -v b="${b}" 'BEGIN { exit !(b + 0 > a + 0) }'
 }
 
+# param_num ノード パラメータ — 数値のパラメータを 1 つ取る。取れなければ空。
+param_num() {
+  ros_run 10 param get "$1" "$2" 2>/dev/null | grep -o '[-0-9][0-9.e+-]*' | tail -n 1
+}
+
 # ── 静的検査で使う小物 ──────────────────────────────────────────────────────
+# 自前パッケージの場所。daifuku_config だけ src/ の下ではなく config/ に居る。
+OWN_PKGS=(
+  src/daifuku_bringup src/daifuku_stack src/daifuku_config_manager
+  src/daifuku_rqt src/daifuku_waypoint_manager src/raspicat_driver config
+)
+
+# /proc/net/snmp の Ip: / Udp: 行を「見出し 行」の組で読む。カウンタの位置は
+# カーネルの版で動くので、番号ではなく名前で引くこと。
+snmp_counter() { # snmp_counter Ip ReasmFails
+  awk -v sec="$1:" -v key="$2" '
+    $1 == sec { if (!seen) { for (i = 2; i <= NF; i++) k[i] = $i; seen = 1 }
+                else       { for (i = 2; i <= NF; i++) if (k[i] == key) print $i } }
+  ' /proc/net/snmp 2>/dev/null | head -n 1
+}
 # config/site の値 (params.read_site_file と同じ規則: 1 つめの空でない非コメント行)
 site_name() {
   sed -e 's/[[:space:]]*$//' "${ROOT}/config/site" 2>/dev/null |
