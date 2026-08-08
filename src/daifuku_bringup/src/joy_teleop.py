@@ -77,6 +77,22 @@ joy_buttons.py の TUNE_* にある。押しても効かなかったとき (巡�
 **鳴らし続ける**。旋律の途中でこのノードが落ちると鳴りっぱなしになるので、
 stop() で 0 を出しておく。
 
+## いまのモードは LED でも伝える
+
+音は**切り替わった瞬間しか**伝えない。2 秒前に鳴ったのを聞き逃せば、いま teleop が
+入っているのかは結局スティックを倒すまで分からない。そこで **/leds**
+(`raspimouse_msgs/Leds`、ドライバが購読する 4 灯) へ現在の状態を出す
+(led0=teleop 入、led1=モータ電源、led2=巡回中、led3=/joy 受信中)。音を消していない
+のは、機体を見ていない・見えない位置にいるときは音のほうが届くため。
+
+**変化時だけでなく 1 秒ごとにも出す。** ドライバは deactivate で LED を消すが
+activate で戻さないので、lifecycle を回すと次にボタンを押すまで消灯したままに
+なる (エラーは出ない)。~/enabled と同じ枝で出しているのはこのため。
+
+**led1 (モータ電源) は要求の写しであって実際の状態ではない。** ドライバは電源の
+状態を出さないので、下の `_motor_power` と同じものを映しているだけである
+(`control.sh motor` や RViz のパネルから変えられると 1 回ぶんずれる)。
+
 ## teleop 中は「出しっぱなし」にしてある
 
 **自律側を黙らせているのはゴールの取り消しであって、優先度ではない** (/cmd_vel の
@@ -126,6 +142,8 @@ from geometry_msgs.msg import Twist
 from nav2_msgs.action import FollowWaypoints
 
 from nav_msgs.msg import Path
+
+from raspimouse_msgs.msg import Leds
 
 import rclpy
 from rclpy.action import ActionClient
@@ -261,6 +279,7 @@ class JoyTeleop(Node):
         self.declare_parameter("cancel_window", 2.0)
         self.declare_parameter("start_enabled", False)
         self.declare_parameter("buzzer", True)
+        self.declare_parameter("leds", True)
         self.declare_parameter("motor_power_service", "motor_power")
         self.declare_parameter("motor_power_start_state", False)
         self.declare_parameter("waypoints_file", "")
@@ -306,6 +325,8 @@ class JoyTeleop(Node):
         self._cancel_until = 0.0
         self._cancel_at = 0.0
         self._state_at = 0.0
+        self._leds = None
+        self._leds_at = 0.0
         self._warned_stale = False
         self._goal_handle = None
         self._goal_pending = False
@@ -338,6 +359,12 @@ class JoyTeleop(Node):
         if bool(value("buzzer")):
             self._buzzer_pub = self.create_publisher(Int16, "buzzer", 10)
             self.create_timer(TUNE_PERIOD, self._tune_tick)
+
+        # LED も同じくドライバが購読する。こちらは旋律ではなく現在の状態なので、
+        # 変化時と 1 秒ごとの両方で出す (_publish_state と同じ枝)。
+        self._leds_pub = None
+        if bool(value("leds")):
+            self._leds_pub = self.create_publisher(Leds, "leds", 10)
 
         self._motor_service = value("motor_power_service")
         self._motor_client = self.create_client(SetBool, self._motor_service)
@@ -441,6 +468,11 @@ class JoyTeleop(Node):
         if now - self._state_at >= 1.0:
             self._publish_state()
 
+        # LED は _tick から出す。ここなら状態が変わった call site を数え上げずに
+        # 済み (20 Hz で見に来るので押してから 50 ms 以内に映る)、受信断かどうか
+        # (led3) を知っているのもここだけ。
+        self._publish_leds(fresh)
+
         # teleop を切ったあとは stop_tail を待たずに、**刻みがゼロに着くまで**
         # 出し続ける。stop_tail (1 秒) より減速に時間がかかる設定にされると、
         # 途中で黙った速度をドライバが保持したまま走り続けるため。
@@ -536,6 +568,36 @@ class JoyTeleop(Node):
         message.data = self._enabled
         self._state_pub.publish(message)
         self._state_at = time.monotonic()
+
+    def _publish_leds(self, fresh):
+        """いまのモードを 4 灯へ映す。変わったときと 1 秒ごとに出す。
+
+        1 秒ごとにも出すのは、ドライバが deactivate で LED を消す一方 activate で
+        戻さないため。変化時だけにすると lifecycle を回した先で消えたままになり、
+        **エラーは出ない**。
+
+        led1 は「モータ電源が入っている」ではなく「こちらがそう要求した」である
+        (下の _toggle_motor_power と同じ写し)。
+        """
+        if self._leds_pub is None:
+            return
+        # ponytail: led1 はドライバの状態ではなく要求の写し。`control.sh motor` や RViz の
+        # パネルから変えられると 1 回ぶんずれる。直すならドライバに状態を出させるところ
+        # からだが、公式実装 (既定の driver:=raspimouse) にその口が無い。
+        state = (
+            self._enabled,                                          # teleop 入
+            self._motor_power,                                      # モータ電源 (要求の写し)
+            self._goal_pending or self._goal_handle is not None,    # 巡回中
+            fresh,                                                  # /joy が来ている
+        )
+        now = time.monotonic()
+        if state == self._leds and now - self._leds_at < 1.0:
+            return
+        self._leds = state
+        self._leds_at = now
+        self._leds_pub.publish(
+            Leds(led0=state[0], led1=state[1], led2=state[2], led3=state[3])
+        )
 
     # ── モータ電源 ──────────────────────────────────────────────────────
 
@@ -735,11 +797,18 @@ class JoyTeleop(Node):
         ドライバは最後に受けた速度を cmd_vel_timeout (既定 60 秒) のあいだ保持
         するので、走っている状態でノードだけ落ちると走り続ける。ブザーのほうは
         timeout が**無い**ので、旋律の途中で落ちると誰かが 0 を出すまで鳴り続ける。
+        LED も同じで、消さずに落ちると**最後のモードを主張したまま点きっぱなしに
+        なる** (音が鳴り止むのと違い、点いた LED は状態の断定として読まれる)。
         """
         try:
             self._cmd_pub.publish(Twist())
         except Exception:  # noqa: BLE001 - 落ちる途中なので何が来ても握る
             pass
+        if self._leds_pub is not None:
+            try:
+                self._leds_pub.publish(Leds())
+            except Exception:  # noqa: BLE001 - 同上
+                pass
         if self._buzzer_pub is None:
             return
         self._tune.stop()
