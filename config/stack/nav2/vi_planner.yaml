@@ -62,6 +62,7 @@ vi_planner:
     # ~30µs / mppi ~0.2ms (どちらも上の refine_budget_ms 40ms に対して誤差)。
     # **この機体では未検証** — 上の action_forward_m を 0.5 へ上げてあるぶん 1 手が長く、
     # 連続に読むと旋回半径 1.43m の制約から外れた指令が出る側なので、試すなら実機で。
+    # **同梱の overrides で dwa にしてあるのは map_19f だけ** (津田沼は既定の greedy)。
     # follow_controller: "greedy"   # greedy (既定) / dwa / mppi
     # dwa_horizon_s: 1.0          # dwa・mppi の前方シミュレーション時間 [s]
     # dwa_n_v: 7                  # dwa の並進候補数 (計算量 ∝ n_v x n_w x horizon)
