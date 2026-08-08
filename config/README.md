@@ -225,8 +225,8 @@ ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=nav2
 
 何も重ねないときは `overrides:=none` です。`ros2 launch` は値が空の
 `overrides:=` を malformed として弾くので、空文字ではなく `none` を使います。
-**`none` は場所を名乗らないので、`map:=` と対で渡してください**（対応する override を
-持たない `maps/turtlebot3.yaml` などを使うとき）。`site: map:` の無い overrides を
+**`none` は場所を名乗らないので、`map:=` と対で渡してください**（作ったばかりで
+まだ override の無い地図を試すとき）。`site: map:` の無い overrides を
 重ねたときも同じです。どちらも**既定の地図へ落とさず起動時にエラーで止めます** —
 別の場所にいるのに 19F の地図で自己位置を推定し始めるほうが危ないためです。
 

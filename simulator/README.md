@@ -49,7 +49,7 @@ nav2 側の構成・制約・キャリブレーションはそのまま引き継
 
 | ファイル | 状態 |
 |---|---|
-| `src/daifuku_sim/map_to_usd.py` | **実測検証済み**。`map_19f` / `turtlebot3` / `map_tsudanuma` で生成し、出力 USD の Wall プリムを地図グリッドに焼き直して元の占有と**完全一致** (欠落0・余剰0) を確認。検算は `tests/verify_usda.py` (手元で再実行できる) |
+| `src/daifuku_sim/map_to_usd.py` | **実測検証済み**。`map_19f` / `map_tsudanuma` で生成し、出力 USD の Wall プリムを地図グリッドに焼き直して元の占有と**完全一致** (欠落0・余剰0) を確認。検算は `tests/verify_usda.py` (手元で再実行できる) |
 | `src/daifuku_sim/rtf_gate.py` | **実測検証済み**。合成 RTF ログで PASS / FAIL(3) / WARN の分岐を確認 |
 | `pyproject.toml` / `uv.lock` | **実測検証済み**。`uv lock` / `uv sync` / `uv run map-to-usd` / `uv run rtf-gate` の成功を確認 |
 | extra `isaac` (pip 版 Isaac Sim 6.0.1) | **解決のみ検証済み**。`uv lock` が 166 パッケージで解決し、`uv sync --extra isaac --dry-run` が `isaacsim-*` 22 個を含む 144 個を入れると出すことを確認。lock には linux (x86_64 / aarch64) と win_amd64 の wheel が入っている。**実際にインストールして起動したことは無い** (GPU 必須) |
@@ -244,7 +244,6 @@ uv run --project simulator map-to-usd \
 
 | 地図 | セル | 占有セル | 矩形 | USD |
 |---|---|---|---|---|
-| `turtlebot3` | 112×103 | 765 | 209 | 104 KiB |
 | `map_19f` | 915×577 | 9,146 | 3,373 | 1.6 MiB |
 | `map_tsudanuma` | 5888×4000 | 176,107 | 67,939 | **上限超過** |
 
