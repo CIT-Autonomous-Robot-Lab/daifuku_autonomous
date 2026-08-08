@@ -1,5 +1,7 @@
 # daifuku_autonomous
 
+[![CI](https://github.com/CIT-Autonomous-Robot-Lab/daifuku_autonomous/actions/workflows/ci.yml/badge.svg)](https://github.com/CIT-Autonomous-Robot-Lab/daifuku_autonomous/actions/workflows/ci.yml)
+
 [Raspberry Pi Cat](https://rt-net.jp/products/raspicat)をROS 2 Navigation2で自律移動させるためのワークスペースです。
 
 - 2D LiDARまたはLivox Mid-360に対応
