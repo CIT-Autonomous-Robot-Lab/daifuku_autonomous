@@ -1,0 +1,160 @@
+# 建てないし走らせない。見るのは「読めるか・綴りが合っているか・実行ビットが
+# 付いているか」まで。colcon build を回さないのは、要るものが Livox-SDK2 の
+# ソースビルドと raspicat2 のワークスペースと ros2_rust で全部上流側にあり、かつ
+# 自前 6 パッケージは --symlink-install なので建て直さなくても値が効くため
+# (CLAUDE.md のビルド表)。C++ / Rust のコンパイルはここでは守られない。
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # colcon test で走るのと同じ lint を、ワークスペースを建てずに CLI で掛ける。
+  # 対象は自前 6 パッケージだけを名指しする — src/ をまとめて渡すと、CI の
+  # チェックアウトには居ない vcs import の分まで見に行くことになる。この一覧は
+  # 手で保つので package.xml / CMakeLists.txt の test_depend とは乖離し得る。
+  lint:
+    runs-on: ubuntu-latest
+    container: ros:humble-ros-base
+    env:
+      PKGS_ALL: src/daifuku_bringup src/daifuku_stack src/daifuku_config_manager src/daifuku_rqt src/daifuku_waypoint_manager src/raspicat_driver
+      PKGS_PY: src/daifuku_bringup src/daifuku_stack src/daifuku_config_manager src/daifuku_rqt src/raspicat_driver
+      PKGS_CMAKE: src/daifuku_bringup src/daifuku_stack src/daifuku_waypoint_manager
+    steps:
+      - uses: actions/checkout@v4
+      - name: linter を入れる
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ros-humble-ament-copyright \
+            ros-humble-ament-flake8 \
+            ros-humble-ament-lint-cmake \
+            ros-humble-ament-xmllint
+      # container の step は entrypoint を通らないので、自分で source する。
+      # ament_xmllint だけは package.xml のスキーマを download.ros.org から
+      # 毎回引くので、ここが赤いときは repo ではなく向こうが落ちていることがある。
+      - name: lint
+        run: |
+          . /opt/ros/humble/setup.sh
+          ament_copyright $PKGS_ALL
+          ament_flake8 $PKGS_PY
+          ament_lint_cmake $PKGS_CMAKE
+          ament_xmllint $PKGS_CMAKE
+
+  # 実機で「yaml の綴り違い 1 つで機体が上がり直し続ける」のを止める関門
+  # (params.precheck) を、置いてある overrides 全部に掛ける。install が要らない
+  # のは、precheck が ament の索引を引くのが overrides_dir() だけだから。
+  config:
+    runs-on: ubuntu-latest
+    container: ros:humble-ros-base
+    steps:
+      - uses: actions/checkout@v4
+      - name: overrides を立てずに確かめる
+        run: |
+          . /opt/ros/humble/setup.sh
+          python3 - <<'PY'
+          import os
+          import sys
+
+          sys.path.insert(0, "src/daifuku_config_manager/src")
+          sys.path.insert(0, "src/daifuku_stack/launch")
+
+          from daifuku_config_manager import params
+
+          # share ではなくソースの overrides/ を見る (ここだけが ament 索引)。
+          params.overrides_dir = lambda: "src/daifuku_config_manager/config/overrides"
+
+          ROOTS = {
+              "daifuku_bringup": "src/daifuku_bringup/config",
+              "daifuku_stack": "src/daifuku_stack/config",
+          }
+          MAPS = "src/daifuku_stack/maps"
+
+          bad = []
+          sites = params.available_overrides()
+          if not sites:
+              bad.append("overrides/ が空に見える (パスを間違えている)")
+          for site in sites:
+              for package, root in ROOTS.items():
+                  ok, why = params.precheck(site, package, root)
+                  print(f"{'ok  ' if ok else 'NG  '} {site} x {package} {why}")
+                  if not ok:
+                      bad.append(f"{site} x {package}: {why}")
+              # site: map: が指す地図の実在。無いと navigation が起動時に落ちる。
+              declared = str((params.load(params.overrides_path(site)).get("site")
+                              or {}).get("map") or "").strip()
+              if declared and not os.path.isfile(os.path.join(MAPS, declared)):
+                  bad.append(f"{site}: site: map: {declared} が {MAPS}/ に無い")
+
+          # 断片の重複 (同じノード名が config/nav2 の 2 ファイルに居ると起動時に
+          # 止まる)。launch を立てずに呼ぶため context は空のものを作る。
+          from launch import LaunchContext
+
+          from daifuku_stack_launch import nav2_params
+
+          context = LaunchContext()
+          context.launch_configurations["params_dir"] = "src/daifuku_stack/config/nav2"
+          context.launch_configurations["params_file"] = ""
+          try:
+              _, _, origin, _ = nav2_params.fragments_resolver(context)
+              print(f"ok   fragments: {origin}")
+          except RuntimeError as err:
+              bad.append(str(err))
+
+          if bad:
+              print("\n".join(bad), file=sys.stderr)
+              sys.exit(1)
+          PY
+
+  # launch が executable="*.py" で立てるものは git 側で 100755 が要る。Windows の
+  # チェックアウトは core.fileMode=false で chmod が記録されないので、抜けると
+  # Linux の実機で初めて Permission denied になる (import されるだけの
+  # joy_buttons.py は対象外 — launch が名指ししていないので拾わない)。
+  exec-bit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 実行ビット
+        run: |
+          bad=0
+          for name in $(grep -rhoP 'executable="\K[\w]+\.py' src/*/launch | sort -u); do
+            mode=$(git ls-files -s -- "src/*/src/$name" | awk '{print $1}')
+            case "$mode" in
+              100755) echo "ok   $name" ;;
+              "")     echo "NG   $name: src/*/src/ に見つからない"; bad=1 ;;
+              *)      echo "NG   $name: $mode (git update-index --chmod=+x で直す)"; bad=1 ;;
+            esac
+          done
+          exit $bad
+
+  # map_to_usd の出力検算。repo で唯一単体で回せる検査 (Isaac は入らない)。
+  simulator:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: simulator
+    steps:
+      - uses: actions/checkout@v4
+      # setup-uv アクションは使わない。移動する major タグが v7 で止まっていて
+      # (v8 / v9 は x.y.z しか無い)、追うたびに版を書き換えることになるため。
+      - name: uv を入れる
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      # --frozen: uv.lock が古いなら黙って解き直さずに落とす。
+      - run: uv sync --frozen
+      - name: map_19f を USD にして焼き戻す
+        run: |
+          uv run map-to-usd ../src/daifuku_stack/maps/map_19f.yaml -o "$RUNNER_TEMP/world.usda"
+          uv run python tests/verify_usda.py \
+            ../src/daifuku_stack/maps/map_19f.yaml "$RUNNER_TEMP/world.usda" free
