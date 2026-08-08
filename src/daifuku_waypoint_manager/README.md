@@ -163,11 +163,14 @@ latch して出す。**これは他ノードが読むためのもの**で、い�
 では `follow_waypoints` を `vi_planner` 自身が受けるので、順路はゴールと同じ経路で
 そのまま届く（このトピックはもう 1 つの入口として残っているだけ）。
 
-`vi_planner` 側はトピック名が `waypoints`、`waypoint_prefetch` は
-`config/stack/nav2/vi_planner.yaml`・ノードの宣言ともに **`false`** である
-（2026-08-04 に一度 `true` へ反転したが、同日の実機で走行中の固まりが出たため容疑者の
-1 つとして戻した）。先読みを試すときにこのパネルが出す順路が要るので、ここを直すと
-`planner:=vi` + `nav2:=true` の挙動が変わる。代償（メモリ 2 倍）は上の yaml 側に書いてある。
+`vi_planner` 側はトピック名が `waypoints`。`waypoint_prefetch` は
+`config/stack/nav2/vi_planner.yaml`・ノードの宣言ともに `false` だが、
+**既定の場所である `map_19f` の overrides が `true` へ上書きしている**ので、引数を何も
+足さずに立てれば先読みは入っている（`map_tsudanuma` は 2026-08-07 に `true` にしたあと
+2026-08-08 に `false` へ戻した。走行中の固まりの切り分けで、2026-08-04 に断片で反転した
+ときも同じ症状が出ている）。先読みを試すときにこのパネルが出す順路が要るので、ここを
+直すと `planner:=vi` + `nav2:=true` の挙動が変わる。代償（メモリ 2 倍）は上の yaml 側に
+書いてある。
 
 同じものを `daifuku_bringup/src/joy_teleop.py`（START+BACK での巡回開始）も出す。
 **実機のイメージにこのパネルは入らない**ので、機体だけで走らせるときはあちらが

@@ -47,7 +47,7 @@
   <exec_depend>urg_node</exec_depend>
 
   <!-- ament_lint_common (詰め合わせ) は使わず、走らせるものだけを名指しする。
-       外してあるのは pep257 と C++ の書式 lint で、理由は CLAUDE.md。 -->
+       外してあるのは pep257 と C++ の書式 lint で、理由は AGENTS.md。 -->
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_cmake_copyright</test_depend>
   <test_depend>ament_cmake_flake8</test_depend>

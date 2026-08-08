@@ -107,7 +107,7 @@ resample_interval: 1         # 既定 1: 何回の更新ごとにリサンプル
 そのパスは起動ログに出ます。
 
 ```
-[INFO] [launch.user]: params: params_file: 8 fragments from .../config/nav2 -> /tmp/params_file_xxxx.yaml
+[INFO] [launch.user]: params: params_file: 8 fragments from .../daifuku_config/stack/nav2 -> /tmp/params_file_xxxx.yaml
 ```
 
 分割は「ノード単位で重複なし」が前提です。同じノード名が 2 つの断片にあると、
@@ -189,7 +189,7 @@ override も**通ります**（そして黙って無視されます）。
 `ros__parameters` も無い）ので、この仕組みに乗りません。`mid360_config:=<パス>` で
 ファイルごと差し替えてください。
 
-`overrides` の既定値は **`daifuku_config_manager` の `config/site` の 1 行**（既定
+`overrides` の既定値は **`config/site` の 1 行**（既定
 `map_19f`）で、すべての launch が同じものを見ます。さらに `navigation.launch.py` は
 `map` の既定もそこから導きます。場所が変われば LiDAR の帯も EMCL2 の調整も地図も
 一緒に変わるので、**人が動かす値を 1 つにしてある**という趣旨です。
@@ -239,8 +239,9 @@ ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=nav2
 `simulator/container/nav_container.sh` と `simulator/container/run_case.sh` は、
 `MAP_NAME` と同名の override があればそれを、無ければ `none` を**必ず明示的に**
 渡します（`OVERRIDES=` で上書き可）。既定任せにすると同じ取り違えが起きるためです。
-**参照先は `daifuku_config_manager` の share** で、`maps/` を持つ `daifuku_stack` とは
-置き場が違います（2026-08-07 まで後者を見ていて、どの地図でも `none` に落ちていました）。
+**参照先は `daifuku_config` の share** で、`maps/` を持つ `daifuku_stack` とは
+置き場が違います（2026-08-08 まで後者の `config/overrides/` を見ていました。設定を
+`config/` へ出したときにそこは消えているので、**どの地図でも `none` に落ちていました**）。
 
 ### 何がどこへ行ったかを見る
 
@@ -248,7 +249,7 @@ ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=nav2
 `(+ ...)` が「どの override のどの節を重ねたか」です。
 
 ```
-[INFO] [launch.user]: params: params_file: 8 fragments from .../config/nav2 -> /tmp/params_file_xxxx.yaml (+ overrides:map_19f -> vi_planner, vi_global_planner)
+[INFO] [launch.user]: params: params_file: 8 fragments from .../daifuku_config/stack/nav2 -> /tmp/params_file_xxxx.yaml (+ overrides:map_19f -> vi_planner, vi_global_planner)
 [INFO] [launch.user]: params: emcl2_params_file: .../config/stack/localization/emcl2.yaml -> /tmp/emcl2_params_file_xxxx.yaml (+ overrides:map_19f -> emcl2)
 ```
 
@@ -284,8 +285,8 @@ daifuku_stack:              # 自律移動側
           inflation_radius: 0.45
 ```
 
-**ファイルを新しく足したときは 1 度ビルドを通してください。** `setup.py` の `glob` は
-ビルド時にしか展開されないので、足しただけでは `overrides:=` の一覧に出てきません
+**ファイルを新しく足したときは 1 度ビルドを通してください。** `install/` の symlink は
+ビルド時にしか張られないので、足しただけでは `overrides:=` の一覧に出てきません
 （既にあるファイルの値を直すだけならビルドは要りません）。
 
 間違えると起動時にエラーで止まります。**パッケージ名**が `KNOWN_PACKAGES`

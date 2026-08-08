@@ -376,12 +376,12 @@ RVizのFixed Frameとwaypointの`frame_id`が一致している必要があり�
 `config/stack/nav2/vi_planner.yaml`の`waypoint_prefetch`を`true`にすると、いまの点へ
 走っているあいだに次の点を別スレッドで解いておき、着いたらsolveを飛ばして受け取ります。
 
-**同梱の2地図はどちらも`true`です。** 断片（`config/stack/nav2/vi_planner.yaml`）のほうは
-`false`のままで、`overrides/map_19f.yaml`と`overrides/map_tsudanuma.yaml`が上書き
-しています（津田沼は2026-08-07から。solveが87秒と長いぶん消える待ちも大きく、
-そのかわり場が1.3 GBになります）。2026-08-04に一度**断片**で`true`へ反転しましたが、
-同日の実機で走行中の固まりが出たため容疑者の1つとして戻した経緯があります
-（切り分けは未了）。効いた回はログに出ます。
+**いま`true`なのは`map_19f`だけです。** 断片（`config/stack/nav2/vi_planner.yaml`）は
+`false`で、それを上書きしているのは`overrides/map_19f.yaml`だけです。津田沼は
+2026-08-07に`true`にしたあと、**2026-08-08に`false`へ戻しました**——走行中の固まりの
+容疑者を切り分けるためで、あちらは場が648 MB×2＝1.3 GBになります。2026-08-04にも一度
+**断片**で`true`へ反転して同日の実機で固まりが出たため、容疑者の1つとして戻した経緯が
+あります（切り分けは未了）。効いた回はログに出ます。
 
 ```
 vi_planner: prefetched the value function for (12.30, -4.50) in 31.20s
@@ -397,12 +397,12 @@ vi_planner: path with 412 poses in 0.34s (solved_now=true, iters=0, prefetched)
 有効なぶん代償も常時払います。価値関数が同時に2つ生きるので、場も2つ要ります。
 密ソルバではメモリがそのまま2倍です。compactでsinkがディスクへ出るのは
 `compact_sink_dir`を指定したときと`compact_ram_limit_mb`を超えたときだけで、
-**同梱の2地図はいまどちらも出ません**。したがって2つとも丸ごとRAMに載ります
-（津田沼648 MB×2＝1.3 GB、19F 95 MB×2）。津田沼を巡回するなら、その1.3 GBが
-匿名メモリとして居座ることになります。solveのCPUも取られます（追従の`try_lock`は
-邪魔しませんが、10Hzの制御周期がずれ得ます）。**Pi 4（4 GB）で走らせるなら、使う
-地図の`overrides`（`map_19f.yaml` / `map_tsudanuma.yaml`）の`waypoint_prefetch`を
-`false`へ戻してください**（Pi 5の8 GBを前提にしている点は`dense_limit_mb`・
+**同梱の2地図はいまどちらも出ません**。したがって場は丸ごとRAMに載ります——19Fが
+95 MB×2、津田沼は`true`へ戻せば648 MB×2＝1.3 GBが匿名メモリとして居座ります。
+solveのCPUも取られます（追従の`try_lock`は邪魔しませんが、10Hzの制御周期がずれ得ます）。
+**Pi 4（4 GB）で走らせるなら`overrides/map_19f.yaml`の`waypoint_prefetch`を`false`へ
+戻してください**——既定の場所が`map_19f`なので、引数を何も足さずに立てるとPi 4でも
+これが効きます（Pi 5の8 GBを前提にしている点は`dense_limit_mb`・
 `compact_ram_limit_mb`と同じ事情です）。
 走行中に固まるようになったときも、まずここを戻して切り分けます。
 **まだ実機でもpi4_simでも通していません。**

@@ -20,6 +20,17 @@ ros2 topic hz /imu/mid360
 ros2 topic hz /wheel/odom
 ```
 
+一通り順番に確かめるなら`tools/checklist/`を使います。段階順（静的検査から
+ナビゲーションまで）に並んでいて、機体が動く項は必ず事前に確認を求めます。
+
+```bash
+tools/checklist/checkall.sh --list          # 何が走るかだけ見る
+tools/checklist/checkall.sh                 # 機体は動かさない範囲を全部
+tools/checklist/checkall.sh --only 0401     # LiDARだけ
+```
+
+`--armed`（機体が動く項も走らせる）を含む使いかたは`checkall.sh`の冒頭にあります。
+
 ## Dockerでコマンドを実行する
 
 ```bash
@@ -118,8 +129,10 @@ TELEOP_LINEAR_SPEED=0.1 bash docker/raspberrypi/tools/control.sh teleop keyboard
 
 同じことは**ゲームパッドのBACKを2秒長押しして離す**操作でもできます
 （[ゲームパッドで操作する](joystick.md#backでモータ電源を切る)）。端末に戻れない場所で
-止めたいときはそちら。ただし`joy_teleop`は電源の状態を自分の要求からしか数えていないので、
-`control.sh`と混ぜて使うと入/切が1回ぶんずれます。
+止めたいときはそちら。標準の自前実装（`driver:=original`）は電源の実状態を
+`/motor_power_state`へ出すので、`control.sh`と混ぜても`joy_teleop`が追随します。
+**公式実装（`driver:=raspimouse`）はこれを出さない**ので、そのときだけ`joy_teleop`は
+自分が投げた要求を数えることになり、外から変えると入/切が1回ぶんずれます。
 
 `teleop joystick`は`teleop_twist_joy`のlaunchを別に立てるもので、自前の`joy_node`を
 持ちます。`robot_bringup.launch.py`の`joy:=true`（既定）と重ねると`joy_node`が2つ、
@@ -137,9 +150,9 @@ TELEOP_LINEAR_SPEED=0.1 bash docker/raspberrypi/tools/control.sh teleop keyboard
 |---|---|
 | `src/daifuku_stack`配下のlaunch、behavior_trees、maps、rviz、src | 何もしない。`--symlink-install`なのでノードを再起動するだけで反映される |
 | `config/stack/`の**値**（`nav2/`・`localization/`・`mapping/`・`lifecycle_bond.yaml`） | 同じく再ビルドは不要。ただし**走らせたまま直すと`config_sentinel`がそのlaunchを終了します**（下） |
-| `config/bringup/`（LiDAR・EKF・ドライバ）と`src/daifuku_config_manager`の`overrides/`の**値** | 再ビルドは不要だが、読むのは常駐している`raspicat`サービスなので立て直しが要る。**`config_sentinel`が変化に気づいて自分で上がり直します**（機体が止まっていて、その設定でも立つときだけ。`config_watch:=warn`で止められる）。コメントだけの変更には反応しません |
+| `config/bringup/`（LiDAR・EKF・ドライバ）と`config/overrides/`の**値** | 再ビルドは不要だが、読むのは常駐している`raspicat`サービスなので立て直しが要る。**`config_sentinel`が変化に気づいて自分で上がり直します**（機体が止まっていて、その設定でも立つときだけ。`config_watch:=warn`で止められる）。コメントだけの変更には反応しません |
 | `src/daifuku_bringup`配下のlaunchと`src/`のPython | 再ビルドは不要だが、**`config_sentinel`は気づきません**（見張っているのは`config/`の`*.yaml`だけ）。`docker compose up -d`で自分で立て直す |
-| `config/overrides/`に**ファイルを新しく足した** | 一度ビルドを通す（`setup.py`の`glob`はビルド時にしか展開されない）。そのあと`docker compose up -d` |
+| `config/overrides/`に**ファイルを新しく足した** | 一度ビルドを通す（`install/`のsymlinkはビルド時にしか張られないので、足しただけでは`overrides:=`の一覧に出てこない）。そのあと`docker compose up -d` |
 | `config/site`（走らせる場所） | **`tools/site.sh <名前>`**。書き換えと`raspicat`の立て直しを両方やる（下） |
 | `src/raspicat_driver`のPython | 何もしない。ただし`setup.py`の`entry_points`を増やしたときはビルドが要る |
 | C++やRustのコード、`CMakeLists.txt`、外部パッケージのソース | `docker compose up`で差分ビルドする |

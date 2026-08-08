@@ -244,7 +244,7 @@ def declare_args():
             # map:= がこの値に追随する (nav2_params.resolve_map) ので、ここだけ
             # 渡せばよい。既定を変えるのは tools/site.sh。
             default_value=DEFAULT_OVERRIDES,
-            description=f"daifuku_config_manager の overrides/<名前>.yaml を重ねる "
+            description=f"daifuku_config の overrides/<名前>.yaml を重ねる "
                         f"({available})。カンマ区切りで複数可。行き先はパッケージ名と"
                         "ノード名で決まるので、この launch が読まない設定ファイル宛の"
                         "節は何も起きない。"
