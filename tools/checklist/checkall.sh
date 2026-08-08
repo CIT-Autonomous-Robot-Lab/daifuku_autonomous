@@ -15,7 +15,7 @@
 # (静的で安全なものが先、機体が動くものが最後)。項を足すときは bb を、
 # 段を足すときは aa を増やす。
 #
-#   01 静的検査   02 コンテナ   03 ROS グラフ   04 LiDAR   05 IMU/EKF
+#   01 静的検査   02 インフラ   03 ROS グラフ   04 LiDAR   05 IMU/EKF
 #   06 モータドライバ   07 車輪 (動く)   08 オドメトリ (動く)
 #   09 自己位置   10 ナビゲーション
 #
@@ -95,6 +95,20 @@ done
 if ((${#sections[@]} == 0)); then
   echo "走らせる section がありません。" >&2
   exit 2
+fi
+
+# --only 0401,0510 のような綴り違いは、**片方だけが走って全部走ったように見える**。
+# 番号を足したあとの打ち間違いが一番危ないので、ここで止める。
+if [[ -n "${ONLY}" ]]; then
+  missing=()
+  for id in ${ONLY//,/ }; do
+    compgen -G "${DIR}/section-${id}-*.sh" >/dev/null || missing+=("${id}")
+  done
+  if ((${#missing[@]} > 0)); then
+    echo "--only にその番号の section がありません: ${missing[*]}" >&2
+    echo "--list で一覧を見てください。" >&2
+    exit 2
+  fi
 fi
 
 if [[ -n "${LIST}" ]]; then

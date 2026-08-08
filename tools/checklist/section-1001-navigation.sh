@@ -56,6 +56,31 @@ if has_node /bt_navigator; then
   item "/global_costmap/costmap が出ている" has_topic /global_costmap/costmap
   item "/local_costmap/costmap が出ている" has_topic /local_costmap/costmap
 
+  # **居るだけでは足りない。** 止まったコストマップも latch されたままなので
+  # has_topic は通る。周期はノード自身の publish_frequency と突き合わせる
+  # (0.0 = 更新時のみ、という設定もありうるので、そのときは測らない)。
+  check_costmap_hz() { # check_costmap_hz local | global
+    local node f
+    # ノード名は決め打ちにしない (planner:=vi では素の Nav2 と顔ぶれが違う)。
+    node="$(grep -E "/$1_costmap/[a-z_]*costmap\$" <<<"${ROS_NODES}" | head -n 1)"
+    [[ -n "${node}" ]] || {
+      echo "$1_costmap のノードが居ない"
+      return 0
+    }
+    f="$(param_num "${node}" publish_frequency)"
+    [[ -n "${f}" ]] || {
+      echo "${node} の publish_frequency を読めない"
+      return 1
+    }
+    awk -v f="${f}" 'BEGIN { exit !(f + 0 > 0) }' || {
+      echo "publish_frequency=${f} (更新時のみ出す設定なので測らない)"
+      return 0
+    }
+    hz_at_least "/$1_costmap/costmap" "$(awk -v f="${f}" 'BEGIN { printf "%.2f", f * 0.5 }')" 10
+  }
+  item_warn "/local_costmap/costmap が publish_frequency 相当で出ている" check_costmap_hz local
+  item_warn "/global_costmap/costmap が publish_frequency 相当で出ている" check_costmap_hz global
+
   # RViz の Navigation 2 パネルの Reset を押すと、停止が逆順なので
   # velocity_smoother が先に落ち、waypoint_follower の停止で固まって
   # behavior_server だけが active で残る (回転だけが止まらなくなる)。

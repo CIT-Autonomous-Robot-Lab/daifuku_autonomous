@@ -89,10 +89,6 @@ else
 fi
 
 # ── 帯 (仰角フィルタと切り出しは組で決まる) ─────────────────────────────────
-param_num() {
-  ros_run 10 param get "$1" "$2" 2>/dev/null | grep -o '[-0-9][0-9.e+-]*' | tail -n 1
-}
-
 if has_node /elevation_filter; then
   # 仰角フィルタは pointcloud_to_laserscan の手前に入り、切り出しの下限を
   # lidar_z + 距離 x tan(min_elevation_deg) へ変える。下限が距離とともに上がるので、
