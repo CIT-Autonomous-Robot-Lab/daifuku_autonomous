@@ -105,16 +105,17 @@ map_scale = os.environ.get("VI_MAP_SCALE", "")
 sink_dir = os.environ.get("VI_COMPACT_SINK_DIR", "")
 bt_timeout = os.environ.get("BT_SERVER_TIMEOUT", "")
 
-for node in ("vi_planner", "vi_global_planner"):
-    if solver:
-        put(node, "solver", solver)
-    if pub_vf:
-        put(node, "publish_value_function", pub_vf.lower() == "true")
-# map_scale / compact_sink_dir は vi_global_planner だけが持つ。
+# 2026-08-08 の上流の整理で vi_global_planner ノードは消え、広域だけ VI
+# (local_planner:=nav2) も同じ vi_planner を follow: false で立てるようになった。
+# 宛先が 1 つになったので、ここも 1 つだけに書く。
+if solver:
+    put("vi_planner", "solver", solver)
+if pub_vf:
+    put("vi_planner", "publish_value_function", pub_vf.lower() == "true")
 if map_scale:
-    put("vi_global_planner", "map_scale", int(map_scale))
+    put("vi_planner", "map_scale", int(map_scale))
 if sink_dir:
-    put("vi_global_planner", "compact_sink_dir", sink_dir)
+    put("vi_planner", "compact_sink_dir", sink_dir)
 if bt_timeout:
     # bt_navigator の BtActionNode がゴール受理 ack を待つ時間 [ms]。
     # nav2 既定は 20ms で、CPU 飢餓時はこれを超えて全アクションが即失敗する。

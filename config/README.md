@@ -125,7 +125,7 @@ resample_interval: 1         # 既定 1: 何回の更新ごとにリサンプル
 | `nav2/costmaps.yaml` | `local_costmap`, `global_costmap` |
 | `nav2/map_server.yaml` | `map_server`, `map_saver` |
 | `nav2/planner_server.yaml` | `planner_server`（navfn） |
-| `nav2/vi_planner.yaml` | `vi_planner`, `vi_global_planner` |
+| `nav2/vi_planner.yaml` | `vi_planner` |
 
 `amcl` が `localization/` ではなく `nav2/` にあるのは、nav2 の
 `localization_launch.py` が `params_file` の中から読むためです。
@@ -138,7 +138,7 @@ resample_interval: 1         # 既定 1: 何回の更新ごとにリサンプル
 
 | 断片 | `nav2:=false` |
 | --- | --- |
-| `vi_planner.yaml` | 効く（`vi_planner` の節だけ。`vi_global_planner` は立たない） |
+| `vi_planner.yaml` | 効く |
 | `map_server.yaml` | 効く（自己位置側なので構成によらない） |
 | `behaviors.yaml` | `velocity_smoother` の節だけ効く。残り 3 ノードは立たない |
 | `amcl.yaml` | `localization:=amcl` のときだけ |
@@ -249,7 +249,7 @@ ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=nav2
 `(+ ...)` が「どの override のどの節を重ねたか」です。
 
 ```
-[INFO] [launch.user]: params: params_file: 8 fragments from .../daifuku_config/stack/nav2 -> /tmp/params_file_xxxx.yaml (+ overrides:map_19f -> vi_planner, vi_global_planner)
+[INFO] [launch.user]: params: params_file: 8 fragments from .../daifuku_config/stack/nav2 -> /tmp/params_file_xxxx.yaml (+ overrides:map_19f -> vi_planner)
 [INFO] [launch.user]: params: emcl2_params_file: .../config/stack/localization/emcl2.yaml -> /tmp/emcl2_params_file_xxxx.yaml (+ overrides:map_19f -> emcl2)
 ```
 
@@ -270,7 +270,7 @@ daifuku_bringup:            # 機体側。変えたら docker compose up -d
       min_elevation_deg: 5.0
 
 daifuku_stack:              # 自律移動側
-  vi_global_planner:        # -> nav2/vi_planner.yaml (params_file の合成結果)
+  vi_planner:               # -> nav2/vi_planner.yaml (params_file の合成結果)
     ros__parameters:
       safety_radius_penalty: 1
 
@@ -522,7 +522,7 @@ Pi 4 と Pi 5 で 1 ファイルです。機種差は `model: auto` が device-t
 
 **入れた理由は書き手が 2 つあったからです。** 自律側は `velocity_smoother` が
 `cmd_vel_smoothed -> cmd_vel` の remap で `/cmd_vel` へ出し（nav2 の
-`navigation_launch.py` と `vi_global_planner` のそれ、どちらも同じ）、手動側は
+`navigation_launch.py` と `vi_planner` のそれ、どちらも同じ）、手動側は
 `control.sh teleop` の `teleop_twist_keyboard` / `teleop_twist_joy` が同じ
 `/cmd_vel` へ直接出していました。仲裁が無いので、自律走行中に遠隔操作を開くと
 両者のメッセージがそのまま交互にドライバへ届きます。
@@ -664,14 +664,14 @@ fw_var_per_fw + |angle| * fw_var_per_rot)`）。距離 L [m] を直進したと�
 戻すときは 4 つとも `emcl2_node.cpp` の既定（0.19 / 0.0001 / 0.13 / 0.2）へ。
 **機体固有の値なので `overrides/` ではなくこの断片に置いてあります。**
 
-### `vi_planner` / `vi_global_planner` の `safety_radius_penalty: 30`
+### `vi_planner` の `safety_radius_penalty: 30`
 
 単位は「秒/セル」で、`safety_radius`（0.2m）以内のセルを通るときの加算コストです。
 1 手のコストが 1 秒なので、30 は「近寄るくらいなら 30 手迂回する」という強い忌避に
 なります。細い通路ばかりの地図では下げる必要があります（`map_tsudanuma` の実例は
 下の節）。
 
-### `vi_planner` / `vi_global_planner` の `action_forward_m`（前へ出る 3 つを 0.5 m へ）
+### `vi_planner` の `action_forward_m`（前へ出る 3 つを 0.5 m へ）
 
 `action_forward_m` の 1・4・6 番目（`forward` / `rightfw` / `leftfw`）を **0.5 m** に
 してあります。ノード既定は `[0.3, -0.2, 0.0, 0.2, 0.0, 0.2]` なので、直進が 0.3 → 0.5、
@@ -764,12 +764,12 @@ nav2 既定は 20ms。Pi4 の CPU 飽和時（`nr_throttled` が 10 万回級）
 
 ### `bt_navigator` の `wait_for_service_timeout: 60000`
 
-nav2 既定は 1000ms。`planner:=vi` では `vi_global_planner` が `/map` を受け取って
+nav2 既定は 1000ms。`planner:=vi` では `vi_planner` が `/map` を受け取って
 から `compute_path_to_pose` を作るので、地図が大きいほど遅れます。`map_tsudanuma`
 （23.5MB）では間に合わず、`bt_navigator` が `on_configure` で
 "action server not available" を投げて bringup 全体が止まりました。
 
-### `vi_planner` / `vi_global_planner` の `cost_drawing_threshold`
+### `vi_planner` の `cost_drawing_threshold`
 
 表示専用（`value_function` の色スケール上限、単位はステップ数≒秒）。経路にも
 メモリにも影響しないので、読みにくければ動かして構いません。**地図ごとに測り直す
@@ -818,9 +818,10 @@ p99 の間へ置くと、運用上通る範囲に階調を集中させ、遠い�
 
 ### `map_tsudanuma` で `planner:=vi` を使うときの制約
 
-* `local_planner:=vi`（`vi_planner` 1 ノード）と `local_planner:=nav2`
-  （`vi_global_planner` + `controller_server`）のどちらも使えます。どちらも
-  `map_scale` とアウトオブコア経路 (`frontier2d_sparse_compact`) を持ちます。
+* `local_planner:=vi`（両アクション）と `local_planner:=nav2`（同じ `vi_planner` を
+  `follow: false` で立てて `controller_server` が追従）のどちらも使えます。どちらも
+  同じノードなので `map_scale` もアウトオブコア経路 (`frontier2d_sparse_compact`) も
+  同じです。
   `vi_planner` の狭域追従だけは密な状態配列を要るので、全域ではなくロボット近傍の
   パッチ（±1m ウィンドウ + 遷移到達距離 + 余裕、0.25m セルで 27x27x60 ≒ 2.5MB）を
   compact の場から起こして回します。狭域 → 広域のフィードバック（`global_sweep`、
@@ -839,9 +840,9 @@ p99 の間へ置くと、運用上通る範囲に階調を集中させ、遠い�
   拠り所がほとんどありません（別途要検討）。
 * メモリは `map_scale: 5` + compact で、`vi_planner` のピーク RSS が **実測 1.60GB**
   （うち sink の mmap が 648MB）。`map_scale: 3` + 保守的プーリングだった頃の
-  `vi_global_planner` の 3.98GB（匿名 2.16GB + mmap 1.81GB）から下がり、Pi4 4GB の枠には
-  収まります。`vi_global_planner` をこの scale で測ってはいませんが、解像度もソルバも
-  同じなので同程度になるはずです（**未計測**）。実測の詳細は
+当時の広域専用ノード `vi_global_planner` の 3.98GB（匿名 2.16GB + mmap 1.81GB）から
+  下がり、Pi4 4GB の枠には収まります（そのノードは 2026-08-08 の上流の整理で消え、
+  広域だけの構成も同じ `vi_planner` になりました）。実測の詳細は
   `simulator/docs/pi4_sim.md` と `overrides/map_tsudanuma.yaml` のヘッダ。
   **ただしこの 1.60GB は sink をディスクへ逃がしていた頃の値です。** 2026-08-04 に
   `compact_sink_dir` を外して RAM 出力へ変えた（Pi 5 の 8GB が前提）ので、同じ 648MB が
@@ -1020,7 +1021,7 @@ vi_planner: tile repair running for 6.0s (412 visits, 27 tiles queued) # 2 秒�
 取り直してください。誤検知（この地図では emcl2 の有効ビームの 28% が壁を貫通する）が
 残り続ける経路でもあるので、挙動が怪しいときはここを疑ってください。
 
-### `vi_planner` / `vi_global_planner` の `compact_ram_limit_mb: 4096`
+### `vi_planner` の `compact_ram_limit_mb: 4096`
 
 **これはプロセス全体のメモリ上限ではありません。** compact の確定出力（sink）を
 RAM に置いたままにする上限で、超えたぶんだけ `/tmp/vi_*_sink` へ mmap で逃がす、
@@ -1058,7 +1059,7 @@ OOM kill に変わります。4 GB 機で使うなら 2048 以下へ戻してく
 **代償**: 逃がさない代わりに、sink は**この上限いっぱいまで**匿名メモリとして居座り
 得ます（実際に居座るのは sink の実寸で、津田沼なら 648 MB）。Pi4（4 GB）で
 `compact_sink_dir` 無しの広域地図を解くと、512 MB で退避していたときには起きなかった
-OOM kill があり得ます（`vi_global_planner` が SIGKILL された実測は
+OOM kill があり得ます（当時の広域専用ノード `vi_global_planner` が SIGKILL された実測は
 `simulator/docs/pi4_sim.md` の「C. 本命」）。広域地図を足すときは `compact_sink_dir` を
 セットで書くこと。
 
@@ -1067,14 +1068,14 @@ VI のメモリを実際に頭打ちにしたいなら、手段は `map_scale` �
 `dense_limit_mb` で密の上限を切る、コンテナ側で `mem_limit` を掛ける、の
 いずれかです。
 
-このキーは元々 `vi_global_planner` にしかありませんでした。2026-08-04 に
-`vi_planner` にも同じ既定値（512 MB）・同じ判断順で実装したので、いまは両方に
-置けます。自動退避先だけがノードごとに違います（`/tmp/vi_global_planner_sink` /
-`/tmp/vi_planner_sink`）。
+このキーは元々、当時の広域専用ノード `vi_global_planner` にしかありませんでした。
+2026-08-04 に `vi_planner` にも同じ既定値（512 MB）・同じ判断順で実装し、2026-08-08 に
+あちらのノードごと消えたので、いまの宛先は `vi_planner` だけです。自動退避先は
+`/tmp/vi_planner_sink`。
 
-ただし**ディスクへ逃がしたときの代償は `vi_planner` のほうが大きい**です。広域を
-1 回解くだけの `vi_global_planner` と違い、`vi_planner` の追従は 10 Hz の制御ループの
-中でパッチを置き直すたびに sink を読みます。コンテナの `/tmp` は tmpfs ではなく
+ただし**ディスクへ逃がしたときの代償は追従する構成のほうが大きい**です。広域を
+1 回解くだけの `local_planner:=nav2`（`follow: false`）と違い、`local_planner:=vi` の
+追従は 10 Hz の制御ループの中でパッチを置き直すたびに sink を読みます。コンテナの `/tmp` は tmpfs ではなく
 書き込み層（= SD カード）なので、自動退避に頼らず `compact_sink_dir` で速い場所を
 明示するほうが安全です。いまはどちらの地図も `compact_sink_dir` が空なので、この
 経路には入りません（19F は sink が小さくて、`map_tsudanuma` は上限 4096 MB に収まって）。

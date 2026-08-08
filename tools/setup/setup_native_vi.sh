@@ -11,8 +11,8 @@ CARGO_PROFILE_ARG="--release"
 
 usage() {
   cat <<'EOF'
-価値反復プランナ（vi_planner: 広域+狭域を 1 ノード / vi_global_planner: 広域のみ）を
-ビルドします。事前にtools/setup/setup_native_ros2_rust.shを実行してください。
+価値反復プランナ（vi_planner: 広域+狭域を 1 ノード。local_planner:=nav2 の
+「広域のみ」も同じノードを follow: false で立てる）をビルドします。事前にtools/setup/setup_native_ros2_rust.shを実行してください。
 
 Usage:
   bash tools/setup/setup_native_vi.sh [options]
@@ -94,7 +94,7 @@ if ! command -v cargo-ament-build >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "[1/2] Building vi_planner and vi_global_planner"
+echo "[1/2] Building vi_planner"
 # shellcheck disable=SC1090
 source "${ROS_SETUP}"
 # shellcheck disable=SC1090
@@ -108,18 +108,19 @@ cd "${WORKSPACE}"
 COLCON_ARGS=(
   --symlink-install
   --parallel-workers "${BUILD_JOBS}"
-  --packages-select vi_planner vi_global_planner
+  --packages-select vi_planner
 )
 if [[ -n "${CARGO_PROFILE_ARG}" ]]; then
   COLCON_ARGS+=(--cargo-args "${CARGO_PROFILE_ARG}")
 fi
 colcon build "${COLCON_ARGS[@]}"
 
-echo "[2/2] Verifying vi_global_planner launch files"
+echo "[2/2] Verifying vi_planner launch files"
 # cargo-ament-buildがpackage.xmlの<install>launch</install>を取りこぼす環境が
 # あるため、navigation_launch.pyが無い場合だけ補完する。
-LAUNCH_SRC="${VI_DIR}/vi_ros2/vi_global_planner/launch/navigation_launch.py"
-LAUNCH_DST="${WORKSPACE}/install/vi_global_planner/share/vi_global_planner/launch/navigation_launch.py"
+# 2026-08-08の上流の整理まで、このlaunchはvi_global_plannerパッケージにあった。
+LAUNCH_SRC="${VI_DIR}/vi_ros2/vi_planner/launch/navigation_launch.py"
+LAUNCH_DST="${WORKSPACE}/install/vi_planner/share/vi_planner/launch/navigation_launch.py"
 if [[ -e "${LAUNCH_DST}" ]]; then
   echo "Already installed: ${LAUNCH_DST}"
 elif [[ -f "${LAUNCH_SRC}" ]]; then
@@ -138,6 +139,5 @@ Load the environment with:
   source ${WORKSPACE}/install/setup.bash
 
 Verify with:
-  ros2 pkg prefix vi_global_planner
   ros2 pkg prefix vi_planner
 EOF

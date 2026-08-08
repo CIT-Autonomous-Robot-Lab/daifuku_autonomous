@@ -252,8 +252,8 @@ ros2 launch daifuku_stack navigation.launch.py \
   planner:=vi
 ```
 
-`local_planner`は既定の`auto`（`planner:=vi`なので`vi`）でも`nav2`でも動きます。`vi_planner`と
-`vi_global_planner`のどちらも`map_scale`とアウトオブコア経路を持つためです。`vi_planner`の
+`local_planner`は既定の`auto`（`planner:=vi`なので`vi`）でも`nav2`でも動きます。どちらも同じ
+`vi_planner`で、`map_scale`もアウトオブコア経路も同じだからです（`nav2`は`follow: false`）。`vi_planner`の
 狭域追従だけは密な状態配列を必要とします。ただし全域ではなく、ロボット近傍のパッチだけを
 確定出力（sink）から起こして回します（±1 mウィンドウ＋遷移到達距離＋余裕。
 0.25 mセルで27×27×60≒2.5 MB）。
@@ -272,7 +272,7 @@ ros2 launch daifuku_stack navigation.launch.py \
 
 NavFnとDWBで動かす場合、`map_tsudanuma`の価値反復向け設定は要りません。ただし
 `overrides:=none`はEMCL2の調整も一緒に落とすので、**ふつうは場所を切り替えたまま
-`planner:=navfn`だけを渡してください**（VI向けの節は`vi_planner`／`vi_global_planner`宛で、
+`planner:=navfn`だけを渡してください**（VI向けの節は`vi_planner`宛で、
 それらが立たない構成では宛先が無いだけです）。どうしても何も重ねたくないときは
 `map:=`を自分で渡します——`overrides:=none`は場所を名乗らないので、地図を導けません。
 
@@ -296,9 +296,9 @@ ros2 launch daifuku_stack navigation.launch.py \
   `robot_radius: 0.22`（`nav2_bringup`のyamlのまま）だったため、実機の条件はこれより
   厳しくなります。
 - ピークRSSは`vi_planner`で実測1.60 GB（うちsinkのmmapが648 MB）です。
-  `map_scale: 3`＋保守的プーリングだった頃の`vi_global_planner`の3.98 GBから下がり、
-  Raspberry Pi 4の4 GBに収まります。`vi_global_planner`をこの`map_scale: 5`で
-  測ってはいませんが、解像度もソルバも同じなので同程度になるはずです（**未計測**）。
+  `map_scale: 3`＋保守的プーリングだった頃の広域専用ノード`vi_global_planner`の3.98 GBから
+  下がり、Raspberry Pi 4の4 GBに収まります（そのノードは2026-08-08の上流の整理で消え、
+  広域だけの構成も同じ`vi_planner`になりました）。
   **ただしこれはsinkをディスクへ逃がしていた頃の値です。** RAM出力にした2026-08-04
   以降は同じ648 MBが匿名メモリになり、カーネルが追い出せません。上の「Pi 4の4 GBに
   収まる」はもう成り立たない前提です（RAM化後のピークは**未計測**）。

@@ -1,15 +1,20 @@
-# 価値反復プランナ (value_iteration3, Rust)。「既定」= 各ノードの main.rs が
-# declare_parameter で持つ値。既定と違うのは両ノードの solver / map_wait_sec /
-# compact_ram_limit_mb と、vi_planner だけの dense_limit_mb /
-# window_cost_drawing_threshold の 5 つだけ。
+# 価値反復プランナ (value_iteration3, Rust)。「既定」= ノードの main.rs が
+# declare_parameter で持つ値。既定と違うのは solver / map_wait_sec /
+# compact_ram_limit_mb / dense_limit_mb / window_cost_drawing_threshold の 5 つだけ。
 # 地図ごとの調整は ../overrides/<地図名>.yaml。合成順序と上書きは ../README.md を参照。
 #
-# ノードは 2 つあり、**同時には起動されない**。local_planner でどちらかが選ばれる:
-#   local_planner:=vi   (auto + planner:=vi の既定) … vi_planner 1 ノード。1 本の
-#                       価値関数で経路計画と経路追従の両方を担う。
-#   local_planner:=nav2 … vi_global_planner (広域のみ) + controller_server (DWB)。
+# **ノードは 1 つだけ**。local_planner はこのノードの立ち方を選ぶ:
+#   local_planner:=vi   (auto + planner:=vi の既定) … 1 本の価値関数で経路計画と
+#                       経路追従の両方を担う (compute_path_to_pose + follow_path)。
+#   local_planner:=nav2 … 同じノードを follow: false で立てて広域だけ担わせ、追従は
+#                       controller_server (DWB) が持つ。**follow は launch が渡す**
+#                       ので、ここには書かない。
 #
-# 両者で意味の同じキーは値を揃えること (どちらで起動しても挙動が変わらないように)。
+# **2026-08-08 の上流の整理まで、後者は vi_global_planner という別パッケージ・別
+# ノードだった**。パッケージごと消えて follow: false に置き換わったので、この
+# ファイルにあった vi_global_planner: の節と ../overrides/ の同名の節も消してある
+# (置いたままだと合成される params_file に誰も読まないノードが残り、
+# ../overrides/ 側は「どの設定ファイルにも無いノード名」で起動時に落ちる)。
 #
 # vi_planner にはさらに **nav2:=false (この構成の既定) のスタンドアロン**があり、
 # そのとき navigate_to_pose と follow_waypoints もこのノードが出す。効くキーが
@@ -48,6 +53,23 @@ vi_planner:
     refine_budget_ms: 40          # 既定 40 [ms/tick]: ローカルウィンドウ価値反復に使う時間予算
     action_tolerance: 0.2         # 既定 0.2 [m]: 方策なしセルでの近傍行動探索半径
     no_action_timeout_sec: 3.0    # 既定 3.0 [s]: pose か方策が無い状態がこれだけ続いたら追従を中断。15 へ延ばしても粘れず、1 点飛ばすまでが 2 分に伸びただけだったので戻した (2026-08-04 実機)
+    # ── 未設定 (既定のまま。狭域 1 tick の判断器。2026-08-08 に上流が足した) ──
+    # 場も solve も全域掃きも変わらず、**変わるのは「場から速度指令を引く読み方」だけ**。
+    # 既定の greedy は上の action_* の離散 6 行動そのもの (本家 ViNode::decision 準拠) で、
+    # dwa / mppi は同じ場を連続に読む (V̂ 三線形補間 + 軌道サンプリング)。速度範囲は行動集合
+    # と同じままで、候補が全滅したら greedy へ落ちるので**失敗の形は変わらない**。上流実測
+    # (津田沼 scale 3) で到達率同じ・コマンド変動 Σ|Δω| 半減・到達 5% 短縮、decide は dwa
+    # ~30µs / mppi ~0.2ms (どちらも上の refine_budget_ms 40ms に対して誤差)。
+    # **この機体では未検証** — 上の action_forward_m を 0.5 へ上げてあるぶん 1 手が長く、
+    # 連続に読むと旋回半径 1.43m の制約から外れた指令が出る側なので、試すなら実機で。
+    # follow_controller: "greedy"   # greedy (既定) / dwa / mppi
+    # dwa_horizon_s: 1.0          # dwa・mppi の前方シミュレーション時間 [s]
+    # dwa_n_v: 7                  # dwa の並進候補数 (計算量 ∝ n_v x n_w x horizon)
+    # dwa_n_w: 11                 # dwa の旋回候補数
+    # mppi_samples: 256           # mppi のサンプル本数
+    # mppi_lambda: 1.0            # mppi の温度 (softmax 重み)
+    # mppi_sigma_v: 0.0           # mppi の並進ノイズ (0 = 行動集合から自動)
+    # mppi_sigma_w_deg: 0.0       # mppi の旋回ノイズ [deg] (同上)
     # ── スタンドアロン (nav2:=false のときだけ効く。standalone は launch が渡す) ──
     goal_retry_limit: 3           # 既定 3: 追従が失敗したときにゴールを投げ直す上限 (負で無制限)。BT の RecoveryNode number_of_retries: 6 の置き換え
     goal_retry_settle_sec: 3.0    # 既定 3.0 [s]: 投げ直す前に止まったまま場を更新する時間。**BT の Wait と違い penalty の半減が実際に進む** (0 で即座に投げ直す)
@@ -97,41 +119,3 @@ vi_planner:
     # pose_topic: "mcl_pose"      # 自己位置を読むトピック。launch が上書きする
     # scan_topic: "scan"          # スキャンを読むトピック。launch が上書きする
     # global_frame: "map"         # 出力する Path のフレーム
-
-# ── local_planner:=nav2: 広域のみ (planner_server 置換、追従は controller_server) ──
-vi_global_planner:
-  ros__parameters:
-    use_sim_time: false
-    solver: "frontier2d_sparse_compact"  # 既定 frontier2d_sparse (密): vi_planner と揃える (理由は上のブロック)
-    map_scale: 1                  # 既定 1: プランナ内部で地図を粗くする倍率 (1 = /map のまま)。19F は ../overrides/ で 2
-    compact_sink_dir: ""          # 既定 "": compact の確定出力先 ("" = RAM)
-    compact_ram_limit_mb: 4096    # 既定 512 [MB]: sink を RAM に置ける上限 (超過分は /tmp/vi_global_planner_sink へ退避)。**上の compact_sink_dir を指定すると効かない** (明示指定が無条件に勝つ)
-    theta_cell_num: 60            # 既定 60: 姿勢の離散数。360 を割り切ること
-    safety_radius: 0.2            # 既定 0.2 [m]: 障害物近傍ペナルティの半径
-    safety_radius_penalty: 30     # 既定 30 [秒/セル]: 障害物に近寄る代わりに払う迂回コスト
-    goal_margin_radius: 0.3       # 既定 0.3 [m]: ゴール圏 (final_state) 判定半径
-    goal_margin_theta: 15.0       # 既定 15.0 [deg]: 同、角度
-    map_wait_sec: 60              # 既定 30 [s]: /map の到着待ち上限。広域地図では遅い
-    vi_threads: 0                 # 既定 0 (= 論理コア数): 価値反復のスレッド数
-    solve_chunk: 64               # 既定 64 [イテレーション]: プリエンプトを見る間隔
-    max_solve_iter: 1000000       # 既定 1000000: 価値反復の打ち切り回数
-    max_rollout_steps: 10000      # 既定 10000: 方策を辿って経路を作るときの最大手数
-    start_tolerance: 0.5          # 既定 0.5 [m]: start が方策なしセルのときの近傍スナップ半径
-    path_spacing: 0.05            # 既定 0.05 [m]: Path の姿勢間隔 (DWB 向け補間; 0 で無効)
-    goal_tolerance_xy: 0.25       # 既定 0.25 [m]: 価値関数キャッシュを再利用するゴール一致判定
-    goal_tolerance_deg: 10.0      # 既定 10.0 [deg]: 同、角度
-    cost_drawing_threshold: 60    # 既定 60: /value_function の色スケール上限 (vi_planner と同じ扱い。overrides でも揃えること)
-    publish_value_function: true  # 既定 true: /value_function を配信するか
-    value_publish_interval_ms: 500  # 既定 500 [ms]: solve 途中経過の配信間隔 (0 で完了時のみ)
-    unknown_as_obstacle: true     # 既定 true: 未観測セルを障害物として扱う
-    action_names: ["forward", "back", "right", "rightfw", "left", "leftfw"]  # 既定 同左
-    action_forward_m: [0.5, -0.2, 0.0, 0.5, 0.0, 0.5]      # 既定 [0.3, -0.2, 0.0, 0.2, 0.0, 0.2] [m]: 前へ出る 3 つを上のブロックと揃える (../README.md)
-    action_rotation_deg: [0.0, 0.0, -20.0, -20.0, 20.0, 20.0]  # 既定 同左 [deg]
-
-    # ── 未設定 (既定のまま) ──
-    # downsample_policy: "conservative"  # map_scale > 1 のときの縮小方針
-    # pose_topic: "mcl_pose"      # 自己位置を読むトピック。launch が上書きする
-    # global_frame: "map"         # 出力する Path のフレーム
-    #     ▲ vi_global_planner は広域専用なので scan_topic / control_frequency /
-    #       refine_budget_ms / action_tolerance / no_action_timeout_sec /
-    #       window_cost_drawing_threshold は**そもそも持たない**。

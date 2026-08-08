@@ -172,9 +172,11 @@ Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。
   それをタイル単位で修復する形になる（同じ更新式・同じ不動点）。密ソルバでも同じ
   ように効く
 - 同一ゴールへの再計画ではキャッシュを使う（ロールアウトのみ実行する）
-- `local_planner:=nav2`では`vi_global_planner`（広域のみ）とNav2標準`controller_server`
-  の組み合わせになる。`map_scale`とアウトオブコアソルバが要る広域地図は、どちらの構成
-  でも扱える（`vi_planner`はロボット近傍のパッチだけを密に起こす）。詳細は
+- `local_planner:=nav2`では同じ`vi_planner`を`follow: false`（広域のみ）で立て、追従は
+  Nav2標準`controller_server`が担う。**立つVIのノードはどちらでも1つ**（2026-08-08の
+  上流の整理まで、広域専用は`vi_global_planner`という別パッケージだった）。
+  `map_scale`とアウトオブコアソルバが要る広域地図は、どちらの構成でも扱える
+  （`vi_planner`はロボット近傍のパッチだけを密に起こす）。詳細は
   [自律移動](navigation.md#広域地図map_tsudanumaで動かす)を参照
 
 `planner:=navfn`:
@@ -241,7 +243,7 @@ RVizの「Navigation 2」パネルは**ほぼ空になります**。あれはラ
 - `nav2_behaviors`: Spin、BackUp、Wait等
 - `nav2_waypoint_follower`: 経由地点追従
 
-ローカルコストマップはVoxelLayer + InflationLayer、グローバルコストマップはStaticLayer + ObstacleLayer + InflationLayerを使い、障害物入力は`/scan`です。**VI構成ではどちらも使いません**（`vi_planner`も`vi_global_planner`もコストマップを持たず、障害物は価値関数のペナルティとして扱う）。
+ローカルコストマップはVoxelLayer + InflationLayer、グローバルコストマップはStaticLayer + ObstacleLayer + InflationLayerを使い、障害物入力は`/scan`です。**VI構成ではどちらも使いません**（`vi_planner`はコストマップを持たず、障害物は価値関数のペナルティとして扱う）。
 
 ### プロセス構成
 

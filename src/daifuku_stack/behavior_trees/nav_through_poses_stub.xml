@@ -8,7 +8,7 @@
   ComputePathThroughPoses を含み、BtActionNode のコンストラクタが
   wait_for_service_timeout 内にアクションサーバを見つけられないと例外を投げる。
 
-  planner:=vi では planner_server を起動せず、vi_global_planner は
+  planner:=vi では planner_server を起動せず、vi_planner は
   compute_path_to_pose しか提供しないため、この XML を差し替えないと
   bt_navigator が configure できず lifecycle manager が bringup を中断する。
 

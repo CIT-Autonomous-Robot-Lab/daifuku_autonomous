@@ -24,7 +24,7 @@ Ubuntu 22.04へインストールしたROS 2 Humble上で直接ビルドしま�
 | `setup_native_base.sh` | 共通のaptパッケージ、`vcs import`、`rosdep`、`daifuku_bringup`・`daifuku_config`・`daifuku_config_manager`・`daifuku_stack`・`raspicat_driver`・`raspimouse_msgs`・`emcl2`と、GUI側の`daifuku_rqt`・`daifuku_waypoint_manager`のビルド |
 | `setup_native_livox.sh` | Livox SDK2と`livox_ros_driver2`（Mid-360） |
 | `setup_native_ros2_rust.sh` | Rust toolchainと`ros2_rust`（`rclrs`）ワークスペース |
-| `setup_native_vi.sh` | `vi_planner`と`vi_global_planner` |
+| `setup_native_vi.sh` | `vi_planner` |
 
 ### 一括で導入する
 
