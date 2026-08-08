@@ -6,7 +6,7 @@
 #   tools/site.sh map_19f --file-only   ファイルを書くだけ (ROS にも Docker にも触らない)
 #
 # 場所が決まれば LiDAR の帯 (仰角と高さ) も emcl2 / 価値反復の調整も地図も決まる。
-# その 1 つを src/daifuku_config_manager/config/site に置いてあり、機体側
+# その 1 つを config/site に置いてあり、機体側
 # (docker compose で常駐) も人が立てる navigation も同じ値を見る。
 #
 # **切り替えの本体は ROS 側にある。** 機体で site_manager ノードが上がっていて、
@@ -26,8 +26,8 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-SITE_FILE=$ROOT/src/daifuku_config_manager/config/site
-OVERRIDES_DIR=$ROOT/src/daifuku_config_manager/config/overrides
+SITE_FILE=$ROOT/config/site
+OVERRIDES_DIR=$ROOT/config/overrides
 
 current() {
     # params.read_site_file と同じ規則 (1 つめの空でない非コメント行)。

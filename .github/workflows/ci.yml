@@ -72,11 +72,13 @@ jobs:
           from daifuku_config_manager import params
 
           # share ではなくソースの overrides/ を見る (ここだけが ament 索引)。
-          params.overrides_dir = lambda: "src/daifuku_config_manager/config/overrides"
+          params.overrides_dir = lambda: "config/overrides"
 
+          # share ではなくソースの config/ を見る (params.config_root は
+          # daifuku_config の share を引くので、install していないここでは使えない)。
           ROOTS = {
-              "daifuku_bringup": "src/daifuku_bringup/config",
-              "daifuku_stack": "src/daifuku_stack/config",
+              package: os.path.join("config", sub)
+              for package, sub in params.CONFIG_DIRS.items()
           }
           MAPS = "src/daifuku_stack/maps"
 
@@ -103,7 +105,7 @@ jobs:
           from daifuku_stack_launch import nav2_params
 
           context = LaunchContext()
-          context.launch_configurations["params_dir"] = "src/daifuku_stack/config/nav2"
+          context.launch_configurations["params_dir"] = "config/stack/nav2"
           context.launch_configurations["params_file"] = ""
           try:
               _, _, origin, _ = nav2_params.fragments_resolver(context)
