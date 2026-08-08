@@ -652,14 +652,17 @@ fw_var_per_fw + |angle| * fw_var_per_rot)`）。距離 L [m] を直進したと�
 3 つをまとめて 0.5 へ上げています。等しくしてあるのは「向きを変えるかどうかで
 1 m あたりの手数が変わらない」状態を保つためで、**3 つは一緒に動かすこと**。
 
-**上限は 0.5 です。** `follow_path` の `cmd_vel` は `velocity_smoother` を通ってから
-車輪へ行き（`nav2:=false` でも通る。`navigation.launch.py` が `cmd_vel` →
-`cmd_vel_nav` → `cmd_vel_smoothed` → `cmd_vel` と繋ぐ）、`config/` に
-`velocity_smoother.yaml` は無いのでノード既定の `max_velocity: [0.5, 0.0, 2.5]` が
-効きます。**0.5 を超える値を書くとそこで黙ってクリップされ**、価値反復は「1 手 =
-1 秒」で解いているのに機体はそれより遅く走ります（経路は closed-loop なので破綻は
-しませんが、旋回半径が計画より小さくなり内側を切ります）。上げたいときは
-`velocity_smoother` の `max_velocity` も一緒に。実際の値は
+**上限を決めるのは `velocity_smoother` で、いまそこは 0.4 です。** `follow_path` の
+`cmd_vel` は `velocity_smoother` を通ってから車輪へ行き（`nav2:=false` でも通る。
+`navigation.launch.py` が `cmd_vel` → `cmd_vel_nav` → `cmd_vel_smoothed` → `cmd_vel`
+と繋ぐ）、その `max_velocity` は `nav2/behaviors.yaml` が **DWB の `max_vel_x` に
+合わせた `[0.4, 0.0, 1.0]`** に落としています（ノード既定は `[0.5, 0.0, 2.5]`）。
+**上限を超える値を書くとそこで黙ってクリップされ**、価値反復は「1 手 = 1 秒」で
+解いているのに機体はそれより遅く走ります（経路は closed-loop なので破綻はしませんが、
+旋回半径が計画より小さくなり内側を切ります）。**つまりこの 0.5 は、断片のままだと
+どの地図でも 0.4 で頭打ちです** — 外してあるのは `overrides/map_tsudanuma.yaml` の
+`velocity_smoother` だけ（2026-08-08）。他の地図でも 0.5 を出したいなら、そちらに
+同じ節を置くか `behaviors.yaml` の `max_velocity` を上げてください。実際の値は
 `ros2 param get /velocity_smoother max_velocity` で見えます。
 
 代償が 3 つあります。
@@ -860,9 +863,10 @@ scale 1 + 先読みが起動時に止まってくれるかどうかも分かり�
 先読みそのものの効き方・条件・ログは
 [`docs/usage/navigation.md`](../../../docs/usage/navigation.md#次の点を走行中に解いておくwaypoint_prefetch)。
 ここで `true` にしているのは、巡回で点が変わるたびに入る 1 回ぶんの solve（19F の
-実測で 29 秒、そのあいだ機体は止まったまま）を消すためです。**`map_tsudanuma` も
-2026-08-07 に `true` になりました**（あちらは solve が 87 秒、場は 648 MB × 2 =
-1.3 GB です）。4 GB 機ではどちらの地図でも外してください。
+実測で 29 秒、そのあいだ機体は止まったまま）を消すためです。**`map_tsudanuma` は
+2026-08-07 に `true` にしたあと、2026-08-08 に `false` へ戻しました**（走行中の
+固まりの容疑者を切り分けるため。あちらは solve が 87 秒、場は 648 MB × 2 = 1.3 GB
+です）。**いま `true` なのはこの地図だけ**で、4 GB 機では外してください。
 
 代償は 0.10 m/cell の粗さと、保守的プーリングで通路が片側最大 0.05 m 細ること。
 **未検証** — この地図・この scale での solve 時間と経路そのものは測っていません

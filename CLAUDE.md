@@ -287,14 +287,14 @@ Docker 越しに叩く形は
   絶対名なので、`namespace:=` を付けた構成でも噛み合わない）。**`nav2:=false` では
   この穴は無い** — `follow_waypoints` を `vi_planner` 自身が受けるので、順路はゴールと
   同じ経路で入る（トピックはもう 1 つの入口として残る）。**ノード側の宣言と
-  `config/nav2/vi_planner.yaml` は `false` だが、同梱の overrides は
-  `map_19f` も `map_tsudanuma` も `true` へ上書きしている**ので、どちらの場所でも
-  効いている（津田沼は 2026-08-07 から。消える待ちは 19F が 29 秒、津田沼が
-  87 秒）。価値関数が同時に 2 つ生きるので、**密ソルバでは
+  `config/nav2/vi_planner.yaml` は `false` で、同梱の overrides で `true` へ
+  上書きしているのは `map_19f` だけ**（津田沼は 2026-08-07 に `true` にしたあと
+  2026-08-08 に `false` へ戻した。走行中の固まりの切り分けで、消える待ちは 19F が
+  29 秒、津田沼が 87 秒）。価値関数が同時に 2 つ生きるので、**密ソルバでは
   メモリが 2 倍要る**。compact でも同梱の 2 地図は sink が RAM なので（2026-08-04 に
   津田沼の `compact_sink_dir` を外した）、そのまま 2 倍が匿名メモリに乗る
-  （津田沼 648MB×2 = 1.3GB、19F 95MB×2）。**Pi 4 (4GB) では `true` に
-  しないこと。ただし同梱の overrides が両方とも `true` なので、引数を何も
+  （19F 95MB×2、津田沼は戻せば 648MB×2 = 1.3GB）。**Pi 4 (4GB) では `true` に
+  しないこと。ただし既定の `map_19f` が `true` なので、引数を何も
   足さずに立てると Pi 4 でもこれが効く。** 外すには使う地図の
   `overrides/*.yaml` の `waypoint_prefetch` を消すしかない（キー 1 つだけ外す launch 引数は無い。
   `overrides:=none` にすると emcl2 の 3 つの対症療法ごと落ちて、19F では自己位置が
@@ -354,9 +354,12 @@ Docker 越しに叩く形は
   （読むのは常駐している raspicat サービス）。
   `range_max` の既定 70.0 はセンサの測距上限だが、**そこまで使うのは `emcl2` だけ**
   （costmap は `obstacle_max_range: 2.5`、SLAM は `max_laser_range: 10.0` で頭打ち）。
-  **`map_tsudanuma` の `max_height` は仰角 5 度と対の 8.30m** なので、そこで
-  `elevation_filter:=false` にすると**高さで切っていないのと同じ**になる（床も天井も
-  全距離で帯に入る）。外すなら `max_height` / `range_max` も組で戻すこと。
+  **`map_tsudanuma` の `max_height` は仰角 5 度と対の 5.00m**（2026-08-08 に 8.30 から
+  下げた）なので、そこで `elevation_filter:=false` にすると**高さで切っていないのと
+  同じ**になる（床も天井も全距離で帯に入る）。外すなら `max_height` / `range_max` も
+  組で戻すこと。逆に仰角フィルタを効かせたままなら、**この 5.00 は
+  `range_max: 70.0` より先に効く** — 実効下限がここへ達する 54.0m で帯が閉じ、
+  そこから先は 1 点も入らない。
 - **センサを立てるのは `robot_bringup.launch.py` だけ。** LiDAR（`/scan`）も EKF
   （`/odom`・`odom→base_footprint`）もそちらが `include` していて、**`docker compose up`
   で常駐している**。`navigation.launch.py` / `mapping.launch.py` は消費者に徹し、

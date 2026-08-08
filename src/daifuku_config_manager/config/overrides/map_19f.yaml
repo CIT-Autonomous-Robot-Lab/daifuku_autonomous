@@ -75,8 +75,9 @@ daifuku_stack:
   # (19F の実測で 29 秒)。先読みは走行中に次の点を解いておいてそれを消す。代償は場が 2 本
   # 生きること (この地図は compact・scale 2 なので sink 95MB x2 = 190MB。断片の
   # compact_ram_limit_mb 4096MB に収まるのでディスクへも出ない) と、走行中ずっと 1 コア
-  # (waypoint_prefetch_threads の既定 1) を solve に取られること。**津田沼も 2026-08-07 に
-  # true にした**が、あちらは 648MB x2 = 1.3GB になる。**4GB 機ではどちらの地図でも外すこと。**
+  # (waypoint_prefetch_threads の既定 1) を solve に取られること。**津田沼は 2026-08-07 に
+  # true にしたあと 2026-08-08 に false へ戻した** (走行中の固まりの切り分け。あちらは
+  # 648MB x2 = 1.3GB になる) ので、**今これが true なのはこの地図だけ**。**4GB 機では外すこと。**
   # 効いたかはログの "prefetched the value function for" / "(..., prefetched)" で見る。
   # **未検証** — 2026-08-04 に断片で一度 true にしたとき走行中の固まりが出て容疑者の 1 つ
   # として戻した経緯がある (切り分けは未了)。再発したらここを false に戻すのが戻し方。
@@ -93,8 +94,9 @@ daifuku_stack:
 
 # ── ここで上書きしていないもの ────────────────────────────────────────────
 # この地図では断片 (= ほぼノード既定) のままで足りている。要るとしたら次の順で疑う。
-#   emcl2.range_threshold / laser_likelihood_max_dist … 地図の壁の厚みが実物と違うとき。
-#     今の 19F は貫通が多いので alpha_threshold 側で凌いでいる。
+#   emcl2.range_threshold … 貫通と見なす角度幅 [rad] (距離ではない)。上げるほど判定が緩む。
+#   emcl2.laser_likelihood_max_dist … 地図の壁の厚みが実物と違うとき。
+#     今の 19F はどちらも触らず、貫通が多いのを alpha_threshold 側で凌いでいる。
 #   costmaps.*.inflation_radius … 通路幅が足りず経路が出ないとき。ただし外接円 0.408m を
 #     下回らせないこと (daifuku_stack/config/nav2/costmaps.yaml)。
 #   vi_planner.safety_radius_penalty … 通路が細くて貪欲ロールアウトが固着するとき。
