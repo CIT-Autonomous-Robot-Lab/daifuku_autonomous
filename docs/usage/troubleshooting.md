@@ -49,23 +49,29 @@ rtmouseもMCP3204を自前で叩くので、両者が同じデバイスを取り
 ## 遠隔操作しても機体が動かない
 
 `twist_mux`（`robot_bringup.launch.py`の`twist_mux:=true`が既定）を挟むと、ドライバが
-購読するのは`/cmd_vel`ではなく`/cmd_vel_mux`です。ただし`/cmd_vel`のほうも仲裁の
-入力（優先度10）として残っているので、**ほかに誰も出していなければそのまま届きます**。
-効かなくなるのは自律走行中で、`/cmd_vel`へ投げると自律側の出力と取り合いになります。
+購読するのは`/cmd_vel`ではなく`/cmd_vel_mux`です。人が出す指令の宛先は
+`/cmd_vel_teleop`（優先度10）で、`/cmd_vel`は自律側の出力（優先度100）です。
 
 ```bash
 ros2 node list | grep twist_mux
 ros2 topic hz /cmd_vel_mux          # 指令を出しているあいだだけ流れる
+ros2 topic hz /cmd_vel              # 自律側が出していれば手動は通らない
 ```
 
-人が出す指令は`/cmd_vel_teleop`（優先度100）です。`control.sh`の`CMD_VEL_TOPIC`は
-これが既定なので、`twist_mux:=false`で起動しているときだけ`CMD_VEL_TOPIC=/cmd_vel`を
-渡してください。逆に`twist_mux`ノードが立っていない（イメージを焼き直していない）
-場合は、`ros2 launch`が`package 'twist_mux' not found`で止まります。
+**まず疑うのは自律走行中かどうかです。** 優先度は自律側のほうが高いので、
+`/cmd_vel`が出ているあいだ`/cmd_vel_teleop`は**エラーも出さずに無視されます**
+（`control.sh stop`も同じで、止まりません）。手動へ渡すにはゴールを止めてください
+——操作パネルの「中断」、`ros2 action send_goal`を投げた端末の Ctrl-C、または
+パッドのSTART長押し（`joy_teleop`は入るときにゴールを取り消します）。自律側が
+`timeout`（0.5秒）ぶん黙れば手動が通ります。
 
-自律走行中に遠隔操作が効くのは、**publishしているあいだと0.5秒だけ**です。キーを
-離せば自律側（`/cmd_vel`）へ戻ります。確実に止めるのはモーター電源
-（`control.sh motor off`）で、優先度は非常停止ではありません。
+`control.sh`の`CMD_VEL_TOPIC`は`/cmd_vel_teleop`が既定なので、`twist_mux:=false`で
+起動しているときだけ`CMD_VEL_TOPIC=/cmd_vel`を渡してください。逆に`twist_mux`
+ノードが立っていない（イメージを焼き直していない）場合は、`ros2 launch`が
+`package 'twist_mux' not found`で止まります。
+
+確実に止めるのはモーター電源（`control.sh motor off`）です。優先度は非常停止では
+ありません。
 
 ## 機体のトピックが見つからない
 

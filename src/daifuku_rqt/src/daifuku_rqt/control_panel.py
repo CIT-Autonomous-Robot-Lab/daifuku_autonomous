@@ -76,10 +76,12 @@ HOLD_LIMIT = 5.0
 # (config/stack/nav2/vi_planner.yaml), so this matches what the driver already sees.
 TELEOP_HZ = 10.0
 
-# Human-issued velocity goes to the high-priority input of twist_mux, not to
-# /cmd_vel (which is the autonomous stack's own output).  robot_bringup launches
-# the mux by default; with twist_mux:=false nothing subscribes here and the pad
-# silently does nothing -- see config/README.md.
+# Human-issued velocity goes to the manual input of twist_mux, not to /cmd_vel
+# (which is the autonomous stack's own output).  The autonomous side has the
+# HIGHER priority (100 vs 10), so this topic only gets through while the stack is
+# quiet -- that is why teleop is disabled while a goal is running.  robot_bringup
+# launches the mux by default; with twist_mux:=false nothing subscribes here and
+# the pad silently does nothing -- see config/README.md.
 TELEOP_CMD_VEL_TOPIC = "/cmd_vel_teleop"
 
 DRIVER_NODES = ["raspicat_driver", "raspimouse"]

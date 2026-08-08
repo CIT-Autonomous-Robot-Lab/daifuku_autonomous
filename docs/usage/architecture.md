@@ -26,9 +26,11 @@ TF                ─── odom → base_footprint → センサーフレーム
 LiDARの初期化待ちは入らず、EKFが再起動して`/odom`が原点へ飛ぶこともありません。**
 
 速度指令は`twist_mux`が優先度で1本に束ねます（`robot_bringup.launch.py`の
-`twist_mux:=true`が既定）。自律側は`/cmd_vel`（優先度10）、遠隔操作は
-`/cmd_vel_teleop`（100）で、勝っている側が出しているあいだだけ`/cmd_vel_mux`へ
-中継されます。**優先度は非常停止ではありません**（止めるのはモーター電源）。
+`twist_mux:=true`が既定）。自律側は`/cmd_vel`（優先度100）、遠隔操作は
+`/cmd_vel_teleop`（10）で、勝っている側が出しているあいだだけ`/cmd_vel_mux`へ
+中継されます。**自律側のほうが上なので、自律走行中は遠隔操作が通りません**
+（手動へ渡すには先にゴールを取り消す）。**優先度は非常停止ではありません**
+（止めるのはモーター電源）。
 配線と設定は[`config/README.md`](../../config/README.md#twist_muxyaml-の配線と優先度)。
 
 Mid-360は時刻同期がないためスタンプが実時計からずれていきます。`restamp_scan.py`が

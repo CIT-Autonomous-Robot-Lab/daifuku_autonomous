@@ -76,11 +76,13 @@ ros2 launch daifuku_stack navigation.launch.py \
 ros2 launch raspicat_bringup teleop.launch.py teleop:=key
 ```
 
-人が出す指令の宛先は`/cmd_vel_teleop`（優先度100）です（`control.sh teleop`と
-[操作パネル](../usage/control-panel.md)はそちらへ出しています）。**この上流launchが
-どこへ出すかは確認していません。** `/cmd_vel`へ出しているなら、`twist_mux:=true`
-（既定）ではそれは自律側の入力（優先度10）なので、自律走行中に開くと取り合いに
-なります。`ros2 topic info /cmd_vel_teleop`で購読者と配信者を見て確かめてください。
+人が出す指令の宛先は`/cmd_vel_teleop`（優先度10）です（`control.sh teleop`と
+[操作パネル](../usage/control-panel.md)はそちらへ出しています）。優先度は自律側の
+`/cmd_vel`（100）のほうが上なので、**自律走行中は手動が通りません**（先にゴールを
+取り消すこと）。**この上流launchがどこへ出すかは確認していません。** `/cmd_vel`へ
+出しているなら、`twist_mux:=true`（既定）ではそれは自律側の入口なので、自律走行中に
+開くと取り合いになります。`ros2 topic info /cmd_vel_teleop`で購読者と配信者を見て
+確かめてください。
 
 ## GUI
 

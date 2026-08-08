@@ -204,18 +204,21 @@ Docker 越しに叩く形は
   同名の設定を移した先は `config/stack/nav2/vi_planner.yaml`（`stop_on_failure` /
   `waypoint_pause_sec` / `goal_retry_limit`）。`behaviors.yaml` のほうを直しても効かない。
 - **`twist_mux:=true`（既定）だと、機体が動くのは `/cmd_vel` ではなく
-  `/cmd_vel_mux`。** 人が出す指令は `/cmd_vel_teleop`（優先度 100）へ。`/cmd_vel`
-  （優先度 10）は自律側の出力で、そちらへ投げると自律走行中は取り合いになる（誰も
-  出していなければ届く）。どちらでもないトピックへ投げると**エラーは出ず、ただ機体が
-  動かない**。優先度は非常停止ではない（出しているあいだ + 0.5 秒だけ勝つ）ので、
-  止めるのはモータ電源。
+  `/cmd_vel_mux`。** 人が出す指令は `/cmd_vel_teleop`（優先度 10）へ。`/cmd_vel`
+  （優先度 100）は自律側の出力で、**自律側のほうが勝つ**。どちらでもないトピックへ
+  投げると**エラーは出ず、ただ機体が動かない**。**自律走行中は手動が通らない**ので、
+  `control.sh teleop` と `control.sh stop`（ゴールを取り消さない）は自律側が
+  `timeout`（0.5 秒）ぶん黙るまで効かず、**そのときもエラーは出ない**。優先度は
+  非常停止ではないので、止めるのはモータ電源。
 - **`joy:=true`（既定）の teleop は「押している間」ではなくモード。** START を
   `hold_seconds`（既定 2 秒）長押しして入れたあとは、ボタンを離しても切るまで続く。
-  そのあいだ `joy_teleop` はスティックが中立でもゼロを出し続けるので、
-  **そのあいだ自律側の `/cmd_vel` は twist_mux を通らない**（出しっぱなしにしないと
-  手を離した 0.5 秒後に自律が勝って走り出す）。入るときに `/follow_waypoints` と
-  `/navigate_to_pose` のゴールを取り消すのも同じ事情で、優先度で押さえるだけでは
-  teleop を切った瞬間に元のゴールが再開する。`twist_mux:=false` だと
+  **パッドが自律側に勝てるのは優先度ではなく、入るときに `/follow_waypoints` と
+  `/navigate_to_pose` のゴールを取り消して自律側を黙らせるから**（取り消さない
+  `control.sh teleop` との違いはここ）。それでも自律側は最後の指令から 0.5 秒は
+  勝つので、入った直後に効かない間がある。そのあいだ `joy_teleop` はスティックが
+  中立でもゼロを出し続けるが、これは**ドライバの `cmd_vel_timeout`（既定 60 秒）に
+  対する保険**で、自律側を押さえる働きは無い（twist_mux は勝っているトピックが
+  メッセージを受けたときしか中継しない）。`twist_mux:=false` だと
   `/cmd_vel_teleop` を誰も購読しないので、**エラーも出さずに効かない**。
 - **Pi 5 では rtmouse が動かない。** `robot_bringup.launch.py` の `driver:=` は既定が
   公式実装の `raspimouse`（`/dev/rt*` が要る）なので、Pi 5 でそのままだと configure で

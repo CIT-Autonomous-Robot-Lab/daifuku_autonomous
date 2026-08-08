@@ -158,7 +158,7 @@ docker compose exec ros2 \
 
 ## 3. 地図を作る
 
-地図を作成する範囲をゆっくり走行します。操作ノードは`/cmd_vel_teleop`へ`geometry_msgs/msg/Twist`を配信する必要があります（`twist_mux`の優先度が高い側。`twist_mux:=false`で起動したなら`/cmd_vel`）。
+地図を作成する範囲をゆっくり走行します。操作ノードは`/cmd_vel_teleop`へ`geometry_msgs/msg/Twist`を配信する必要があります（`twist_mux`の手動側の入口。`twist_mux:=false`で起動したなら`/cmd_vel`）。地図作成中は自律側が`/cmd_vel`を出さないので、優先度が下でもそのまま通ります。
 
 軽量Docker環境では、モーター電源を入れてから`control.sh`で操作できます。SLAMを
 起動したターミナルとは別のターミナルで実行してください。

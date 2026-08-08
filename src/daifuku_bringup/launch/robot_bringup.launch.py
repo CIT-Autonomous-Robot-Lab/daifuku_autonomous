@@ -163,10 +163,11 @@ def _params_file(context, argument, default_name):
 def _twist_mux(context):
     """cmd_vel の仲裁ノードを組み立てる (twist_mux:=false なら何も作らない)。
 
-    自律走行 (/cmd_vel) と遠隔操作 (/cmd_vel_teleop) を優先度で 1 本に束ね、
-    MUXED_CMD_VEL へ出す。**「出している間だけ勝つ」仲裁**であって非常停止では
-    ない。teleop が勝つのは publish している間と timeout (0.5 s) のあいだだけで、
-    途切れれば自律側に戻る。確実に止めるのは今までどおりモータ電源
+    自律走行 (/cmd_vel、優先度 100) と遠隔操作 (/cmd_vel_teleop、優先度 10) を
+    1 本に束ね、MUXED_CMD_VEL へ出す。**「出している間だけ勝つ」仲裁**であって
+    非常停止ではない。自律側のほうが上なので、**自律走行中は遠隔操作が通らない**
+    (通るのは自律側が timeout (0.5 s) のあいだ黙ったとき)。手動へ渡すには
+    ゴールを取り消すこと。確実に止めるのは今までどおりモータ電源
     (motor_power サービス / control.sh motor off)。
 
     Returns:
@@ -437,8 +438,9 @@ def generate_launch_description():
             default_value="true",
             description="cmd_vel の仲裁 (twist_mux) を挟むか。true ならドライバが "
                         f"購読するのは /cmd_vel ではなく /{MUXED_CMD_VEL} になり、"
-                        "遠隔操作は /cmd_vel_teleop へ出す (自律側の /cmd_vel より "
-                        "優先度が高い)。false にすると仲裁なしで全員が /cmd_vel へ "
+                        "遠隔操作は /cmd_vel_teleop へ出す (自律側の /cmd_vel の "
+                        "ほうが優先度が高いので、自律走行中は通らない)。"
+                        "false にすると仲裁なしで全員が /cmd_vel へ "
                         "書く従来の配線に戻る。",
         ),
         DeclareLaunchArgument(
