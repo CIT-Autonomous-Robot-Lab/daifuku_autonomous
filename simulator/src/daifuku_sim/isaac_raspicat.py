@@ -79,10 +79,8 @@ import math
 import os
 import sys
 
-# ---------------------------------------------------------------------------
 # 引数は SimulationApp を起動する **前** に解釈する。SimulationApp を作った時点で
 # Kit が sys.argv を触りにいくため、後から argparse すると取りこぼす。
-# ---------------------------------------------------------------------------
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -179,9 +177,7 @@ def parse_args():
 
 ARGS = parse_args()
 
-# ---------------------------------------------------------------------------
 # Kit の起動。これ以降でしか omni.* / isaacsim.* は import できない。
-# ---------------------------------------------------------------------------
 
 from isaacsim import SimulationApp  # noqa: E402  (SimulationApp より前に import 禁止)
 
@@ -197,7 +193,6 @@ from isaacsim.core.utils.extensions import enable_extension  # noqa: E402
 from pxr import Gf, UsdGeom  # noqa: E402
 
 
-# ---------------------------------------------------------------------------
 # 拡張名の解決
 #
 # Isaac Sim 4.x と 5.x で OmniGraph のノード型名の名前空間が変わった:
@@ -207,7 +202,6 @@ from pxr import Gf, UsdGeom  # noqa: E402
 # 6.0 では ROS 2 ブリッジと core の名前空間は据え置き。動いたのは RTX センサ
 # (isaacsim.sensors.rtx -> isaacsim.sensors.experimental.rtx) で、そちらは
 # OmniGraph ではなく Python API なので _make_rtx_lidar() が別に面倒を見る。
-# ---------------------------------------------------------------------------
 
 _NS_CANDIDATES = {
     "ros2": ("isaacsim.ros2.bridge", "omni.isaac.ros2_bridge"),
@@ -257,9 +251,7 @@ def enable_ros2_bridge():
     )
 
 
-# ---------------------------------------------------------------------------
 # ステージの組み立て
-# ---------------------------------------------------------------------------
 
 def load_world(path):
     path = os.path.abspath(path)
@@ -464,9 +456,7 @@ def _rpy_to_quat(rpy):
     ]
 
 
-# ---------------------------------------------------------------------------
 # ROS 2 ブリッジのグラフ
-# ---------------------------------------------------------------------------
 
 def build_ros_graph(args, robot_prim, lidar_path):
     """/cmd_vel 購読 -> 差動駆動 -> odom/TF/scan 出版までを 1 つのグラフに組む。"""
@@ -722,9 +712,7 @@ def build_imu_graph(args):
     print("[isaac_raspicat] imu graph -> /livox/imu")
 
 
-# ---------------------------------------------------------------------------
 # 実行ループ + RTF の計測
-# ---------------------------------------------------------------------------
 
 class RtfMeter:
     """1 秒ごとに RTF を測って JSON Lines で落とす。

@@ -21,21 +21,14 @@
 #   include lidar_bringup.launch.py   LiDAR -> /scan
 #   include odom_fusion.launch.py     車輪 + IMU -> /odom, odom -> base_footprint
 #
-# LiDAR をここに置いてあるのは、(1) 人が navigation を立てるまでセンサが上がらない
-# のを避けるため、(2) navigation を立て直すたびに EKF が再起動して /odom が原点へ
-# 飛ぶのを避けるため、(3) use_mid360_imu の切り替えを 1 つの launch に閉じるため。
-#
-# **ドライバが finalized まで落ちると launch ごと終了する** (下の
-# register_shutting_down_transition)。したがってドライバの障害は LiDAR も道連れに
-# し、restart: unless-stopped で両方が上がり直す。踏むのは Pi 5 で
-# driver:=raspimouse を選んだときのような設定の取り違えで、そこは直せば直る。
+# LiDAR と EKF をここに置いてあるのは、navigation を立て直すたびに EKF が再起動して
+# /odom が原点へ飛ぶのを避けるため。**ドライバが finalized まで落ちるとこの launch
+# ごと終了する**ので、駆動の障害はセンサも道連れにする (下の
+# register_shutting_down_transition。詳細は CLAUDE.md)。
 #
 # 上流 raspicat_ros の raspicat.launch.py 相当だが、raspimouse ノードを自前で
-# 立てている。上流は parameters= に raspicat/config/raspicat.param.yaml を直接
-# 渡しており、launch_ros のパラメータ優先順位 (ノード自身の parameters= が
-# グローバルの SetParametersFromFile に勝つ) の都合で、include して差分を重ねる
-# 方式では use_pulse_counters を上書きできないため。詳細は
-# config/bringup/robot/raspicat.yaml のコメント。
+# 立てている (上流の parameters= に勝てないため。config/bringup/robot/raspicat.yaml
+# のコメント)。
 #
 # 自前化のついでに urg_node 関連は落としてある (LiDAR はどちらの構成でも
 # lidar_bringup.launch.py が扱う)。robot_state_publisher / joint_state_publisher は
@@ -50,24 +43,12 @@
 #   original          … 自前実装 (raspicat_driver)。PWM・gpiochip・I2C をユーザ空間
 #                       から直接叩く。Pi 5 は rtmouse が動かないのでこちらしか選べない。
 #
-# **Pi 4 で original を選ぶときは rtmouse を載せないこと。** 両方が GPIO 16/6/5 と PWM を
-# 奪い合い、カーネルは止めてくれない (ノード側が起動時に拒否する)。詳細は
+# rtmouse と original の排他、twist_mux:= (既定 true) の仲裁と joy:= (既定 true) の
+# 行き先、use_mid360_imu:= (既定 true) が odom の担当を EKF へ譲ることと、その EKF を
+# 立てるのもこの launch (odom_fusion.launch.py を include する) であることは、
+# どれも他のファイルと組で決まるので CLAUDE.md「ファイルをまたぐ約束ごと」に集約して
+# ある。操作は docs/usage/joystick.md と src/joy_teleop.py、Pi ごとの注意は
 # docs/setup/raspberry-pi-4.md と raspberry-pi-5.md。
-#
-# twist_mux:= (既定 true) はドライバの手前に cmd_vel の仲裁を挟み、自律走行 (/cmd_vel)
-# と遠隔操作 (/cmd_vel_teleop) を優先度付きで 1 本に束ねる。ドライバが購読するのは
-# /cmd_vel ではなく /cmd_vel_mux になる。nav2 側の配線は変えていない。
-#
-# joy:= (既定 true) はゲームパッド (XInput 互換) を足す。出す先が仲裁の teleop 側なので、
-# **twist_mux:=false では誰も購読しない**。操作は docs/usage/joystick.md と
-# src/joy_teleop.py。
-#
-# use_mid360_imu:= (既定 true) は上の契約のうち odom の担当を EKF へ譲る。true では
-# ドライバは /wheel/odom を出すだけになり、odom -> base_footprint TF を出さない。
-# **その EKF を立てるのもこの launch** (odom_fusion.launch.py を include する) なので、
-# 引数 1 つで両側が同時に切り替わる。以前は EKF が lidar_bringup 側に居て、2 つの
-# launch へ同じ値を渡さないとエラーも警告も出ないまま自己位置が壊れた。既定を環境変数
-# USE_MID360_IMU から取るのは、その名残と Compose の .env 1 行で切れる操作性のため。
 
 import os
 import sys
@@ -375,19 +356,10 @@ def generate_launch_description():
 
     # URDF / TF ツリー。上流のものをそのまま使う (競合するパラメータが無い)。
     #
-    # **GroupAction で囲むこと。** IncludeLaunchDescription の launch_arguments は
-    # SetLaunchConfiguration として親と同じ文脈に積まれるので、囲まないと**後ろに
-    # 並ぶ include まで巻き添えになる**。ここで渡す上流の引数名 `lidar_frame` は
+    # **GroupAction で囲むこと。** ここで渡す上流の引数名 `lidar_frame` は
     # lidar_bringup.launch.py が Mid-360 用に宣言している名前とぶつかっていて、
-    # 素で並べると向こうの DeclareLaunchArgument が既定 (livox_frame) を入れられず
-    # lidar_link のまま走る。そうなると Livox ドライバの frame_id と
-    # base_footprint -> * の静的 TF が両方 lidar_link になる一方、**IMU だけは
-    # livox_ros_driver2 が frame_id を無視して "livox_frame" をべた書きする**
-    # (lddc.cpp の Lddc::PublishImuData) ので、EKF が引くべき TF が存在しなくなる。
-    # robot_localization は transform_timeout (0.1 秒) ぶん毎回ブロックするだけで
-    # **エラーも警告も出さない**ため、IMU が丸ごと捨てられたまま 30 Hz が 5 Hz に
-    # 落ち、odom -> base_footprint が 0.5 秒古くなり、emcl2 が map -> odom を
-    # 出せなくなって RViz から地図ごと消える (2026-08-07 の実機)。
+    # 素で並べると向こうの既定 (livox_frame) が入らず、IMU の TF が消える。
+    # 何がどう壊れるかは CLAUDE.md (IncludeLaunchDescription の項)。
     robot_state_publisher_launch = GroupAction([
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
