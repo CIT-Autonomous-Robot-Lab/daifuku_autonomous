@@ -91,14 +91,21 @@ symlink になるので、効くのは**ソース側の権限**です。Windows 
 
 ## テストと起動
 
-自動テストは実質ありません。`colcon test` で走るのは lint だけで、独自テストを持つ
-パッケージはありません。挙動の確認は実機か `simulator/` のハーネスで行います。例外は
-`map-to-usd` の出力検算で、これだけは単体で回せます。
+自動テストは実質ありません。`colcon test` で走るのはほぼ lint だけで、独自テストを
+持つのは `raspicat_driver`（`test/test_control.py`。閉ループの PI を ROS もハードも
+無しで回す）**1 つだけ**です。挙動の確認は実機か `simulator/` のハーネスで行います。
+もう 1 つの例外は `map-to-usd` の出力検算で、これだけは単体で回せます。
+
+**実機で通すぶんは `tools/checklist/` にあります。** `colcon test` からは走りません
+（人に聞く項も機体が動く項もあるため）。使いかたと番号の意味は `checkall.sh` の冒頭に
+あるので**ここには写しません**。段の 01 は静的検査で、このファイルが述べている約束ごと
+（ヘッダの位置・lint の顔ぶれ・見張りの立て方・順路のトピック名）をそのまま突き
+合わせます。**ここを直したら 0103 も直すこと。**
 
 lint は詰め合わせ（`ament_lint_common`）を使わず、自前 7 パッケージが**同じものを
 名指し**しています。走るのは 7 つ全部で copyright、Python を持つ 5 つで flake8、
-`ament_cmake` の 3 つで lint_cmake と xmllint（`daifuku_waypoint_manager` は
-Python が無いので flake8 が無い）。踏むのは 4 つ:
+`ament_cmake` の 4 つで lint_cmake と xmllint（`daifuku_waypoint_manager` と
+`daifuku_config` は Python が無いので flake8 が無い）。踏むのは 4 つ:
 
 - **`.py` / `.cpp` / `.hpp` を足したら Apache-2.0 のヘッダが要る**（`# Copyright 2026
   Keita Sekiguchi / nop` + `ament_copyright` のテンプレート逐語）。**置くのは
@@ -201,11 +208,15 @@ Docker 越しに叩く形は
   真のまま Nav2 構成で起動すると `navigate_to_pose` のサーバが `bt_navigator` と 2 つに
   なり、クライアントは先に見つけたほうへ繋ぐ（**どちらに繋がったかはログにも
   `ros2 action list` にも出ない**）。渡すのは launch だけ。
-- **`nav2:=false` では `config/stack/nav2/{bt_navigator,behaviors,controller_server,costmaps}.yaml`
-  と `behavior_trees/` が丸ごと読まれない。** 合成には入る（ファイル名順に束ねる規則は
-  そのまま）が、宛先のノードが立たないので**エラーも警告も出ないまま無視される**。
-  同名の設定を移した先は `config/stack/nav2/vi_planner.yaml`（`stop_on_failure` /
-  `waypoint_pause_sec` / `goal_retry_limit`）。`behaviors.yaml` のほうを直しても効かない。
+- **`nav2:=false` では `config/stack/nav2/{bt_navigator,controller_server,costmaps}.yaml`
+  と `behavior_trees/` が丸ごと読まれず、`behaviors.yaml` も `velocity_smoother` の
+  節だけになる**（そのノードだけは `nav2:=false` でも立つ）。合成には入る（ファイル名順に
+  束ねる規則はそのまま）が、宛先のノードが立たないので**エラーも警告も出ないまま
+  無視される**。`behaviors.yaml` の残り 3 ノード（`smoother_server` /
+  `behavior_server` / `waypoint_follower`）がそれで、同名の設定を移した先は
+  `config/stack/nav2/vi_planner.yaml`（`stop_on_failure` / `waypoint_pause_sec`）。
+  あちらを直しても効かない。BT の `RecoveryNode number_of_retries` に当たるものは
+  同ファイルの `goal_retry_limit` で、こちらは名前が違う。
 - **`twist_mux:=true`（既定）だと、機体が動くのは `/cmd_vel` ではなく
   `/cmd_vel_mux`。** 人が出す指令は `/cmd_vel_teleop`（優先度 10）へ。`/cmd_vel`
   （優先度 100）は自律側の出力で、**自律側のほうが勝つ**。どちらでもないトピックへ

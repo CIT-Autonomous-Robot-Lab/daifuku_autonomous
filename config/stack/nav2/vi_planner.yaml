@@ -14,10 +14,11 @@
 # vi_planner にはさらに **nav2:=false (この構成の既定) のスタンドアロン**があり、
 # そのとき navigate_to_pose と follow_waypoints もこのノードが出す。効くキーが
 # 増える (goal_retry_* / stop_on_failure / waypoint_pause_sec) 一方で、
-# ./bt_navigator.yaml ./behaviors.yaml ./controller_server.yaml ./costmaps.yaml と
-# ../../behavior_trees/ は**丸ごと読まれなくなる** (それらのノードが立たないため)。
-# 読む必要があるのはこのファイルと ./map_server.yaml と ../localization/emcl2.yaml
-# だけになる。切り替えは launch の nav2:= で、ここには書かない (下の未設定を参照)。
+# ./bt_navigator.yaml ./controller_server.yaml ./costmaps.yaml と ../../behavior_trees/
+# は**丸ごと読まれなくなり**、./behaviors.yaml も velocity_smoother の節だけになる
+# (それ以外のノードが立たないため)。読む必要があるのはこのファイルと ./map_server.yaml
+# と ../localization/emcl2.yaml と ./behaviors.yaml の velocity_smoother の節だけに
+# なる。切り替えは launch の nav2:= で、ここには書かない (下の未設定を参照)。
 
 # ── local_planner:=vi: 統合プランナ (planner_server + controller_server 置換) ──
 vi_planner:

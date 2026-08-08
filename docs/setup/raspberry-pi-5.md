@@ -32,9 +32,10 @@ GPIO / PWM / SPI / I2C はすべて PCIe の先の RP1 側にあります。こ�
 | ROS ノード | `raspimouse`（raspimouse2） | `raspicat_driver`（同名パッケージ） |
 | Pi 5 で | 動かない | これを使う |
 
-上に見せる契約は同じです。`cmd_vel` を購読し、`odom` と `odom -> base_footprint`
-TF を出し、`motor_power` サービスを持つ lifecycle ノードなので、Nav2・EKF・emcl2 の
-設定は一切変わりません。
+上に見せる契約は公式実装を**含みます**。`cmd_vel` を購読し、`odom` と
+`odom -> base_footprint` TF を出し、`motor_power` サービスを持つ lifecycle ノードなので、
+Nav2・EKF・emcl2 の設定は一切変わりません（足してあるのは `/motor_power_state` 1 つ
+だけで、購読する側は無くても動くように書いてあります）。
 
 LED・ブザー・スイッチも同じ型で出します（`/leds`・`/buzzer`・`/switches`）。**測距
 センサだけは用意しません**（基板の SPI 側 AD にぶら下がっていて、このワークスペースの

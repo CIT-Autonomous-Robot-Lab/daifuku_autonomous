@@ -71,4 +71,15 @@ ros2 run tf2_ros tf2_echo odom base_footprint
 Mid-360 + IMU構成では`/wheel/odom`と`/odom`の両方が`raspicat`サービス側から出ます
 （ドライバが前者、同じlaunchが立てるEKFが後者）。`/odom`のpublisherは1つが正です。
 
+**一通り確かめるなら`tools/checklist/`があります。** 静的検査からナビゲーションまでを
+段階順（安全なものが先、機体が動くものが最後）に並べたもので、機体が動く項は必ず事前に
+確認を求めます。
+
+```bash
+tools/checklist/checkall.sh --list     # 何が走るかだけ見る
+tools/checklist/checkall.sh            # 機体は動かさない範囲を全部
+```
+
+`--armed`や項の絞り込みを含む使いかたは`checkall.sh`の冒頭にあります。
+
 準備ができたら[利用ガイド](../usage/README.md)へ進んでください。

@@ -17,7 +17,7 @@
   <exec_depend>rqt_gui_py</exec_depend>
   <exec_depend>std_srvs</exec_depend>
 
-  <!-- test/ の各 test_*.py と対。pep257 は外してある (理由は CLAUDE.md)。 -->
+  <!-- test/ の各 test_*.py と対。pep257 は外してある (理由は AGENTS.md)。 -->
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
   <test_depend>python3-pytest</test_depend>

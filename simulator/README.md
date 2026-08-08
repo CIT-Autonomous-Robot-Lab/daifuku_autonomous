@@ -388,7 +388,8 @@ RTF が足りないときの対処: `RENDER_DT` を大きくする / `HEADLESS=1
 
 実機の挙動を変えないよう、追加した引数の既定値は現行のままにしてある。
 
-- `lidar_bringup.launch.py` / `navigation.launch.py` に **`lidar_driver`** (既定 `true`) を追加。
+- `lidar_bringup.launch.py` / `robot_bringup.launch.py` に **`lidar_driver`** (既定 `true`) を追加
+  (センサーを立てるのは機体側なので、`navigation.launch.py` にこの引数は無い)。
   `false` にすると:
   - `livox_ros_driver2` を起動しない (Isaac が `/livox/lidar` を PointCloud2 で直接出す。
     実機ドライバも `xfer_format: 0` = PointCloud2 なので**同型**で、下流は一切変わらない)
