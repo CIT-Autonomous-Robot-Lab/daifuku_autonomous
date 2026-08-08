@@ -12,11 +12,11 @@ scan_to_scan_filter_chain:
       name: connector_blind_sector       # チェーン内でのこのフィルタの名前 (任意)
       type: laser_filters/LaserScanSectorFilter   # 適用するフィルタのクラス
       params:
-        # 後方 60 度 (+150 度から ±180 度をまたいで -150 度まで) を除外する。
+        # 後方 50 度 (+155 度から ±180 度をまたいで -155 度まで) を除外する。
         # この機体は後方にコネクタがあり、自分自身を障害物として拾うため。
         # angle_max < angle_min は「±180 度をまたぐ扇形」を意味する意図的な指定。
-        angle_min: 2.617993878           # [rad] 扇形の始端 (+150 度)
-        angle_max: -2.617993878          # [rad] 扇形の終端 (-150 度)
+        angle_min: 2.705260341           # [rad] 扇形の始端 (+155 度)
+        angle_max: -2.705260341          # [rad] 扇形の終端 (-155 度)
         range_min: 0.0                   # [m] 扇形として扱う距離の下限
         range_max: 100.0                 # [m] 同上限。実質すべての距離が対象
         clear_inside: true               # true = 扇形の内側を消す (false なら外側)

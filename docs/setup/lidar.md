@@ -16,8 +16,8 @@ EKF）の2つで、どちらも単独でも立てられます（`simulator/`は�
 です。どちらも入力を`/scan_raw`へ集約し、角度フィルタ後の`/scan`をSLAMとNav2へ
 渡します。
 
-既定の`daifuku_bringup/config/sensors/scan_filter.yaml`は、コネクタがある後方60度
-（+150度から-150度まで、±180度をまたぐ範囲）を除外します。
+既定の`daifuku_bringup/config/sensors/scan_filter.yaml`は、コネクタがある後方50度
+（+155度から-155度まで、±180度をまたぐ範囲）を除外します。
 
 センサーごとのトピックの流れは次のとおりです。
 
@@ -247,8 +247,8 @@ daifuku_bringup:
     ros__parameters:
       filter1:
         params:
-          angle_min: 2.617993878
-          angle_max: -2.617993878
+          angle_min: 2.705260341
+          angle_max: -2.705260341
 ```
 
 `pointcloud_to_laserscan`（`mid360_scan.yaml`）、`ekf_filter_node`
