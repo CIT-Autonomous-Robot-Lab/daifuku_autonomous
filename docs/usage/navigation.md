@@ -397,12 +397,12 @@ vi_planner: path with 412 poses in 0.34s (solved_now=true, iters=0, prefetched)
 有効なぶん代償も常時払います。価値関数が同時に2つ生きるので、場も2つ要ります。
 密ソルバではメモリがそのまま2倍です。compactでsinkがディスクへ出るのは
 `compact_sink_dir`を指定したときと`compact_ram_limit_mb`を超えたときだけで、
-**同梱の2地図はいまどちらも出ません**。したがって2つとも丸ごとRAMに載ります
-（津田沼648 MB×2＝1.3 GB、19F 95 MB×2）。津田沼を巡回するなら、その1.3 GBが
-匿名メモリとして居座ることになります。solveのCPUも取られます（追従の`try_lock`は
-邪魔しませんが、10Hzの制御周期がずれ得ます）。**Pi 4（4 GB）で走らせるなら、使う
-地図の`overrides`（`map_19f.yaml` / `map_tsudanuma.yaml`）の`waypoint_prefetch`を
-`false`へ戻してください**（Pi 5の8 GBを前提にしている点は`dense_limit_mb`・
+**同梱の2地図はいまどちらも出ません**。したがって場は丸ごとRAMに載ります——19Fが
+95 MB×2、津田沼は`true`へ戻せば648 MB×2＝1.3 GBが匿名メモリとして居座ります。
+solveのCPUも取られます（追従の`try_lock`は邪魔しませんが、10Hzの制御周期がずれ得ます）。
+**Pi 4（4 GB）で走らせるなら`overrides/map_19f.yaml`の`waypoint_prefetch`を`false`へ
+戻してください**——既定の場所が`map_19f`なので、引数を何も足さずに立てるとPi 4でも
+これが効きます（Pi 5の8 GBを前提にしている点は`dense_limit_mb`・
 `compact_ram_limit_mb`と同じ事情です）。
 走行中に固まるようになったときも、まずここを戻して切り分けます。
 **まだ実機でもpi4_simでも通していません。**

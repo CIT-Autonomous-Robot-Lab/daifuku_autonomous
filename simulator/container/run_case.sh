@@ -78,6 +78,11 @@ cleanup_ros
 ros2 daemon stop >/dev/null 2>&1
 
 SHARE=/opt/ros_ws/install/share/daifuku_stack
+# overrides は daifuku_config の share。**maps/ を持つ daifuku_stack とは置き場が違う**
+# (2026-08-08 まで $SHARE/config/overrides/ を見ていた。設定を config/ へ出して
+# daifuku_stack がその段を install しなくなった時点から、**どの地図でも overrides:=none
+# に落ちていたはず** — この修正ともども**未検証**。効かせるには一度ビルドが要る)。
+CONFIG_SHARE=/opt/ros_ws/install/share/daifuku_config
 RUN=/tmp/pi4_sim/$CASE
 rm -rf "$RUN"; mkdir -p "$RUN"
 export ROS_LOG_DIR=$RUN/log
@@ -171,7 +176,7 @@ params_arg=()
 # MAP_NAME を変えても 19F 用の調整 (emcl2 のリセット閾値など) が載ったままになる。
 # 地図名と同名の override があればそれを、無ければ none (= 何も重ねない)。
 if [ -z "${OVERRIDES:-}" ]; then
-    if [ -f "$SHARE/config/overrides/$MAP_NAME.yaml" ]; then
+    if [ -f "$CONFIG_SHARE/overrides/$MAP_NAME.yaml" ]; then
         OVERRIDES=$MAP_NAME
     else
         OVERRIDES=none

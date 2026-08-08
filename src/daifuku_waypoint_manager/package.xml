@@ -23,7 +23,7 @@
 
   <!-- ament_lint_common (詰め合わせ) は使わず、走らせるものだけを名指しする。
        flake8 は Python が無いので入れない。外してあるのは C++ の書式 lint
-       (uncrustify / cpplint) で、理由は CLAUDE.md。 -->
+       (uncrustify / cpplint) で、理由は AGENTS.md。 -->
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_cmake_copyright</test_depend>
   <test_depend>ament_cmake_lint_cmake</test_depend>

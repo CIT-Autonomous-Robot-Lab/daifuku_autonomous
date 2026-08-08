@@ -65,6 +65,11 @@ Three deliberate differences from raspimouse:
     direction line we last wrote, so neither the loop nor the odometry can see
     that happening.  wheel_correction_limit is what bounds how bad that gets;
     "open" is the way out, and is exactly what raspimouse does.
+    The gains were measured on the robot on 2026-08-08 against a wall seen by
+    the Mid-360, which is the only ruler here that is independent of the
+    encoders: wheel_ki 8 oscillates, 4 amplifies the counter's own noise, and
+    1-3 all settle, so 2.0 is the middle of the usable range.  wheel_kp 0.3
+    destabilises and 0.1 changes nothing measurable, which is why it is 0.
 
 An I2C stall cannot wedge the robot the way rtmouse does: the ioctl returns
 ETIMEDOUT to us, the counters are read in their own callback group, and
@@ -128,8 +133,8 @@ class RaspicatDriver(LifecycleNode):
         self.declare_parameter("odometry_scale_right_wheel", 1.0)
         self.declare_parameter("wheel_diameter", 0.2)
         self.declare_parameter("wheel_tread", 0.35)
-        self.declare_parameter("pulses_per_revolution", 1118.0)
-        self.declare_parameter("steps_per_revolution", 570.0)
+        self.declare_parameter("pulses_per_revolution", 1073.0)
+        self.declare_parameter("steps_per_revolution", 447.0)
         self.declare_parameter("odom_hz", 50.0)
         self.declare_parameter("initial_motor_power", False)
         self.declare_parameter("cmd_vel_timeout", 60.0)
@@ -143,7 +148,7 @@ class RaspicatDriver(LifecycleNode):
 
         self.declare_parameter("control_mode", "closed")
         self.declare_parameter("wheel_kp", 0.0)
-        self.declare_parameter("wheel_ki", 1.0)
+        self.declare_parameter("wheel_ki", 2.0)
         self.declare_parameter("wheel_correction_limit", 2.0)
 
         self.declare_parameter("gpiochip_label", "")

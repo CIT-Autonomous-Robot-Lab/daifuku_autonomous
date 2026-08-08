@@ -32,6 +32,13 @@ rqt                                          # Plugins > Raspicat > Raspicat Con
 `create_service` しているためです（相対名は名前空間に対して解決され、ノード名は入りません）。
 ライフサイクルのサービスだけはノード名の下にいます。
 
+**モータ電源に状態表示はありません。** ライフサイクルは `/get_state` で 2 秒ごとに
+取り直しますが、電源のほうは「ON」「OFF」の 2 ボタンだけで、いま入っているかは
+パネルのどこにも出ません。自前実装（`driver:=original`）は実状態を
+`/motor_power_state`（`std_msgs/Bool`、latch）へ出しますが、**パネルはまだ購読して
+いません**（`joy_teleop` の LED1 はそれを見ています）。確かめるなら
+`ros2 topic echo /motor_power_state --qos-durability transient_local` のほうです。
+
 ## 止まり方（ここが一番重要）
 
 自前実装（`driver:=original`）の `config/bringup/robot/raspicat_driver.yaml` は

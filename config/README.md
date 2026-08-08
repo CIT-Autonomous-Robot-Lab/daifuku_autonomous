@@ -107,7 +107,7 @@ resample_interval: 1         # 既定 1: 何回の更新ごとにリサンプル
 そのパスは起動ログに出ます。
 
 ```
-[INFO] [launch.user]: params: params_file: 8 fragments from .../config/nav2 -> /tmp/params_file_xxxx.yaml
+[INFO] [launch.user]: params: params_file: 8 fragments from .../daifuku_config/stack/nav2 -> /tmp/params_file_xxxx.yaml
 ```
 
 分割は「ノード単位で重複なし」が前提です。同じノード名が 2 つの断片にあると、
@@ -189,7 +189,7 @@ override も**通ります**（そして黙って無視されます）。
 `ros__parameters` も無い）ので、この仕組みに乗りません。`mid360_config:=<パス>` で
 ファイルごと差し替えてください。
 
-`overrides` の既定値は **`daifuku_config_manager` の `config/site` の 1 行**（既定
+`overrides` の既定値は **`config/site` の 1 行**（既定
 `map_19f`）で、すべての launch が同じものを見ます。さらに `navigation.launch.py` は
 `map` の既定もそこから導きます。場所が変われば LiDAR の帯も EMCL2 の調整も地図も
 一緒に変わるので、**人が動かす値を 1 つにしてある**という趣旨です。
@@ -239,8 +239,9 @@ ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=nav2
 `simulator/container/nav_container.sh` と `simulator/container/run_case.sh` は、
 `MAP_NAME` と同名の override があればそれを、無ければ `none` を**必ず明示的に**
 渡します（`OVERRIDES=` で上書き可）。既定任せにすると同じ取り違えが起きるためです。
-**参照先は `daifuku_config_manager` の share** で、`maps/` を持つ `daifuku_stack` とは
-置き場が違います（2026-08-07 まで後者を見ていて、どの地図でも `none` に落ちていました）。
+**参照先は `daifuku_config` の share** で、`maps/` を持つ `daifuku_stack` とは
+置き場が違います（2026-08-08 まで後者の `config/overrides/` を見ていました。設定を
+`config/` へ出したときにそこは消えているので、**どの地図でも `none` に落ちていました**）。
 
 ### 何がどこへ行ったかを見る
 
@@ -284,8 +285,8 @@ daifuku_stack:              # 自律移動側
           inflation_radius: 0.45
 ```
 
-**ファイルを新しく足したときは 1 度ビルドを通してください。** `setup.py` の `glob` は
-ビルド時にしか展開されないので、足しただけでは `overrides:=` の一覧に出てきません
+**ファイルを新しく足したときは 1 度ビルドを通してください。** `install/` の symlink は
+ビルド時にしか張られないので、足しただけでは `overrides:=` の一覧に出てきません
 （既にあるファイルの値を直すだけならビルドは要りません）。
 
 間違えると起動時にエラーで止まります。**パッケージ名**が `KNOWN_PACKAGES`
@@ -404,10 +405,18 @@ Pi 5 実機で、右車輪だけを一定周波数で回してエンコーダで
 | 5506 | 4.944 回転（5 回転に 20° 足りず） | 1113.6 /回転 | 567.8 /回転 |
 | 11148 | 9.972 回転（10 回転に 10° 足りず） | 1118.1 /回転 | 570.4 /回転 |
 
-目視誤差が半分になる後者を採って **1118 / 570** としています。**この 2 つは 1.960 倍
+目視誤差が半分になる後者を採って **1118 / 570** としました。**この 2 つは 1.960 倍
 違います**（比のほうは 142 秒の計測なので 0.5% 以下の精度で出ています）。エンコーダと
 ステッピングが同じ軸に載っていない、ということです。上流はこれを 1 つの数で兼ねて
 いるので、この機体では**どちらに合わせても片方が壊れます**。
+
+**この 1118 / 570 は、車輪を浮かせて数えた値です。2026-08-08 に床の上で測り直して
+`1073 / 447` へ替えました**（物差しは Mid-360 が見る前方の壁。20 脚、0.10〜0.40 m/s）。
+浮かせて数えた値では、指令より 27% 余計に走り、`odom` は実距離より 3〜8% 少なく出て
+いました。導出と、`pulses_per_revolution` が 1 つの値で全速度に合わない理由（不足が
+距離ではなく経過時間に比例する。**原因は未解明で、カウンタの読み出しではない**）は
+[`src/raspicat_driver/README.md`](../src/raspicat_driver/README.md#較正2026-08-08-に床の上で測り直し)。
+上の比 1.960 のほうは 1073/447 = 2.40 へ動いていますが、**軸が別という結論は同じ**です。
 
 `raspimouse` ノード（`driver:=raspimouse`）はここが直せません。`cmd_vel` → ステップ
 周波数の換算に **400 を直書き**していて、パラメータはオドメトリ側にしか効かないため
@@ -448,10 +457,14 @@ Pi 4 と Pi 5 で 1 ファイルです。機種差は `model: auto` が device-t
 [`docs/setup/raspberry-pi-4.md`](../docs/setup/raspberry-pi-4.md) と
 [`raspberry-pi-5.md`](../docs/setup/raspberry-pi-5.md)。
 
-* **`pulses_per_revolution`（1118.0）と `steps_per_revolution`（570.0）が別のキー**
+* **`pulses_per_revolution`（1073.0）と `steps_per_revolution`（447.0）が別のキー**
   です。前者はエンコーダのパルス数で `odom` 専用、後者はステップ数で `cmd_vel` →
-  周波数専用。上の実測のとおり 1.96 倍違うので、上流のように 1 つで兼ねると、機体は
+  周波数専用。上の実測のとおり 2 倍以上違うので、上流のように 1 つで兼ねると、機体は
   指令より遅く走るのに `odom` は指令どおりを報告する、という形で静かにずれます。
+  **どちらも 2026-08-08 に床の上で測り直した値**で、浮かせて数えた 1118 / 570 では
+  ありません。`pulses_per_revolution` は 1 つの値で全速度には合わないので、巡航帯
+  （0.20〜0.40 m/s）に合わせてあります（そこでは +0.4%、0.13 m/s では `odom` が 4%
+  **少なく**出る。値を下げると `odom` は大きくなるので、向きを間違えないこと）。
 * `use_pulse_counters` の既定が `true`。ユーザ空間の `ioctl` は失敗を返して戻って
   くるので、rtmouse のような D 状態固着が起きません。連続失敗が
   `counter_error_limit` に達すると `cmd_vel` 積分へ落ち、応答が戻れば自動で復帰
@@ -475,11 +488,15 @@ Pi 4 と Pi 5 で 1 ファイルです。機種差は `model: auto` が device-t
   EKF まで道連れになり、`restart: unless-stopped` で回り続けるため）。
   **ゲインの 3 つだけは実行中に読み直す**
   ので、走らせながら `ros2 param set /raspicat_driver wheel_ki 2.0` で詰められます
-  （この yaml を直すと `config_sentinel` が launch ごと落とすため）。`wheel_kp` の
-  既定が 0.0 なのは、`odom_hz` の 1 周期ではエンコーダ 1 カウントが 0.28 rad/s
-  あり、比例項がその量子化を毎周期そのまま周波数に出してしまうからです。積分項に
-  同じ問題はありません（カウンタが自由走行なので、積分値は「走らなかった距離」に
-  収束する）。
+  （この yaml を直すと `config_sentinel` が launch ごと落とすため）。**ゲインは
+  2026-08-08 に実機で測ってあります**（`wheel_ki: 2.0`。8 で発振、4 でカウンタ自身の
+  ノイズを増幅、1〜3 はどれも収束。表は
+  [`src/raspicat_driver/README.md`](../src/raspicat_driver/README.md#ゲインは実機で測ってあります2026-08-08)）。
+  `wheel_kp` の既定が 0.0 なのは、比例項が測定の量子化を毎周期そのまま周波数に出して
+  しまうからです。**カウンタは `odom_hz` の 3 周期に 1 度、12 パルス前後をまとめて
+  返す**ので、1 周期あたりの量子化は 1 カウント (0.28 rad/s) ではなく 0.85 rad/s
+  あります。実測でも 0.3 で崩れ、0.1 では何も変わりませんでした。積分項に同じ問題は
+  ありません（カウンタが自由走行なので、積分値は「走らなかった距離」に収束する）。
 * `publish_tf` があります。EKF に `odom -> base_footprint` を出させる構成
   （`use_mid360_imu:=true`）では `false` になります。`robot_bringup.launch.py` が
   その引数を受けたときに自分で渡すので、**このファイルを直す必要はありません**。
@@ -583,7 +600,7 @@ fw_var_per_fw + |angle| * fw_var_per_rot)`）。距離 L [m] を直進したと�
 | 方位 `odom_rot_dev_per_fw` | 0.13 | 7.4 度 | 24 度 | — |
 | 方位 `odom_rot_dev_per_rot` | 0.2 | — | — | 14 度 |
 
-この機体のオドメトリは、車輪径 0.2m・トレッド 0.35m・エンコーダ 1118 pulses/rev の
+この機体のオドメトリは、車輪径 0.2m・トレッド 0.35m・エンコーダ 1073 pulses/rev の
 **実測値**を入れた `raspicat_driver` と、方位を Mid-360 のジャイロ（バイアス除去済み、
 残ノイズ 0.074 deg/s）で押さえる EKF の組です。1 m で 7.4 度も曲がりません。
 

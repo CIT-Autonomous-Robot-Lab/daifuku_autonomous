@@ -20,7 +20,7 @@ setup(
     zip_safe=True,
     maintainer="Keita Sekiguchi / nop",
     maintainer_email="noplab90@gmail.com",
-    description="設定ファイルの合成規則と、場所ごとの調整 (overrides) を持つ共有パッケージ",
+    description="設定ファイルの合成規則と見張り。設定の実体は daifuku_config (config/)",
     license="Apache-2.0",
     tests_require=["pytest"],
     # **ここを足したときはビルドが要る** (entry_points はビルド時にしか展開されない。
