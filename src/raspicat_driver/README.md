@@ -86,6 +86,7 @@ Pi 4 では `buzzer_pwm_channel` を 0 以上にすると `configure` を拒否�
 | ファイル | 何を持つか |
 | --- | --- |
 | `node.py` | ROS に見える面。lifecycle・`cmd_vel`・`odom`・TF・`motor_power`・`/leds`・`/buzzer`・`/switches`・オドメトリの積分。レジスタもチップ名も出てこない |
+| `control.py` | `control_mode: closed` の車輪ごとの PI 補正。ROS もハードも触らないので、rclpy の無いホストでも `test/test_control.py` で回せる |
 | `backend.py` | 両機種で共通の手順（GPIO → PWM → I2C → 周辺の順で掴む）と、機種の判定 |
 | `pi4.py` | BCM2711 の同定（`pinctrl-bcm2835` / `fe20c000.pwm`）と rtmouse の排除、ブザーへの PWM 割り当ての拒否 |
 | `pi5.py` | RP1 の同定（`pinctrl-rp1` / `98000.pwm`） |
@@ -118,6 +119,33 @@ Pi 4 では `buzzer_pwm_channel` を 0 以上にすると `configure` を拒否�
 コンテナから動かすときは `docker/raspberrypi/compose.original.yaml` を重ねます
 （`/sys/class/pwm` と `/sys/devices` を rw で渡し、`driver:=original` を付ける）。
 
+## 開ループと閉ループ
+
+`control_mode` で選びます。**既定は `closed`** で、`odom` の周期（`odom_hz`）で
+読んでいるエンコーダの値をそのまま使って、指令との差を PI で積んだぶんを周波数に
+足します。読む相手は同じカウンタなので、専用のタイマも I2C トランザクションも
+増えません。指令が来た瞬間に前置きの周波数を書く点は `open` と同じで、補正はその
+上に乗るだけです（`_push_command`）。
+
+`open` は上流（`raspimouse`）とまったく同じで、`cmd_vel` を車輪角速度に割って
+ステップ周波数を書いて終わりです。エンコーダは `odom` にしか出てきません。
+
+**脱調の対策にはなりません。** パルスの符号は直前に書いた方向線から借りているので、
+脱調した車輪も「前進した」カウントを返します。ループはそれを遅れと読んで周波数を
+上げ、脱調を悪化させます。効くのはすべりと負荷による定常的な不足で、そのために
+`wheel_correction_limit`（既定 2.0 rad/s）を小さく保ってあります。補正が指令と
+逆向きに車輪を回すことはありません（`trimmed_speed`）。**荷重をかけて実速度が
+落ちるようなら脱調なので、`control_mode` を `open` へ戻してください。**
+
+I2C が落ちて `cmd_vel` 積分に降りているあいだは補正を 0 に戻して前置きだけで走り、
+`motor_power` を切ったときと watchdog が働いたときは目標も積分も 0 にします（そうし
+ないと、止めた 20 ms 後の周期が止める前の目標を書き戻します）。
+
+ゲイン 3 つ（`wheel_kp` / `wheel_ki` / `wheel_correction_limit`）は毎周期読み直す
+ので、走らせたまま `ros2 param set /raspicat_driver wheel_ki 2.0` で詰められます。
+`control_mode` だけは `configure` 時に固定です。既定値と `wheel_kp: 0.0` の理由は
+[`config/README.md`](../../config/README.md)。
+
 ## I2C が詰まっても固着しません
 
 rtmouse は I2C が 1 回タイムアウトするとカーネルの mutex を握ったままになり、
@@ -140,6 +168,12 @@ rtmouse は I2C が 1 回タイムアウトするとカーネルの mutex を握
 と `steps_per_revolution` の較正まで済ませました。Pi 4 では未確認です。残っている
 ものは機種ごとに [`docs/setup/raspberry-pi-4.md`](../../docs/setup/raspberry-pi-4.md)
 と [`docs/setup/raspberry-pi-5.md`](../../docs/setup/raspberry-pi-5.md) の表にあります。
+
+**閉ループ（`control_mode: closed`、既定）は荷重をかけて回したことがありません。**
+較正は車輪を浮かせた状態で取ったもので、そこには補正すべきすべりがありません。
+`control.py` の PI そのものはホストで検算してありますが、この機体で効くかどうか
+——効くどころか脱調を悪化させないかどうか——は上の表の「閉ループ」の行が済むまで
+未確認です。
 
 **LED・ブザー・スイッチも実機では未確認です。** ピン番号は rtmouse の `rtmouse.h` から
 写したもの（LED 25/24/23/18、SW 20/26/21、ブザー 19）で、机上で確かめたのはソフト生成の

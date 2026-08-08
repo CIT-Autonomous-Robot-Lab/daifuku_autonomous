@@ -444,7 +444,7 @@ Pi 4 と Pi 5 で 1 ファイルです。機種差は `model: auto` が device-t
   （`allow_rtmouse` で上書き可）。両方が GPIO 16/6/5 と PWM を持つと、カーネルは
   衝突を検出しないまま車輪が逆に回り得ます。
 
-寸法と補正係数は上の 2 節と同じ値です。`raspicat.yaml` と違うのは次の 4 点で、理由は
+寸法と補正係数は上の 2 節と同じ値です。`raspicat.yaml` と違うのは次の 5 点で、理由は
 [`docs/setup/raspberry-pi-4.md`](../docs/setup/raspberry-pi-4.md) と
 [`raspberry-pi-5.md`](../docs/setup/raspberry-pi-5.md)。
 
@@ -459,6 +459,27 @@ Pi 4 と Pi 5 で 1 ファイルです。機種差は `model: auto` が device-t
 * `odom_hz` の既定が 50.0（`raspicat.yaml` は 100.0）。1 周期あたり I2C を
   6 トランザクション使うので、62.5 kHz のバス占有を半分に落としてあります
   （カウンタ 1 個につき 3 回。上位バイトで下位バイトを挟んで桁上がりを検出する）。
+* **`control_mode` があります**（`wheel_kp` / `wheel_ki` / `wheel_correction_limit`）。
+  **既定は `closed`** で、エンコーダが返した車輪速度と指令との差を PI で積んで
+  周波数に足します（実装は `src/raspicat_driver/src/raspicat_driver/control.py`）。
+  `open` にすると上流とまったく同じ、指令をそのままステップ周波数にする経路に
+  なります。**閉ループはすべりと負荷を消すためのもので、脱調の対策にはなりません。**
+  パルスの符号は直前に書いた方向線から借りているので、脱調した車輪も「前進した」
+  カウントを返します。ループはそれを「遅れている」と読んで周波数を上げ、脱調を
+  さらに悪化させます。`wheel_correction_limit`（既定 2.0 rad/s ≒ 車輪外周で
+  0.2 m/s）を小さく保つのはそのためで、補正が指令と逆向きに回すことも無いように
+  してあります。**荷重をかけて遅くなるようなら脱調なので `open` へ戻してください。**
+  `use_pulse_counters: false` と組むと測る相手が居ないので `open` に落ちます
+  （起動時に `error` を出し、`configured:` の行の `control=` にも `open` と出る。
+  ここで `configure` を落とすと、カウンタを切って切り分けようとしただけで LiDAR と
+  EKF まで道連れになり、`restart: unless-stopped` で回り続けるため）。
+  **ゲインの 3 つだけは実行中に読み直す**
+  ので、走らせながら `ros2 param set /raspicat_driver wheel_ki 2.0` で詰められます
+  （この yaml を直すと `config_sentinel` が launch ごと落とすため）。`wheel_kp` の
+  既定が 0.0 なのは、`odom_hz` の 1 周期ではエンコーダ 1 カウントが 0.28 rad/s
+  あり、比例項がその量子化を毎周期そのまま周波数に出してしまうからです。積分項に
+  同じ問題はありません（カウンタが自由走行なので、積分値は「走らなかった距離」に
+  収束する）。
 * `publish_tf` があります。EKF に `odom -> base_footprint` を出させる構成
   （`use_mid360_imu:=true`）では `false` になります。`robot_bringup.launch.py` が
   その引数を受けたときに自分で渡すので、**このファイルを直す必要はありません**。
