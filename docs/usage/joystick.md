@@ -9,7 +9,8 @@
 ```text
 パッド ─ /joy ─ joy_teleop ─ /cmd_vel_teleop（優先度 10）──┐
                      ├─ FollowWaypoints ─ vi_planner（nav2:=true なら nav2_waypoint_follower）
-                     └─ /buzzer ─→ ドライバ（音）
+                     ├─ /buzzer ─→ ドライバ（音・切り替わった瞬間だけ）
+                     └─ /leds ──→ ドライバ（LED・いまの状態）
                                                            ├→ twist_mux → /cmd_vel_mux → ドライバ
 自律側 ───────────────────── /cmd_vel（優先度 100）────────┘
 ```
@@ -119,6 +120,37 @@ teleopへ移って巡回を**取り消した**ときは鳴りません。取り�
 鳴らしているのは本体ドライバで、自前実装（`driver:=original`）も公式実装
 （`driver:=raspimouse`）も同じトピック・同じ型で受けます。**鳴らなくても走行には何の影響も
 ありません。** うるさければ`config/bringup/robot/joy_teleop.yaml`の`buzzer: false`で止まります。
+
+## いまのモードはLEDで分かります
+
+音は**切り替わった瞬間しか**伝えません。2秒前のピロリを聞き逃せば、いまteleopが入って
+いるのかは結局スティックを倒すまで分かりません。そこで機体の4つのLED（`/leds`、
+`raspimouse_msgs/Leds`）へ現在の状態を出します。
+
+| LED | 点いているとき |
+| --- | --- |
+| LED0 | teleopが入っている（自律側は塞がれています） |
+| LED1 | モータ電源を入れた**と`joy_teleop`が思っている**（下記） |
+| LED2 | `joy_teleop`から始めた巡回中（START+BACKで投げたゴールが生きている。RVizのパネルから始めたものは**点きません**） |
+| LED3 | `/joy`が届いている（消えていたらパッドの電池・受信機） |
+
+**LED1だけは実際の状態ではありません。** ドライバが電源の状態を出さないので、
+[モータ電源の節](#backでモータ電源を切る)と同じく`joy_teleop`が投げた要求を数えているだけ
+です。`control.sh motor`やRVizのパネルから変えると**点いたまま実際は切れている**（あるいは
+その逆）になります。**車輪に手を入れるときはLEDではなくモータ電源そのものを切ってください。**
+
+変化したときと**1秒ごと**に出しています。ドライバは`deactivate`でLEDを消す一方
+`activate`では戻さないので、変化時だけにするとlifecycleを回した先で消灯したままになります
+（エラーは出ません）。`joy_teleop`が落ちるときは4つとも消します——鳴り止むブザーと違い、
+点いたままのLEDは状態の断定として読まれるためです。
+
+音は残してあります。機体が見えない位置にいるときは音のほうが届くからで、LEDは「いまどうか」、
+音は「いま変わった・効かなかった」を受け持ちます。要らなければ
+`config/bringup/robot/joy_teleop.yaml`の`leds: false`で止まります（`buzzer: false`と同じ形）。
+
+ピンを掴めていなければ**エラーも出ずにただ点きません**。起動ログの
+`peripherals: leds=`で分かります。実機での配線確認は
+[`src/raspicat_driver/README.md`](../../src/raspicat_driver/README.md)。
 
 ## teleopは「モード」で、押している間だけではありません
 
@@ -230,6 +262,7 @@ STARTとBACKを同時に2秒押すと、`waypoints_file`のYAMLを読んで
 ros2 topic echo /joy                       # ボタンと軸の番号
 ros2 topic echo /joy_teleop/enabled        # teleopが入っているか（1秒ごとに出ています）
 ros2 topic echo /buzzer                    # モードの音（Hz、0で停止。音の変わり目だけ出ます）
+ros2 topic echo /leds                      # いまのモード（led0=teleop / led1=モータ / led2=巡回 / led3=/joy）
 ros2 topic hz /cmd_vel_teleop              # 出ているか
 ros2 topic echo /cmd_vel_mux               # 仲裁を抜けてドライバへ届いているか
 ```
@@ -246,6 +279,8 @@ ros2 topic echo /cmd_vel_mux               # 仲裁を抜けてドライバへ�
 | 自律走行が始まらない | teleopが入ったままではありませんか（`/joy_teleop/enabled`） |
 | BACKを長押ししてもモータ電源が変わらない | `ros2 service list \| grep motor_power`。押している途中でSTARTに触れていないか（巡回のほうになります）。音が期待と逆なら[数えがずれています](#backでモータ電源を切る) |
 | 切り替わるのに音が鳴らない | `ros2 topic echo /buzzer`。出ていれば機体側（ドライバが`activate`されているか、`use_buzzer`、起動ログの`peripherals: ... buzzer=`）。出ていなければ`joy_teleop`の`buzzer`が`false` |
+| LEDが1つも点かない | `ros2 topic echo /leds`。出ていれば機体側（`use_leds`、起動ログの`peripherals: leds=`）。出ていなければ`joy_teleop`の`leds`が`false` |
+| LEDが1つずれて点く | `gpio_leds`の並びが逆です（[`raspicat_driver/README.md`](../../src/raspicat_driver/README.md)） |
 
 ## `control.sh teleop joystick`とは別物です
 

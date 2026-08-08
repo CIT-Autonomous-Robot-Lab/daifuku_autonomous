@@ -43,11 +43,16 @@ rosdep install \
 # in the Raspberry Pi image: they need rqt and RViz, which ros:humble-ros-base
 # does not carry. The Pi's build-workspace.sh selects packages by name, so
 # leaving them out of that list is all it takes.
+#
+# raspimouse_msgs is here without raspicat_driver on purpose: the driver is only
+# ever launched (and never on this side), but joy_teleop.py imports Leds at module
+# scope for the status LEDs, so leaving it out kills joy_teleop at startup.
 colcon build \
   --symlink-install \
   --parallel-workers "${BUILD_JOBS}" \
   --packages-select daifuku_bringup daifuku_config daifuku_config_manager daifuku_stack \
                     daifuku_rqt daifuku_waypoint_manager emcl2 livox_ros_driver2 \
+                    raspimouse_msgs \
   --cmake-args \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DROS_EDITION=ROS2 \
