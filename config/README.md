@@ -372,8 +372,9 @@ ros2 topic pub --times 5 /cmd_vel_teleop geometry_msgs/msg/Twist \
   '{linear: {x: 0.0}, angular: {z: 0.0}}'
 ```
 
-`/cmd_vel` ではなく `/cmd_vel_teleop` なのは、仲裁（`twist_mux.yaml`）で優先度が
-高い側だからです。`twist_mux:=false` で立てているなら `/cmd_vel` へ投げてください。
+`/cmd_vel` ではなく `/cmd_vel_teleop` なのは、そちらが仲裁（`twist_mux.yaml`）の
+手動側の入口だからです（優先度は自律側のほうが上なので、**自律走行中は届きません**）。
+`twist_mux:=false` で立てているなら `/cmd_vel` へ投げてください。
 
 ノードの自己診断はあてになりません。`raspimouse_component.cpp` の「Testing
 counters」は `ifstream::is_open()` を見るだけで `read` を試さないので、
@@ -501,13 +502,16 @@ nav2 側の remap には触れていません（include している上流の la
 ドライバが購読するのは `/cmd_vel_mux` です。両ドライバとも相対名 `cmd_vel` で
 購読しているので、`robot_bringup.launch.py` の remap 1 行で両方に効きます。
 
-**これは非常停止ではありません。** twist_mux が中継するのは、その時点で優先度が
-最大のトピックが**メッセージを受けたとき**だけです。teleop が勝つのは publish して
-いる間と `timeout`（0.5 秒）のあいだだけで、キーを離せば自律側へ戻ります
-（`teleop_twist_keyboard` はキー入力のたびに 1 通出すので、押しっぱなしで初めて
-勝ち続けます）。確実に止める手段は今までどおりモータ電源（`motor_power` /
-`control.sh motor off`）です。`control.sh stop` も 0.5 秒ぶんの停止指令であって、
-仲裁を入れる前より強くはなっていません。
+**優先度は自律側（`/cmd_vel`、100）が上で、teleop（`/cmd_vel_teleop`、10）が下です。**
+twist_mux が中継するのは、その時点で優先度が最大のトピックが**メッセージを受けた
+とき**だけなので、teleop が通るのは自律側が `timeout`（0.5 秒）のあいだ黙っている
+ときに限られます。**したがって自律走行中は `control.sh teleop` も `control.sh stop`
+も効きません**（エラーは出ず、ただ機体が言うことを聞かない）。パッド
+（`joy_teleop`）だけは別で、teleop に入るときに `/follow_waypoints` と
+`/navigate_to_pose` を取り消すので自律側が黙り、0.5 秒後に手動が通ります。
+
+**これは非常停止ではありません。** 確実に止める手段は今までどおりモータ電源
+（`motor_power` / `control.sh motor off` / パッドの BACK 長押し）です。
 
 一方で、**中継が止まると指令も止まります**。twist_mux が落ちるとドライバには何も
 届かず、ドライバは最後の指令を `cmd_vel_timeout`（既定 60 秒）まで保持します。

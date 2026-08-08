@@ -13,7 +13,7 @@ Pi (ros2 コンテナ)                                PC (dev コンテナ / ネ
                                                      /cmd_vel_teleop <───┘
   自律側 /cmd_vel ──┐
                     ├─> twist_mux ─> /cmd_vel_mux ─> raspicat_driver
-  /cmd_vel_teleop ──┘  (teleop 100 / 自律 10)
+  /cmd_vel_teleop ──┘  (自律 100 / teleop 10。自律走行中は teleop が通らない)
 ```
 
 ## 準備
@@ -94,8 +94,9 @@ deactivate と、モータ ON/OFF。状態は 2 秒ごとに `get_state` で取�
 （スピンボックスに入っている間は矢印キーは値の増減に使われます）。
 
 出す先が `/cmd_vel` でないのは、機体の手前に `twist_mux` が入っているためです
-（`robot_bringup.launch.py` の `twist_mux:=true` が既定）。優先度は teleop 100 / 自律 10 で、
-**publish している間と 0.5 秒だけ**こちらが勝ちます。指を離せば自律側に戻ります。
+（`robot_bringup.launch.py` の `twist_mux:=true` が既定）。優先度は**自律 100 /
+teleop 10** で、**自律側のほうが勝ちます**。こちらが通るのは自律側が `timeout`
+（0.5 秒）のあいだ黙っているときだけです。
 
 `twist_mux:=false` で立てた機体では `/cmd_vel_teleop` を誰も購読しません。パネルは正常に
 見えて**機体だけが動かない**ので、そのときは宛先を `/cmd_vel` に戻してください。宛先は
@@ -123,14 +124,12 @@ deactivate と、モータ ON/OFF。状態は 2 秒ごとに `get_state` で取�
 または `control.sh motor off`）です。`driver:=original` で teleop を常用するなら
 `overrides/` で `cmd_vel_timeout` を 1 秒程度に下げることも検討してください。
 
-止めたあとパネルが黙るのも意図的です。`twist_mux` はメッセージを受けている間 teleop を
-勝たせ続けるので、ゼロを流し続けると**開いているだけで自律走行を塞いだまま**になります。
-停止時は 3 回だけゼロを出して黙ります。
+止めたあとパネルが黙るのも意図的です。停止時は 3 回だけゼロを出して黙ります
+（それ以上流しても仲裁の優先度は自律側のほうが上なので意味がありません）。
 
-**ゴールが走っている間は teleop を無効化**しています。仲裁上は勝てますが、勝てるのは
-押している間と 0.5 秒だけで、離せばゴールの途中から自律側が動き出します。0.5 秒刻みで
-プランナと取り合うくらいなら操作させないほうがよい、という判断です。手動に戻すには
-「中断」を押してください。
+**ゴールが走っている間は teleop を無効化**しています。無効化しなくても仲裁で自律側が
+勝つので**押しても機体は動かない**のですが、それだと「パネルが壊れた」と見分けが
+付きません。手動に戻すには「中断」を押してください。
 
 ## 動かないとき
 
@@ -141,4 +140,4 @@ deactivate と、モータ ON/OFF。状態は 2 秒ごとに `get_state` で取�
 | プロセス別だけ空 | PID 名前空間（上記）。`ros2` コンテナに `pid: host` を足す |
 | ゴールが「サーバがいません」 | `ros2 action list` に `navigate_to_pose` があるか。出すのは既定（`nav2:=false`）では `vi_planner`、`nav2:=true` では `bt_navigator`（後者は active かも見る。前者は lifecycle ノードではないので、居れば動いている） |
 | モータが「サービスがいません」 | ドライバが configure 済みか。ノード名の選択が `driver:=` と合っているか |
-| teleop でロボットが動かない | ゴールが走っていないか（走行中は無効）。`ros2 topic hz /cmd_vel_teleop` で出ているなら、`twist_mux` が立っているか（`twist_mux:=false` なら誰も購読しない）と `/cmd_vel_mux` を確認 |
+| teleop でロボットが動かない | ゴールが走っていないか（走行中は無効。パネル外から自律側が `/cmd_vel` を出しているときも優先度で負ける。`ros2 topic hz /cmd_vel`）。`ros2 topic hz /cmd_vel_teleop` で出ているなら、`twist_mux` が立っているか（`twist_mux:=false` なら誰も購読しない）と `/cmd_vel_mux` を確認 |

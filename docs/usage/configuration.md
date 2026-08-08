@@ -99,7 +99,7 @@ ros2 launch daifuku_stack mapping.launch.py --show-args
 | `driver` | `raspimouse` | 本体ドライバ。`raspimouse`（公式実装。rtmouseが要る。Pi 4のみ）または`original`（自前実装。Pi 4 / Pi 5） |
 | `model` | 空（`raspicat_driver.yaml`の`model`に従う。既定は`auto`） | `driver:=original`のときの機種。`pi4` / `pi5` / `auto`。`driver:=raspimouse`に渡すとエラーになる |
 | `params_file` | 空（`driver:=`に応じて`config/bringup/robot/`から選ぶ） | ドライバのパラメータファイル |
-| `twist_mux` | `true` | 速度指令の仲裁を挟むか。`true`だと**ドライバが購読するのは`/cmd_vel`ではなく`/cmd_vel_mux`**になり、人が出す指令は`/cmd_vel_teleop`（優先度100）へ。`false`で全員が`/cmd_vel`へ書く従来の配線に戻る |
+| `twist_mux` | `true` | 速度指令の仲裁を挟むか。`true`だと**ドライバが購読するのは`/cmd_vel`ではなく`/cmd_vel_mux`**になり、人が出す指令は`/cmd_vel_teleop`（優先度10）へ。自律側の`/cmd_vel`が優先度100で**上**なので、自律走行中は手動が通らない。`false`で全員が`/cmd_vel`へ書く従来の配線に戻る |
 | `twist_mux_params_file` | 空（`config/bringup/robot/twist_mux.yaml`） | `twist_mux`のパラメータファイル |
 | `joy` | `true` | ゲームパッドでの手動走行を立てるか。`joy_node`と`joy_teleop`が上がり、STARTの2秒長押しでteleopの入/切、BACK単体の2秒長押しでモータ電源の入/切、START+BACK同時2秒でウェイポイント巡回を始める（[ゲームパッドで操作する](joystick.md)）。挿していなくても他のノードは動く |
 | `joy_teleop_params_file` | 空（`config/bringup/robot/joy_teleop.yaml`） | ゲームパッドのパラメータファイル。`joy_node`と`joy_teleop`の両方に渡る |

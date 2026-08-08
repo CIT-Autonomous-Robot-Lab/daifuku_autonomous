@@ -26,7 +26,7 @@ rqt                                          # Plugins > Raspicat > Raspicat Con
 | ゴール送信・中断 | `navigate_to_pose` アクション（既定の `nav2:=false` では `vi_planner`、`nav2:=true` では `bt_navigator`。型も名前も同じ） |
 | configure / activate / deactivate | `/<ドライバ名>/change_state`、状態表示は `/get_state` を 2 秒ごと |
 | モータ ON/OFF | `/motor_power`（`std_srvs/SetBool`） |
-| teleop | `/cmd_vel_teleop` を 10 Hz で publish（`twist_mux` の優先度 100 側） |
+| teleop | `/cmd_vel_teleop` を 10 Hz で publish（`twist_mux` の優先度 10 側。**自律側の `/cmd_vel`（100）のほうが上なので、自律走行中は通らない** — 先に「中断」でゴールを止めること） |
 
 `motor_power` が**ノード名の下ではなく `/motor_power`** にいるのは、ドライバが相対名で
 `create_service` しているためです（相対名は名前空間に対して解決され、ノード名は入りません）。
@@ -57,13 +57,13 @@ teleop を常用するなら `cmd_vel_timeout` を 1 秒程度へ下げること
 
 出す先は `/cmd_vel` ではなく **`/cmd_vel_teleop`** です。`/cmd_vel` は自律側
 （nav2 のコントローラと `vi_planner`）の出力で、機体の手前には `twist_mux` が入って
-います（`robot_bringup.launch.py` の `twist_mux:=true` が既定）。優先度は teleop 100 /
-自律 10 なので、**publish しているあいだはこちらが勝ちます**。配線は
+います（`robot_bringup.launch.py` の `twist_mux:=true` が既定）。優先度は**自律 100 /
+teleop 10** なので、**こちらが通るのは自律側が黙っているあいだだけです**。配線は
 [`config/README.md`](../../config/README.md#twist_muxyaml-の配線と優先度)。
 
-それでも**ゴールが走っている間は teleop グループを無効化**しています。勝てるのは
-publish している間と 0.5 秒だけで、指を離せば自律側が動き出すためです。手動に戻すには
-「中断」を押してください。
+だから**ゴールが走っている間は teleop グループを無効化**しています。無効化しなくても
+仲裁で負けて機体は動かないのですが、それでは「パネルが壊れた」と見分けが付きません。
+手動に戻すには「中断」を押してください。
 
 `twist_mux:=false` で立てた機体では、`/cmd_vel_teleop` を誰も購読しません。
 パネルは何事もなく動いているように見えて**機体だけが動かない**ので、そのときは宛先を

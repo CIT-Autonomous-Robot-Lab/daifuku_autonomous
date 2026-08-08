@@ -11,8 +11,10 @@ source "$(cd -- "${DOCKER_DIR}/../common/lib" && pwd)/compose.sh"
 COMPOSE_FILE="${DOCKER_DIR}/compose.common.yaml"
 SERVICE="${CONTROL_SERVICE:-ros2}"
 MOTOR_SERVICE="${MOTOR_SERVICE:-/motor_power}"
-# 人が出す速度指令は仲裁 (twist_mux) の優先度の高い側へ入れる。robot_bringup を
-# twist_mux:=false で立てているなら CMD_VEL_TOPIC=/cmd_vel を渡すこと。
+# 人が出す速度指令は仲裁 (twist_mux) の手動側の入口へ入れる。優先度は自律側
+# (/cmd_vel = 100) のほうが上なので、**自律走行中は teleop も stop も効かない**
+# (エラーは出ない)。先にゴールを取り消すこと。robot_bringup を twist_mux:=false で
+# 立てているなら CMD_VEL_TOPIC=/cmd_vel を渡すこと。
 CMD_VEL_TOPIC="${CMD_VEL_TOPIC:-/cmd_vel_teleop}"
 ROS_TIMEOUT="${ROS_TIMEOUT:-10}"
 TELEOP_LINEAR_SPEED="${TELEOP_LINEAR_SPEED:-0.2}"
@@ -42,6 +44,8 @@ usage() {
   CONTROL_SERVICE  Composeサービス名（既定: ros2）
   MOTOR_SERVICE    モーター電源サービス（既定: /motor_power）
   CMD_VEL_TOPIC    速度指令トピック（既定: /cmd_vel_teleop。twist_mux:=false なら /cmd_vel）
+                   ※ 自律側 (/cmd_vel) のほうが優先度が高いので、自律走行中は
+                     teleop / stop が効かない。先にゴールを取り消すこと
   ROS_TIMEOUT      ROS操作のタイムアウト秒数（既定: 10）
   TELEOP_LINEAR_SPEED  キーボード操作の並進速度 m/s（既定: 0.2）
   TELEOP_ANGULAR_SPEED キーボード操作の旋回速度 rad/s（既定: 1.0）
