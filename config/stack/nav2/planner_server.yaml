@@ -1,6 +1,6 @@
 # planner:=navfn のグローバルプランナ。
 # 「既定」= nav2_planner / nav2_navfn_planner (humble) の declare_parameter。
-# planner:=vi では起動せず、vi_planner.yaml の vi_global_planner が
+# planner:=vi では起動せず、vi_planner.yaml の vi_planner が
 # compute_path_to_pose を提供する。合成順序と上書きは ../README.md を参照。
 #
 # ▲ nav2_bringup が配っている nav2_params.yaml は expected_planner_frequency 20.0 /

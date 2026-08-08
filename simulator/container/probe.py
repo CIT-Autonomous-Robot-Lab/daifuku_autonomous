@@ -3,7 +3,7 @@
 
 実機で取った診断プローブ (plan=0 / cmd_vel_nav=0 / cmd_vel=49 → ABORTED) と
 同じ指標をローカルシムでも取れるようにしたもの。加えて Pi4 4GB 再現で本命に
-なるメモリを継続サンプリングする (vi_planner / vi_global_planner の RSS、
+なるメモリを継続サンプリングする (vi_planner の RSS、
 コンテナの memory.current / memory.events)。
 
   python3 probe.py --goal-x 4.28 --goal-y -2.92 --goal-yaw -24 --timeout 300
@@ -31,7 +31,7 @@ STATUS = {
     GoalStatus.STATUS_CANCELED: "CANCELED",
 }
 
-WATCH = ("vi_planner", "vi_global_planner", "controller_server",
+WATCH = ("vi_planner", "controller_server",
          "planner_server", "bt_navigator", "emcl2", "map_server")
 
 
@@ -101,8 +101,8 @@ class Probe(Node):
     def __init__(self, args):
         super().__init__("pi4_sim_probe")
         self.args = args
-        # 注意: planner:=vi では /plan に publisher がいない (vi_planner /
-        # vi_global_planner は Path を action の Result で返すだけで、nav2 の
+        # 注意: planner:=vi では /plan に publisher がいない (vi_planner は Path を
+        # action の Result で返すだけで、nav2 の
         # planner_server のように /plan を publish しない)。実機プローブの plan=0 は
         # これで説明がつくので、VI が実際に解けたかは value_function で見る。
         self.counts = dict(

@@ -24,7 +24,7 @@
 #
 #   localization:=amcl  + planner:=navfn -> nav2 の bringup_launch.py をそのまま
 #   localization:=amcl  + planner:=vi    -> nav2 の localization_launch.py +
-#                                           vi_global_planner の navigation_launch.py
+#                                           vi_planner の navigation_launch.py
 #   localization:=emcl2 + navfn / vi     -> map_server + emcl2 を自前で立て、
 #                                           その上に nav2 / vi の navigation
 #
@@ -95,13 +95,14 @@ def generate_launch_description():
     navigation_launch = os.path.join(nav2_share, "launch", "navigation_launch.py")
     localization_launch = os.path.join(nav2_share, "launch", "localization_launch.py")
     # planner:=vi 用: planner_server の代わりに価値反復プランナを起動する
-    # navigation_launch.py の vi 版 (vi_global_planner パッケージが提供)。
-    # local_planner:=vi なら vi_planner 1 ノード (両アクション)、local_planner:=nav2 なら
-    # vi_global_planner + controller_server を立てる (排他)。
-    # vi_global_planner 未インストールでも planner:=navfn で起動できるよう、パス解決は
+    # navigation_launch.py の vi 版 (vi_planner パッケージが提供。2026-08-08 の上流の
+    # 整理で vi_global_planner パッケージごと消え、こちらへ移った)。**どちらの
+    # local_planner でも立つノードは vi_planner 1 つ**で、local_planner:=vi なら両
+    # アクション、local_planner:=nav2 なら follow: false (広域のみ) + controller_server。
+    # vi_planner 未インストールでも planner:=navfn で起動できるよう、パス解決は
     # include 実行時 (条件成立時) まで遅延させる。
     vi_navigation_launch = PathJoinSubstitution(
-        [FindPackageShare("vi_global_planner"), "launch", "navigation_launch.py"]
+        [FindPackageShare("vi_planner"), "launch", "navigation_launch.py"]
     )
 
     namespace = LaunchConfiguration("namespace")
@@ -331,7 +332,7 @@ def generate_launch_description():
     def standalone_navigation(pose_topic):
         """nav2:=false: vi_planner 1 ノードだけで navigation を組む。
 
-        vi_global_planner の navigation_launch.py を include する代わりに
+        vi_planner の navigation_launch.py を include する代わりに
         vi_planner を直接立てる。あちらは Nav2 のスタック (bt_navigator /
         behavior_server / waypoint_follower / smoother_server / velocity_smoother
         + lifecycle_manager) を組む launch なので、Nav2 を立てないならもう
@@ -550,7 +551,8 @@ def generate_launch_description():
                         "planner:=vi -> vi, otherwise nav2), vi (vi_planner — one "
                         "node serving compute_path_to_pose and follow_path from a "
                         "single value function; requires planner:=vi) or nav2 "
-                        "(vi_global_planner + controller_server/DWB, the wiring "
+                        "(the same vi_planner with follow: false + controller_server/DWB, "
+                        "the wiring "
                         "needed for maps that use map_scale / the compact solver).",
         ),
         DeclareLaunchArgument(

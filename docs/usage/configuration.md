@@ -177,7 +177,7 @@ daifuku_bringup:            # 機体側。変更後は docker compose up -d
       min_elevation_deg: 5.0
 
 daifuku_stack:              # 自律移動側
-  vi_global_planner:        # -> config/stack/nav2/vi_planner.yaml（params_fileの合成結果）
+  vi_planner:               # -> config/stack/nav2/vi_planner.yaml（params_fileの合成結果）
     ros__parameters:
       safety_radius_penalty: 1
 
@@ -219,4 +219,4 @@ daifuku_stack:              # 自律移動側
 - LiDAR搭載位置と除外角度
 - ゴール許容誤差
 
-ソルバ、スレッド数、キャッシュ許容差、経路補間間隔、制御周期、局所反復時間などは`config/stack/nav2/vi_planner.yaml`で設定します。同ファイルには`vi_planner`（既定の統合ノード）と`vi_global_planner`（`local_planner:=nav2`用の広域専用ノード）の2セクションがあり、同時に起動されることはありません。
+ソルバ、スレッド数、キャッシュ許容差、経路補間間隔、制御周期、局所反復時間などは`config/stack/nav2/vi_planner.yaml`で設定します。同ファイルの節は`vi_planner`の1つだけです（`local_planner:=nav2`の広域専用構成も同じノードを`follow: false`で立てるため。2026-08-08の上流の整理まで、あちらは`vi_global_planner`という別ノードで節も2つありました）。

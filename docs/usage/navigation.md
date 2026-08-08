@@ -252,8 +252,8 @@ ros2 launch daifuku_stack navigation.launch.py \
   planner:=vi
 ```
 
-`local_planner`は既定の`auto`（`planner:=vi`なので`vi`）でも`nav2`でも動きます。`vi_planner`と
-`vi_global_planner`のどちらも`map_scale`とアウトオブコア経路を持つためです。`vi_planner`の
+`local_planner`は既定の`auto`（`planner:=vi`なので`vi`）でも`nav2`でも動きます。どちらも同じ
+`vi_planner`で、`map_scale`もアウトオブコア経路も同じだからです（`nav2`は`follow: false`）。`vi_planner`の
 狭域追従だけは密な状態配列を必要とします。ただし全域ではなく、ロボット近傍のパッチだけを
 確定出力（sink）から起こして回します（±1 mウィンドウ＋遷移到達距離＋余裕。
 0.25 mセルで27×27×60≒2.5 MB）。
@@ -272,7 +272,7 @@ ros2 launch daifuku_stack navigation.launch.py \
 
 NavFnとDWBで動かす場合、`map_tsudanuma`の価値反復向け設定は要りません。ただし
 `overrides:=none`はEMCL2の調整も一緒に落とすので、**ふつうは場所を切り替えたまま
-`planner:=navfn`だけを渡してください**（VI向けの節は`vi_planner`／`vi_global_planner`宛で、
+`planner:=navfn`だけを渡してください**（VI向けの節は`vi_planner`宛で、
 それらが立たない構成では宛先が無いだけです）。どうしても何も重ねたくないときは
 `map:=`を自分で渡します——`overrides:=none`は場所を名乗らないので、地図を導けません。
 
@@ -296,9 +296,9 @@ ros2 launch daifuku_stack navigation.launch.py \
   `robot_radius: 0.22`（`nav2_bringup`のyamlのまま）だったため、実機の条件はこれより
   厳しくなります。
 - ピークRSSは`vi_planner`で実測1.60 GB（うちsinkのmmapが648 MB）です。
-  `map_scale: 3`＋保守的プーリングだった頃の`vi_global_planner`の3.98 GBから下がり、
-  Raspberry Pi 4の4 GBに収まります。`vi_global_planner`をこの`map_scale: 5`で
-  測ってはいませんが、解像度もソルバも同じなので同程度になるはずです（**未計測**）。
+  `map_scale: 3`＋保守的プーリングだった頃の広域専用ノード`vi_global_planner`の3.98 GBから
+  下がり、Raspberry Pi 4の4 GBに収まります（そのノードは2026-08-08の上流の整理で消え、
+  広域だけの構成も同じ`vi_planner`になりました）。
   **ただしこれはsinkをディスクへ逃がしていた頃の値です。** RAM出力にした2026-08-04
   以降は同じ648 MBが匿名メモリになり、カーネルが追い出せません。上の「Pi 4の4 GBに
   収まる」はもう成り立たない前提です（RAM化後のピークは**未計測**）。
@@ -376,12 +376,12 @@ RVizのFixed Frameとwaypointの`frame_id`が一致している必要があり�
 `config/stack/nav2/vi_planner.yaml`の`waypoint_prefetch`を`true`にすると、いまの点へ
 走っているあいだに次の点を別スレッドで解いておき、着いたらsolveを飛ばして受け取ります。
 
-**同梱の2地図はどちらも`true`です。** 断片（`config/stack/nav2/vi_planner.yaml`）のほうは
-`false`のままで、`overrides/map_19f.yaml`と`overrides/map_tsudanuma.yaml`が上書き
-しています（津田沼は2026-08-07から。solveが87秒と長いぶん消える待ちも大きく、
-そのかわり場が1.3 GBになります）。2026-08-04に一度**断片**で`true`へ反転しましたが、
-同日の実機で走行中の固まりが出たため容疑者の1つとして戻した経緯があります
-（切り分けは未了）。効いた回はログに出ます。
+**いま`true`なのは`map_19f`だけです。** 断片（`config/stack/nav2/vi_planner.yaml`）は
+`false`で、それを上書きしているのは`overrides/map_19f.yaml`だけです。津田沼は
+2026-08-07に`true`にしたあと、**2026-08-08に`false`へ戻しました**——走行中の固まりの
+容疑者を切り分けるためで、あちらは場が648 MB×2＝1.3 GBになります。2026-08-04にも一度
+**断片**で`true`へ反転して同日の実機で固まりが出たため、容疑者の1つとして戻した経緯が
+あります（切り分けは未了）。効いた回はログに出ます。
 
 ```
 vi_planner: prefetched the value function for (12.30, -4.50) in 31.20s

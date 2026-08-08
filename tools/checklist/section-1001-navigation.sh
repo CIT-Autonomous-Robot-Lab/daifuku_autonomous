@@ -13,7 +13,7 @@ section 1001 "ナビゲーション"
 
 need_ros
 
-if ! has_node /vi_planner && ! has_node /vi_global_planner && ! has_node /bt_navigator; then
+if ! has_node /vi_planner && ! has_node /bt_navigator; then
   skip "ナビゲーション" "navigation が立っていない"
   finish 0
 fi

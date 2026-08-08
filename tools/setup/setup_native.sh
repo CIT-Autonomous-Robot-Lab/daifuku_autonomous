@@ -19,7 +19,7 @@ Ubuntu 22.04 / ROS 2 Humbleのネイティブ環境を一括で構築します�
   1. setup_native_base.sh        共通依存 + daifuku_stack / raspicat_driver / emcl2
   2. setup_native_livox.sh       Livox SDK2 + livox_ros_driver2（Mid-360）
   3. setup_native_ros2_rust.sh   Rust toolchain + ros2_rust（rclrs）
-  4. setup_native_vi.sh          vi_planner / vi_global_planner
+  4. setup_native_vi.sh          vi_planner
 
 Usage:
   bash tools/setup/setup_native.sh [options]

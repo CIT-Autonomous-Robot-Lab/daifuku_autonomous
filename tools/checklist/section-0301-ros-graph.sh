@@ -72,14 +72,17 @@ check_odom_tf_owner() {
 }
 item "odom -> base_footprint を出すものが 1 つだけ" check_odom_tf_owner
 
-# vi_planner と vi_global_planner は排他。両方立つと compute_path_to_pose に
-# サーバが 2 つ載る。
+# compute_path_to_pose を出すものは 1 つだけ。2 つ載るとクライアントは先に見つけた
+# ほうへ繋ぎ、**どちらに繋がったかはログにも ros2 action list にも出ない**。
+# かつてここは vi_planner と vi_global_planner の排他を見ていたが、2026-08-08 の
+# 上流の整理で後者はパッケージごと消え (広域だけ VI = 同じ vi_planner を
+# follow: false で立てる)、残る同居先は planner:=vi で立たないはずの planner_server。
 check_vi_exclusive() {
   local n
-  n="$(grep -cE '/(vi_planner|vi_global_planner)$' <<<"${ROS_NODES}")"
+  n="$(grep -cE '/(vi_planner|planner_server)$' <<<"${ROS_NODES}")"
   echo "${n} つ"
   ((n <= 1))
 }
-item "vi_planner と vi_global_planner が同居していない" check_vi_exclusive
+item "compute_path_to_pose を出すノードが 1 つだけ" check_vi_exclusive
 
 finish

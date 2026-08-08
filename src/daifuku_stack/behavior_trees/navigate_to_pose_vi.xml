@@ -7,9 +7,9 @@
     global_costmap/clear_entirely_global_costmap  <- planner_server のコストマップ
     local_costmap/clear_entirely_local_costmap    <- controller_server のコストマップ
 
-  が提供するサービスを要求する。vi_global_planner は planner_server の
-  compute_path_to_pose だけを置き換え、コストマップとそのサービスは持たない
-  (vi_planner も同様)。BtActionNode / BtServiceNode はコンストラクタで
+  が提供するサービスを要求する。vi_planner は planner_server の
+  compute_path_to_pose を置き換えるだけで、コストマップとそのサービスは持たない
+  (local_planner:=nav2 の follow: false でも同じ)。BtActionNode / BtServiceNode はコンストラクタで
   wait_for_service_timeout 内にサーバが見つからないと例外を投げるので、既定の
   BT のままでは bt_navigator が on_configure で落ち、lifecycle manager が
   bringup を中断する。

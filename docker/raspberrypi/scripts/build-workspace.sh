@@ -115,12 +115,12 @@ colcon build --merge-install --symlink-install \
 source "${WS}/install/local_setup.bash"
 colcon build --merge-install --symlink-install \
     --parallel-workers "${BUILD_JOBS}" \
-    --packages-select vi_global_planner vi_planner \
+    --packages-select vi_planner \
     --cargo-args --release
 
 # ament_cargo は package.xml の <install>launch</install> を実行しないので、
 # launch ファイルは自前で install/ へ置く。
-for pkg in vi_global_planner vi_planner; do
+for pkg in vi_planner; do
   src_dir="src/value_iteration3/vi_ros2/${pkg}/launch"
   [[ -d "${src_dir}" ]] || continue
   for launch_file in "${src_dir}"/*.py; do

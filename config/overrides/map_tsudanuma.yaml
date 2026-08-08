@@ -24,7 +24,7 @@
 #
 # 確定出力 (sink 648MB) は **RAM** に置く。Pi 5 (8GB) は走行中でも空きが 5.6GB あり、
 # 断片の compact_ram_limit_mb (4096MB) に収まるので自動退避も起きない。**4GB 機で使うなら
-# 両ノードに compact_sink_dir を書き戻すこと** (広域側は vi_global_planner_sink)。
+# compact_sink_dir を書き戻すこと** (自動退避先は /tmp/vi_planner_sink)。
 # 退避先は tmpfs でないこと (`findmnt -no FSTYPE <dir>`)。
 #
 # 2026-08-01 実測 (Pi4 相当 = 0.6 コア枠 / メモリ 3GB, VI_THREADS=3、BT を外した最小構成):
@@ -171,20 +171,11 @@ daifuku_stack:
       # global_sweep と budget/idle は断片のまま (compact でもタイル修復として効く)。
       # **走行中に "global sweep done in" は出ない**のが設計どおりで、動いているかは
       # 2 秒ごとの "tile repair running for" のほうで見る (config/README.md)。
-
-  # planner:=vi かつ local_planner:=nav2 (広域だけ VI) 用。解像度まわりと
-  # safety_radius_penalty は上の vi_planner と同じ値にしてある。片方だけ変えると同じ地図
-  # なのに 2 構成で別の経路が出て比較にならない。
-  vi_global_planner:
-    ros__parameters:
-      solver: "frontier2d_sparse_compact"  # 断片も同じ値: states を確保しない。この地図では必須なので明示する
-      map_scale: 5                         # 断片 1: 内部だけ 0.25m/cell (5650 万状態)
-      downsample_policy: "optimistic"      # 既定 conservative (断片は未設定): 保守側だと通路のセル幅が死ぬ
-      action_forward_m: [0.5, -0.3333, 0.0, 0.5, 0.0, 0.5]  # 前進の 3 つは断片と同値 (断片が 0.5 へ上がって並んだ。これ以上は velocity_smoother の上限で頭打ち)。後退だけ 5/3 倍のまま
-      goal_margin_radius: 0.5              # 断片 0.3: ゴールセル数を 7 に保つ (セル比例)
-      safety_radius_penalty: 1             # 断片 30: 30 だと貪欲ロールアウトが降下できない
-      max_rollout_steps: 100000            # 断片 10000: 広域では遠い start から届かない
-      cost_drawing_threshold: 600          # 断片 60: 同上 (vi_planner と揃える)
+      # ▲ planner:=vi かつ local_planner:=nav2 (広域だけ VI) でも読まれるのはこの節。
+      #   2026-08-08 の上流の整理で vi_global_planner ノードが消え、同じ vi_planner が
+      #   follow: false で立つようになったので、ここにあった同名の節 (この節と同じ 8 つを
+      #   写しただけのもの) は消した。**2 構成で別の経路が出ないよう値を揃える**という
+      #   縛りも、読む節が 1 つになったぶん消えている。
 
 # ── ここで上書きしていないもの ────────────────────────────────────────────
 # いずれも**未検証**。次も上書きが要るかもしれない。
