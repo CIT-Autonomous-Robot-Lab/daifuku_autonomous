@@ -472,7 +472,8 @@ fi
 
 if [[ "${DAIFUKU_BUILD_ON_FIRST_BOOT}" == "1" && -f "${COMPOSE_FILE}" ]]; then
   step "Dockerイメージをビルド（Pi 4では数時間かかります）"
-  BUILD_JOBS="${DAIFUKU_BUILD_JOBS}" docker compose -f "${COMPOSE_FILE}" build ||
+  docker compose -f "${COMPOSE_FILE}" build \
+    --build-arg BUILD_JOBS="${DAIFUKU_BUILD_JOBS}" ||
     soft_fail "docker compose build"
 fi
 
@@ -500,7 +501,7 @@ echo "         sudo reboot"
 if [[ "${DAIFUKU_BUILD_ON_FIRST_BOOT}" != "1" ]]; then
   echo "  2. Dockerイメージをビルドする（Pi 4で数時間）"
   echo "         cd ${WORKSPACE}"
-  echo "         BUILD_JOBS=${DAIFUKU_BUILD_JOBS} docker compose build"
+  echo "         docker compose build --build-arg BUILD_JOBS=${DAIFUKU_BUILD_JOBS}"
   echo "  3. 起動する"
 else
   echo "  2. 起動する"

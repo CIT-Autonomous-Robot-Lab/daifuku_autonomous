@@ -89,11 +89,19 @@ Raspberry Piを再起動しても自動で上がります（Dockerデーモン�
 `docker compose stop`で止めたものは再起動後も止まったままです（`unless-stopped`）。
 `down`したものはコンテナごと消えるので、次は`up`が要ります。
 
-`BUILD_JOBS`はイメージのビルドと`up`のときの`colcon build`の両方に効きます
-（既定は4＝Pi 4の全コア）。メモリが足りずにOOMで落ちるときだけ下げてください。
+`BUILD_JOBS`が効くのは`up`のときの`colcon build`だけです（既定は4＝Pi 4の
+全コア）。メモリが足りずにOOMで落ちるときだけ下げてください。
 
 ```bash
 BUILD_JOBS=1 docker compose up -d
+```
+
+**イメージのビルドには効きません**（`build.args`には渡していない）。渡すと
+下げた瞬間にイメージのビルドキャッシュが全部外れて1〜2時間の焼き直しになる
+ためです。イメージ側を絞るときは明示します。
+
+```bash
+docker compose build --build-arg BUILD_JOBS=1
 ```
 
 外部パッケージ（`emcl2_ros2`、`livox_ros_driver2`、`value_iteration3`など）は

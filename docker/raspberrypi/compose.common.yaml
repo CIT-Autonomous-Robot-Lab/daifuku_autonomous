@@ -40,8 +40,6 @@ services:
     build:
       context: ../..
       dockerfile: docker/raspberrypi/Dockerfile
-      args:
-        BUILD_JOBS: ${BUILD_JOBS:-4}
     image: daifuku-autonomous:humble
     container_name: daifuku-autonomous-build
     command: ["build-workspace"]
@@ -53,6 +51,8 @@ services:
       ROS_LOG_DIR: /tmp/ros/log
       # colcon の並列数。Pi4 の 4 コアを使い切る。メモリ 4GB でも release の
       # rustc 2 本で available 2.5GB 残っていたので足りる。低メモリ時は絞る。
+      # **イメージのビルドには効かない** (build.args には渡していない)。渡すと
+      # OOM 避けで下げた瞬間にイメージの層が全部作り直しになるため。
       BUILD_JOBS: ${BUILD_JOBS:-4}
       # cargo を crates.io へ出さないか。**ロボット LAN にゲートウェイが無いので、
       # 実機では true が要る。** キャッシュが揃っていても cargo はレジストリの
