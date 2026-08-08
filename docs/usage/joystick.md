@@ -10,7 +10,8 @@
 パッド ─ /joy ─ joy_teleop ─ /cmd_vel_teleop（優先度 10）──┐
                      ├─ FollowWaypoints ─ vi_planner（nav2:=true なら nav2_waypoint_follower）
                      ├─ /buzzer ─→ ドライバ（音・切り替わった瞬間だけ）
-                     └─ /leds ──→ ドライバ（LED・いまの状態）
+                     ├─ /leds ──→ ドライバ（LED・いまの状態）
+                     └← /motor_power_state ← ドライバ（電源の実状態。自前実装だけ）
                                                            ├→ twist_mux → /cmd_vel_mux → ドライバ
 自律側 ───────────────────── /cmd_vel（優先度 100）────────┘
 ```
@@ -130,14 +131,16 @@ teleopへ移って巡回を**取り消した**ときは鳴りません。取り�
 | LED | 点いているとき |
 | --- | --- |
 | LED0 | teleopが入っている（自律側は塞がれています） |
-| LED1 | モータ電源を入れた**と`joy_teleop`が思っている**（下記） |
+| LED1 | モータ電源が入っている（ドライバの`/motor_power_state`。下記） |
 | LED2 | `joy_teleop`から始めた巡回中（START+BACKで投げたゴールが生きている。RVizのパネルから始めたものは**点きません**） |
 | LED3 | `/joy`が届いている（消えていたらパッドの電池・受信機） |
 
-**LED1だけは実際の状態ではありません。** ドライバが電源の状態を出さないので、
-[モータ電源の節](#backでモータ電源を切る)と同じく`joy_teleop`が投げた要求を数えているだけ
-です。`control.sh motor`やRVizのパネルから変えると**点いたまま実際は切れている**（あるいは
-その逆）になります。**車輪に手を入れるときはLEDではなくモータ電源そのものを切ってください。**
+**LED1の出どころは自前実装（`driver:=original`）が出す`/motor_power_state`です。** ドライバが
+切り替えるたびに出すので、`control.sh motor`やRVizのパネルから変えても追随します。
+**公式実装（`driver:=raspimouse`）はこれを出さない**ので、そのときだけ
+[モータ電源の節](#backでモータ電源を切る)と同じく`joy_teleop`が投げた要求の写しになり、外から
+変えると**点いたまま実際は切れている**（あるいはその逆）になります。いずれにせよ
+**車輪に手を入れるときはLEDではなくモータ電源そのものを切ってください。**
 
 変化したときと**1秒ごと**に出しています。ドライバは`deactivate`でLEDを消す一方
 `activate`では戻さないので、変化時だけにするとlifecycleを回した先で消灯したままになります
@@ -202,10 +205,14 @@ BACKだけを2秒以上押して**離す**と、本体ドライバの`motor_powe
 ままでは何も起きません（一度離してから押し直してください）。押しっぱなしにしても2秒ごとに
 入/切を繰り返すことはありません。
 
-**いま入っているかは`joy_teleop`にも分かりません。** ドライバが電源の状態を出さないので、
-自分が投げた要求だけを数えています。起点は`motor_power_start_state`（既定`false`）で、
-ドライバの`initial_motor_power`と合わせてください。`control.sh motor`やRVizのパネルから
-外して変えると**1回ぶんずれます**。音が期待と逆だったら、もう一度押せば揃います。
+**いま入っているかは`/motor_power_state`（`std_msgs/Bool`、latch）で分かります。** 自前実装
+（`driver:=original`、リポジトリの標準）が電源を切り替えるたびに出すので、`control.sh motor`
+やRVizのパネルから変えても`joy_teleop`は追随します。
+
+**公式実装（`driver:=raspimouse`）はこれを出しません。** そのときだけ`joy_teleop`は自分が
+投げた要求を数えます。起点は`motor_power_start_state`（既定`false`）で、ドライバの
+`initial_motor_power`と合わせてください。外から変えると**1回ぶんずれます**（音が期待と逆
+だったら、もう一度押せば揃います）。
 
 ドライバが立っていない（`activate`されていない）ときはブッブーが鳴り、ログに
 `motor_power service is not available`が出ます。
@@ -263,6 +270,7 @@ ros2 topic echo /joy                       # ボタンと軸の番号
 ros2 topic echo /joy_teleop/enabled        # teleopが入っているか（1秒ごとに出ています）
 ros2 topic echo /buzzer                    # モードの音（Hz、0で停止。音の変わり目だけ出ます）
 ros2 topic echo /leds                      # いまのモード（led0=teleop / led1=モータ / led2=巡回 / led3=/joy）
+ros2 topic echo /motor_power_state --qos-durability transient_local  # モータ電源の実状態（自前実装だけが出します）
 ros2 topic hz /cmd_vel_teleop              # 出ているか
 ros2 topic echo /cmd_vel_mux               # 仲裁を抜けてドライバへ届いているか
 ```
@@ -277,7 +285,7 @@ ros2 topic echo /cmd_vel_mux               # 仲裁を抜けてドライバへ�
 | 倒しても加速が鈍い・止まるまで滑る | [加減速](#速度は刻んで出します加減速)が入っています。`linear_accel` / `linear_decel`で変えられます |
 | ブーストしても指令より遅い・まっすぐ走らない | 脱調です。`linear_accel`を下げてください（`/cmd_vel_mux`には出ているのに機体が付いてこない形で出ます） |
 | 自律走行が始まらない | teleopが入ったままではありませんか（`/joy_teleop/enabled`） |
-| BACKを長押ししてもモータ電源が変わらない | `ros2 service list \| grep motor_power`。押している途中でSTARTに触れていないか（巡回のほうになります）。音が期待と逆なら[数えがずれています](#backでモータ電源を切る) |
+| BACKを長押ししてもモータ電源が変わらない | `ros2 service list \| grep motor_power`。押している途中でSTARTに触れていないか（巡回のほうになります）。音が期待と逆なら、公式実装で[数えがずれています](#backでモータ電源を切る)（自前実装なら`/motor_power_state`が実状態です） |
 | 切り替わるのに音が鳴らない | `ros2 topic echo /buzzer`。出ていれば機体側（ドライバが`activate`されているか、`use_buzzer`、起動ログの`peripherals: ... buzzer=`）。出ていなければ`joy_teleop`の`buzzer`が`false` |
 | LEDが1つも点かない | `ros2 topic echo /leds`。出ていれば機体側（`use_leds`、起動ログの`peripherals: leds=`）。出ていなければ`joy_teleop`の`leds`が`false` |
 | LEDが1つずれて点く | `gpio_leds`の並びが逆です（[`raspicat_driver/README.md`](../../src/raspicat_driver/README.md)） |

@@ -24,8 +24,16 @@ the EKF and Nav2 do not care which driver is running:
   publish    odom           nav_msgs/Odometry
   publish    switches       raspimouse_msgs/Switches  (true = pressed)
   publish    odom -> base_footprint TF   (publish_tf, unlike raspimouse)
+  publish    motor_power_state  std_msgs/Bool  (latched, unlike raspimouse)
   service    motor_power    std_srvs/SetBool
   lifecycle  configure -> activate, driven by robot_bringup.launch.py
+
+motor_power_state is ours alone: raspimouse takes the SetBool and tells nobody,
+so everything that wants to show whether the power is on (joy_teleop's LEDs)
+had to mirror its own request and drifted the moment anyone else called the
+service.  It is latched (transient local, depth 1) because it changes a few
+times an hour and a late subscriber has no other way to ask.  Consumers must
+treat it as optional -- with driver:=raspimouse nothing publishes it.
 
 Everything below the node is a Backend (backend.py, pi4.py, pi5.py); this file
 never mentions a register, a chip label or a kernel module.
@@ -80,6 +88,9 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.lifecycle import LifecycleNode
 from rclpy.lifecycle import LifecycleState
 from rclpy.lifecycle import TransitionCallbackReturn
+from rclpy.qos import DurabilityPolicy
+from rclpy.qos import QoSProfile
+from std_msgs.msg import Bool
 from std_msgs.msg import Int16
 from std_srvs.srv import SetBool
 from tf2_ros import TransformBroadcaster
@@ -185,6 +196,7 @@ class RaspicatDriver(LifecycleNode):
         self._hardware = Hardware()
         self._odom_pub = None
         self._switches_pub = None
+        self._motor_power_pub = None
         self._tf_broadcaster = None
         self._odom_timer = None
         self._watchdog_timer = None
@@ -234,6 +246,15 @@ class RaspicatDriver(LifecycleNode):
             Int16, "buzzer", self._on_buzzer, 10, callback_group=self._aux_group
         )
         self._switches_pub = self.create_lifecycle_publisher(Switches, "switches", 10)
+        # Not a lifecycle publisher: the state has to reach the LEDs from
+        # on_deactivate and teardown too, and a lifecycle publisher drops
+        # exactly those (leaving the last "on" as the newest thing anyone can
+        # read).  Latched so a subscriber that comes up later still knows.
+        self._motor_power_pub = self.create_publisher(
+            Bool,
+            "motor_power_state",
+            QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL),
+        )
 
         period = 1.0 / max(self._odom_hz, 1.0)
         self._odom_timer = self.create_timer(
@@ -342,6 +363,12 @@ class RaspicatDriver(LifecycleNode):
                 self.destroy_lifecycle_publisher(publisher)
         self._odom_pub = None
         self._switches_pub = None
+        # Ordinary publisher (see on_configure), so not in the loop above.  It
+        # has already carried the "off" from _set_motor_power at the top of
+        # this method.
+        if self._motor_power_pub is not None:
+            self.destroy_publisher(self._motor_power_pub)
+            self._motor_power_pub = None
         self._tf_broadcaster = None
 
     # -- setup -------------------------------------------------------------
@@ -621,6 +648,8 @@ class RaspicatDriver(LifecycleNode):
             self.get_logger().error("motor enable write failed: %s" % exc)
             return
         self._motor_power = bool(enabled)
+        if self._motor_power_pub is not None:
+            self._motor_power_pub.publish(Bool(data=self._motor_power))
         if enabled:
             with self._state_lock:
                 self._last_cmd_time = time.monotonic()

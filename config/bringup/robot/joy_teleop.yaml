@@ -52,11 +52,11 @@ joy_teleop:
     cancel_window: 2.0      # 既定 同左 [s]: teleop に入ったあと取り消しを出し続ける時間。1 回では waypoint_follower が次の点へ出し直す分を拾えない
     start_enabled: false    # 既定 false: 起動直後から teleop 入にするか。true にすると挿しただけで自律側を塞ぐ
     buzzer: true            # 既定 同左: モードが切り替わったとき /buzzer へ短い旋律を出すか。旋律は src/joy_buttons.py の TUNE_*
-    leds: true              # 既定 同左: いまのモードを /leds へ映すか。led0=teleop 入 / led1=モータ電源 (要求の写しなので外から変えるとずれる) / led2=巡回中 / led3=/joy 受信中
+    leds: true              # 既定 同左: いまのモードを /leds へ映すか。led0=teleop 入 / led1=モータ電源 (ドライバの /motor_power_state。出さない driver:=raspimouse でだけ要求の写し) / led2=巡回中 / led3=/joy 受信中
 
     waypoints_file: ""      # 既定 同左: 巡回する経路。**空なら START+BACK は断る** (既定の順路は無い)。**地図と対で選ぶこと** — 噛み合わないと全点が地図の外に出て、1 点ずつ失敗しながら最後まで進む
 
     follow_waypoints_action: "follow_waypoints"  # 既定 同左: 巡回のアクション名。受けるのは nav2:=false (既定) では vi_planner、nav2:=true では nav2_waypoint_follower
     navigate_to_pose_action: "navigate_to_pose"  # 既定 同左: teleop に入るときに取り消す単発ゴールのほう
     motor_power_service: "motor_power"           # 既定 同左: BACK 単体長押しで叩く本体ドライバのサービス (std_srvs/SetBool)
-    motor_power_start_state: false               # 既定 同左: 起動時に電源が入っているとみなすか。ドライバの initial_motor_power と合わせる (外から変えられると 1 回ぶんずれる)
+    motor_power_start_state: false               # 既定 同左: 起動時に電源が入っているとみなすか。**効くのは /motor_power_state が来ないあいだだけ** (自前実装は出すので 1 通目で上書きされる)。公式実装 (driver:=raspimouse) では最後までこちらで、initial_motor_power と合わせる

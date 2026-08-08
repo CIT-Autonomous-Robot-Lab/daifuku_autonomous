@@ -53,10 +53,12 @@ twist_mux の優先度は非常停止ではない。実際に止めるのはモ�
 長押しは**その手をパッドに出したもの**である。切れば twist_mux も自律側も関係なく
 車輪が止まる。
 
-いま入っているかどうかは**こちらでは分からない** (ドライバは状態を出さない) ので、
-自分が投げた要求だけを数えている。起点は motor_power_start_state で、ドライバの
-initial_motor_power と合わせておくこと。`control.sh motor` など外から変えられると
-1 回ぶんずれる (次の長押しが空振りして、その次で揃う)。
+いま入っているかは自前実装 (driver:=original) が **/motor_power_state**
+(`std_msgs/Bool`、latch) で出すので、それを購読して使う。公式実装
+(既定の driver:=raspimouse) にはその口が無いので、来ないあいだは**自分が投げた
+要求だけを数える**。起点は motor_power_start_state で、そのときはドライバの
+initial_motor_power と合わせておくこと。`control.sh motor` や RViz のパネルから
+外して変えられると 1 回ぶんずれる (次の長押しが空振りして、その次で揃う)。
 
 ## モードは音でも伝える
 
@@ -89,9 +91,9 @@ stop() で 0 を出しておく。
 activate で戻さないので、lifecycle を回すと次にボタンを押すまで消灯したままに
 なる (エラーは出ない)。~/enabled と同じ枝で出しているのはこのため。
 
-**led1 (モータ電源) は要求の写しであって実際の状態ではない。** ドライバは電源の
-状態を出さないので、下の `_motor_power` と同じものを映しているだけである
-(`control.sh motor` や RViz のパネルから変えられると 1 回ぶんずれる)。
+**led1 (モータ電源) はドライバが出す /motor_power_state をそのまま映す。** 公式実装
+(driver:=raspimouse) はそれを出さないので、そのときだけ要求の写し (下の
+`_motor_power`) に落ちる — 外から変えられると 1 回ぶんずれるのはその構成のとき。
 
 ## teleop 中は「出しっぱなし」にしてある
 
@@ -331,8 +333,11 @@ class JoyTeleop(Node):
         self._goal_handle = None
         self._goal_pending = False
         self._tune = TunePlayer()
-        # ドライバは電源の状態を出さないので、自分が投げた要求だけを数える。
+        # ドライバが状態を出さない構成 (driver:=raspimouse) 用の写し。自分が
+        # 投げた要求だけを数えるので、外から変えられるとずれる。
         self._motor_power = bool(value("motor_power_start_state"))
+        # ドライバが出す実際の状態。None = まだ一度も来ていない (= 写しを使う)。
+        self._motor_state = None
         self._motor_pending = False
 
         self._cmd_pub = self.create_publisher(Twist, "cmd_vel_teleop", 10)
@@ -368,6 +373,12 @@ class JoyTeleop(Node):
 
         self._motor_service = value("motor_power_service")
         self._motor_client = self.create_client(SetBool, self._motor_service)
+        # 自前実装だけが出す実際の電源状態。latch なので、こちらが後から上がっても
+        # 現在値が 1 通届く (購読側も transient_local でないと届かない)。
+        self.create_subscription(
+            Bool, "motor_power_state", self._on_motor_state,
+            QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL),
+        )
 
         self._follow_action = value("follow_waypoints_action")
         follow_action = self._follow_action
@@ -576,17 +587,14 @@ class JoyTeleop(Node):
         戻さないため。変化時だけにすると lifecycle を回した先で消えたままになり、
         **エラーは出ない**。
 
-        led1 は「モータ電源が入っている」ではなく「こちらがそう要求した」である
-        (下の _toggle_motor_power と同じ写し)。
+        led1 の出どころは _motor_on (ドライバが出していればその状態、公式実装の
+        ときだけ要求の写し)。
         """
         if self._leds_pub is None:
             return
-        # ponytail: led1 はドライバの状態ではなく要求の写し。`control.sh motor` や RViz の
-        # パネルから変えられると 1 回ぶんずれる。直すならドライバに状態を出させるところ
-        # からだが、公式実装 (既定の driver:=raspimouse) にその口が無い。
         state = (
             self._enabled,                                          # teleop 入
-            self._motor_power,                                      # モータ電源 (要求の写し)
+            self._motor_on(),                                       # モータ電源
             self._goal_pending or self._goal_handle is not None,    # 巡回中
             fresh,                                                  # /joy が来ている
         )
@@ -601,11 +609,29 @@ class JoyTeleop(Node):
 
     # ── モータ電源 ──────────────────────────────────────────────────────
 
+    def _on_motor_state(self, msg):
+        """ドライバが出す実際のモータ電源の状態 (自前実装だけが出す)。
+
+        読む側 (_tick と _toggle_motor_power) と同じスレッドで走る前提で、鍵は
+        持っていない。main() が rclpy.spin (単スレッド) だからで、
+        MultiThreadedExecutor へ移すならここは非常停止の判断に効く値である。
+        """
+        self._motor_state = bool(msg.data)
+
+    def _motor_on(self):
+        """いまモータ電源が入っているか。
+
+        ドライバ (driver:=original) が /motor_power_state を出していればそれが
+        答え。公式実装 (driver:=raspimouse) は出さないので、そのときだけ自分が
+        投げた要求の写しに落ちる (外から変えられると 1 回ぶんずれる)。
+        """
+        return self._motor_power if self._motor_state is None else self._motor_state
+
     def _toggle_motor_power(self):
         """モータ電源を入/切する。切るほうは非常停止として使われる。
 
-        いま入っているかは分からない (ドライバは状態を出さない) ので、自分が
-        投げた要求だけを数えている。外から変えられると 1 回ぶんずれる。
+        いま入っているかは _motor_on から取る。ドライバが状態を出していない
+        構成では自分が投げた要求の写しなので、外から変えられると 1 回ぶんずれる。
         """
         if self._motor_pending:
             # 前の要求がまだ返っていない。二度押しで往復させない。
@@ -619,7 +645,7 @@ class JoyTeleop(Node):
             )
             return
 
-        wanted = not self._motor_power
+        wanted = not self._motor_on()
         request = SetBool.Request()
         request.data = wanted
         # 要求を先に投げる。切るほうは非常停止なので、音 (最長 0.41 秒) を
@@ -640,8 +666,8 @@ class JoyTeleop(Node):
             self.get_logger().error("motor power call failed: %s" % exc)
         if response is not None and response.success:
             return
-        # 通らなかったのなら数えた側を戻す。戻さないと、次の長押しが「切る」
-        # つもりで「入れる」になる。
+        # 通らなかったのなら数えた側を戻す。戻さないと、写しを使う構成
+        # (driver:=raspimouse) で次の長押しが「切る」つもりで「入れる」になる。
         self._motor_power = not self._motor_power
         if response is None:
             # 例外の中身は上で出してある。ここは音だけ。

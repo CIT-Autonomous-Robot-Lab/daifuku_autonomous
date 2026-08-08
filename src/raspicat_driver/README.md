@@ -26,13 +26,21 @@ ros2 launch daifuku_bringup robot_bringup.launch.py driver:=original model:=pi4
 | LED・スイッチ | あり | あり（`/dev/gpiochip*` を直接） |
 | ブザー | あり（PWM レジスタ直書き） | あり（既定はソフト生成。下記） |
 | 測距センサ | あり | **なし** |
+| モータ電源の状態 | サービスのみ（出さない） | `/motor_power_state`（`std_msgs/Bool`、latch） |
 | カーネルモジュール | 要 rtmouse | 不要 |
 
-上に見せる契約は同じです。`cmd_vel` と `/leds`（`raspimouse_msgs/Leds`）と
+上に見せる契約は公式実装を**含みます**。`cmd_vel` と `/leds`（`raspimouse_msgs/Leds`）と
 `/buzzer`（`std_msgs/Int16`、値は Hz・0 で停止）を購読し、`odom` と
 `odom -> base_footprint` TF と `/switches`（`raspimouse_msgs/Switches`、true が押下）を
 出し、`motor_power` サービスを持つ lifecycle ノードなので、Nav2・EKF・emcl2 の設定は
 変わりません。
+
+足してあるのは `/motor_power_state`（`std_msgs/Bool`、latch）1 つだけです。公式実装は
+`motor_power` を受けても**どこにも出さない**ので、電源が入っているかを見せたい側
+（`joy_teleop` の LED1）は自分が投げた要求を数えるしかなく、`control.sh motor` や RViz の
+パネルから変えられると 1 回ぶんずれていました。**購読する側は「無くても動く」ように
+書くこと** — `driver:=raspimouse` では誰も出しません。latch なので**ドライバが落ちても
+最後の値は残ります**（生きているかは別に見ること）。**実機未確認。**
 
 **測距センサだけは持ちません。** GPIO ではなく基板の SPI 側 AD にぶら下がっていて、
 このワークスペースの中に `/light_sensors` を読むものが無く、100 Hz で読むと rtmouse
@@ -85,7 +93,7 @@ Pi 4 では `buzzer_pwm_channel` を 0 以上にすると `configure` を拒否�
 
 | ファイル | 何を持つか |
 | --- | --- |
-| `node.py` | ROS に見える面。lifecycle・`cmd_vel`・`odom`・TF・`motor_power`・`/leds`・`/buzzer`・`/switches`・オドメトリの積分。レジスタもチップ名も出てこない |
+| `node.py` | ROS に見える面。lifecycle・`cmd_vel`・`odom`・TF・`motor_power`（+ `/motor_power_state`）・`/leds`・`/buzzer`・`/switches`・オドメトリの積分。レジスタもチップ名も出てこない |
 | `control.py` | `control_mode: closed` の車輪ごとの PI 補正。ROS もハードも触らないので、rclpy の無いホストでも `test/test_control.py` で回せる |
 | `backend.py` | 両機種で共通の手順（GPIO → PWM → I2C → 周辺の順で掴む）と、機種の判定 |
 | `pi4.py` | BCM2711 の同定（`pinctrl-bcm2835` / `fe20c000.pwm`）と rtmouse の排除、ブザーへの PWM 割り当ての拒否 |
