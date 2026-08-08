@@ -1,17 +1,13 @@
-ARG ROS_IMAGE=ros:humble-ros-base-jammy
+# **タグではなくダイジェストで固定する。** `FROM` のタグは毎回レジストリへ引きに
+# いくので (`load metadata for ...`)、上流が同じタグを焼き直した日にこの下の層が
+# 全部作り直しになる — しかも「何も変えていないのに 1〜2 時間」という顔で出る。
+# 上げるときは人が明示的にこの sha を書き換えること。
+ARG ROS_IMAGE=ros:humble-ros-base-jammy@sha256:7bea3d9aa2483d3ca34c8e30d921b79273b0913bd7dc64bebf51d082b5d107e4
 
 # Build on the target architecture.  The official ros-base image supports both
 # amd64 and arm64, unlike osrf/ros:humble-desktop-full (amd64 only).
 FROM ${ROS_IMAGE} AS builder
 
-ARG LIVOX_SDK2_REF=v1.3.1
-# ビルドの並列数。**compose は環境変数の BUILD_JOBS をここへ渡さない** (`args:`
-# に無い)。渡すと OOM 避けの `BUILD_JOBS=1 docker compose up -d` — つまり up 時の
-# colcon だけを絞りたいとき — がこの下の層を全部作り直し、いちばん困るときに
-# 1〜2 時間の焼き直しが始まるため。イメージ側を絞るのは明示のときだけ:
-#
-#   docker compose build --build-arg BUILD_JOBS=1
-ARG BUILD_JOBS=4
 ENV DEBIAN_FRONTEND=noninteractive \
     ROS_DISTRO=humble \
     ROS_WS=/opt/ros_ws
@@ -54,6 +50,21 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       ros-humble-rosbag2 \
       ros-humble-slam-toolbox \
       ros-humble-topic-tools
+
+# **ARG は「最初に使う RUN の直前」に置くこと。** BuildKit は FROM より後に宣言した
+# ARG を、**使っていない RUN も含めて**それ以降の全 RUN のキャッシュキーへ入れる
+# (`docker history` の `RUN |2 LIVOX_SDK2_REF=... BUILD_JOBS=...` がそれ)。上の
+# apt の層は 2.85GB / Pi 4 で 6 分あるので、そこより上に置くと
+# `--build-arg BUILD_JOBS=1` がそれを作り直しにいく。ここへ下ろしてあるので、
+# 巻き添えは Livox 以降 (数分) で済む — ゼロにはならない。
+ARG LIVOX_SDK2_REF=v1.3.1
+# ビルドの並列数。**compose は環境変数の BUILD_JOBS をここへ渡さない** (`args:`
+# に無い)。渡すと OOM 避けの `BUILD_JOBS=1 docker compose up -d` — つまり up 時の
+# colcon だけを絞りたいとき — がこの下の層を全部作り直すため。イメージ側を絞るのは
+# 明示のときだけ:
+#
+#   docker compose build --build-arg BUILD_JOBS=1
+ARG BUILD_JOBS=4
 
 # Livox SDK2 is required by livox_ros_driver2.
 RUN git clone --depth 1 --branch "${LIVOX_SDK2_REF}" \
