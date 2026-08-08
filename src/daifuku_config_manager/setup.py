@@ -1,5 +1,3 @@
-import glob
-
 from setuptools import setup
 
 package_name = "daifuku_config_manager"
@@ -14,17 +12,9 @@ setup(
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),
-        # 今どこで走らせるか。**tools/site.sh が書き換えるので glob にしない** —
-        # 名前を決め打ちにしておけば、ビルド時の glob の結果に依らず必ず入る。
-        ("share/" + package_name + "/config", ["config/site"]),
-        # overrides はここから両パッケージへ配る。--symlink-install では symlink に
-        # なるので、値を直しても再ビルドは要らない (launch / config と同じ扱い)。
-        # **ファイルを新しく足したときだけは 1 度ビルドを通すこと** — glob は
-        # ビルド時にしか展開されない。
-        (
-            "share/" + package_name + "/config/overrides",
-            glob.glob("config/overrides/*.yaml"),
-        ),
+        # **設定の実体はここには無い。** リポジトリルートの config/
+        # (daifuku_config パッケージ) に置いてある。こちらはその合成規則
+        # (params.py) とノード 2 つだけを持つ。
     ],
     install_requires=["setuptools"],
     zip_safe=True,

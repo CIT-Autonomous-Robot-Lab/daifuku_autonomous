@@ -82,13 +82,13 @@ def generate_launch_description():
     pkg_share = get_package_share_directory("daifuku_stack")
     nav2_share = get_package_share_directory("nav2_bringup")
 
-    default_params_dir = os.path.join(pkg_share, "config", "nav2")
-    config_root = os.path.join(pkg_share, "config")
+    config_root = params.config_root("daifuku_stack")
+    default_params_dir = os.path.join(config_root, "nav2")
     # Pi4 高負荷時の bond 4 秒タイムアウト対策 (詳細はファイル内コメント参照)。
     # nav2 の navigation_launch.py はマネージャに bond_timeout を渡せないため、
     # SetParametersFromFile でグループスコープ内の全ノードに注入する。
-    default_bond_params = os.path.join(pkg_share, "config", "lifecycle_bond.yaml")
-    default_emcl2_params = os.path.join(pkg_share, "config", "localization", "emcl2.yaml")
+    default_bond_params = os.path.join(config_root, "lifecycle_bond.yaml")
+    default_emcl2_params = os.path.join(config_root, "localization", "emcl2.yaml")
     default_rviz_config = os.path.join(pkg_share, "rviz", "navigation.rviz")
 
     bringup_launch = os.path.join(nav2_share, "launch", "bringup_launch.py")
@@ -203,7 +203,7 @@ def generate_launch_description():
         パラメータが無く through_poses を無効化できないので、木そのものを VI 用
         (behavior_trees/) に差し替える。
 
-        これらのキーは config/nav2/*.yaml に存在しないので SetParameter (グループ全体への
+        これらのキーは config/stack/nav2/*.yaml に存在しないので SetParameter (グループ全体への
         注入) で足りる。逆に params_file に**ある**キーは SetParameter /
         SetParametersFromFile では上書きできない (launch_ros は global params を先に、
         ノード個別の parameters= を後に渡すため、後勝ちでノード側が勝つ)。
@@ -614,7 +614,7 @@ def generate_launch_description():
                 "package": "daifuku_stack",
                 "config_root": config_root,
                 "targets": ["params_file", "emcl2_params_file", "bond_params_file"],
-                # params_file だけは config/nav2/*.yaml の合成が土台になる。
+                # params_file だけは config/stack/nav2/*.yaml の合成が土台になる。
                 "base_resolvers": {"params_file": nav2_params.fragments_resolver},
             },
         ),

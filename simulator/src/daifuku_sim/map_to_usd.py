@@ -34,7 +34,7 @@ Python でしか読めない形式を避けることで、GPU の無い開発機
 
     python3 map_to_usd.py src/daifuku_stack/maps/map_19f.yaml -o worlds/map.usda
     python3 map_to_usd.py .../map.yaml -o w.usda --unknown wall   # 未観測も壁
-    python3 map_to_usd.py .../turtlebot3.yaml -o w.usda --wall-height 1.0
+    python3 map_to_usd.py .../map.yaml -o w.usda --wall-height 1.0    # 壁を低く
 
 大きな地図 (map_tsudanuma: 5888x4000) はプリム数が数万に達してステージの読み込みが
 重い。先に `uv run downsample-map` で粗くしてから渡すこと:
@@ -54,7 +54,7 @@ from PIL import Image
 # 壁の高さの既定値。
 #
 # 「センサのスライスに合わせて薄く作る」は罠。mid360 経路は
-# config/sensors/mid360_scan.yaml が base_footprint 基準で min_height 0.30 /
+# config/bringup/sensors/mid360_scan.yaml が base_footprint 基準で min_height 0.30 /
 # max_height 0.50 を切り出し、2D 経路の LiDAR は URDF 上 base_link (0.0762) +
 # lidar_mount + 0.055 のあたりに来る。どちらか片方に合わせると、もう片方が
 # 空スキャンになって「自己位置推定が壊れた」ように見える。床から 2m 立てて

@@ -5,5 +5,5 @@ Dockerfile text eol=lf
 *.yml text eol=lf
 # 走らせる場所を 1 行で持つファイル (tools/site.sh が書き換える)。拡張子が無いので
 # 名指しで LF にしておく — 中身をそのまま Linux のコンテナが読む。
-src/daifuku_config_manager/config/site text eol=lf
+config/site text eol=lf
 *.ps1 text eol=crlf

@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>daifuku_config</name>
+  <version>0.1.0</version>
+  <description>設定ファイルの実体。合成規則とノードは daifuku_config_manager 側</description>
+  <maintainer email="noplab90@gmail.com">Keita Sekiguchi / nop</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <!-- ament_lint_common (詰め合わせ) は使わず、走らせるものだけを名指しする。
+       理由は CLAUDE.md。ここは yaml しか持たないので copyright は見る対象が
+       無い (拡張子で選ぶ) が、6 つと揃えておく。 -->
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_cmake_copyright</test_depend>
+  <test_depend>ament_cmake_lint_cmake</test_depend>
+  <test_depend>ament_cmake_xmllint</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

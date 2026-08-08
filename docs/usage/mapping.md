@@ -115,7 +115,7 @@ Mid-360 + IMUの場合:
 
 - 車輪オドメトリを`/wheel/odom`へ配信
 - 車輪側の`odom -> base_footprint` TFを停止
-- `config/sensors/MID360_config.json`のIPとセンサーTFを設定
+- `config/bringup/sensors/MID360_config.json`のIPとセンサーTFを設定
 
 詳しくは[LiDARとオドメトリ](../setup/lidar.md)を参照してください。
 
@@ -218,7 +218,7 @@ symlinkなので、そちらへ書くとホストに残るかどうかがsymlink
 ください**（`docker compose up -d`。`install/`のsymlinkはビルド時に張られ、
 `daifuku_config_manager`の`setup.py`の`glob`もビルド時にしか展開されません）。既にある
 名前へ上書きしたときは要りません。詳細は[設定](configuration.md)と
-`src/daifuku_stack/config/README.md`を参照してください。
+`config/README.md`を参照してください。
 
 保存が終わったらモーター電源を切ります。
 

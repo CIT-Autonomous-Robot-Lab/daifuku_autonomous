@@ -27,7 +27,7 @@
 
   1. 土台 = 各 launch が渡している設定ファイル。navigation の params_file だけは
      base_resolvers 経由で params_dir/*.yaml を合成したもの
-  2. overrides:=<名前> -> <このパッケージの share>/config/overrides/<名前>.yaml
+  2. overrides:=<名前> -> <daifuku_config の share>/overrides/<名前>.yaml
   3. extra_params_file:=<パス>
 
 **1 地図 = 1 ファイル。** 場所が決まれば LiDAR の帯 (daifuku_bringup) も emcl2 の
@@ -52,8 +52,10 @@ SetParameter / SetParametersFromFile では設定ファイルに既にあるキ�
 一時ファイルを作る。
 
 **このモジュールはどのパッケージの中身も知らない。** 土台の解決を差し替える口
-(base_resolvers) と、宣言済みノード名を探す範囲 (config_root) は呼び元が渡す。
-nav2 の断片合成のようなパッケージ固有の規則は、そちら側に置くこと。
+(base_resolvers) は呼び元が渡す。nav2 の断片合成のようなパッケージ固有の規則は、
+そちら側に置くこと。宣言済みノード名を探す範囲 (config_root) だけは逆で、
+**組み立てるのはここ (config_root()) 1 か所**にしてある — 呼び元が作れると
+親の段を渡す事故が起き、検査が黙って広がるため。
 """
 
 import difflib
@@ -82,10 +84,8 @@ _FALLBACK_SITE = "map_19f"
 
 
 def site_file():
-    """今どこで走らせるかを 1 行で持つファイル (このパッケージの share)。"""
-    return os.path.join(
-        get_package_share_directory("daifuku_config_manager"), "config", "site"
-    )
+    """今どこで走らせるかを 1 行で持つファイル (daifuku_config の share)。"""
+    return os.path.join(get_package_share_directory("daifuku_config"), "site")
 
 
 def read_site_file(path):
@@ -138,13 +138,18 @@ DEFAULT_OVERRIDES_ORIGIN = (
     "環境変数 OVERRIDES" if os.environ.get("OVERRIDES", "").strip() else "config/site"
 )
 
-# overrides ファイルの 1 段目に書けるパッケージ名。
+# overrides ファイルの 1 段目に書けるパッケージ名と、そのパッケージの設定が
+# daifuku_config のどの段に居るか。
 #
 # **ここに無い名前は起動時に落とす。** 各 launch は自分の名前の部分木しか見ないので、
 # `daifuku_stak:` のような綴り違いを許すと、どの launch からも読まれないまま
 # エラーも警告も出ずに消える (ノード名の綴り違いを _reject_unknown_nodes で
 # 潰しているのと同じ理由)。パッケージが増えたときだけここを足す。
-KNOWN_PACKAGES = ("daifuku_bringup", "daifuku_stack")
+CONFIG_DIRS = {
+    "daifuku_bringup": "bringup",
+    "daifuku_stack": "stack",
+}
+KNOWN_PACKAGES = tuple(CONFIG_DIRS)
 
 # 1 段目に書ける、パッケージ名ではない節。**ノードのパラメータではないもの**を
 # ここへ入れる (今は地図だけ)。パッケージ名の段に混ぜないのは、どちらのパッケージの
@@ -162,15 +167,25 @@ SENTINEL_RESTART_CODE = 42
 
 
 def overrides_dir():
-    """overrides/*.yaml の置き場 (このパッケージの share)。
+    """overrides/*.yaml の置き場 (daifuku_config の share)。
 
     daifuku_bringup と daifuku_stack のどちらからも同じものを指す。地図ごとの
     調整が 2 つのパッケージにまたがるので、どちらか一方に置くと他方がそちらへ
-    依存してしまう (葉であるこのパッケージに置けば、その依存は起きない)。
+    依存してしまう (葉である daifuku_config に置けば、その依存は起きない)。
     """
-    return os.path.join(
-        get_package_share_directory("daifuku_config_manager"), "config", "overrides"
-    )
+    return os.path.join(get_package_share_directory("daifuku_config"), "overrides")
+
+
+def config_root(package):
+    """そのパッケージの設定の根 (daifuku_config の bringup/ か stack/)。
+
+    **設定のパスを組み立てるのはここだけ。** 呼び元が os.path.join で作れると、
+    親の daifuku_config/ を渡す事故が起きる。そうすると
+    _reject_unknown_nodes が両パッケージ分のノード名を認めてしまい、
+    `daifuku_bringup:` の下に nav2 のノード名を書いても**通ってしまう** (誰も
+    読まない部分木になるのを止める検査が、黙って効かなくなる)。
+    """
+    return os.path.join(get_package_share_directory("daifuku_config"), CONFIG_DIRS[package])
 
 
 def load(path):
@@ -357,7 +372,7 @@ def _base(context, name, base_resolvers):
     """launch 引数 name が指す設定ファイルを読む。
 
     base_resolvers に name があれば、そちらへ丸ごと委ねる。ファイル 1 つでは
-    済まない土台 (navigation の params_file は config/nav2/*.yaml の合成) を、
+    済まない土台 (navigation の params_file は config/stack/nav2/*.yaml の合成) を、
     このモジュールがパッケージ構造を知らないまま扱うための口。
 
     Returns:
@@ -502,7 +517,7 @@ def _config_files(config_root):
     **開けないものは飛ばす。** `--symlink-install` の install/ は src/ への
     symlink なので、設定ファイルを別のパッケージへ移すと**古い symlink が
     install/ に残る** (2026-08-07 の実機: daifuku_stack の share にまだ
-    config/robot/joy_teleop.yaml が居た。移したのは f922a80)。glob には出るが
+    当時の config/robot/joy_teleop.yaml が居た。移したのは f922a80)。glob には出るが
     開けないので、読みにいくと launch ごと落ちる。ここは「今ある設定」を数える
     ところなので、リンク切れは設定ではないと見なす。
 

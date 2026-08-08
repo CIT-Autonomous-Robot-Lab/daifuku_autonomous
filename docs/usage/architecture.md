@@ -29,7 +29,7 @@ LiDARの初期化待ちは入らず、EKFが再起動して`/odom`が原点へ�
 `twist_mux:=true`が既定）。自律側は`/cmd_vel`（優先度10）、遠隔操作は
 `/cmd_vel_teleop`（100）で、勝っている側が出しているあいだだけ`/cmd_vel_mux`へ
 中継されます。**優先度は非常停止ではありません**（止めるのはモーター電源）。
-配線と設定は[`config/README.md`](../../src/daifuku_stack/config/README.md#twist_muxyaml-の配線と優先度)。
+配線と設定は[`config/README.md`](../../config/README.md#twist_muxyaml-の配線と優先度)。
 
 Mid-360は時刻同期がないためスタンプが実時計からずれていきます。`restamp_scan.py`が
 `/scan_mid360_prestamp`を受信時刻で打ち直して`/scan_raw`へ流し、以降は2D LiDARと同じ
@@ -106,7 +106,7 @@ ROSに見える契約は`driver:=raspimouse`（公式実装）と同じです。
 （`/light_sensors`）だけです。
 
 Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。パラメータは
-`config/robot/raspicat_driver.yaml`、実装と機種ごとの前提は
+`config/bringup/robot/raspicat_driver.yaml`、実装と機種ごとの前提は
 [`src/raspicat_driver/README.md`](../../src/raspicat_driver/README.md)にまとめています。
 
 ## launchファイルの構成
@@ -132,7 +132,7 @@ Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。
 | --- | --- | --- |
 | `params.py` | `daifuku_config_manager` | 設定ファイルへの上書きの合成（土台 → `overrides` → `extra_params_file`）と、`config_sentinel`の起動・停止の配線（`sentinel_actions`）。**すべてのlaunchが使う共有部品** |
 | `backends.py` | `daifuku_stack/launch/daifuku_stack_launch/` | `localization`／`planner`／`local_planner`／`nav2`の解決と起動前チェック |
-| `nav2_params.py` | `daifuku_stack/launch/daifuku_stack_launch/` | `config/nav2/*.yaml`の合成と、`overrides`からの`map:=`の決定。`params.py`へ`base_resolvers`で渡す |
+| `nav2_params.py` | `daifuku_stack/launch/daifuku_stack_launch/` | `config/stack/nav2/*.yaml`の合成と、`overrides`からの`map:=`の決定。`params.py`へ`base_resolvers`で渡す |
 | `lidar.py` | `daifuku_bringup/launch/daifuku_bringup_launch/` | LiDAR構成の共通引数と`lidar_bringup`の`include` |
 
 `lidar`や`lidar_z`のようなLiDAR構成の引数は、`robot_bringup`と`lidar_bringup`の
@@ -196,7 +196,7 @@ Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。
 1ノードだけ**になります（`velocity_smoother:=false`にするとマネージャごと消えます）。
 `nav2:=true`で従来の構成に戻せます。
 
-読む設定ファイルも減ります。`config/nav2/`のうち実際に効くのは
+読む設定ファイルも減ります。`config/stack/nav2/`のうち実際に効くのは
 `vi_planner.yaml`と`map_server.yaml`、それに`behaviors.yaml`の`velocity_smoother`の
 節だけです。`bt_navigator.yaml`・`controller_server.yaml`・`costmaps.yaml`と
 `behaviors.yaml`の残り3ノード分は**合成には入るが宛先のノードが立たないので黙って
@@ -245,7 +245,7 @@ Nav2の各ノードは既定でプロセスを分けて起動します（`use_co
 Raspberry Pi 4で1プロセスへ合成すると、DDS参加者あたりのエンドポイント数が大きく
 なりすぎて、新規参加者からディスカバリできなくなります。さらにCPU飢餓でライフ
 サイクルマネージャのbond心拍が途絶え、自動シャットダウンする事象が頻発しました。
-あわせて`config/lifecycle_bond.yaml`でbondのタイムアウトを60秒へ延長しています。
+あわせて`config/stack/lifecycle_bond.yaml`でbondのタイムアウトを60秒へ延長しています。
 
 PCなど余裕のある環境では`use_composition:=True`も利用できます。
 

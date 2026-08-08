@@ -1,7 +1,7 @@
 # 建てないし走らせない。見るのは「読めるか・綴りが合っているか・実行ビットが
 # 付いているか」まで。colcon build を回さないのは、要るものが Livox-SDK2 の
 # ソースビルドと raspicat2 のワークスペースと ros2_rust で全部上流側にあり、かつ
-# 自前 6 パッケージは --symlink-install なので建て直さなくても値が効くため
+# 自前 7 パッケージは --symlink-install なので建て直さなくても値が効くため
 # (CLAUDE.md のビルド表)。C++ / Rust のコンパイルはここでは守られない。
 name: CI
 
@@ -20,16 +20,17 @@ concurrency:
 
 jobs:
   # colcon test で走るのと同じ lint を、ワークスペースを建てずに CLI で掛ける。
-  # 対象は自前 6 パッケージだけを名指しする — src/ をまとめて渡すと、CI の
+  # 対象は自前 7 パッケージだけを名指しする — src/ をまとめて渡すと、CI の
   # チェックアウトには居ない vcs import の分まで見に行くことになる。この一覧は
   # 手で保つので package.xml / CMakeLists.txt の test_depend とは乖離し得る。
   lint:
     runs-on: ubuntu-latest
     container: ros:humble-ros-base
     env:
-      PKGS_ALL: src/daifuku_bringup src/daifuku_stack src/daifuku_config_manager src/daifuku_rqt src/daifuku_waypoint_manager src/raspicat_driver
+      # daifuku_config だけ src/ の外 (リポジトリルートの config/)。
+      PKGS_ALL: config src/daifuku_bringup src/daifuku_stack src/daifuku_config_manager src/daifuku_rqt src/daifuku_waypoint_manager src/raspicat_driver
       PKGS_PY: src/daifuku_bringup src/daifuku_stack src/daifuku_config_manager src/daifuku_rqt src/raspicat_driver
-      PKGS_CMAKE: src/daifuku_bringup src/daifuku_stack src/daifuku_waypoint_manager
+      PKGS_CMAKE: config src/daifuku_bringup src/daifuku_stack src/daifuku_waypoint_manager
     steps:
       - uses: actions/checkout@v4
       - name: linter を入れる
@@ -72,11 +73,13 @@ jobs:
           from daifuku_config_manager import params
 
           # share ではなくソースの overrides/ を見る (ここだけが ament 索引)。
-          params.overrides_dir = lambda: "src/daifuku_config_manager/config/overrides"
+          params.overrides_dir = lambda: "config/overrides"
 
+          # share ではなくソースの config/ を見る (params.config_root は
+          # daifuku_config の share を引くので、install していないここでは使えない)。
           ROOTS = {
-              "daifuku_bringup": "src/daifuku_bringup/config",
-              "daifuku_stack": "src/daifuku_stack/config",
+              package: os.path.join("config", sub)
+              for package, sub in params.CONFIG_DIRS.items()
           }
           MAPS = "src/daifuku_stack/maps"
 
@@ -96,14 +99,14 @@ jobs:
               if declared and not os.path.isfile(os.path.join(MAPS, declared)):
                   bad.append(f"{site}: site: map: {declared} が {MAPS}/ に無い")
 
-          # 断片の重複 (同じノード名が config/nav2 の 2 ファイルに居ると起動時に
+          # 断片の重複 (同じノード名が config/stack/nav2 の 2 ファイルに居ると起動時に
           # 止まる)。launch を立てずに呼ぶため context は空のものを作る。
           from launch import LaunchContext
 
           from daifuku_stack_launch import nav2_params
 
           context = LaunchContext()
-          context.launch_configurations["params_dir"] = "src/daifuku_stack/config/nav2"
+          context.launch_configurations["params_dir"] = "config/stack/nav2"
           context.launch_configurations["params_file"] = ""
           try:
               _, _, origin, _ = nav2_params.fragments_resolver(context)

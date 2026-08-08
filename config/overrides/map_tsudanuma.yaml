@@ -1,8 +1,8 @@
 # map_tsudanuma.yaml (5888x4000 @0.05m = 294.4m x 200m) 用の上書き。
 # 「断片」= 重ねる先の設定ファイルの値で、
-# daifuku_bringup/config/sensors/{mid360_scan,mid360_elevation}.yaml、
-# daifuku_stack/config/nav2/vi_planner.yaml (= ノードの既定) と
-# config/nav2/behaviors.yaml (velocity_smoother の節)、config/localization/emcl2.yaml。
+# config/bringup/sensors/{mid360_scan,mid360_elevation}.yaml、
+# config/stack/nav2/vi_planner.yaml (= ノードの既定) と
+# config/stack/nav2/behaviors.yaml (velocity_smoother の節)、config/stack/localization/emcl2.yaml。
 #
 #   tools/site.sh map_tsudanuma                    # config/site を書いて機体を立て直す
 #   ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=vi
@@ -15,7 +15,7 @@
 # 0.05m のまま解くと 14.1 億状態 = 密ソルバで 79GB を確保して起動と同時に死ぬ。
 # プランナ内部だけ粗くし (map_scale)、密な states を確保しない compact で解くことで通す。
 # 実測値・導出・既知の制約 (行動集合を変えるので value_iteration3 は ec2579d 以降が要る、
-# 全域スライスが重い、pi4_sim では BT がリカバリして ABORT する) は daifuku_stack/config/README.md を参照。
+# 全域スライスが重い、pi4_sim では BT がリカバリして ABORT する) は config/README.md を参照。
 #
 # **overrides は置き換えなので、既定の map_19f はこのとき外れる**。この地図は 68.2% が
 # 未観測で占有セルが 0.4% しかなく 19F と同じ alpha 崩壊が起きる余地があるため、
@@ -137,7 +137,7 @@ daifuku_stack:
   # local_planner:=vi (vi_planner 1 ノード構成) 用。以下 4 つ (map_scale /
   # downsample_policy / action_forward_m / goal_margin_radius) は**セットで効く**。1 つでも
   # 欠けると波がゴール近傍で止まり、到達列 1 で「収束」する。scale 6 は楽観でも通路の
-  # セル幅が足りず解けない。狭域追従が密な states をどう用立てるかは daifuku_stack/config/README.md と
+  # セル幅が足りず解けない。狭域追従が密な states をどう用立てるかは config/README.md と
   # vi_planner/src/core/compact.rs 冒頭。
   vi_planner:
     ros__parameters:
@@ -170,7 +170,7 @@ daifuku_stack:
       waypoint_prefetch: false             # 断片も同じ値: 切り分けのため 2026-08-08 に true から戻した。巡回は点あたり 87 秒止まる
       # global_sweep と budget/idle は断片のまま (compact でもタイル修復として効く)。
       # **走行中に "global sweep done in" は出ない**のが設計どおりで、動いているかは
-      # 2 秒ごとの "tile repair running for" のほうで見る (daifuku_stack/config/README.md)。
+      # 2 秒ごとの "tile repair running for" のほうで見る (config/README.md)。
 
   # planner:=vi かつ local_planner:=nav2 (広域だけ VI) 用。解像度まわりと
   # safety_radius_penalty は上の vi_planner と同じ値にしてある。片方だけ変えると同じ地図
@@ -200,4 +200,4 @@ daifuku_stack:
 #     **この地図では全域スライス 1 枚 (94 万セル) が重い**。掃きスレッドがそれをロックを
 #     握ったまま 2 秒ごとに作るので、走行中に /cmd_vel_mux が 2 秒おきに途切れる恐れが
 #     ある。2026-08-04 の実機はまさにこの止まり方だったが、犯人の切り分けは未了 —
-#     再発したら value_publish_interval_ms: 0 をここへ足すのが戻し方 (daifuku_stack/config/README.md)。
+#     再発したら value_publish_interval_ms: 0 をここへ足すのが戻し方 (config/README.md)。

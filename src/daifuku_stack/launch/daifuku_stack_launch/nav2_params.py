@@ -14,7 +14,7 @@
 """daifuku_stack だけが持つ、nav2 まわりの設定の解決。
 
 `daifuku_config_manager.params` は「launch 引数 1 つ = 設定ファイル 1 つ」しか
-知らない。navigation の params_file だけは `config/nav2/*.yaml` の合成なので、
+知らない。navigation の params_file だけは `config/stack/nav2/*.yaml` の合成なので、
 土台の作り方をここに置いて `base_resolvers` 経由で渡す。あちらにパッケージ構造を
 持ち込むと、機体側 (daifuku_bringup) にも nav2 の知識が付いてくるため。
 
@@ -58,7 +58,7 @@ def fragments_resolver(context):
                 raise RuntimeError(
                     f"Node '{node_name}' is defined in two fragments: "
                     f"{owner[node_name]} and {frag}.\n"
-                    "config/nav2/*.yaml must partition the nodes; put "
+                    "config/stack/nav2/*.yaml must partition the nodes; put "
                     "map-specific overrides in config/overrides/ instead."
                 )
             owner[node_name] = frag

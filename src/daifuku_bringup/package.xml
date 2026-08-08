@@ -12,6 +12,7 @@
   <exec_depend>ament_index_python</exec_depend>
   <!-- launch が設定の合成 (overrides) に使う。daifuku_stack も同じものに依存し、
        その 2 つは互いに依存しない。 -->
+  <exec_depend>daifuku_config</exec_depend>
   <exec_depend>daifuku_config_manager</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <!-- joy:=true (既定) で立てるゲームパッドのドライバ。src/joy_teleop.py が /joy を購読する。 -->

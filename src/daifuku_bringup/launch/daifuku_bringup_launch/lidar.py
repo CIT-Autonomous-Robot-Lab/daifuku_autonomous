@@ -38,12 +38,12 @@ from launch.actions import (
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 
-from daifuku_config_manager import is_true, value
+from daifuku_config_manager import is_true, params, value
 
 
-def _shared_arg_specs(pkg_share):
+def _shared_arg_specs():
     """(名前, 既定値, 説明) の並び。説明が None の引数は説明を付けない。"""
-    sensors = os.path.join(pkg_share, "config", "sensors")
+    sensors = os.path.join(params.config_root("daifuku_bringup"), "sensors")
     return [
         ("lidar", "mid360",
          "LiDAR backend: mid360 (既定。本機の構成) または "
@@ -96,10 +96,10 @@ def _shared_arg_specs(pkg_share):
     ]
 
 
-def declare_shared_args(pkg_share):
+def declare_shared_args():
     """LiDAR 構成の共通引数を宣言する。3 つの launch ファイルが同じものを使う。"""
     declarations = []
-    for name, default, description in _shared_arg_specs(pkg_share):
+    for name, default, description in _shared_arg_specs():
         kwargs = {"default_value": default}
         if description is not None:
             kwargs["description"] = description
@@ -119,7 +119,7 @@ def include_lidar_bringup(pkg_share):
     できるようにするため。表に入れずここで足しているのは、親が
     params.declare_args で先に宣言しているから (二重宣言になる)。
     """
-    names = [name for name, _, _ in _shared_arg_specs(pkg_share)]
+    names = [name for name, _, _ in _shared_arg_specs()]
     names += ["use_sim_time", "overrides", "extra_params_file"]
     return IncludeLaunchDescription(
         PythonLaunchDescriptionSource(

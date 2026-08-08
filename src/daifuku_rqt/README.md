@@ -34,7 +34,7 @@ rqt                                          # Plugins > Raspicat > Raspicat Con
 
 ## 止まり方（ここが一番重要）
 
-自前実装（`driver:=original`）の `config/robot/raspicat_driver.yaml` は
+自前実装（`driver:=original`）の `config/bringup/robot/raspicat_driver.yaml` は
 `cmd_vel_timeout` が **60 秒**です。つまり「`cmd_vel` が途切れたから止まる」までに
 1 分かかります。公式実装（`driver:=raspimouse`）にはこのキーが**そもそも
 ありません**（`raspicat.yaml` が並べている 14 個で全部）。指令が途切れたときに
@@ -59,7 +59,7 @@ teleop を常用するなら `cmd_vel_timeout` を 1 秒程度へ下げること
 （nav2 のコントローラと `vi_planner`）の出力で、機体の手前には `twist_mux` が入って
 います（`robot_bringup.launch.py` の `twist_mux:=true` が既定）。優先度は teleop 100 /
 自律 10 なので、**publish しているあいだはこちらが勝ちます**。配線は
-[`config/README.md`](../daifuku_stack/config/README.md#twist_muxyaml-の配線と優先度)。
+[`config/README.md`](../../config/README.md#twist_muxyaml-の配線と優先度)。
 
 それでも**ゴールが走っている間は teleop グループを無効化**しています。勝てるのは
 publish している間と 0.5 秒だけで、指を離せば自律側が動き出すためです。手動に戻すには

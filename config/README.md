@@ -1,33 +1,30 @@
 # config/
 
-**設定は 3 つのパッケージに分かれています。** このファイルは 3 つとも扱います
-（値の由来を 1 か所にまとめておきたいため）。
+**設定の実体はここに全部あります**（パッケージ名は `daifuku_config`）。合成規則
+（`params.py`）と `site_manager` / `config_sentinel` は `src/daifuku_config_manager`
+の側で、あちらは実体を持ちません。
 
-| パッケージ | 持つもの | 立てるもの |
-| --- | --- | --- |
-| `daifuku_stack` | Nav2 / emcl2 / SLAM | 人が立てる `navigation` / `mapping` |
-| `daifuku_bringup` | 駆動ドライバ / LiDAR / EKF / 仲裁 / ゲームパッド | **`docker compose up` で常駐**する `robot_bringup` |
-| `daifuku_config_manager` | `overrides/*.yaml` と合成規則 | `site_manager`（`robot_bringup` が 1 つ）と `config_sentinel`（top-level の launch が 1 つずつ） |
-
-**機体側 (`daifuku_bringup`) の値を変えたら `docker compose up -d` が要ります。**
-navigation を立て直しても、常駐している raspicat サービスは読み直しません。
-
-ディレクトリは**どの launch がどう読むか**で分かれています。`overrides/*.yaml` は
-このうち `MID360_config.json` を除く全部に重ねられます（下の「上書き」）。
+1 段目の `bringup/` と `stack/` は**どの launch が読むか**で分かれていて、これが
+`overrides/*.yaml` の 1 段目（`daifuku_bringup:` / `daifuku_stack:`）と
+`config_sentinel` が指紋を取る単位の両方を兼ねます。`overrides/*.yaml` は
+`MID360_config.json` を除く全部に重ねられます（下の「上書き」）。
 
 | 場所 | 読む launch | 渡し方 |
 | --- | --- | --- |
-| `daifuku_config_manager` の `overrides/*.yaml` | すべて | 下のどれかへ重ねる（`overrides:=`）。行き先はパッケージ名とノード名で決まる |
-| `daifuku_stack` の `nav2/*.yaml` | `navigation.launch.py` | 起動時に 1 つへ合成して `params_file` に渡る |
-| `daifuku_stack` の `localization/emcl2.yaml` | `navigation.launch.py` | `emcl2_params_file` でノードへ直接 |
-| `daifuku_stack` の `lifecycle_bond.yaml` | `navigation.launch.py` | `bond_params_file` を `SetParametersFromFile` でグループ内の全ノードへ注入 |
-| `daifuku_stack` の `mapping/slam_toolbox.yaml` | `mapping.launch.py` | `slam_params_file` でノードへ直接 |
-| `daifuku_bringup` の `sensors/*.yaml` | `lidar_bringup.launch.py` / `odom_fusion.launch.py` | 各ノードへ直接（`scan_filter_params_file`、`mid360_ekf_params_file` など） |
-| `daifuku_bringup` の `sensors/MID360_config.json` | `lidar_bringup.launch.py` | `livox_ros_driver2` へ直接。**ROS のパラメータファイルではない**ので上書きの対象外 |
-| `daifuku_bringup` の `robot/raspicat_driver.yaml` | `robot_bringup.launch.py` | `raspicat_driver` (LifecycleNode) へ直接。`driver:=original` (自前実装 / 標準 / Pi 4・Pi 5) |
-| `daifuku_bringup` の `robot/raspicat.yaml` | `robot_bringup.launch.py` | `raspimouse` (LifecycleNode) へ直接。`driver:=raspimouse` (公式実装 / rtmouse 入りの Pi 4 のみ) |
-| `daifuku_bringup` の `robot/twist_mux.yaml` | `robot_bringup.launch.py` | `twist_mux` へ直接。`twist_mux:=true` (既定) のときだけ |
-| `daifuku_bringup` の `robot/joy_teleop.yaml` | `robot_bringup.launch.py` | `joy_node` と `joy_teleop` の**両方**へ直接（1 ファイルに 2 ノード分）。`joy:=true` (既定) のときだけ |
+| `overrides/*.yaml` | すべて | 下のどれかへ重ねる（`overrides:=`）。行き先はパッケージ名とノード名で決まる |
+| `stack/nav2/*.yaml` | `navigation.launch.py` | 起動時に 1 つへ合成して `params_file` に渡る |
+| `stack/localization/emcl2.yaml` | `navigation.launch.py` | `emcl2_params_file` でノードへ直接 |
+| `stack/lifecycle_bond.yaml` | `navigation.launch.py` | `bond_params_file` を `SetParametersFromFile` でグループ内の全ノードへ注入 |
+| `stack/mapping/slam_toolbox.yaml` | `mapping.launch.py` | `slam_params_file` でノードへ直接 |
+| `bringup/sensors/*.yaml` | `lidar_bringup.launch.py` / `odom_fusion.launch.py` | 各ノードへ直接（`scan_filter_params_file`、`mid360_ekf_params_file` など） |
+| `bringup/sensors/MID360_config.json` | `lidar_bringup.launch.py` | `livox_ros_driver2` へ直接。**ROS のパラメータファイルではない**ので上書きの対象外 |
+| `bringup/robot/raspicat_driver.yaml` | `robot_bringup.launch.py` | `raspicat_driver` (LifecycleNode) へ直接。`driver:=original` (自前実装 / 標準 / Pi 4・Pi 5) |
+| `bringup/robot/raspicat.yaml` | `robot_bringup.launch.py` | `raspimouse` (LifecycleNode) へ直接。`driver:=raspimouse` (公式実装 / rtmouse 入りの Pi 4 のみ) |
+| `bringup/robot/twist_mux.yaml` | `robot_bringup.launch.py` | `twist_mux` へ直接。`twist_mux:=true` (既定) のときだけ |
+| `bringup/robot/joy_teleop.yaml` | `robot_bringup.launch.py` | `joy_node` と `joy_teleop` の**両方**へ直接（1 ファイルに 2 ノード分）。`joy:=true` (既定) のときだけ |
+
+**`bringup/` の値を変えたら `docker compose up -d` が要ります。** navigation を
+立て直しても、常駐している raspicat サービスは読み直しません。
 
 `lidar_bringup.launch.py` と `odom_fusion.launch.py` は `robot_bringup.launch.py` が
 include します。単独でも立てられます（`simulator/` はそうしています）。
@@ -136,7 +133,7 @@ resample_interval: 1         # 既定 1: 何回の更新ごとにリサンプル
 ### 合成には入るが読まれない断片（`nav2:=false`）
 
 **束ねるのは常に 8 ファイル全部です。何が実際に読まれるかは、どのノードが立つかで
-決まります。** `nav2` の既定は `false`（[navigation.md](../../../docs/usage/navigation.md#nav2を立てるかどうかnav2falseが既定)）
+決まります。** `nav2` の既定は `false`（[navigation.md](../docs/usage/navigation.md#nav2を立てるかどうかnav2falseが既定)）
 で、素で起動すると Nav2 の navigation ノードが 1 つも立ちません。そのとき効くのは
 
 | 断片 | `nav2:=false` |
@@ -228,8 +225,8 @@ ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=nav2
 
 何も重ねないときは `overrides:=none` です。`ros2 launch` は値が空の
 `overrides:=` を malformed として弾くので、空文字ではなく `none` を使います。
-**`none` は場所を名乗らないので、`map:=` と対で渡してください**（対応する override を
-持たない `maps/turtlebot3.yaml` などを使うとき）。`site: map:` の無い overrides を
+**`none` は場所を名乗らないので、`map:=` と対で渡してください**（作ったばかりで
+まだ override の無い地図を試すとき）。`site: map:` の無い overrides を
 重ねたときも同じです。どちらも**既定の地図へ落とさず起動時にエラーで止めます** —
 別の場所にいるのに 19F の地図で自己位置を推定し始めるほうが危ないためです。
 
@@ -252,7 +249,7 @@ ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=nav2
 
 ```
 [INFO] [launch.user]: params: params_file: 8 fragments from .../config/nav2 -> /tmp/params_file_xxxx.yaml (+ overrides:map_19f -> vi_planner, vi_global_planner)
-[INFO] [launch.user]: params: emcl2_params_file: .../config/localization/emcl2.yaml -> /tmp/emcl2_params_file_xxxx.yaml (+ overrides:map_19f -> emcl2)
+[INFO] [launch.user]: params: emcl2_params_file: .../config/stack/localization/emcl2.yaml -> /tmp/emcl2_params_file_xxxx.yaml (+ overrides:map_19f -> emcl2)
 ```
 
 行が出ないファイルは、重なるものが無かったので土台がそのままノードへ渡っています
@@ -261,7 +258,7 @@ ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=nav2
 
 ### 新しい override を足す
 
-`src/daifuku_config_manager/config/overrides/<地図名や状況>.yaml` を作り、
+`config/overrides/<地図名や状況>.yaml` を作り、
 **変えたいキーだけ**を書きます。パッケージ名・ノード名・`ros__parameters` の 3 段が
 必要です。
 
@@ -431,7 +428,7 @@ Pi 5 実機で、右車輪だけを一定周波数で回してエンコーダで
 
 `raspicat.yaml` は公式実装（`driver:=raspimouse`）用で、rtmouse カーネルモジュールが
 出す `/dev/rt*` を `raspimouse` ノードが読む構成が前提です。自前実装
-（`driver:=original`、[`src/raspicat_driver`](../../raspicat_driver/README.md)）は
+（`driver:=original`、[`src/raspicat_driver`](../src/raspicat_driver/README.md)）は
 モータ経路をユーザ空間から直接扱い、そのパラメータがこのファイルです。**リポジトリの
 標準はこちら**で、Docker の入口（`.env` の `COMPOSE_FILE`）が `driver:=original` を
 渡します。`driver:` という引数そのものの既定値だけは `raspimouse` のままです。
@@ -447,8 +444,8 @@ Pi 4 と Pi 5 で 1 ファイルです。機種差は `model: auto` が device-t
   衝突を検出しないまま車輪が逆に回り得ます。
 
 寸法と補正係数は上の 2 節と同じ値です。`raspicat.yaml` と違うのは次の 4 点で、理由は
-[`docs/setup/raspberry-pi-4.md`](../../../docs/setup/raspberry-pi-4.md) と
-[`raspberry-pi-5.md`](../../../docs/setup/raspberry-pi-5.md)。
+[`docs/setup/raspberry-pi-4.md`](../docs/setup/raspberry-pi-4.md) と
+[`raspberry-pi-5.md`](../docs/setup/raspberry-pi-5.md)。
 
 * **`pulses_per_revolution`（1118.0）と `steps_per_revolution`（570.0）が別のキー**
   です。前者はエンコーダのパルス数で `odom` 専用、後者はステップ数で `cmd_vel` →
@@ -476,7 +473,7 @@ Pi 4 と Pi 5 で 1 ファイルです。機種差は `model: auto` が device-t
   右モータのステップクロックと同じ PWM チャネルで、sysfs からはピンの alt 機能を
   変えられないので、両方を PWM に mux すると鳴らすたびに右車輪が回ります。モータと
   同じ番号を書いた場合と、Pi 4 で 0 以上を書いた場合は `configure` が拒否します。
-  経緯は [`src/raspicat_driver/README.md`](../../raspicat_driver/README.md)。
+  経緯は [`src/raspicat_driver/README.md`](../src/raspicat_driver/README.md)。
 
 配線に関わるキー（`gpio_*` / `pwm*` / `i2c_*` / `direction_*_forward_level`）は
 すべて rtmouse の `rtmouse.h` から写した値で、**実機で確認していません**。
@@ -861,7 +858,7 @@ sink が 0.095 GB × 2 = 0.19 GB で、断片の `compact_ram_limit_mb`（4096 M
 scale 1 + 先読みが起動時に止まってくれるかどうかも分かりません。
 
 先読みそのものの効き方・条件・ログは
-[`docs/usage/navigation.md`](../../../docs/usage/navigation.md#次の点を走行中に解いておくwaypoint_prefetch)。
+[`docs/usage/navigation.md`](../docs/usage/navigation.md#次の点を走行中に解いておくwaypoint_prefetch)。
 ここで `true` にしているのは、巡回で点が変わるたびに入る 1 回ぶんの solve（19F の
 実測で 29 秒、そのあいだ機体は止まったまま）を消すためです。**`map_tsudanuma` は
 2026-08-07 に `true` にしたあと、2026-08-08 に `false` へ戻しました**（走行中の

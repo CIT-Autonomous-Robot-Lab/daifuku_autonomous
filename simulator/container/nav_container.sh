@@ -27,7 +27,7 @@
 #   LIDAR=2d|mid360             lidar:= (Isaac 側の --lidar と必ず揃えること)
 #   USE_SIM_TIME=true|false     use_sim_time:= (既定 false。true にすると
 #                               RTF ゲートが厳格になる。run_isaac_case.sh 参照)
-#   MAP_NAME=map_19f|turtlebot3|... share/maps/<name>.yaml (既定 map_19f)。
+#   MAP_NAME=map_19f|map_tsudanuma|... share/maps/<name>.yaml (既定 map_19f)。
 #                               OVERRIDES 未指定なら同名の override を自動で選ぶ
 #   OVERRIDES= / EXTRA_PARAMS=  navigation.launch.py と同じ
 #   GOAL_X/GOAL_Y/GOAL_YAW_DEG  ゴール
@@ -81,7 +81,7 @@ if [ ! -f "$MAP" ]; then
 fi
 
 # パラメータの上書きは launch と同じ経路 (extra_params_file) に載せる。
-# ここで nav2_params 相当を作り直すと config/nav2/*.yaml の合成を素通りするので、
+# ここで nav2_params 相当を作り直すと config/stack/nav2/*.yaml の合成を素通りするので、
 # 環境変数で触るキーだけの overlay を書く (run_case.sh と同じ方式)。
 python3 - "$RUN" <<'PY'
 import os, sys, yaml

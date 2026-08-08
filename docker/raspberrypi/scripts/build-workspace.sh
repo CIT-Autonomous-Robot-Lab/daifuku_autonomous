@@ -96,7 +96,7 @@ MULTIARCH="$(dpkg-architecture -qDEB_HOST_MULTIARCH)"
 # ビルドすら要らず、ノードを起動し直すだけで反映される。
 colcon build --merge-install --symlink-install \
     --parallel-workers "${BUILD_JOBS}" \
-    --packages-select daifuku_bringup daifuku_config_manager daifuku_stack \
+    --packages-select daifuku_bringup daifuku_config daifuku_config_manager daifuku_stack \
                      emcl2 livox_ros_driver2 \
                      raspicat_bringup raspicat_description raspicat_driver \
                      raspimouse raspimouse_msgs \

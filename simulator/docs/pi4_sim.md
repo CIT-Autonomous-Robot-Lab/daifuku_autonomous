@@ -146,7 +146,7 @@ compact 非対応 (追従ループが `states` に書き戻すため) だった�
 **2026-08-01 に解消**: `vi_planner` も compact を扱う。追従はロボット近傍のパッチ
 だけを sink から起こして回し、狭域 → 広域の伝播 (`global_sweep`) は sink のタイル修復
 になる (2026-08-04)。広域地図は `local_planner:=vi` でも `nav2` でも通る。詳細は
-[`config/README.md`](../../src/daifuku_stack/config/README.md) の
+[`config/README.md`](../../config/README.md) の
 「`map_tsudanuma` で `planner:=vi` を使うときの制約」。
 
 ### 4. 地図を切り詰めても効かない
@@ -238,7 +238,7 @@ OOM に至る前の実行では、BT の全アクションが即座に失敗し�
 ```
 
 `bt_navigator` の `default_server_timeout` は **20 ms** (nav2 既定, 当時は
-`config/nav2/bt_navigator.yaml` 相当にもその値が入っていた)。cgroup の統計で `nr_throttled=31904`,
+`config/stack/nav2/bt_navigator.yaml` 相当にもその値が入っていた)。cgroup の統計で `nr_throttled=31904`,
 `throttled_usec=546s` という状態では、rclrs のアクションサーバが 20 ms 以内に
 ack を返せずゴールが即失敗する。`default_server_timeout: 500` に上げると
 この段階は通過し、次の OOM まで進んだ。
@@ -320,7 +320,7 @@ calib_navfn2 で planner_server が出した実測値は **11.19 Hz** (navfn 1 �
 ## 実機に反映するときの提案 (実機が復帰してから適用すること)
 
 Pi には触れていないので、以下は**提案**であって適用済みではない。唯一
-`config/nav2/bt_navigator.yaml` の `default_server_timeout` だけリポジトリに入れた
+`config/stack/nav2/bt_navigator.yaml` の `default_server_timeout` だけリポジトリに入れた
 (下記)。
 
 ### `planner:=vi` を Pi4 で動かすのに必要な 5 点 (全部必要)
@@ -498,11 +498,11 @@ penalty を 1 にすると同じ地図・同じゴールで V 120→0 と単調�
 launch_ros は global params (SetParameter / SetParametersFromFile) を先に、
 ノード個別の `parameters=[...]` を後に渡す。ROS は後勝ちなので、
 **`params_file` に既にあるキーは上書きできない**。`bond_timeout` が効くのは
-`config/nav2/*.yaml` のどこにも無いキーだからで、`solver` や `map_scale` は効かない
+`config/stack/nav2/*.yaml` のどこにも無いキーだからで、`solver` や `map_scale` は効かない
 (実測: overlay を書いても `map_scale=1` のまま起動した)。
 `navigation.launch.py` は `daifuku_config_manager` の `params.py` の `compose` で YAML の
 段階でマージし、`params_file` 自体を作っている (`overrides:=` / `extra_params_file:=`
-の両方がこの経路)。BT XML の 2 キーは `config/nav2/*.yaml` に無いので `SetParameter` で
+の両方がこの経路)。BT XML の 2 キーは `config/stack/nav2/*.yaml` に無いので `SetParameter` で
 足りる (`planner:=vi` の bringup はこれで通る)。
 
 ### 罠 3: `bt_navigator` の `wait_for_service_timeout` (既定 1000ms)
@@ -512,7 +512,7 @@ launch_ros は global params (SetParameter / SetParametersFromFile) を先に、
 間に合わず、`"compute_path_to_pose" action server not available after waiting for
 1.00s` → `Error loading XML file` → `Failed to bring up all requested nodes` で
 bringup が全滅した (BT の差し替え自体は成功していたのに、その次で落ちる)。
-`config/nav2/bt_navigator.yaml` で 60000ms にした。起動時にしか効かない待ち。
+`config/stack/nav2/bt_navigator.yaml` で 60000ms にした。起動時にしか効かない待ち。
 
 ### 罠 4: `/initialpose` の 1 発だけでは取りこぼす
 

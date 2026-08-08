@@ -46,7 +46,7 @@ rosdep install \
 colcon build \
   --symlink-install \
   --parallel-workers "${BUILD_JOBS}" \
-  --packages-select daifuku_bringup daifuku_config_manager daifuku_stack \
+  --packages-select daifuku_bringup daifuku_config daifuku_config_manager daifuku_stack \
                     daifuku_rqt daifuku_waypoint_manager emcl2 livox_ros_driver2 \
   --cmake-args \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \

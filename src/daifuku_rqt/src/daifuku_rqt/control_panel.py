@@ -73,7 +73,7 @@ from std_srvs.srv import SetBool
 HOLD_LIMIT = 5.0
 
 # cmd_vel publish rate.  vi_planner runs its control loop at 10 Hz
-# (config/nav2/vi_planner.yaml), so this matches what the driver already sees.
+# (config/stack/nav2/vi_planner.yaml), so this matches what the driver already sees.
 TELEOP_HZ = 10.0
 
 # Human-issued velocity goes to the high-priority input of twist_mux, not to
