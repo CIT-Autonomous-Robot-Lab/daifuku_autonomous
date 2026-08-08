@@ -118,17 +118,20 @@ item "config/stack/nav2/*.yaml にノード名の重複が無い" check_nav2_dup
 
 # standalone を設定に書くと、Nav2 構成で立てたとき navigate_to_pose のサーバが
 # bt_navigator と 2 つになる。**どちらに繋がったかはログにも ros2 action list にも
-# 出ない。** 渡すのは launch だけ。
-check_no_standalone() {
+# 出ない。** follow も同じで、nav2:=false (既定) では navigation.launch.py が
+# vi_planner を直に立てて follow を渡さないので、**follow: false と書いてあると
+# follow_path のサーバが立たないまま上がり、機体が黙って追従しなくなる**。
+# どちらも渡すのは launch だけ。
+check_no_launch_only_keys() {
   local hit
-  hit="$(grep -rln '^[[:space:]]*standalone:' "${CONFIG}" 2>/dev/null | tr '\n' ' ')"
+  hit="$(grep -rlnE '^[[:space:]]*(standalone|follow):' "${CONFIG}" 2>/dev/null | tr '\n' ' ')"
   [[ -z "${hit}" ]] || {
-    echo "standalone: が書かれている: ${hit}"
+    echo "standalone: / follow: が書かれている: ${hit}"
     return 1
   }
   echo "書かれていない"
 }
-item "config/ に standalone: が書かれていない" check_no_standalone
+item "config/ に standalone: / follow: が書かれていない" check_no_launch_only_keys
 
 # ── .env ────────────────────────────────────────────────────────────────────
 ROOT_ENV="${ROOT}/.env"

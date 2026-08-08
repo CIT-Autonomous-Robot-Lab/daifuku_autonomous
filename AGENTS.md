@@ -46,7 +46,7 @@ Raspberry Pi Cat を ROS 2 Humble / Nav2 で自律移動させる colcon ワー�
 罠が 2 つあります。`raspicat_ros` / `raspicat_description` / `raspimouse2` は
 `.gitignore` に**書かれていない**ので、Linux・Docker のチェックアウトでは untracked で
 現れます。それでも**コミット対象ではありません**。もう 1 つ、`src/value_iteration3`
-（`vi_planner` / `vi_global_planner` の実装）は**独自の `CLAUDE.md` を持つ**ので、中を
+（`vi_planner` の実装）は**独自の `CLAUDE.md` を持つ**ので、中を
 触る前にそちらを読むこと。
 
 ## ビルド
@@ -184,8 +184,19 @@ Docker 越しに叩く形は
   LiDAR の帯（機体側）と emcl2 / VI（自律移動側）にまたがるので、どちらかに置くと
   他方がそちらへ依存してしまう。1 地図 = 1 ファイルのまま、葉のパッケージに置いて
   ある。
-- `vi_planner`（`local_planner:=auto|vi`）と `vi_global_planner`（`local_planner:=nav2`）は
-  **排他**。両方立てると `compute_path_to_pose` にサーバが 2 つ載る。
+- **VI のノードは `vi_planner` 1 つだけ**（`local_planner` はその立ち方を選ぶ。
+  `auto|vi` は両アクション、`nav2` は `follow: false` で広域だけ担わせて追従を
+  `controller_server` に渡す）。**2026-08-08 の上流の整理まで後者は
+  `vi_global_planner` という別パッケージ・別ノードで、両方立てると
+  `compute_path_to_pose` にサーバが 2 つ載る、というのがここの罠だった**。消えたので、
+  設定（`config/stack/nav2/vi_planner.yaml` と `overrides/`）も検査も名前を
+  `vi_planner` に一本化してある。**`follow` を `config/` に書かないこと。**
+  `local_planner` を見て渡すのは vi 版 `navigation_launch.py` で、あちらは
+  `parameters` の後ろに置くので設定より強い（書いても効かない）。**危ないのは
+  `nav2:=false`（既定）のほう** — こちらは `navigation.launch.py` が `vi_planner` を
+  直に立てていて `follow` を渡さないので、`follow: false` と書いてあると
+  **`follow_path` のサーバが立たないまま standalone が上がり、エラーも警告も出ない
+  まま機体が追従しない**。`standalone` と対で、どちらも渡すのは launch だけ。
 - **`nav2` の既定は `false` で、そのとき Nav2 の navigation は BT ごと
   立たない。** `planner:=navfn` / `local_planner:=nav2` へ落とすときは
   **`nav2:=auto` を足さないと起動時にエラーで止まる**（`navigate_to_pose` を出す
@@ -201,11 +212,15 @@ Docker 越しに叩く形は
   真のまま Nav2 構成で起動すると `navigate_to_pose` のサーバが `bt_navigator` と 2 つに
   なり、クライアントは先に見つけたほうへ繋ぐ（**どちらに繋がったかはログにも
   `ros2 action list` にも出ない**）。渡すのは launch だけ。
-- **`nav2:=false` では `config/stack/nav2/{bt_navigator,behaviors,controller_server,costmaps}.yaml`
-  と `behavior_trees/` が丸ごと読まれない。** 合成には入る（ファイル名順に束ねる規則は
-  そのまま）が、宛先のノードが立たないので**エラーも警告も出ないまま無視される**。
-  同名の設定を移した先は `config/stack/nav2/vi_planner.yaml`（`stop_on_failure` /
-  `waypoint_pause_sec` / `goal_retry_limit`）。`behaviors.yaml` のほうを直しても効かない。
+- **`nav2:=false` では `config/stack/nav2/{bt_navigator,controller_server,costmaps}.yaml`
+  と `behavior_trees/` が丸ごと読まれず、`behaviors.yaml` も `velocity_smoother` の
+  節だけになる**（そのノードだけは `nav2:=false` でも立つ）。合成には入る（ファイル名順に
+  束ねる規則はそのまま）が、宛先のノードが立たないので**エラーも警告も出ないまま
+  無視される**。`behaviors.yaml` の残り 3 ノード（`smoother_server` /
+  `behavior_server` / `waypoint_follower`）がそれで、同名の設定を移した先は
+  `config/stack/nav2/vi_planner.yaml`（`stop_on_failure` / `waypoint_pause_sec`）。
+  あちらを直しても効かない。BT の `RecoveryNode number_of_retries` に当たるものは
+  同ファイルの `goal_retry_limit` で、こちらは名前が違う。
 - **`twist_mux:=true`（既定）だと、機体が動くのは `/cmd_vel` ではなく
   `/cmd_vel_mux`。** 人が出す指令は `/cmd_vel_teleop`（優先度 10）へ。`/cmd_vel`
   （優先度 100）は自律側の出力で、**自律側のほうが勝つ**。どちらでもないトピックへ
@@ -332,16 +347,16 @@ Docker 越しに叩く形は
   `waypoint_follower` も立たないので起こらない**（`lifecycle_manager_navigation` は
   残るが、管理下が `velocity_smoother` 1 つなので停止順で固まる相手が居ない。
   代わりに投げ直しは `vi_planner` の `goal_retry_limit` / `goal_retry_settle_sec`）。
-- **recovery の `spin` だけは `velocity_smoother` を通らない。** 上流 nav2 の
-  `navigation_launch.py` は `behavior_server` に `cmd_vel` → `cmd_vel_nav` を張るが、
-  `vi_global_planner` 側の複製（`local_planner:=vi` で使うほう）は張っていないので、
-  **`spin` / `backup` は生の値で直接 `/cmd_vel` → twist_mux → 車輪へ届く**。結果、
-  `velocity_smoother` が落ちていても回転だけは効く。ここで **RViz の「Navigation 2」
-  パネルの `Reset` を押すと悪化する**：停止は逆順なので `velocity_smoother` が先に
-  落ち、`waypoint_follower` の停止で（走りっぱなしのコールバックを待って）固まり、
-  `behavior_server` だけが active で残る。**自律走行は死んだまま回転だけが止まらない**
-  状態になり、`lifecycle_manager_navigation` は `is_active` にも応答しなくなる。
-  抜けるには launch を立て直すしかない。
+- **RViz の「Navigation 2」パネルの `Reset` を押すと停止順で固まる。** 停止は逆順なので
+  `velocity_smoother` が先に落ち、`waypoint_follower` の停止で（走りっぱなしの
+  コールバックを待って）固まり、`behavior_server` だけが active で残る。
+  `lifecycle_manager_navigation` は `is_active` にも応答しなくなり、抜けるには launch を
+  立て直すしかない。**ここはかつてもっと悪く**、VI 版の `navigation_launch.py` が
+  `behavior_server` に `cmd_vel` → `cmd_vel_nav` を張っていなかったので `spin` /
+  `backup` だけが生の値で直接 `/cmd_vel` → twist_mux → 車輪へ届き、**自律走行は死んだまま
+  回転だけが止まらない**状態になった。**2026-08-08 に上流（`6e803f7`）が張ったので、
+  いまは `spin` も `velocity_smoother` を通る** —— 裏を返すと、
+  `velocity_smoother` が落ちているときは以前と違って**回転も効かない**。**未検証**。
 - **`navigation.rviz` の `2D Goal Pose` は `/goal_pose` を出さない。**
   `daifuku_waypoint_manager` へ waypoint を渡すため `/waypoint_pose` に付け替えて
   ある。単発ゴールは `Nav2 Goal` (`nav2_rviz_plugins/GoalTool`) のほうを使う。

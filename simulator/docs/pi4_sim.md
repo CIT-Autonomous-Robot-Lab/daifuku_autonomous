@@ -535,12 +535,11 @@ start (53.07,-21.62,90°) → goal (44.08,-5.12,0°)、`planner:=vi local_planne
 > (8GB) 前提で外した (RAM 出力になった)。そのまま回すと sink が **匿名メモリ**に
 > なり、3GB の枠では回収できるページキャッシュだった 1.8GB がそのまま常駐に変わる
 > = 上の「C. 本命」の OOM kill を踏む。`run_case.sh` の overlay は
-> `vi_global_planner` にしか効かないので、`LOCAL_PLANNER=vi` (= `vi_planner`) で
-> 測るときは `config/overrides/map_tsudanuma.yaml` に `compact_sink_dir` を書き戻す
-> ほうが確実。
+> **2026-08-08 以降 `vi_planner` へ書く** (上流の整理で `vi_global_planner` ノードが
+> 消え、`LOCAL_PLANNER` のどちらでも宛先が同じノードになった)。
 >
 > ```bash
-> VI_COMPACT_SINK_DIR=/tmp/vi_global_planner_sink \
+> VI_COMPACT_SINK_DIR=/tmp/vi_planner_sink \
 > CASE=tsuda_vi MAP_NAME=map_tsudanuma PLANNER=vi LOCAL_PLANNER=nav2 \
 > OVERRIDES=map_tsudanuma ... bash /opt/sim/run_case.sh
 > ```

@@ -108,7 +108,6 @@ class SystemMonitor(Node):
             "watch",
             [
                 "vi_planner",
-                "vi_global_planner",
                 "controller_server",
                 "planner_server",
                 "bt_navigator",

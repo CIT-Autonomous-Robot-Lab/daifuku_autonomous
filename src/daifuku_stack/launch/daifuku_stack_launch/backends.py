@@ -20,10 +20,14 @@ navigation.launch.py が扱う 4 つの選択肢:
   local_planner : auto / nav2 / vi
   nav2          : false (既定) / true / auto
 
-planner:=vi では planner_server の代わりに vi_global_planner パッケージの
-navigation_launch.py を include する。その中で local_planner:=vi なら
-vi_planner 1 ノードが compute_path_to_pose と follow_path の両方を提供し、
-local_planner:=nav2 なら vi_global_planner + controller_server が立つ (排他)。
+planner:=vi では planner_server の代わりに vi_planner パッケージの
+navigation_launch.py を include する。**立つ VI のノードはどちらの
+local_planner でも vi_planner 1 つ**で、local_planner:=vi なら
+compute_path_to_pose と follow_path の両方を、local_planner:=nav2 なら
+follow: false で compute_path_to_pose だけを提供し、追従は controller_server
+(DWB) が持つ。**2026-08-08 の上流の整理まで後者は vi_global_planner という
+別パッケージだった**（消えたので、設定も検査もノード名 vi_planner に一本化して
+ある）。
 
 nav2:=false (**既定**) はそこからさらに進んで、**Nav2 の navigation を
 BT ごと立てない**。vi_planner が standalone モードで
@@ -46,7 +50,7 @@ def resolve_local_planner(planner, local_planner):
 
     auto (既定) はグローバルプランナに連動する: planner:=vi なら vi
     (= vi_planner 1 ノードが両アクションを提供)、それ以外は nav2
-    (vi_global_planner + controller_server)。
+    (vi_planner を follow: false で立てて controller_server が追従)。
     """
     return PythonExpression([
         "'", local_planner, "' if '", local_planner, "' != 'auto' else "
@@ -139,16 +143,16 @@ def validate_planner(context, *args, **kwargs):
     if selected not in ("vi", "navfn"):
         raise RuntimeError(
             f"Unsupported planner: {selected}\n"
-            "Use planner:=vi (value iteration, vi_global_planner) or planner:=navfn."
+            "Use planner:=vi (value iteration, vi_planner) or planner:=navfn."
         )
     if selected == "vi":
         try:
-            get_package_prefix("vi_global_planner")
+            get_package_prefix("vi_planner")
         except PackageNotFoundError as exc:
             raise RuntimeError(
-                "vi_global_planner package is not available.\n"
+                "vi_planner package is not available.\n"
                 "Import value_iteration3 (vcs import src < daifuku_autonomous.repos) and "
-                "build it (colcon build --packages-select vi_global_planner) before launching "
+                "build it (colcon build --packages-select vi_planner) before launching "
                 "with planner:=vi, or fall back to planner:=navfn."
             ) from exc
     return []
@@ -163,19 +167,14 @@ def validate_planner(context, *args, **kwargs):
 # ``dense_limit_mb`` としてノード側にある (超えたら起動時にエラーで止まる)。
 
 
-def validate_local_planner(context, *args, effective_local_planner, **kwargs):
-    """local_planner:= の値と、vi に解決される場合の前提を見る。
-
-    Args:
-        effective_local_planner: resolve_local_planner() が返した substitution。
-            auto の解決規則をここで書き直さないよう、呼び出し側から受け取る。
-    """
+def validate_local_planner(context, *args, **kwargs):
+    """local_planner:= の値と、vi を選んだ場合の前提を見る。"""
     selected = value(context, "local_planner")
     if selected not in ("auto", "nav2", "vi"):
         raise RuntimeError(
             f"Unsupported local_planner: {selected}\n"
             "Use local_planner:=auto (follow the global planner), "
-            "local_planner:=nav2 (vi_global_planner + controller_server) or "
+            "local_planner:=nav2 (vi_planner with follow: false + controller_server) or "
             "local_planner:=vi (vi_planner: one node, both actions)."
         )
     if selected == "vi" and value(context, "planner") != "vi":
@@ -184,20 +183,10 @@ def validate_local_planner(context, *args, effective_local_planner, **kwargs):
         # 知らない)。
         raise RuntimeError(
             "local_planner:=vi requires planner:=vi (it is wired through "
-            "vi_global_planner's navigation_launch.py)."
+            "vi_planner's navigation_launch.py)."
         )
 
-    if effective_local_planner.perform(context) != "vi":
-        return []
-
-    try:
-        get_package_prefix("vi_planner")
-    except PackageNotFoundError as exc:
-        raise RuntimeError(
-            "vi_planner package is not available (local planner defaults to "
-            "vi when planner:=vi).\n"
-            "Import value_iteration3 (vcs import src < daifuku_autonomous.repos) and "
-            "build it (colcon build --packages-select vi_planner), or "
-            "fall back to local_planner:=nav2."
-        ) from exc
+    # パッケージの有無はここでは見ない。**どちらの local_planner でも立つのは
+    # vi_planner 1 つ**になり、それを要求するのは planner:=vi の側なので、
+    # validate_planner の検査で尽きている (上の分岐で planner:=vi は保証済み)。
     return []

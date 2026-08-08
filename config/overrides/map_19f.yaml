@@ -86,11 +86,9 @@ daifuku_stack:
       map_scale: 2                       # 既定 1 (断片は未設定): 内部だけ 0.10m/cell (794 万状態)。solve を軽くするため
       cost_drawing_threshold: 108        # 断片 60: 色スケール上限 [ステップ数≒秒] ≒54m (1 ステップ 0.5m)
       waypoint_prefetch: true            # 断片 false: 次の点を走行中に解いておく。点あたり 29 秒の停止が消える代わりに場が 2 本 (190MB) + 1 コア
-
-  vi_global_planner:
-    ros__parameters:
-      map_scale: 2                       # 断片 1: 同上 (vi_planner と揃える)
-      cost_drawing_threshold: 108        # 断片 60: 同上 (vi_planner と揃える)
+      # ▲ local_planner:=nav2 (広域だけ VI) でも読まれるのはこの節。2026-08-08 の上流の
+      #   整理で vi_global_planner ノードが消え、同じ vi_planner が follow: false で立つ
+      #   ようになったので、ここにあった同名の節は消した (両者で値を揃える必要も消えた)。
 
 # ── ここで上書きしていないもの ────────────────────────────────────────────
 # この地図では断片 (= ほぼノード既定) のままで足りている。要るとしたら次の順で疑う。
