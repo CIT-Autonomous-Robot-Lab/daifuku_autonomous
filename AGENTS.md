@@ -204,12 +204,8 @@ Docker 越しに叩く形は
   位置だけが壊れる**ため。`localizer` が `external`（既定）でないのに `emcl2` を
   立てると、`map→odom` の出し手が 2 つになるうえ、`pose_topic` の意味が「自己位置の
   連続入力」ではなく**手動シード**に変わって `mcl_pose` の 20Hz で belief が張り
-  直され、素通しと変わらなくなる。逆向き（`localization:=vi` なのに `external` の
-  まま）は止めずに **`belief` へ読み替える**（`backends.DEFAULT_VI_LOCALIZER`。
-  `external` は「誰かの推定を読む」設定なので、そのまま立てると誰も `map→odom` を
-  出さない）。**ノードへ渡す `localizer` は launch 引数ではなく解決結果**で、
-  `validate_localization` が launch 設定へ置いたものを Node が読む。
-  `localization:=vi` は
+  直され、素通しと変わらなくなる。逆に `localization:=vi` なのに `external` のままだと、
+  **誰も `map→odom` を出さないまま起動する**。`localization:=vi` は
   `planner:=vi` と `nav2:=false`（既定）が要る——`nav2:=true` の navigation は上流の
   `navigation_launch.py` 経由で、あちらに `publish_tf` を渡す口が無い。**その
   `publish_tf` は `standalone` / `follow` と同じ launch 専用のキーで、`config/` に

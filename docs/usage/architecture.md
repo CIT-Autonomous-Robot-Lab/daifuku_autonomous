@@ -160,10 +160,7 @@ Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。
 
 **どの推定器を使うかはlaunchではなく`config/stack/nav2/vi_planner.yaml`の`localizer`**
 （`external`／`grid`／`adaptive`／`belief`／`viterbi`）。launch引数が持つのは
-「内蔵を使うか」だけです。既定の`external`のまま`localization:=vi`を選ぶと
-**`belief`に読み替えます**（`external`＝外部の推定を読む設定なので、そのままでは
-誰も`map -> odom`を出しません）。逆に内蔵を選んだまま`emcl2`を立てようとすると
-起動時に止まります。
+「内蔵を使うか」だけなので、2つが噛み合わなければ起動時に止まります。
 
 ## 経路計画と追従
 

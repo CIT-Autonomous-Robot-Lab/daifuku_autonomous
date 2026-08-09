@@ -148,18 +148,18 @@ ros2 launch daifuku_stack navigation.launch.py \
 残ります）。`planner:=vi`と`nav2:=false`——どちらも既定——が要ります。
 
 **使うかどうかはこの引数、どれを使うかは`config/stack/nav2/vi_planner.yaml`の
-`localizer`**です。既定の`external`（＝外部の推定を読む）のままなら**`belief`で
-立ちます**——emcl2を止めた構成で`external`のまま立てると誰も`map -> odom`を出さない
-ためで、起動ログに読み替えたことが出ます。
+`localizer`**です。既定は`external`（＝外部の推定を読む）なので、そのまま
+`localization:=vi`を渡すと**起動時に止まります**。先に`localizer`を選んでください。
 
 | 値 | 中身 |
 | --- | --- |
-| `belief` | 全地図にbeliefを持つ和積。未シードでも最初のスキャンからfree一様で立ち上がる。**内蔵の既定**。窓がないぶん重い（beliefはVIと同じ格子＝`map_scale`後の全域に載る）。**未検証** |
-| `viterbi` | 同じ場をmin-plusで回す変種。1観測183 msで追従の40 ms予算を超えるため実走行向きではない |
-| `adaptive` | 窓つきヒストグラムMCLの多重解像度版（belief窓は数MB）。観測が合わなくなると広域レベルへ広げて再定位する。**能動的再定位（`active_reloc`）を出せるのはこれだけ** |
+| `adaptive` | 窓つきヒストグラムMCLの多重解像度版（belief窓は数MB）。観測が合わなくなると広域レベルへ広げて再定位するので、誘拐から戻れて未シードでも立ち上がる。**能動的再定位（`active_reloc`）を出せるのはこれだけ。内蔵を使うならまずこれ** |
 | `grid` | その1レベル版（要シード、再定位なし） |
+| `belief` | 全地図にbeliefを持つ和積。未シードでも最初のスキャンからfree一様で立ち上がるが、窓がないぶん重い（VIと同じ格子＝`map_scale`後の全域に載る） |
+| `viterbi` | 同じ場をmin-plusで回す変種。1観測183 msで追従の40 ms予算を超えるため実走行向きではない |
 
 ```bash
+# config/stack/nav2/vi_planner.yaml で localizer: "adaptive" にしてから
 ros2 launch daifuku_stack navigation.launch.py \
   localization:=vi
 ```

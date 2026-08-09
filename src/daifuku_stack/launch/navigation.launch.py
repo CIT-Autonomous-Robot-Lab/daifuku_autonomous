@@ -36,9 +36,8 @@
 # lifecycle_manager_localization をここで立てているのはそのため。
 #
 # **どの推定器を使うかは config の `localizer`** で、この引数は「内蔵を使うか」
-# だけを決める。config が何も選んでいなければ backends.DEFAULT_VI_LOCALIZER
-# (belief)。逆に config が内蔵を選んだまま emcl2 を立てようとしたときは
-# backends.validate_localization が起動時に止める (通すと自己位置だけが静かに壊れる)。
+# だけを決める。2 か所に分かれるので、噛み合わなければ backends.validate_localization
+# が起動時に止める (どちらの向きも、通すと自己位置だけが静かに壊れる)。
 #
 # その navigation を **Nav2 抜き**で組むのが nav2:=false で、これが**既定**。
 # vi_planner が standalone モードで navigate_to_pose と follow_waypoints も
@@ -433,13 +432,6 @@ def generate_launch_description():
                             # (区間ごとに所有者は 1 つ) が破れて自己位置だけが
                             # 静かに壊れる。渡すのは launch と 1 対 1 のここ。
                             "publish_tf": ParameterValue(use_vi_loc, value_type=bool),
-                            # **launch 引数ではなく解決結果**。中身は config の
-                            # localizer そのままで、localization:=vi なのに config が
-                            # 何も選んでいないときだけ backends の
-                            # DEFAULT_VI_LOCALIZER で埋まる (external のまま立てると
-                            # 誰も map->odom を出さない)。置くのは
-                            # backends.validate_localization。
-                            "localizer": LaunchConfiguration("localizer"),
                         },
                     ],
                     arguments=["--ros-args", "--log-level", log_level],
@@ -585,9 +577,8 @@ def generate_launch_description():
                         "(initialpose), not as a pose input. **Which estimator** is "
                         "config's business — set localizer: in "
                         "config/stack/nav2/vi_planner.yaml (or an overrides file) to "
-                        "grid / adaptive / belief / viterbi; left at external (the "
-                        "default) it falls back to belief. Needs planner:=vi and "
-                        "nav2:=false.",
+                        "adaptive / grid / belief / viterbi; leaving it external here "
+                        "stops the launch. Needs planner:=vi and nav2:=false.",
         ),
         DeclareLaunchArgument("emcl2_package", default_value="emcl2"),
         DeclareLaunchArgument("emcl2_executable", default_value="emcl2_node"),
