@@ -139,7 +139,39 @@ ros2 launch daifuku_stack navigation.launch.py \
   localization:=amcl
 ```
 
-指定可能な値は`emcl2`（別名`emcl`）と`amcl`です。
+指定可能な値は`emcl2`（別名`emcl`）と`amcl`と`vi`です。
+
+### `localization:=vi`（プランナ内蔵の推定器）
+
+`vi_planner`は2026-08-09の上流の更新から自己位置推定も持ちます（VIOLA）。これに
+切り替えると**emcl2を立てず**、`map -> odom`も`vi_planner`が出します（`map_server`は
+残ります）。`planner:=vi`と`nav2:=false`——どちらも既定——が要ります。
+
+**使うかどうかはこの引数、どれを使うかは`config/stack/nav2/vi_planner.yaml`の
+`localizer`**です。既定は`external`（＝外部の推定を読む）なので、そのまま
+`localization:=vi`を渡すと**起動時に止まります**。先に`localizer`を選んでください。
+
+| 値 | 中身 |
+| --- | --- |
+| `adaptive` | 窓つきヒストグラムMCLの多重解像度版。観測が合わなくなると広域レベルへ広げて再定位するので、誘拐から戻れて未シードでも立ち上がる。**内蔵を使うならまずこれ** |
+| `grid` | その1レベル版（要シード、再定位なし） |
+| `belief` / `viterbi` | 全地図にbeliefを持つ別系統。`viterbi`は1観測183 msで追従の40 ms予算を超えるため実走行向きではない |
+
+```bash
+# config/stack/nav2/vi_planner.yaml で localizer: "adaptive" にしてから
+ros2 launch daifuku_stack navigation.launch.py \
+  localization:=vi
+```
+
+初期姿勢はRVizの**2D Pose Estimate**（`/initialpose`）で与えます。内蔵推定器にとって
+`pose_topic`は「自己位置の連続入力」ではなく**手動シード**で、メッセージが来るたび
+beliefを張り直すためです（`adaptive`と`belief`は未シードでも立ち上がります）。推定姿勢は
+`/mcl_pose`ではなく`/viola_pose`に出ます。
+
+逆向きの取り違え——`localizer`を内蔵にしたまま`localization:=emcl2`で立てる——も
+起動時に止まります。通すと`map -> odom`の出し手が2つになり、さらに`pose_topic`
+（`mcl_pose`）が20 Hzの手動シードとして読まれて、**エラーも警告も出ないまま自己位置
+だけが壊れる**ためです。
 
 ## プランナを選ぶ
 

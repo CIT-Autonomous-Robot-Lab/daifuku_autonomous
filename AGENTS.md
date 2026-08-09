@@ -197,15 +197,20 @@ Docker 越しに叩く形は
   直に立てていて `follow` を渡さないので、`follow: false` と書いてあると
   **`follow_path` のサーバが立たないまま standalone が上がり、エラーも警告も出ない
   まま機体が追従しない**。`standalone` と対で、どちらも渡すのは launch だけ。
-- **`vi_planner` は 2026-08-09 の上流の更新から自己位置推定も持つが、この構成では
-  使わない（`localizer` は既定の `external` のまま）。** 内蔵推定器を選ぶと 2 つ壊れる。
-  1 つは `pose_topic` の意味が変わること —— 内蔵のときあれは「自己位置の連続入力」では
-  なく**手動シード**で、メッセージが来るたび belief を張り直す。launch が渡している
-  `mcl_pose`（emcl2 の 20Hz 出力）に向けたままだと**毎メッセージでリセットされ、
-  エラーも警告も出ないまま素通しと変わらなくなる**（向けるなら `initialpose`）。
-  もう 1 つは `publish_tf`（既定 `false`）で、真にすると `map→odom` の出し手が emcl2 と
-  2 つになり、下の TF の約束どおり**自己位置だけが静かに壊れる**。載せ替えるなら
-  emcl2 を止めてからで、`config/` にではなく launch に書くこと。
+- **`vi_planner` は 2026-08-09 の上流の更新から自己位置推定も持つ（VIOLA）。使うかは
+  launch の `localization:=vi`、どれを使うかは `config` の `localizer` で、この
+  2 つは別の場所にある。** 噛み合わなければ起動時に止まる（`backends.
+  validate_localization`）——どちらの向きも、通せば**エラーも警告も出ないまま自己
+  位置だけが壊れる**ため。`localizer` が `external`（既定）でないのに `emcl2` を
+  立てると、`map→odom` の出し手が 2 つになるうえ、`pose_topic` の意味が「自己位置の
+  連続入力」ではなく**手動シード**に変わって `mcl_pose` の 20Hz で belief が張り
+  直され、素通しと変わらなくなる。逆に `localization:=vi` なのに `external` のままだと、
+  **誰も `map→odom` を出さないまま起動する**。`localization:=vi` は
+  `planner:=vi` と `nav2:=false`（既定）が要る——`nav2:=true` の navigation は上流の
+  `navigation_launch.py` 経由で、あちらに `publish_tf` を渡す口が無い。**その
+  `publish_tf` は `standalone` / `follow` と同じ launch 専用のキーで、`config/` に
+  書かないこと**（`localizer` は逆に `config/` にしか無い）。`localization:=vi` では
+  `pose_topic` が `initialpose` になり、emcl2 は立たず `map_server` だけが残る。
 - **`nav2` の既定は `false` で、そのとき Nav2 の navigation は BT ごと
   立たない。** `planner:=navfn` / `local_planner:=nav2` へ落とすときは
   **`nav2:=auto` を足さないと起動時にエラーで止まる**（`navigate_to_pose` を出す

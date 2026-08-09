@@ -151,8 +151,16 @@ Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。
 
 ## 自己位置推定
 
-- `localization:=emcl2`: 外部パッケージ`emcl2`が`map -> odom`を推定
+- `localization:=emcl2`（既定）: 外部パッケージ`emcl2`が`map -> odom`を推定
 - `localization:=amcl`: Nav2標準`nav2_amcl`を使用
+- `localization:=vi`: **emcl2を立てず**、`vi_planner`自身が推定する（上流のVIOLA）。
+  `map_server`は残る。`map -> odom`を出すのも`vi_planner`（`publish_tf`）で、
+  `pose_topic`は`initialpose`＝**手動シード**（RVizの2D Pose Estimate）になる。
+  `planner:=vi`と`nav2:=false`（どちらも既定）が要る
+
+**どの推定器を使うかはlaunchではなく`config/stack/nav2/vi_planner.yaml`の`localizer`**
+（`external`／`grid`／`adaptive`／`belief`／`viterbi`）。launch引数が持つのは
+「内蔵を使うか」だけなので、2つが噛み合わなければ起動時に止まります。
 
 ## 経路計画と追従
 

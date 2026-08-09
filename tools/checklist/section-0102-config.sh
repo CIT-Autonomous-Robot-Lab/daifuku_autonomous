@@ -121,17 +121,35 @@ item "config/stack/nav2/*.yaml にノード名の重複が無い" check_nav2_dup
 # 出ない。** follow も同じで、nav2:=false (既定) では navigation.launch.py が
 # vi_planner を直に立てて follow を渡さないので、**follow: false と書いてあると
 # follow_path のサーバが立たないまま上がり、機体が黙って追従しなくなる**。
-# どちらも渡すのは launch だけ。
+# vi_planner の publish_tf も同じ側。真になるのは localization:=vi (emcl2 を立てない
+# 構成) だけで、設定に書いて emcl2 構成で真になると map->odom の出し手が 2 人になり、
+# **エラーも警告も出ないまま自己位置だけが壊れる**。どれも渡すのは launch だけ。
+# **見るのは自律移動側 (stack/ と overrides/) だけ** — 同じ名前のキーが機体側の
+# EKF と駆動ドライバにもあり、あちらは正しく設定で持つもの (odom->base_footprint)。
+#
+# **localizer は逆にここに書く側**。「どの推定器を使うか」を持つのは
+# config/stack/nav2/vi_planner.yaml だけで、launch が持つのは「内蔵を使うか」
+# (localization:=vi) だけ。噛み合わなければ backends.validate_localization が
+# 起動時に止めるので、この検査の対象には**入れない**。
 check_no_launch_only_keys() {
-  local hit
-  hit="$(grep -rlnE '^[[:space:]]*(standalone|follow):' "${CONFIG}" 2>/dev/null | tr '\n' ' ')"
+  local d hit
+  # 見る先が無いと grep は stderr へ書いて空を返す = **黙って合格**になる。
+  for d in "${CONFIG}/stack" "${CONFIG}/overrides"; do
+    [[ -d "${d}" ]] || {
+      echo "見る先が無い: ${d}"
+      return 1
+    }
+  done
+  hit="$(grep -rlnE '^[[:space:]]*(standalone|follow|publish_tf):' \
+    "${CONFIG}/stack" "${CONFIG}/overrides" 2>/dev/null | tr '\n' ' ')"
   [[ -z "${hit}" ]] || {
-    echo "standalone: / follow: が書かれている: ${hit}"
+    echo "standalone: / follow: / publish_tf: が書かれている: ${hit}"
     return 1
   }
   echo "書かれていない"
 }
-item "config/ に standalone: / follow: が書かれていない" check_no_launch_only_keys
+item "config/stack と config/overrides に standalone: / follow: / publish_tf: が無い" \
+  check_no_launch_only_keys
 
 # ── .env ────────────────────────────────────────────────────────────────────
 ROOT_ENV="${ROOT}/.env"

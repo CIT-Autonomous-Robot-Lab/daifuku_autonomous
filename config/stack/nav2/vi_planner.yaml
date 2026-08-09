@@ -1,6 +1,8 @@
 # 価値反復プランナ (value_iteration3, Rust)。「既定」= ノードの
 # src/node/params.rs が declare_parameter で持つ値。既定と違うのは
-# solver / map_wait_sec / compact_ram_limit_mb / action_forward_m の 4 つだけ。
+# solver / map_wait_sec / compact_ram_limit_mb / action_forward_m の 4 つだけ
+# (localizer も書いてあるが値は既定と同じ — あれは「どの推定器を使うか」を持つ
+# 唯一の場所なので、既定でも空欄にせず明示してある)。
 # 地図ごとの調整は ../overrides/<地図名>.yaml。合成順序と上書きは ../README.md を参照。
 #
 # **ノードは 1 つだけ**。local_planner はこのノードの立ち方を選ぶ:
@@ -143,23 +145,38 @@ vi_planner:
     #                             # 「±1m 窓」と書いてあるのはこの既定のこと**で、2026-08-09 から
     #                             # 動かせる値になった (窓の大きさを前提にした記述はこちらに従う)
     #
-    # ── 自己位置推定 (2026-08-09 に上流が足した。**この構成では使わない**) ──
-    # localizer: "external"       # external (既定) / grid / adaptive / belief / viterbi
-    #     ▲ **external のままにすること。** 内蔵推定器を選ぶと 2 つ壊れる。
-    #       (1) pose_topic の意味が「自己位置の連続入力」から**手動シード**へ変わり、
-    #           メッセージが来るたび belief を張り直す。既定の mcl_pose (emcl2 の 20Hz
-    #           出力) に向けたままだと毎メッセージでリセットされ、**エラーも警告も出ない
-    #           まま素通しと変わらなくなる** (向けるなら initialpose)。
-    #       (2) 内蔵推定器は publish_tf: true と組で map→odom を出す口だが、emcl2 が
-    #           同じ区間を出しているので**二重になり自己位置だけが静かに壊れる**
-    #           (../../../../AGENTS.md の TF 所有者の約束)。
-    #       同時に増えた belief_* / scan_quality_gate / sigma_margin_gain /
-    #       map_clear_from_scan / qmdp / active_reloc も、external では読まれないか
-    #       実質無効 (既定 off、あるいは quality が 1.0 固定) なので**ここには書かない**。
-    #       **例外が footprint_clear_m** で、あれは localizer と無関係に効く (下を参照)。
-    # publish_tf: false           # map→odom を自分で出すか。**emcl2 が出しているので false 固定**
-    # transform_tolerance: 0.5    # 上を true にしたときの TF スタンプの未来日付け [s]
+    # ── 自己位置推定 (2026-08-09 に上流が足した VIOLA。**この構成の既定では使わない**) ──
+    # **どれを使うかを持つのはここだけ**で、使うかどうかは launch の
+    # `localization:=vi`。2 か所に分かれるので、噛み合わなければ起動時に止まる
+    # (backends.validate_localization)。external のまま vi を選んでも、内蔵を選んだまま
+    # emcl2 を立てても、**通せばどちらも自己位置だけが静かに壊れる**ため。
+    #   external (既定) … pose_topic (= emcl2 の mcl_pose) をそのまま自己位置にする
+    #   adaptive        … 窓つきヒストグラム MCL の多重解像度版。観測が合わなくなると
+    #                     広域レベルへ広げて再定位するので、誘拐から戻れて未シードでも
+    #                     立ち上がる。**内蔵を使うならまずこれ**
+    #   grid            … その 1 レベル版 (要シード、再定位なし)
+    #   belief/viterbi  … 全地図に belief を持つ別系統。viterbi は 1 観測 183ms で
+    #                     追従の 40ms 予算を超えるので実走行には向かない
+    localizer: "external"        # 既定 同左: 自己位置の出どころ。**localization:=vi に
+                                 # するときだけ上の 4 つから選ぶ**
+    #     ▲ 内蔵を選ぶと pose_topic の意味が「自己位置の連続入力」から**手動シード**へ
+    #       変わり、メッセージが来るたび belief を張り直す。launch は localization:=vi の
+    #       ときだけ initialpose へ向け直す (mcl_pose のままだと 20Hz でリセットされ、
+    #       **エラーも警告も出ないまま素通しと変わらなくなる**)。**その initialpose は
+    #       相対名**なので、namespace:= を付けた構成では /<ns>/initialpose になり、
+    #       RViz の 2D Pose Estimate (絶対名 /initialpose) が届かない。
+    #       名前空間なし (既定) でしかシードできない。
+    # publish_tf: false           # map→odom を自分で出すか。
+    #     ▲ **ここに書かないこと。** 渡すのは launch (localization:= の解決結果) で、
+    #       真になるのは emcl2 を立てない構成だけ。ここで真にすると emcl2 構成のときに
+    #       出し手が 2 人になり、**自己位置だけが静かに壊れる**
+    #       (../../../../AGENTS.md の TF 所有者の約束)。
+    # transform_tolerance: 0.5    # 上が真のときの TF スタンプの未来日付け [s]
     # odom_topic: "odom"          # 同、T_odom→base の出どころ
+    #     ▲ 内蔵推定器と組の belief_* / scan_quality_gate / sigma_margin_gain /
+    #       map_clear_from_scan / qmdp / active_reloc は、external では読まれないか
+    #       実質無効 (既定 off、あるいは quality が 1.0 固定) なので**ここには書かない**。
+    #       **例外が footprint_clear_m** で、あれは localizer と無関係に効く (上を参照)。
     #
     # ── 2026-08-09 に消えたキー (書いても読まれない。ノード内の const になった) ──
     #   solve_chunk / max_solve_iter … プリエンプトを見る間隔と反復の打ち切り回数
