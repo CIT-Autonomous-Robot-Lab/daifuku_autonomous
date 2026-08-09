@@ -28,7 +28,13 @@ if has_node /ekf_filter_node; then
   result CHECK "構成" "use_mid360_imu=true (EKF が /odom と TF を持つ)"
 
   item "/livox/imu が 100Hz 以上" hz_at_least /livox/imu 100
-  item "/imu/mid360 が 100Hz 以上" hz_at_least /imu/mid360 100
+  # **生の 200 Hz を見るのは 1 段目まで。** 2 段目からは imu_throttle が 50 指定で
+  # 間引いたあと (実測 44 Hz) で、EKF の frequency 30.0 に対して 1.5 倍ある。
+  # 間引くのは rclpy が 1 通ごとに払う代金が重いためで、prepare_mid360_imu を生の
+  # 200 Hz に繋ぐと Pi 4 で 1 コアの 24% を持っていく (odom_fusion.launch.py)。
+  item "/livox/imu_throttled が 35Hz 以上 (throttle が生きている)" \
+    hz_at_least /livox/imu_throttled 35
+  item "/imu/mid360 が 35Hz 以上" hz_at_least /imu/mid360 35
   item "/wheel/odom がある (ドライバは TF を出さない側)" has_topic /wheel/odom
 
   # EKF が IMU を 1 度も受け取らないまま車輪だけで回っていないか。
@@ -99,9 +105,9 @@ check_odom_still() {
 # **prepare_mid360_imu が通したあとの /imu/mid360 を見る** (生の /livox/imu には
 # バイアスが乗ったままなので、そちらを見ると常に落ちる)。この個体の生値は
 # z +0.013960 rad/s = +0.80 deg/s で、補正が効いていればその 1/10 以下に落ちる。
-# **1 発だけ取って判定しないこと。** 100Hz を超える MEMS の 1 サンプルは
-# それ自体が ±0.2 deg/s を軽く超えて散るので、健全な機体でも当たり外れで
-# WARN が出る。数秒ぶんを平均して初めて閾値が意味を持つ。
+# **1 発だけ取って判定しないこと。** MEMS の 1 サンプルはそれ自体が
+# ±0.2 deg/s を軽く超えて散るので、健全な機体でも当たり外れで WARN が出る。
+# 数秒ぶんを平均して初めて閾値が意味を持つ (44 Hz なので 5 秒で 200 通ほど)。
 check_gyro_bias() {
   local vals
   vals="$(ros_run 5 topic echo --field angular_velocity.z /imu/mid360 2>/dev/null |

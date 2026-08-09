@@ -36,7 +36,11 @@ three things have to happen before the EKF sees it.
     read as m/s^2 by everything downstream.
 
 Topics are the relative imu_in / imu_out, remapped by
-lidar_bringup.launch.py -- the same shape as restamp_scan.py.
+odom_fusion.launch.py -- the same shape as restamp_scan.py.  imu_in is
+**not** the raw /livox/imu: a topic_tools throttle thins its 200 Hz down
+first, because rclpy's per-message cost is what makes this node
+expensive, not the arithmetic below.  bias_samples assumes that thinned
+rate.
 """
 
 import math
@@ -61,7 +65,7 @@ class PrepareMid360Imu(Node):
         self._estimating = self.declare_parameter(
             "estimate_gyro_bias", True
         ).value
-        self._bias_samples = self.declare_parameter("bias_samples", 400).value
+        self._bias_samples = self.declare_parameter("bias_samples", 100).value
         self._bias_max_sd = self.declare_parameter("bias_max_sd", 0.005).value
         self._bias_max = self.declare_parameter("bias_max", 0.05).value
         self._window = []
@@ -117,8 +121,8 @@ class PrepareMid360Imu(Node):
 
         if deviations[2] > self._bias_max_sd or abs(means[2]) > self._bias_max:
             self._rejected += 1
-            # Once per ~10 windows: at 200 Hz and 400 samples that is a
-            # line every 20 s, enough to notice without drowning the log.
+            # Once per ~10 windows: at 44 Hz and 100 samples that is a
+            # line every 23 s, enough to notice without drowning the log.
             if self._rejected % 10 == 1:
                 self.get_logger().warn(
                     "prepare_mid360_imu: still moving, so the gyro bias is not "
