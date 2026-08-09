@@ -54,15 +54,6 @@ vi_planner:
     control_frequency: 10.0       # 既定 10.0 [Hz]: cmd_vel を出す周期
     refine_budget_ms: 40          # 既定 40 [ms/tick]: ローカルウィンドウ価値反復に使う時間予算
     no_action_timeout_sec: 3.0    # 既定 3.0 [s]: pose か方策が無い状態がこれだけ続いたら追従を中断。15 へ延ばしても粘れず、1 点飛ばすまでが 2 分に伸びただけだったので戻した (2026-08-04 実機)
-    # ── 未設定 (既定のまま。2026-08-09 に上流が足した。**localizer とは無関係に効く**) ──
-    # footprint_clear_m: 0.2      # 既定 0.2 [m]: スキャンを注入するたび、機体の周囲この半径の
-    #                             # local_penalty を消す。自己位置がずれて機体の真上にゴースト壁が
-    #                             # 立つと、それが広域の勾配との間に挟まって**動けなくなる**のを
-    #                             # 構造的に防ぐ。0 で無効 = 2026-08-09 より前の挙動。
-    #     ▲ **既定が 0 ではなく 0.2 なので、この pull で両方の地図の挙動が変わった**
-    #       (localizer: external でも follow ループの注入経路をそのまま通る)。壁際で
-    #       止まりにくくなる代わりに、機体の真下 0.2m に本物の障害物があっても消える。
-    #       **どちらも未検証。**
     # ── 未設定 (既定のまま。狭域 1 tick の判断器。2026-08-08 に上流が足した) ──
     # 場も solve も全域掃きも変わらず、**変わるのは「場から速度指令を引く読み方」だけ**。
     # 既定の greedy は上の action_* の離散 6 行動そのもの (本家 ViNode::decision 準拠) で、
@@ -179,7 +170,6 @@ vi_planner:
     #     ▲ 内蔵推定器と組の belief_* / scan_quality_gate / sigma_margin_gain /
     #       map_clear_from_scan / qmdp / active_reloc は、external では読まれないか
     #       実質無効 (既定 off、あるいは quality が 1.0 固定) なので**ここには書かない**。
-    #       **例外が footprint_clear_m** で、あれは localizer と無関係に効く (上を参照)。
     #       active_reloc (迷ったら分かる場所へ寄る) はさらに**上の solver も選ぶ**。
     #       判別点を出せるのは adaptive / belief / viterbi の 3 つ (2026-08-09 の上流の
     #       更新で adaptive だけではなくなった) だが、**アウトオブコアの解は単一ゴール
@@ -192,3 +182,6 @@ vi_planner:
     #   dense_limit_mb / publish_value_function / window_cost_drawing_threshold /
     #   goal_retry_settle_sec / global_sweep_budget_ms / global_sweep_idle_ms /
     #   dwa_n_v / dwa_n_w / mppi_lambda / mppi_sigma_v / mppi_sigma_w_deg … 上の各所を参照
+    #   footprint_clear_m … 機体真下の local_penalty クリア。同じ日に足されて消えた
+    #     (const にはならず**機能ごと**無い)。自己位置がずれて真上にゴースト壁が立つと
+    #     広域の勾配との間に挟まって動けなくなる、その逃げ道は無いままに戻った
