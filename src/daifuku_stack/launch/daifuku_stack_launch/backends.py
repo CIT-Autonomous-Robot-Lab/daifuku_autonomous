@@ -41,15 +41,23 @@ behavior_server / waypoint_follower / smoother_server が丸ごと不要にな�
 **localization:=vi** はその emcl2 も外し、自己位置推定まで vi_planner に持たせる
 (上流が 2026-08-09 に足した VIOLA)。map_server は残る — 地図はどちらの推定器も
 /map から読む。どの推定器を使うかは launch ではなく **config の `localizer`** が
-持ち、ここはその値と launch 引数が噛み合っているかだけを見る
-(validate_localization)。
+持ち、ここはその値と launch 引数が噛み合っているかを見て、決まったものを launch
+設定 `localizer` へ置く (validate_localization)。config が何も選んでいなければ
+`DEFAULT_VI_LOCALIZER`。
 """
 
 from ament_index_python.packages import PackageNotFoundError, get_package_prefix
+from launch.actions import LogInfo, SetLaunchConfiguration
 from launch.substitutions import PythonExpression
 
 from daifuku_config_manager import value
 from daifuku_config_manager.params import load
+
+# localization:=vi で config が何も選んでいない (= localizer が既定の external の
+# まま) ときに使う推定器。全地図に belief を持つ和積で、**未シードでも最初の
+# スキャンから free 一様で立ち上がる** (窓つきの grid は種が要る)。姉妹の viterbi は
+# 同じ場を min-plus で回す変種だが 1 observe 183ms で追従の 40ms 予算を超える。
+DEFAULT_VI_LOCALIZER = "belief"
 
 
 def resolve_local_planner(planner, local_planner):
@@ -134,7 +142,13 @@ def config_localizer(context):
 
 
 def validate_localization(context, *args, effective_nav2=None, **kwargs):
-    """localization:= の値と、選んだ推定器を立てられる前提を見る。"""
+    """localization:= の値と、選んだ推定器を立てられる前提を見る。
+
+    決まった推定器を launch 設定 `localizer` へ置く。**これは launch 引数では
+    なく解決結果**で、vi_planner を立てる Node がここから読む。config の値を
+    そのまま流すのが基本で、localization:=vi のときだけ「config が何も選んで
+    いない」を DEFAULT_VI_LOCALIZER で埋める。
+    """
     selected = value(context, "localization")
     if selected not in ("amcl", "emcl", "emcl2", "vi"):
         raise RuntimeError(
@@ -156,12 +170,10 @@ def validate_localization(context, *args, effective_nav2=None, **kwargs):
 
     # 内蔵推定器 (VIOLA) を使うかどうかは launch 引数、**どれを使うかは config**。
     # 2 か所に分かれるので、噛み合っていなければここで止める。黙って通すと
-    # どちらの向きも**エラーも警告も出ないまま自己位置だけが壊れる**:
-    #   config が内蔵 + localization:=emcl2 -> map->odom を emcl2 と 2 人が出し、
-    #     さらに pose_topic (mcl_pose) が「連続入力」ではなく手動シードとして
-    #     読まれて 20Hz で belief が張り直される。
-    #   config が external + localization:=vi -> 誰も map->odom を出さないまま
-    #     起動し、RViz からは Fixed Frame ごと全部消える。
+    # **エラーも警告も出ないまま自己位置だけが壊れる** —— config が内蔵なのに
+    # localization:=emcl2 で立てると、map->odom を emcl2 と 2 人が出し、さらに
+    # pose_topic (mcl_pose) が「連続入力」ではなく手動シードとして読まれて 20Hz で
+    # belief が張り直される。
     localizer = config_localizer(context)
     if selected != "vi":
         if localizer != "external":
@@ -174,7 +186,7 @@ def validate_localization(context, *args, effective_nav2=None, **kwargs):
                 "(or the overrides file that changed it), or launch with "
                 "localization:=vi to use it."
             )
-        return []
+        return [SetLaunchConfiguration("localizer", "external")]
 
     if value(context, "planner") != "vi":
         raise RuntimeError(
@@ -192,16 +204,21 @@ def validate_localization(context, *args, effective_nav2=None, **kwargs):
             "navigation_launch.py, which has no way to hand it publish_tf — nobody "
             "would publish map->odom."
         )
-    if localizer == "external":
-        raise RuntimeError(
-            "localization:=vi asks vi_planner to localize, but config leaves "
-            "localizer: \"external\" (= consume someone else's pose).\n"
-            "Pick an estimator in config/stack/nav2/vi_planner.yaml (or an overrides "
-            "file): \"adaptive\" (windowed multi-resolution; recovers from kidnapping "
-            "and starts unseeded), \"grid\", \"belief\" or \"viterbi\".\n"
-            "Leaving it external here would launch with nothing publishing map->odom."
-        )
-    return []
+    if localizer != "external":
+        return [SetLaunchConfiguration("localizer", localizer)]
+
+    # config が何も選んでいない (既定のまま)。ここで落とさず既定の推定器を使う。
+    # **external のまま立てるのだけはしない** —— それは「誰かの推定を読む」設定
+    # なので、emcl2 を止めた構成では誰も map->odom を出さないまま起動し、RViz
+    # からは Fixed Frame ごと全部消える。
+    return [
+        LogInfo(
+            msg=f"localizer: {DEFAULT_VI_LOCALIZER} "
+                "(config は external のまま = 既定。config/stack/nav2/vi_planner.yaml "
+                "か overrides で grid / adaptive / viterbi にも変えられる)"
+        ),
+        SetLaunchConfiguration("localizer", DEFAULT_VI_LOCALIZER),
+    ]
 
 
 def validate_planner(context, *args, **kwargs):

@@ -147,18 +147,24 @@ vi_planner:
     #
     # ── 自己位置推定 (2026-08-09 に上流が足した VIOLA。**この構成の既定では使わない**) ──
     # **どれを使うかを持つのはここだけ**で、使うかどうかは launch の
-    # `localization:=vi`。2 か所に分かれるので、噛み合わなければ起動時に止まる
-    # (backends.validate_localization)。external のまま vi を選んでも、内蔵を選んだまま
-    # emcl2 を立てても、**通せばどちらも自己位置だけが静かに壊れる**ため。
-    #   external (既定) … pose_topic (= emcl2 の mcl_pose) をそのまま自己位置にする
-    #   adaptive        … 窓つきヒストグラム MCL の多重解像度版。観測が合わなくなると
-    #                     広域レベルへ広げて再定位するので、誘拐から戻れて未シードでも
-    #                     立ち上がる。**内蔵を使うならまずこれ**
+    # `localization:=vi`。**external (既定) のまま vi を選んだときは belief で立つ**
+    # (backends.DEFAULT_VI_LOCALIZER。external = 「誰かの推定を読む」設定なので、
+    # emcl2 を止めた構成でそのまま立てると誰も map→odom を出さない)。逆に内蔵を
+    # 選んだまま emcl2 を立てようとすると起動時に止まる —— **通せば自己位置だけが
+    # 静かに壊れる**ため。
+    #   external (既定) … pose_topic (= emcl2 の mcl_pose) をそのまま自己位置にする。
+    #                     localization:=vi のときは belief と読み替えられる
+    #   belief          … 全地図に belief を持つ和積。未シードでも最初のスキャンから
+    #                     free 一様で立ち上がる。**内蔵の既定**。窓が無いぶん重い
+    #                     (belief は VI と同じ格子 = map_scale 後の全域に載る)。**未検証**
+    #   viterbi         … 同じ場を min-plus で回す変種。1 観測 183ms で追従の 40ms
+    #                     予算を超えるので実走行には向かない
+    #   adaptive        … 窓つきヒストグラム MCL の多重解像度版 (belief 窓は数 MB)。
+    #                     観測が合わなくなると広域レベルへ広げて再定位する。
+    #                     **能動的再定位 (active_reloc) を出せるのはこれだけ**
     #   grid            … その 1 レベル版 (要シード、再定位なし)
-    #   belief/viterbi  … 全地図に belief を持つ別系統。viterbi は 1 観測 183ms で
-    #                     追従の 40ms 予算を超えるので実走行には向かない
-    localizer: "external"        # 既定 同左: 自己位置の出どころ。**localization:=vi に
-                                 # するときだけ上の 4 つから選ぶ**
+    localizer: "external"        # 既定 同左: 自己位置の出どころ。**localization:=vi の
+                                 # ときだけ読まれ、external なら belief に読み替わる**
     #     ▲ 内蔵を選ぶと pose_topic の意味が「自己位置の連続入力」から**手動シード**へ
     #       変わり、メッセージが来るたび belief を張り直す。launch は localization:=vi の
     #       ときだけ initialpose へ向け直す (mcl_pose のままだと 20Hz でリセットされ、
