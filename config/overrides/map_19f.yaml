@@ -6,7 +6,8 @@
 #
 # **map_tsudanuma.yaml とはキーの集合をそろえてある。** 片方にしか要らない値も、
 # もう片方へ断片と同じ値で書いて並べる (地図ごとの違いが縦に並んで見えるように)。
-# だから「断片も同じ値」の行は消しても挙動は変わらない。
+# だから「断片も同じ値」の行は消しても挙動は変わらない。**例外は下の内蔵推定器 (VIOLA)
+# の 4 つ**で、あれは津田沼には置けない (密ソルバが要り、あちらは密だと 3.17GB で OOM)。
 #
 #   tools/site.sh map_19f                             # config/site (既定)。機体も立て直す
 #   ros2 launch daifuku_stack navigation.launch.py    # map も overrides も既定
@@ -83,8 +84,8 @@ daifuku_stack:
 
   # ── 価値反復プランナ ──────────────────────────────────────────────────────
   # map_scale は**プランナ内部だけ**の解像度で、/map・コストマップ・emcl2 は 0.05m のまま。
-  # 断片が compact になった今は必須ではないが、状態数が 1/4 になるぶん solve も伝播も速い。
-  # **密に戻すならこの scale 2 とセット** (scale 1 は 2.5GB、2 は実測 655MB)。
+  # **2026-08-09 に密へ戻したので、この scale 2 は必須になった** (scale 1 は 2.5GB)。
+  # 状態数が 1/4 になるぶん solve も伝播も速い。
   # 両ノードに同じ値を置くのは、片方だけだと同じ地図なのに 2 構成で別の経路が出るため。
   # 代償・見積もり・先読みとの兼ね合いは config/README.md。**未検証** —
   # この地図・この scale での solve 時間と経路、狭域 → 広域の伝播にかかる実時間は
@@ -102,8 +103,9 @@ daifuku_stack:
   # waypoint_prefetch は true。VI はゴールごとに価値関数を解き直す
   # ので、巡回では点が変わるたびに丸ごと 1 回の solve が入り、そのあいだ機体が止まる
   # (19F の実測で 29 秒)。先読みは走行中に次の点を解いておいてそれを消す。代償は場が 2 本
-  # 生きること (この地図は compact・scale 2 なので sink 95MB x2 = 190MB。断片の
-  # compact_ram_limit_mb 4096MB に収まるのでディスクへも出ない) と、走行中ずっと 1 コア
+  # 生きること (**2026-08-09 に密へ戻したので 655MB x2 = 1.31GB**。compact の頃は
+  # sink 95MB x2 = 190MB だった。密にはディスクへ逃がす口が無いので全部が匿名メモリに乗る)
+  # と、走行中ずっと 1 コア
   # (waypoint_prefetch_threads の既定 1) を solve に取られること。**津田沼は 2026-08-07 に
   # true にしたあと 2026-08-08 に false へ戻した** (走行中の固まりの切り分け。あちらは
   # 648MB x2 = 1.3GB になる) ので、**今これが true なのはこの地図だけ**。**4GB 機では外すこと。**
@@ -112,7 +114,7 @@ daifuku_stack:
   # として戻した経緯がある (切り分けは未了)。再発したらここを false に戻すのが戻し方。
   vi_planner:
     ros__parameters:
-      solver: "frontier2d_sparse_compact"  # 断片も同じ値 (ノード既定は密の frontier2d_sparse): この地図は密でも scale 2 なら 655MB で通るので必須ではない。断片が compact なので明示するだけ
+      solver: "frontier2d_sparse"          # 断片 frontier2d_sparse_compact (ノード既定 同左 = 密): 下の active_reloc がアウトオブコアを受け付けないので密へ戻した。scale 2 で実測 655MB
       map_scale: 2                         # 既定 1 (断片は未設定): 内部だけ 0.10m/cell (794 万状態)。solve を軽くするため
       downsample_policy: "conservative"    # 既定 同左 (断片は未設定): scale 2 では通路が片側 0.05m しか細らないので保守のまま。楽観が要るのは scale >= 4 から
       action_forward_m: [0.5, -0.2, 0.0, 0.5, 0.0, 0.5]  # 断片も同じ値 (6 つとも。2026-08-09 に津田沼の後退が -0.3333 から断片へ戻って 2 地図とも同じ配列になった)。これ以上は velocity_smoother の上限で頭打ち
@@ -120,9 +122,11 @@ daifuku_stack:
       safety_radius_penalty: 30            # 断片も同じ値 [秒/セル]: 19F の通路幅なら 30 でも貪欲ロールアウトが降下できる (津田沼は 1 まで下げている)
       max_rollout_steps: 10000             # 断片も同じ値: 対角 54.1m ÷ 1 手 0.5m ≒ 109 手なので桁で余る (津田沼は 100000)
       cost_drawing_threshold: 100          # 断片 60: 色スケール上限 [ステップ数≒秒] ≒50m (1 ステップ 0.5m)
-      early_start: true                    # 断片 false: ゴールまで方策が繋がった時点で solve を打ち切る。**この地図では効かない見込み** — compact の確定は値バンド単位で、幅は 4 x (0.5m ÷ 0.10m) x 上の 30 = 600 ステップ ≒ 300m と地図の値域を丸ごと覆うので打ち切る隙が無い (エラーも警告も出ない)。**未検証**
-      waypoint_prefetch: true              # 断片 false: 次の点を走行中に解いておく。点あたり 29 秒の停止が消える代わりに場が 2 本 (190MB) + 1 コア
-      # ▲ local_planner:=nav2 (広域だけ VI) でも読まれるのはこの節。2026-08-08 の上流の
+      early_start: true                    # 断片 false: ゴールまで方策が繋がった時点で solve を打ち切る。**2026-08-09 に密へ戻したのでこの地図でも効くようになった** (compact の「値バンド単位でしか確定しない」制約が無い)。効いたかはログの cut short / truncated。**未検証**
+      waypoint_prefetch: true              # 断片 false: 次の点を走行中に解いておく。点あたり 29 秒の停止が消える代わりに場が 2 本 (**密になったので 1.31GB**) + 1 コア。**Pi 4 (4GB) では外すこと**
+      # ▲ この節は local_planner:=nav2 (広域だけ VI) でも読まれる — **はずだったが、
+      #   下の内蔵推定器を置いた 2026-08-09 から、この地図では local_planner:=nav2 が
+      #   そもそも立たない** (下を参照)。2026-08-08 の上流の
       #   整理で vi_global_planner ノードが消え、同じ vi_planner が follow: false で立つ
       #   ようになったので、ここにあった同名の節は消した (両者で値を揃える必要も消えた)。
       follow_controller: "dwa"             # 既定 greedy (断片は未設定): 場は変えず読み方だけ連続に。**未検証** — 1 手 0.5m の旋回半径 1.43m を外れた指令が出る側
@@ -131,6 +135,32 @@ daifuku_stack:
       #   2.0 = 有効。**同じ日に津田沼も dwa にしたので、変わったのは 2 地図とも。**
       #   壁際が通れなくなって経路が出ないなら dwa_lethal_penalty: 0.0 で以前の
       #   「壁を掠める」挙動に戻る (どちらも未検証)。
+
+      # ── 内蔵推定器 (VIOLA) ──────────────────────────────────────────────────
+      # **この節を置いた時点で、この地図は localization:=vi でしか立たない。**
+      # 断片の external と違って localizer が内蔵になるので、既定の
+      # localization:=emcl2 で立てると backends.validate_localization が起動時に落とす
+      # (map→odom の出し手が 2 人になるのを防ぐため)。立てるときは
+      #   ros2 launch daifuku_stack navigation.launch.py localization:=vi
+      # で、planner:=vi (既定) と nav2:=false (既定) も要る。**津田沼はこの節を持たない**
+      # ので、あちらは今までどおり emcl2 で立つ (キーの集合をそろえる約束の例外)。
+      #
+      # **この節があるあいだ、この地図で立つ組み合わせはその 1 通りだけ。**
+      # planner:=navfn / local_planner:=nav2 / nav2:=true はどれも起動時に落ちる
+      # (前 2 つは validate_nav2 が nav2:=auto|true を要求し、そうすると
+      # validate_localization が localization:=vi を拒む。emcl2 / amcl へ落とせば
+      # 今度は localizer が external でないほうで落ちる)。逃げ道は overrides:=none
+      # だけだが、それだと上の emcl2 の対症療法 2 つも落ちて自己位置がその場で回る。
+      #
+      # 初期姿勢は RViz の 2D Pose Estimate (/initialpose) から一度だけ入れる —
+      # 内蔵では pose_topic が連続入力ではなく**手動シード**なので。**全部未検証。**
+      # 内蔵にすると断片が触っていないキーも動き出す: scan_quality_gate は external では
+      # quality 1.0 固定で実質無効だったが、いまはノード既定の 0.25 が効いて観測が
+      # 合わないあいだスキャン注入が減衰する (**ログには出ない**)。
+      localizer: "belief"                  # 断片 external (ノード既定 同左): 全地図に belief を持つ和積。未シードでも最初のスキャンから立ち上がる代わりに、窓が無いぶん重い (belief は VI と同じ格子 = scale 2 後の全域)
+      map_clear_from_scan: true            # 既定 false (断片は未設定): ビームが貫通したセルは地図が壁と言っていても開ける。地図が古い側の不整合 (19F は有効ビームの 28% が貫通) を走行側でも凌ぐ。寿命は local_penalty と同じでゴールを解き直すと戻る
+      qmdp: true                           # 既定 false (断片は未設定): 最尤の 1 点ではなく belief 全体で行動を選ぶ。曖昧なあいだは全仮説で無難な手に寄る
+      active_reloc: true                   # 既定 false (断片は未設定): ロストしたら仮説を最も判別できる地点へ寄って戻る。**上の solver が密であることが要る** (アウトオブコアの解は単一ゴール専用なので、compact のままだと起動時に落ちる)
 
 # ── ここで上書きしていないもの ────────────────────────────────────────────
 # この地図では断片 (= ほぼノード既定) のままで足りている。要るとしたら次の順で疑う。

@@ -211,6 +211,17 @@ Docker 越しに叩く形は
   `publish_tf` は `standalone` / `follow` と同じ launch 専用のキーで、`config/` に
   書かないこと**（`localizer` は逆に `config/` にしか無い）。`localization:=vi` では
   `pose_topic` が `initialpose` になり、emcl2 は立たず `map_server` だけが残る。
+  **2026-08-09 から既定の `map_19f` が `localizer: "belief"` を上書きしているので、
+  この地図では `localization:=vi` のほうが要る** — 引数を足さずに（＝既定の
+  `localization:=emcl2` で）立てると上の 1 つめに当たって起動時に止まる。`active_reloc`
+  と組なので `solver` も密へ戻してあり（compact = アウトオブコアは単一ゴール専用で、
+  そのままだと同じく起動時に止まる）、`map_scale: 2` と `waypoint_prefetch` の
+  1.31GB がそこにぶら下がる。**津田沼は密だと 3.17GB で OOM なのでこの節を持てない。**
+  **この地図で立つのは `localization:=vi planner:=vi nav2:=false` の 1 通りだけになる** —
+  `planner:=navfn` / `local_planner:=nav2` / `nav2:=true` はどれも起動時に落ちる
+  （前 2 つは `nav2:=auto|true` を要求し、それが `localization:=vi` と噛み合わない。
+  `emcl2` へ落とせば今度は `localizer` の側で落ちる）。逃げ道は `overrides:=none` だけで、
+  そちらは emcl2 の対症療法ごと落ちる。
 - **`nav2` の既定は `false` で、そのとき Nav2 の navigation は BT ごと
   立たない。** `planner:=navfn` / `local_planner:=nav2` へ落とすときは
   **`nav2:=auto` を足さないと起動時にエラーで止まる**（`navigate_to_pose` を出す
@@ -335,7 +346,8 @@ Docker 越しに叩く形は
   29 秒、津田沼が 87 秒）。価値関数が同時に 2 つ生きるので、**密ソルバでは
   メモリが 2 倍要る**。compact でも同梱の 2 地図は sink が RAM なので（2026-08-04 に
   津田沼の `compact_sink_dir` を外した）、そのまま 2 倍が匿名メモリに乗る
-  （19F 95MB×2、津田沼は戻せば 648MB×2 = 1.3GB）。**Pi 4 (4GB) では `true` に
+  （**19F は 2026-08-09 に密へ戻したので 655MB×2 = 1.31GB**。compact の頃は 95MB×2。
+  津田沼は戻せば 648MB×2 = 1.3GB）。**Pi 4 (4GB) では `true` に
   しないこと。ただし既定の `map_19f` が `true` なので、引数を何も
   足さずに立てると Pi 4 でもこれが効く。** 外すには使う地図の
   `overrides/*.yaml` の `waypoint_prefetch` を消すか `false` と書くしかない（キー 1 つだけ外す launch 引数は無い。
@@ -346,7 +358,8 @@ Docker 越しに叩く形は
   走行中の固まりが出て、容疑者の 1 つとして戻した（切り分けは未了）ので、
   再発したらまずここを疑う。
 - **`vi_planner` の `early_start` は compact では効かない地図がある。** ゴールまで
-  方策が繋がった時点で solve を打ち切る機能だが、compact（同梱の既定 solver）の確定は
+  方策が繋がった時点で solve を打ち切る機能だが、compact（断片の solver。2026-08-09 に
+  `map_19f` だけ密へ戻したので、compact なのは津田沼だけ）の確定は
   値バンド単位でしか進まず、そのバンド幅は「4 × 1 手の最大移動セル数（`action_forward_m`
   ÷ 解像度）× 最大ペナルティ（`safety_radius_penalty`）」（`couple_margin`）。**地図の値域が
   丸ごと 1 バンドに収まると波 2 つで解き終わって打ち切る隙が無く、エラーも警告も出ないまま

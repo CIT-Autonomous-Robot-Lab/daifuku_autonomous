@@ -152,7 +152,9 @@ vi_planner:
     #   viterbi         … 同じ場を min-plus で回す変種。1 観測 183ms で追従の 40ms
     #                     予算を超えるので実走行には向かない
     localizer: "external"        # 既定 同左: 自己位置の出どころ。**localization:=vi に
-                                 # するときだけ上の 4 つから選ぶ**
+                                 # するときだけ上の 4 つから選ぶ**。**既定の overrides
+                                 # (map_19f) は 2026-08-09 から belief へ上書きしている**
+                                 # ので、あの地図は localization:=emcl2 では立たない
     #     ▲ 内蔵を選ぶと pose_topic の意味が「自己位置の連続入力」から**手動シード**へ
     #       変わり、メッセージが来るたび belief を張り直す。launch は localization:=vi の
     #       ときだけ initialpose へ向け直す (mcl_pose のままだと 20Hz でリセットされ、
@@ -174,14 +176,12 @@ vi_planner:
     #       判別点を出せるのは adaptive / belief / viterbi の 3 つ (2026-08-09 の上流の
     #       更新で adaptive だけではなくなった) だが、**アウトオブコアの解は単一ゴール
     #       専用**なので、同梱の frontier2d_sparse_compact のまま true にすると
-    #       起動時に止まる。使うなら密ソルバごと戻すこと。
+    #       起動時に止まる。使うなら密ソルバごと戻すこと (map_19f がそうしている)。
     #
-    # ── 2026-08-09 に消えたキー (書いても読まれない。ノード内の const になった) ──
+    # ── 2026-08-09 に消えたキー (書いても読まれない。const になったか機能ごと消えた) ──
     #   solve_chunk / max_solve_iter … プリエンプトを見る間隔と反復の打ち切り回数
     #   start_tolerance / action_tolerance … 方策なしセルでの近傍スナップ・行動探索半径
     #   dense_limit_mb / publish_value_function / window_cost_drawing_threshold /
     #   goal_retry_settle_sec / global_sweep_budget_ms / global_sweep_idle_ms /
     #   dwa_n_v / dwa_n_w / mppi_lambda / mppi_sigma_v / mppi_sigma_w_deg … 上の各所を参照
-    #   footprint_clear_m … 機体真下の local_penalty クリア。同じ日に足されて消えた
-    #     (const にはならず**機能ごと**無い)。自己位置がずれて真上にゴースト壁が立つと
-    #     広域の勾配との間に挟まって動けなくなる、その逃げ道は無いままに戻った
+    #   footprint_clear_m … 足された日に消えた。**機能ごと**無いので、自己位置がずれて真上に立つゴースト壁に挟まって動けなくなる逃げ道も無い

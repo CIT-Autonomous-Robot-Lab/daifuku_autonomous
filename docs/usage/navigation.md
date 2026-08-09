@@ -147,9 +147,14 @@ ros2 launch daifuku_stack navigation.launch.py \
 切り替えると**emcl2を立てず**、`map -> odom`も`vi_planner`が出します（`map_server`は
 残ります）。`planner:=vi`と`nav2:=false`——どちらも既定——が要ります。
 
-**使うかどうかはこの引数、どれを使うかは`config/stack/nav2/vi_planner.yaml`の
-`localizer`**です。既定は`external`（＝外部の推定を読む）なので、そのまま
-`localization:=vi`を渡すと**起動時に止まります**。先に`localizer`を選んでください。
+**使うかどうかはこの引数、どれを使うかは`localizer`**です。断片
+（`config/stack/nav2/vi_planner.yaml`）の既定は`external`（＝外部の推定を読む）で、
+そのまま`localization:=vi`を渡すと**起動時に止まります**。
+
+**ただし同梱の`map_19f`（既定のoverrides）は2026-08-09から`belief`へ上書きしています。**
+つまりこの地図では`localization:=vi`のほうが要り、既定の`localization:=emcl2`のまま
+立てると**起動時に止まります**（下の「逆向きの取り違え」がそれ）。`map_tsudanuma`は
+この節を持たないので今までどおりemcl2です。**19Fの内蔵推定はまだ実機で確かめていません。**
 
 | 値 | 中身 |
 | --- | --- |
@@ -158,15 +163,20 @@ ros2 launch daifuku_stack navigation.launch.py \
 | `belief` | 全地図にbeliefを持つ和積。未シードでも最初のスキャンからfree一様で立ち上がるが、窓がないぶん重い（VIと同じ格子＝`map_scale`後の全域に載る） |
 | `viterbi` | 同じ場をmin-plusで回す変種。1観測183 msで追従の40 ms予算を超えるため実走行向きではない |
 
-**「迷ったら分かる場所へ寄る」（`active_reloc`）はこの構成では使えません。** 判別点を
-出せるのは`adaptive` / `belief` / `viterbi`の3つ（2026-08-09の上流の更新で`adaptive`
-だけではなくなった）ですが、**密ソルバも要る**ので、同梱の
-`solver: "frontier2d_sparse_compact"`のまま`active_reloc: true`と書くと起動時に止まります
-（アウトオブコアの解は単一ゴール専用のため）。密へ戻す判断は
-[`config/README.md`](../../config/README.md)。
+**「迷ったら分かる場所へ寄る」（`active_reloc`）は`localizer`だけでなく`solver`も選びます。**
+判別点を出せるのは`adaptive` / `belief` / `viterbi`の3つ（2026-08-09の上流の更新で
+`adaptive`だけではなくなった）ですが、アウトオブコアの解は単一ゴール専用なので、
+`solver: "frontier2d_sparse_compact"`のまま`true`と書くと起動時に止まります。
+**`map_19f`は2026-08-09に`solver`を密（`frontier2d_sparse`）へ戻して
+`active_reloc`を`true`にしてあります**——`map_scale: 2`込みで実測655 MBですが、
+`waypoint_prefetch: true`と重なると場が2本で**1.31 GB**になるので、**Pi 4（4 GB）では
+先読みのほうを外してください**（compactの頃は190 MBで済んでいました）。密へ戻す判断は
+[`config/README.md`](../../config/README.md)。同じ節で`map_clear_from_scan`（ビームが
+貫通したセルは地図が壁と言っていても開ける）と`qmdp`（最尤の1点ではなくbelief全体で
+行動を選ぶ）も`true`にしてあります。
 
 ```bash
-# config/stack/nav2/vi_planner.yaml で localizer: "adaptive" にしてから
+# map_19f (既定の overrides) は localizer: "belief" 済み
 ros2 launch daifuku_stack navigation.launch.py \
   localization:=vi
 ```
