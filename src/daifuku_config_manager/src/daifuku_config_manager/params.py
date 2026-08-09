@@ -491,14 +491,12 @@ def compose(context, *args, package, config_root, targets,
     return actions
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # 設定が書き変わったことを見つけるための道具 (config_sentinel / site_manager と共用)
 #
 # **ここは launch の中からもノードの中からも同じ答えを出さなければならない。**
 # launch は起動時に 1 度呼んで指紋を sentinel へ渡し、sentinel はそれを 2 秒ごとに
 # 計算し直して比べる。context を引かない (site 名と config_root だけで決まる) のは
 # そのため。
-# ──────────────────────────────────────────────────────────────────────────────
 
 
 def overrides_path(site):
