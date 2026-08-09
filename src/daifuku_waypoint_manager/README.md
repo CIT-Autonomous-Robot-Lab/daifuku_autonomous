@@ -141,7 +141,7 @@ waypoint どうしを結ぶオレンジの線に加えて、**機体の現在地
 
 この区間だけは機体について動くので、0.5 秒ごとに引き直す。ただし **5 cm 以上動いた
 ときだけ** MarkerArray を出し直す（1 回の出し直しが全 waypoint のマーカの再送になる
-ため。73 点の `waypoints_tsudanuma.yaml` で効く）。
+ため。73 点の `waypoints_tsudanuma v1.0.yaml` で効く）。
 
 **巡回中は引かない。** 1 点目はもう機体の後ろにあり、そこへ線を引いても嘘になる。
 走行中に向かっている先は Nav2 の `Path` 表示のほうに出る。
@@ -205,15 +205,18 @@ RViz の Fixed Frame と waypoint の `frame_id` が一致している必要が�
 - 有限でない値と、長さが 0 のクォータニオンは弾く。`NaN` のまま `FollowWaypoints` へ
   投げると Nav2 の側で黙って落ちる
 
-`load_waypoints` は UTF-8 を明示して開く。同梱の `waypoints_tsudanuma.yaml` は冒頭に
+`load_waypoints` は UTF-8 を明示して開く。同梱の `waypoints_tsudanuma v1.0.yaml` は冒頭に
 日本語の注記を持っていて、ロケールが C の環境（実機のコンテナは `LANG` を持たない）では
 既定の encoding が ASCII になり、**読み込みごと失敗する**。
 
 ## 保存済みの waypoint
 
-`daifuku_stack/waypoints/waypoints_tsudanuma.yaml`（73 点、`map_tsudanuma` 用）。
-地図に紐づくデータなので `daifuku_stack` 側の `maps/` の隣に置いてある。
-`map_19f` では座標が地図の外に出るので使えない。
+`daifuku_stack/waypoints/waypoints_tsudanuma v1.0.yaml`（73 点、`map_tsudanuma` 用）と、
+そこから採り直した `v1.1`（73 点）・`v1.2`（69 点）。地図に紐づくデータなので
+`daifuku_stack` 側の `maps/` の隣に置いてある。`map_19f` では座標が地図の外に出るので
+使えない。**ファイル名に空白が入っている**ので、`waypoints_file` へシェルから渡すときは
+引用符で囲むこと（囲まないと `-p waypoints_file:=...` が途中で切れ、空扱いになって
+**START+BACK が黙って巡回を断る**）。冒頭の日本語の注記を持つのは `v1.0` だけ。
 
 保存は一時ファイルへ書いてから差し替える（`QSaveFile`）ので、途中で落ちても既存の
 YAML は壊れない。
