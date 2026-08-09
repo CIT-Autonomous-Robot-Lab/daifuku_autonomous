@@ -1,7 +1,12 @@
 # map_19f.yaml (19F、915x577 @0.05m = 45.8m x 28.9m) 用の上書き。**overrides の既定値**。
-# 「断片」= 重ねる先の設定ファイルの値で、この地図では
-# config/bringup/sensors/mid360_scan.yaml、
-# config/stack/localization/emcl2.yaml と config/stack/nav2/vi_planner.yaml。
+# 「断片」= 重ねる先の設定ファイルの値で、
+# config/bringup/sensors/{mid360_scan,mid360_elevation}.yaml、
+# config/stack/nav2/vi_planner.yaml と
+# config/stack/nav2/behaviors.yaml (velocity_smoother の節)、config/stack/localization/emcl2.yaml。
+#
+# **map_tsudanuma.yaml とはキーの集合をそろえてある。** 片方にしか要らない値も、
+# もう片方へ断片と同じ値で書いて並べる (地図ごとの違いが縦に並んで見えるように)。
+# だから「断片も同じ値」の行は消しても挙動は変わらない。
 #
 #   tools/site.sh map_19f                             # config/site (既定)。機体も立て直す
 #   ros2 launch daifuku_stack navigation.launch.py    # map も overrides も既定
@@ -29,12 +34,21 @@ site:
 # **ここを変えたら `docker compose restart raspicat` が要る。** navigation を立て直す
 # だけでは変わらない (読むのは raspicat サービスなので)。
 daifuku_bringup:
+  # ── 仰角フィルタ ──────────────────────────────────────────────────────────
+  # この地図に勾配は無いので断片のまま。0.0 度 = 搭載高 (0.275m) の水平面そのもので、
+  # 下の min_height と同じ切り方 = このノードは実質素通し (elevation_filter:=false と
+  # 同じ帯)。上げると下限が距離に比例して上がるので、そのときは max_height と組になる
+  # (実例は map_tsudanuma.yaml の 5.0 の頃の記述)。
+  elevation_filter:
+    ros__parameters:
+      min_elevation_deg: 0.0          # 断片も同じ値: 搭載高の水平面 = 下の min_height 0.275 と同じ切り方。勾配対策は無し
+
   # ── スキャンの切り出し ────────────────────────────────────────────────────
   # 3 つとも断片と同じ値だが、**帯も距離も場所で変わる**ので地図の側から見えるように
   # 明示する。min は搭載高ちょうど、max はその +0.225m で、屋内の腰高だけを採る形。
   # 片方だけ動かすと帯が潰れて (min >= max) スキャンが空になるので、対で見ること。
-  # range_max は**この地図では効かない** (対角 54.1m がセンサ上限の内側)。仰角フィルタも
-  # 0 度 = 断片のままなので、tsudanuma のような max_height との組の制約もここには無い。
+  # range_max は**この地図では効かない** (対角 54.1m がセンサ上限の内側)。仰角が上の
+  # とおり 0 度なので、tsudanuma のような max_height との組の制約もここには無い。
   pointcloud_to_laserscan:
     ros__parameters:
       min_height: 0.275               # 断片も同じ値: 搭載高 (2026-08-03 実測)。下げると床が載る
@@ -44,14 +58,28 @@ daifuku_bringup:
 # ── 自律移動側 (人が立てる navigation / mapping) ──────────────────────────────
 daifuku_stack:
   # ── emcl2 ────────────────────────────────────────────────────────────────
-  # 有効ビームの 28% が地図の壁を貫通し、断片の 0.5 では膨張リセットとセンサリセットが
-  # 毎スキャン発動して推定姿勢がその場で回る。根因は地図と実環境の不整合なので、これは
-  # **地図を取り直すまでの対症療法** — 作り直したら 3 つとも消すこと。
+  # 有効ビームの 28% が地図の壁を貫通し、断片の 0.5 では膨張リセットが毎スキャン発動して
+  # 推定姿勢がその場で回る。根因は地図と実環境の不整合なので、これは**地図を取り直すまでの
+  # 対症療法** — 作り直したら 2 つとも消すこと。**3 つめの sensor_reset は 2026-08-09 に
+  # 断片ごと false になったので、ここから消した** (書いても断片と同値)。
   emcl2:
     ros__parameters:
       alpha_threshold: 0.2                # 断片 0.5 (EMCL2 既定 0.5): alpha が 0.0-0.4 に張り付くため
       expansion_radius_orientation: 0.05  # 断片 0.2 (EMCL2 既定 0.2): リセット時の姿勢の飛びを抑える
-      sensor_reset: false                 # 断片も同じ値 (2026-08-09 に断片が false へ): 貫通粒子の引き戻しを止める
+
+  # ── cmd_vel の頭打ち ──────────────────────────────────────────────────────
+  # VI の 1 手は前進量そのものが linear.x の指令値で、この地図は 0.5m/s (下の
+  # action_forward_m)。断片の velocity_smoother は DWB の max_vel_x に合わせた 0.4 なので、
+  # **そのままだと 0.5 が黙って 0.4 へクリップされる** (1 手 = 1 秒で解いているのに機体は
+  # それより遅く走り、旋回半径が計画より小さくなって内側を切る)。効くのは x の上限
+  # だけで、**theta の 2.5 も後退側も効かない** — 角速度を出すのは VI が 20 deg/s =
+  # 0.35、DWB が max_vel_theta 1.0、spin が max_rotational_vel 1.0 でどれも断片の 1.0 に
+  # 届かず、後退も -0.2 なので -0.4 でクリップされない。上下を対称に保つために
+  # 対で置いてある。**津田沼が 2026-08-08、この地図は 2026-08-09 に写した。未検証。**
+  velocity_smoother:
+    ros__parameters:
+      max_velocity: [0.5, 0.0, 2.5]     # 断片 [0.4, 0.0, 1.0] (ノード既定 同左): VI の 1 手 0.5m/s のクリップを外す。theta は誰も 1.0 を超えないので効かない
+      min_velocity: [-0.5, 0.0, -2.5]   # 断片 [-0.4, 0.0, -1.0] (ノード既定 同左): 上と対。後退は -0.2 なので断片でもクリップされない
 
   # ── 価値反復プランナ ──────────────────────────────────────────────────────
   # map_scale は**プランナ内部だけ**の解像度で、/map・コストマップ・emcl2 は 0.05m のまま。
@@ -68,7 +96,8 @@ daifuku_stack:
   # p99 300 / 最大 680 で、p90 と p99 のあいだの ≒54m 相当に置く、という選び方。運用上通る
   # 範囲へ階調を集中させ、遠い裾だけ飽和させる。
   # **この実測は 1 ステップ = 0.3m の頃のもの**で、断片が 0.5m になったぶん同じ距離が 0.6 倍の
-  # 手数で済む。180 -> 108 はその換算 (距離の意味は変えていない)。**分布は測り直していない**。
+  # 手数で済む。180 -> 108 はその換算 (距離の意味は変えていない)。**2026-08-09 に 100 へ
+  # 丸めた** (≒50m。根拠未記録)。**分布は測り直していない**。
   #
   # waypoint_prefetch は true。VI はゴールごとに価値関数を解き直す
   # ので、巡回では点が変わるたびに丸ごと 1 回の solve が入り、そのあいだ機体が止まる
@@ -83,18 +112,25 @@ daifuku_stack:
   # として戻した経緯がある (切り分けは未了)。再発したらここを false に戻すのが戻し方。
   vi_planner:
     ros__parameters:
-      map_scale: 2                       # 既定 1 (断片は未設定): 内部だけ 0.10m/cell (794 万状態)。solve を軽くするため
-      cost_drawing_threshold: 108        # 断片 60: 色スケール上限 [ステップ数≒秒] ≒54m (1 ステップ 0.5m)
-      waypoint_prefetch: true            # 断片 false: 次の点を走行中に解いておく。点あたり 29 秒の停止が消える代わりに場が 2 本 (190MB) + 1 コア
-      follow_controller: "dwa"           # 既定 greedy (断片は未設定): 場は変えず読み方だけ連続に。**未検証** — 1 手 0.5m の旋回半径 1.43m を外れた指令が出る側
-      # ▲ **2026-08-09 の上流の更新で dwa の中身が変わった。** 軌道の途中で margin 帯
-      #   (penalty >= 2xPROB_BASE) を踏む候補を棄却する dwa_lethal_penalty が入り、既定が
-      #   2.0 = 有効。**dwa にしてあるのはこの地図だけ**なので、変わったのもここだけ。
-      #   壁際が通れなくなって経路が出ないなら dwa_lethal_penalty: 0.0 で以前の
-      #   「壁を掠める」挙動に戻る (どちらも未検証)。
+      solver: "frontier2d_sparse_compact"  # 断片も同じ値 (ノード既定は密の frontier2d_sparse): この地図は密でも scale 2 なら 655MB で通るので必須ではない。断片が compact なので明示するだけ
+      map_scale: 2                         # 既定 1 (断片は未設定): 内部だけ 0.10m/cell (794 万状態)。solve を軽くするため
+      downsample_policy: "conservative"    # 既定 同左 (断片は未設定): scale 2 では通路が片側 0.05m しか細らないので保守のまま。楽観が要るのは scale >= 4 から
+      action_forward_m: [0.5, -0.2, 0.0, 0.5, 0.0, 0.5]  # 断片も同じ値 (6 つとも。2026-08-09 に津田沼の後退が -0.3333 から断片へ戻って 2 地図とも同じ配列になった)。これ以上は velocity_smoother の上限で頭打ち
+      goal_margin_radius: 0.3              # 断片も同じ値 [m]: ゴール圏の半径。ゴールセル数はこれ ÷ 内部解像度なので、scale 2 (0.10m/cell) のこの地図では断片のままで足りる (津田沼は scale 5 で潰れるため 0.5)
+      safety_radius_penalty: 30            # 断片も同じ値 [秒/セル]: 19F の通路幅なら 30 でも貪欲ロールアウトが降下できる (津田沼は 1 まで下げている)
+      max_rollout_steps: 10000             # 断片も同じ値: 対角 54.1m ÷ 1 手 0.5m ≒ 109 手なので桁で余る (津田沼は 100000)
+      cost_drawing_threshold: 100          # 断片 60: 色スケール上限 [ステップ数≒秒] ≒50m (1 ステップ 0.5m)
+      early_start: true                    # 断片 false: ゴールまで方策が繋がった時点で solve を打ち切る。**この地図では効かない見込み** — compact の確定は値バンド単位で、幅は 4 x (0.5m ÷ 0.10m) x 上の 30 = 600 ステップ ≒ 300m と地図の値域を丸ごと覆うので打ち切る隙が無い (エラーも警告も出ない)。**未検証**
+      waypoint_prefetch: true              # 断片 false: 次の点を走行中に解いておく。点あたり 29 秒の停止が消える代わりに場が 2 本 (190MB) + 1 コア
       # ▲ local_planner:=nav2 (広域だけ VI) でも読まれるのはこの節。2026-08-08 の上流の
       #   整理で vi_global_planner ノードが消え、同じ vi_planner が follow: false で立つ
       #   ようになったので、ここにあった同名の節は消した (両者で値を揃える必要も消えた)。
+      follow_controller: "dwa"             # 既定 greedy (断片は未設定): 場は変えず読み方だけ連続に。**未検証** — 1 手 0.5m の旋回半径 1.43m を外れた指令が出る側
+      # ▲ **2026-08-09 の上流の更新で dwa の中身が変わった。** 軌道の途中で margin 帯
+      #   (penalty >= 2xPROB_BASE) を踏む候補を棄却する dwa_lethal_penalty が入り、既定が
+      #   2.0 = 有効。**同じ日に津田沼も dwa にしたので、変わったのは 2 地図とも。**
+      #   壁際が通れなくなって経路が出ないなら dwa_lethal_penalty: 0.0 で以前の
+      #   「壁を掠める」挙動に戻る (どちらも未検証)。
 
 # ── ここで上書きしていないもの ────────────────────────────────────────────
 # この地図では断片 (= ほぼノード既定) のままで足りている。要るとしたら次の順で疑う。
@@ -103,12 +139,11 @@ daifuku_stack:
 #     今の 19F はどちらも触らず、貫通が多いのを alpha_threshold 側で凌いでいる。
 #   costmaps.*.inflation_radius … 通路幅が足りず経路が出ないとき。ただし外接円 0.408m を
 #     下回らせないこと (config/stack/nav2/costmaps.yaml)。
-#   vi_planner.safety_radius_penalty … 通路が細くて貪欲ロールアウトが固着するとき。
-#     map_tsudanuma では 1 まで下げている。
-#   vi_*.compact_sink_dir … sink を RAM から追い出すとき。19F は scale 2 で 0.095GB なので
+#   vi_planner.compact_sink_dir … sink を RAM から追い出すとき。19F は scale 2 で 0.095GB なので
 #     そもそも退避しない。逃がすなら速い実ディスクを明示すること。
-#   vi_*.downsample_policy … 通路のセル幅が足りず波がゴール近傍で止まるとき。optimistic が
-#     要るのは map_scale >= 4 からで、2 では通路が片側 0.05m しか細らない。
+#   （safety_radius_penalty と downsample_policy は上に**断片と同値で書いてある**
+#     ——津田沼との差を縦に並べるため。動かすのは通路が細くて貪欲ロールアウトが固着する
+#     とき / 波がゴール近傍で止まるときで、そのときは値だけ替えればよい。）
 #   （/local_window_value 用の window_cost_drawing_threshold は 2026-08-09 にキーごと消え、
-#     上の cost_drawing_threshold を全域スライスと窓で共有するようになった。108 は 54m 相当
+#     上の cost_drawing_threshold を全域スライスと窓で共有するようになった。100 は 50m 相当
 #     なので、±1m の窓のほうは階調がほぼ潰れる — 表示だけの話。）

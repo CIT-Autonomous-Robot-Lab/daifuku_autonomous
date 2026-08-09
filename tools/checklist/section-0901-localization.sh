@@ -51,7 +51,7 @@ item "map -> odom の時刻が進んでいる" tf_advancing map odom
 on_fail && diagnose "map -> odom が出ない" \
   "/mcl_pose は 20Hz で出ているか|**これがこの穴の顔**。publishOdomFrame が extrapolation で落ちるのを DEBUG で握り潰している|0501 へ戻る。odom -> base_footprint が古い (EKF が IMU を捨てて 5Hz に落ちた) のが根" \
   "RViz で地図もロボットも全部消えているか|Fixed Frame が map なので、この TF が無いと全部消える|上と同じ。トピックではなく TF を追うこと" \
-  "その場で推定姿勢が回り続けるか|スキャンが地図の壁を貫通している (地図と実環境の不整合)|overrides の emcl2 3 点 (alpha_threshold / expansion_radius_orientation / sensor_reset) は対症療法。**地図を取り直すのが本筋**"
+  "その場で推定姿勢が回り続けるか|スキャンが地図の壁を貫通している (地図と実環境の不整合)|overrides の emcl2 2 点 (alpha_threshold / expansion_radius_orientation) は対症療法。**地図を取り直すのが本筋**"
 
 item "${POSE_TOPIC} が 5Hz 以上" hz_at_least "${POSE_TOPIC}" 5
 
