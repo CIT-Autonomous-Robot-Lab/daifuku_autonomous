@@ -24,7 +24,7 @@ emcl2:
     odom_fw_dev_per_rot: 0.0001         # 既定 同左: 回転量あたりの前進の標準偏差 (実質 0)
     odom_rot_dev_per_fw: 0.05           # 既定 0.13: 前進量あたりの回転の標準偏差。1m で 2.9 度
     odom_rot_dev_per_rot: 0.10          # 既定 0.2: 回転量あたりの回転の標準偏差。90 度旋回で 7.2 度
-    laser_likelihood_max_dist: 0.2      # 既定 0.2 [m]: 尤度場で壁の影響が届く距離
+    laser_likelihood_max_dist: 1.0      # 既定 0.2 [m]: 尤度場で壁の影響が届く距離。**貫通判定の「壁の先の空き」もこの距離で決まる**ので、19F の膨張リセット対策でもある (../README.md)。**未検証**
     scan_increment: 1                   # 既定 1: 何本に 1 本ビームを使うか (2 で半分に間引く)
     # リセット系の 3 つ (alpha_threshold / expansion_radius_orientation /
     # sensor_reset) は地図と環境の一致度で決まるので、ここは既定のままにして

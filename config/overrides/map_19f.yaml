@@ -135,8 +135,12 @@ daifuku_stack:
 # ── ここで上書きしていないもの ────────────────────────────────────────────
 # この地図では断片 (= ほぼノード既定) のままで足りている。要るとしたら次の順で疑う。
 #   emcl2.range_threshold … 貫通と見なす角度幅 [rad] (距離ではない)。上げるほど判定が緩む。
-#   emcl2.laser_likelihood_max_dist … 地図の壁の厚みが実物と違うとき。
-#     今の 19F はどちらも触らず、貫通が多いのを alpha_threshold 側で凌いでいる。
+#     19F はここは触らず、貫通が多いのを上の alpha_threshold で凌いでいる。
+#   emcl2.laser_likelihood_max_dist … **2026-08-09 に断片ごと 0.2 -> 1.0 へ広げた**
+#     (= この地図にも効いている。両地図に効くので、19F だけ別値にしたくなったときここへ
+#     足す)。尤度場の幅であると同時に**貫通判定の「壁の先の空き」の距離**でもあるので、
+#     地図と実物の壁が 1m 未満ずれていても貫通と数えなくなる = 上の対症療法の 2 段目。
+#     理屈と戻し方は config/README.md。**未検証**。
 #   costmaps.*.inflation_radius … 通路幅が足りず経路が出ないとき。ただし外接円 0.408m を
 #     下回らせないこと (config/stack/nav2/costmaps.yaml)。
 #   vi_planner.compact_sink_dir … sink を RAM から追い出すとき。19F は scale 2 で 0.095GB なので
