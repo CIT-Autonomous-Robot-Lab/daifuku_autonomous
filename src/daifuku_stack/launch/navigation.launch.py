@@ -32,7 +32,7 @@
 # lifecycle_manager_localization をここで立てているのはそのため。
 #
 # その navigation を **Nav2 抜き**で組むのが nav2:=false で、これが**既定**。
-# 何が立たなくなるかは CLAUDE.md、何が変わるかは docs/usage/architecture.md。
+# 何が立たなくなるかは AGENTS.md、何が変わるかは docs/usage/architecture.md。
 #
 # パラメータの合成規則は daifuku_config_manager/params.py と config/README.md、
 # バックエンドの選択規則は daifuku_stack_launch/backends.py を参照。

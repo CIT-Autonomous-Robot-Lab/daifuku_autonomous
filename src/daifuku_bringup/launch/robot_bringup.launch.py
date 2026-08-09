@@ -24,7 +24,7 @@
 # LiDAR と EKF をここに置いてあるのは、navigation を立て直すたびに EKF が再起動して
 # /odom が原点へ飛ぶのを避けるため。**ドライバが finalized まで落ちるとこの launch
 # ごと終了する**ので、駆動の障害はセンサも道連れにする (下の
-# register_shutting_down_transition。詳細は CLAUDE.md)。
+# register_shutting_down_transition。詳細は AGENTS.md)。
 #
 # 上流 raspicat_ros の raspicat.launch.py 相当だが、raspimouse ノードを自前で
 # 立てている (上流の parameters= に勝てないため。config/bringup/robot/raspicat.yaml
@@ -46,7 +46,7 @@
 # rtmouse と original の排他、twist_mux:= (既定 true) の仲裁と joy:= (既定 true) の
 # 行き先、use_mid360_imu:= (既定 true) が odom の担当を EKF へ譲ることと、その EKF を
 # 立てるのもこの launch (odom_fusion.launch.py を include する) であることは、
-# どれも他のファイルと組で決まるので CLAUDE.md「ファイルをまたぐ約束ごと」に集約して
+# どれも他のファイルと組で決まるので AGENTS.md「ファイルをまたぐ約束ごと」に集約して
 # ある。操作は docs/usage/joystick.md と src/joy_teleop.py、Pi ごとの注意は
 # docs/setup/raspberry-pi-4.md と raspberry-pi-5.md。
 
@@ -359,7 +359,7 @@ def generate_launch_description():
     # **GroupAction で囲むこと。** ここで渡す上流の引数名 `lidar_frame` は
     # lidar_bringup.launch.py が Mid-360 用に宣言している名前とぶつかっていて、
     # 素で並べると向こうの既定 (livox_frame) が入らず、IMU の TF が消える。
-    # 何がどう壊れるかは CLAUDE.md (IncludeLaunchDescription の項)。
+    # 何がどう壊れるかは AGENTS.md (IncludeLaunchDescription の項)。
     robot_state_publisher_launch = GroupAction([
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
