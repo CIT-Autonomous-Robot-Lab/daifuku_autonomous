@@ -153,8 +153,7 @@ vi_planner:
     #   external (既定) … pose_topic (= emcl2 の mcl_pose) をそのまま自己位置にする
     #   adaptive        … 窓つきヒストグラム MCL の多重解像度版 (belief 窓は数 MB)。
     #                     観測が合わなくなると広域レベルへ広げて再定位するので、誘拐から
-    #                     戻れて未シードでも立ち上がる。**能動的再定位 (active_reloc) を
-    #                     出せるのはこれだけ。内蔵を使うならまずこれ**
+    #                     戻れて未シードでも立ち上がる。**内蔵を使うならまずこれ**
     #   grid            … その 1 レベル版 (要シード、再定位なし)
     #   belief          … 全地図に belief を持つ和積。未シードでも最初のスキャンから
     #                     free 一様で立ち上がるが、窓が無いぶん重い (belief は VI と同じ
@@ -181,6 +180,11 @@ vi_planner:
     #       map_clear_from_scan / qmdp / active_reloc は、external では読まれないか
     #       実質無効 (既定 off、あるいは quality が 1.0 固定) なので**ここには書かない**。
     #       **例外が footprint_clear_m** で、あれは localizer と無関係に効く (上を参照)。
+    #       active_reloc (迷ったら分かる場所へ寄る) はさらに**上の solver も選ぶ**。
+    #       判別点を出せるのは adaptive / belief / viterbi の 3 つ (2026-08-09 の上流の
+    #       更新で adaptive だけではなくなった) だが、**アウトオブコアの解は単一ゴール
+    #       専用**なので、同梱の frontier2d_sparse_compact のまま true にすると
+    #       起動時に止まる。使うなら密ソルバごと戻すこと。
     #
     # ── 2026-08-09 に消えたキー (書いても読まれない。ノード内の const になった) ──
     #   solve_chunk / max_solve_iter … プリエンプトを見る間隔と反復の打ち切り回数
