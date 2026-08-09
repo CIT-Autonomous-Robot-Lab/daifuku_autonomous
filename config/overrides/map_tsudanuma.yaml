@@ -118,7 +118,7 @@ daifuku_stack:
     ros__parameters:
       alpha_threshold: 0.1                # 断片 0.5 (EMCL2 既定 0.5): 19F の 0.2 より渋いが 0 ではないので膨張リセットは起きる
       expansion_radius_orientation: 0.05  # 断片 0.2 (EMCL2 既定 0.2): リセット時の姿勢の飛びを抑える (expansionReset の中でしか使わない)
-      sensor_reset: false                 # 断片 true (EMCL2 既定 false): 貫通粒子の引き戻しを止める
+      sensor_reset: false                 # 断片も同じ値 (2026-08-09 に断片が false へ): 貫通粒子の引き戻しを止める
 
   # ── cmd_vel の頭打ち ──────────────────────────────────────────────────────
   # VI の 1 手は前進量そのものが linear.x の指令値で、この地図は 0.5m/s (下の

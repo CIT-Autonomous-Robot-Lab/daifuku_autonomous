@@ -148,11 +148,12 @@ EMCL2のリセット関連は、19Fの地図に合わせた**暫定値**です�
 |---|---|---|---|
 | `alpha_threshold` | `0.2` | `0.5` | `0.5` |
 | `expansion_radius_orientation` | `0.05` | `0.2` | `0.2` |
-| `sensor_reset` | `false` | `true` | `false` |
+| `sensor_reset` | `false` | `false` | `false` |
 
-`sensor_reset`だけは断片側もEMCL2の既定と違います（上流READMEの表が`true`と
+`sensor_reset`は2026-08-09まで断片側だけが`true`でした（上流READMEの表が`true`と
 書いているのに、コードの`declare_parameter`は`false`。経緯は
-`config/README.md`の「値の由来」）。
+`config/README.md`の「値の由来」）。いまは3つとも`false`なので、この行は
+overridesから消しても挙動は変わりません。
 
 有効ビームの28%が地図上の壁を貫通しており、非貫通率（alpha）が0.0〜0.4に張り付く
 状態でした。閾値0.5のままでは膨張リセットとセンサーリセットが毎スキャン発動し、
