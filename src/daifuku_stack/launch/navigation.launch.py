@@ -40,14 +40,7 @@
 # が起動時に止める (どちらの向きも、通すと自己位置だけが静かに壊れる)。
 #
 # その navigation を **Nav2 抜き**で組むのが nav2:=false で、これが**既定**。
-# vi_planner が standalone モードで navigate_to_pose と follow_waypoints も
-# 提供するので、bt_navigator / behavior_server / waypoint_follower /
-# smoother_server を立てない。アクション型は nav2_msgs のままなので
-# RViz も各パネルも配線は変わらない。残る Nav2 のノードは map_server
-# (localization 側) と、velocity_smoother:=true なら velocity_smoother。
-# lifecycle_manager_navigation は**名前は同じまま残る**が、管理下はその
-# velocity_smoother 1 つだけになる (velocity_smoother:=false なら消える)。
-# 何が変わるか・何を読まなくてよくなるかは docs/usage/architecture.md。
+# 何が立たなくなるかは AGENTS.md、何が変わるかは docs/usage/architecture.md。
 #
 # パラメータの合成規則は daifuku_config_manager/params.py と config/README.md、
 # バックエンドの選択規則は daifuku_stack_launch/backends.py を参照。
@@ -133,9 +126,7 @@ def generate_launch_description():
     nav2 = LaunchConfiguration("nav2")
     use_velocity_smoother = LaunchConfiguration("velocity_smoother")
 
-    # ------------------------------------------------------------------
     # どのスタックを立てるかの条件
-    # ------------------------------------------------------------------
     use_emcl2 = PythonExpression(["'", localization, "' in ['emcl', 'emcl2']"])
     # 自己位置推定も vi_planner に持たせる (VIOLA)。emcl2 を立てないだけで、
     # map_server から下は emcl2 構成と同じものを使う。
@@ -181,9 +172,7 @@ def generate_launch_description():
         ["'initialpose' if ", use_vi_loc, " else 'mcl_pose'"]
     )
 
-    # ------------------------------------------------------------------
     # スタックの部品
-    # ------------------------------------------------------------------
     remappings = [("/tf", "tf"), ("/tf_static", "tf_static")]
     emcl2_remappings = remappings + [
         ("particlecloud", "particle_cloud"),
@@ -441,9 +430,7 @@ def generate_launch_description():
             ],
         )
 
-    # ------------------------------------------------------------------
     # スタック
-    # ------------------------------------------------------------------
     # amcl + navfn: nav2 標準の bringup がそのまま使える。
     amcl_navfn_stack = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(bringup_launch),
@@ -530,9 +517,7 @@ def generate_launch_description():
         parameters=[{"use_sim_time": use_sim_time}],
     )
 
-    # ------------------------------------------------------------------
     # 起動引数
-    # ------------------------------------------------------------------
     declare_args = [
         DeclareLaunchArgument("namespace", default_value=""),
         DeclareLaunchArgument("use_namespace", default_value="false"),

@@ -41,15 +41,17 @@ Mid-360は時刻同期がないためスタンプが実時計からずれてい�
 ## 自前パッケージの分担
 
 独自のC++ノードは持たず、設定とlaunchとPythonノードだけです。**`daifuku_bringup`と
-`daifuku_stack`は互いに依存しません**（どちらも`daifuku_config_manager`にだけ依存）。
+`daifuku_stack`は互いに依存しません**（どちらも`daifuku_config_manager`と
+`daifuku_config`にだけ依存）。
 
 | パッケージ | 持つもの | 立てかた |
 | --- | --- | --- |
 | `daifuku_bringup` | 駆動ドライバ・URDF・`twist_mux`・ゲームパッド・**LiDAR**・**EKF**。`src/`のPythonノード4本 | `docker compose up`で常駐 |
-| `daifuku_stack` | Nav2 / SLAM Toolbox / EMCL2の設定、地図、RViz、`behavior_trees/`、`waypoints/`、`src/system_monitor.py` | 人が`navigation` / `mapping`を立てる |
-| `daifuku_config_manager` | `overrides/*.yaml`と設定の合成規則、走らせる場所を1行で持つ`config/site`、`src/`のPythonノード2本 | 上2つのlaunchが立てる（自前の入口は無い） |
+| `daifuku_stack` | Nav2 / SLAM Toolbox / EMCL2のlaunch、地図、RViz、`behavior_trees/`、`waypoints/`、`src/system_monitor.py` | 人が`navigation` / `mapping`を立てる |
+| `daifuku_config_manager` | 設定の合成規則（`params.py`）と`src/`のPythonノード2本。**設定の実体は持ちません** | 上2つのlaunchが立てる（自前の入口は無い） |
+| `daifuku_config` | 設定の実体だけ。`bringup/`・`stack/`・`overrides/*.yaml`と、走らせる場所を1行で持つ`config/site` | ノードを持たない（`src/`の下でもなく、`src/`と並ぶ`config/`） |
 
-`config/site`は3つのパッケージから同じものが見えます。すべてのlaunchが`overrides`の
+`config/site`はどのlaunchからも同じものが見えます。すべてのlaunchが`overrides`の
 既定をここから取り、`navigation.launch.py`は`map`の既定もここから導きます。**場所が
 変わるとLiDARの帯・EMCL2と価値反復の調整・地図の3つが同時に変わるので、人が動かす値を
 1つにまとめてあります**（切り替えは`tools/site.sh <名前>`。
@@ -69,8 +71,8 @@ Mid-360は時刻同期がないためスタンプが実時計からずれてい�
   `navigation`、`mapping`）。`include`される側でも立てると、1つのlaunch木に見張りが
   3つ並んでそれぞれが勝手に落としにかかります
 
-見ているのは自分のパッケージの`config/`全体（`overrides/`を除く`*.yaml`）と、
-重ねている`overrides`のうち自分の部分木です。**中身を正規化してから指紋を取るので、
+見ているのは`daifuku_config`のうち自分のパッケージの段（`bringup/`か`stack/`）の
+`*.yaml`全部と、重ねている`overrides`のうち自分の部分木です。**中身を正規化してから指紋を取るので、
 コメントや並び順を直しただけでは反応しません。** 落とすかどうかの判断と、落ちた
 あと誰が上げ直すかは[日常操作](operations.md#設定変更を反映する)。
 

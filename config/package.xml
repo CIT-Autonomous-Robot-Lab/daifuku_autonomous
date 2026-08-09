@@ -10,7 +10,7 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <!-- ament_lint_common (詰め合わせ) は使わず、走らせるものだけを名指しする。
-       理由は CLAUDE.md。ここは yaml しか持たないので copyright は見る対象が
+       理由は AGENTS.md。ここは yaml しか持たないので copyright は見る対象が
        無い (拡張子で選ぶ) が、6 つと揃えておく。 -->
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_cmake_copyright</test_depend>

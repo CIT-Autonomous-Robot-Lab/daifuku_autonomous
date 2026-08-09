@@ -6,7 +6,7 @@
 #     configure で落ちる (raspicat_setup_scripts が導入する)。
 #   * **rtmouse と自前実装 (compose.original.yaml) は排他。** rtmouse は
 #     レジスタを ioremap するのでカーネルが衝突を検出せず、両方が GPIO 16/6/5 を
-#     持つと車輪が逆に回り得る (CLAUDE.md)。
+#     持つと車輪が逆に回り得る (AGENTS.md)。
 #   * 公式実装は車輪径 400mm を直書きしているので、実機 (200mm) では指令の
 #     70% で走る。合わせたいなら自前実装のほう。
 #

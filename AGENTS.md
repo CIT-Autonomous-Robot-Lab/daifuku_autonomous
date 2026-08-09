@@ -91,14 +91,21 @@ symlink になるので、効くのは**ソース側の権限**です。Windows 
 
 ## テストと起動
 
-自動テストは実質ありません。`colcon test` で走るのは lint だけで、独自テストを持つ
-パッケージはありません。挙動の確認は実機か `simulator/` のハーネスで行います。例外は
-`map-to-usd` の出力検算で、これだけは単体で回せます。
+自動テストはありません。`colcon test` で走るのは lint だけです（`raspicat_driver` の
+`test/test_control.py` が唯一の例外でしたが、2026-08-09 に PI 補正ごと消しました）。
+挙動の確認は実機か `simulator/` のハーネスで行います。単体で回せるのは
+`map-to-usd` の出力検算だけです。
+
+**実機で通すぶんは `tools/checklist/` にあります。** `colcon test` からは走りません
+（人に聞く項も機体が動く項もあるため）。使いかたと番号の意味は `checkall.sh` の冒頭に
+あるので**ここには写しません**。段の 01 は静的検査で、このファイルが述べている約束ごと
+（ヘッダの位置・lint の顔ぶれ・見張りの立て方・順路のトピック名）をそのまま突き
+合わせます。**ここを直したら 0103 も直すこと。**
 
 lint は詰め合わせ（`ament_lint_common`）を使わず、自前 7 パッケージが**同じものを
 名指し**しています。走るのは 7 つ全部で copyright、Python を持つ 5 つで flake8、
-`ament_cmake` の 3 つで lint_cmake と xmllint（`daifuku_waypoint_manager` は
-Python が無いので flake8 が無い）。踏むのは 4 つ:
+`ament_cmake` の 4 つで lint_cmake と xmllint（`daifuku_waypoint_manager` と
+`daifuku_config` は Python が無いので flake8 が無い）。踏むのは 4 つ:
 
 - **`.py` / `.cpp` / `.hpp` を足したら Apache-2.0 のヘッダが要る**（`# Copyright 2026
   Keita Sekiguchi / nop` + `ament_copyright` のテンプレート逐語）。**置くのは

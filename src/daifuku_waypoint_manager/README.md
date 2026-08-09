@@ -141,7 +141,7 @@ waypoint どうしを結ぶオレンジの線に加えて、**機体の現在地
 
 この区間だけは機体について動くので、0.5 秒ごとに引き直す。ただし **5 cm 以上動いた
 ときだけ** MarkerArray を出し直す（1 回の出し直しが全 waypoint のマーカの再送になる
-ため。73 点の `waypoints_tsudanuma.yaml` で効く）。
+ため。73 点の `waypoints_tsudanuma v1.0.yaml` で効く）。
 
 **巡回中は引かない。** 1 点目はもう機体の後ろにあり、そこへ線を引いても嘘になる。
 走行中に向かっている先は Nav2 の `Path` 表示のほうに出る。
@@ -163,11 +163,14 @@ latch して出す。**これは他ノードが読むためのもの**で、い�
 では `follow_waypoints` を `vi_planner` 自身が受けるので、順路はゴールと同じ経路で
 そのまま届く（このトピックはもう 1 つの入口として残っているだけ）。
 
-`vi_planner` 側はトピック名が `waypoints`、`waypoint_prefetch` は
-`config/stack/nav2/vi_planner.yaml`・ノードの宣言ともに **`false`** である
-（2026-08-04 に一度 `true` へ反転したが、同日の実機で走行中の固まりが出たため容疑者の
-1 つとして戻した）。先読みを試すときにこのパネルが出す順路が要るので、ここを直すと
-`planner:=vi` + `nav2:=true` の挙動が変わる。代償（メモリ 2 倍）は上の yaml 側に書いてある。
+`vi_planner` 側はトピック名が `waypoints`。`waypoint_prefetch` は
+`config/stack/nav2/vi_planner.yaml`・ノードの宣言ともに `false` だが、
+**既定の場所である `map_19f` の overrides が `true` へ上書きしている**ので、引数を何も
+足さずに立てれば先読みは入っている（`map_tsudanuma` は 2026-08-07 に `true` にしたあと
+2026-08-08 に `false` へ戻した。走行中の固まりの切り分けで、2026-08-04 に断片で反転した
+ときも同じ症状が出ている）。先読みを試すときにこのパネルが出す順路が要るので、ここを
+直すと `planner:=vi` + `nav2:=true` の挙動が変わる。代償（メモリ 2 倍）は上の yaml 側に
+書いてある。
 
 同じものを `daifuku_bringup/src/joy_teleop.py`（START+BACK での巡回開始）も出す。
 **実機のイメージにこのパネルは入らない**ので、機体だけで走らせるときはあちらが
@@ -202,15 +205,18 @@ RViz の Fixed Frame と waypoint の `frame_id` が一致している必要が�
 - 有限でない値と、長さが 0 のクォータニオンは弾く。`NaN` のまま `FollowWaypoints` へ
   投げると Nav2 の側で黙って落ちる
 
-`load_waypoints` は UTF-8 を明示して開く。同梱の `waypoints_tsudanuma.yaml` は冒頭に
+`load_waypoints` は UTF-8 を明示して開く。同梱の `waypoints_tsudanuma v1.0.yaml` は冒頭に
 日本語の注記を持っていて、ロケールが C の環境（実機のコンテナは `LANG` を持たない）では
 既定の encoding が ASCII になり、**読み込みごと失敗する**。
 
 ## 保存済みの waypoint
 
-`daifuku_stack/waypoints/waypoints_tsudanuma.yaml`（73 点、`map_tsudanuma` 用）。
-地図に紐づくデータなので `daifuku_stack` 側の `maps/` の隣に置いてある。
-`map_19f` では座標が地図の外に出るので使えない。
+`daifuku_stack/waypoints/waypoints_tsudanuma v1.0.yaml`（73 点、`map_tsudanuma` 用）と、
+そこから採り直した `v1.1`（73 点）・`v1.2`（69 点）。地図に紐づくデータなので
+`daifuku_stack` 側の `maps/` の隣に置いてある。`map_19f` では座標が地図の外に出るので
+使えない。**ファイル名に空白が入っている**ので、`waypoints_file` へシェルから渡すときは
+引用符で囲むこと（囲まないと `-p waypoints_file:=...` が途中で切れ、空扱いになって
+**START+BACK が黙って巡回を断る**）。冒頭の日本語の注記を持つのは `v1.0` だけ。
 
 保存は一時ファイルへ書いてから差し替える（`QSaveFile`）ので、途中で落ちても既存の
 YAML は壊れない。

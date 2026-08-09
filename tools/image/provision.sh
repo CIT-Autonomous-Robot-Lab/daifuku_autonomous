@@ -94,9 +94,7 @@ echo "daifuku_autonomous プロビジョニング開始: $(date -Is)"
 echo "  model=${DAIFUKU_MODEL} user=${DAIFUKU_USER} workspace=${WORKSPACE}"
 echo "  ip=${DAIFUKU_ROBOT_IP} ROS_DOMAIN_ID=${DAIFUKU_ROS_DOMAIN_ID}"
 
-# ---------------------------------------------------------------------------
 # apt
-# ---------------------------------------------------------------------------
 
 apt_retry() {
   # dpkg のロックは cloud-init の package_update や unattended-upgrades と
@@ -158,17 +156,13 @@ apt_install \
   tmux \
   || soft_fail "共通パッケージの導入"
 
-# ---------------------------------------------------------------------------
 # 時刻同期
-# ---------------------------------------------------------------------------
 
 step "時刻同期(chrony)を有効化"
 systemctl enable --now chrony 2>/dev/null || systemctl enable --now chronyd 2>/dev/null ||
   soft_fail "chronyの有効化"
 
-# ---------------------------------------------------------------------------
 # DDS向けカーネルパラメータ
-# ---------------------------------------------------------------------------
 
 step "UDP受信バッファを拡大 (/etc/sysctl.d/60-ros2-dds.conf)"
 # 既定値のままだと MID360 の点群と TF で RcvbufErrors が数十万件出て、
@@ -184,9 +178,7 @@ net.ipv4.ipfrag_high_thresh = 134217728
 EOF
 sysctl --system >/dev/null || soft_fail "sysctl --system"
 
-# ---------------------------------------------------------------------------
 # スワップ
-# ---------------------------------------------------------------------------
 
 if ((DAIFUKU_SWAP_MB > 0)); then
   step "スワップファイルを用意 (${DAIFUKU_SWAP_MB} MB)"
@@ -212,9 +204,7 @@ if ((DAIFUKU_SWAP_MB > 0)); then
   sysctl -p /etc/sysctl.d/61-daifuku-swappiness.conf >/dev/null || true
 fi
 
-# ---------------------------------------------------------------------------
 # Docker
-# ---------------------------------------------------------------------------
 
 step "Dockerを導入"
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
@@ -241,9 +231,7 @@ for group in docker dialout i2c video plugdev gpio; do
   fi
 done
 
-# ---------------------------------------------------------------------------
 # リポジトリ
-# ---------------------------------------------------------------------------
 
 step "リポジトリを用意 (${DAIFUKU_REPO_URL} @ ${DAIFUKU_REPO_REF})"
 # 認証を求められても対話できないので、その場で失敗させてスナップショットへ倒す。
@@ -342,9 +330,7 @@ else
 fi
 chown "${DAIFUKU_USER}:${DAIFUKU_USER}" "${BASHRC}"
 
-# ---------------------------------------------------------------------------
 # rtmouse カーネルモジュール
-# ---------------------------------------------------------------------------
 
 if [[ "${DAIFUKU_WITH_RTMOUSE}" == "1" ]]; then
   step "rtmouseカーネルモジュールを導入"
@@ -376,9 +362,7 @@ if [[ "${DAIFUKU_WITH_RTMOUSE}" == "1" ]]; then
   fi
 fi
 
-# ---------------------------------------------------------------------------
 # 自前の本体ドライバ用の権限
-# ---------------------------------------------------------------------------
 # raspicat_driver (robot_bringup.launch.py の driver:=original) は PWM (sysfs) と
 # gpiochip と I2C をユーザ空間から直接叩く。コンテナは uid/gid 1000 で走り補助
 # グループを持たないため、所有権をホスト側で渡しておく。
@@ -442,9 +426,7 @@ if [[ "${DAIFUKU_MODEL}" == "pi5" ]]; then
   fi
 fi
 
-# ---------------------------------------------------------------------------
 # Dockerイメージ
-# ---------------------------------------------------------------------------
 
 # 本体ドライバの選択。rtmouseを載せたPi 4だけが公式実装(raspimouse)を使える。
 # Pi 5とrtmouse無しのPi 4は自前実装(original)。取り違えるとノードが起動時に
@@ -477,9 +459,7 @@ if [[ "${DAIFUKU_BUILD_ON_FIRST_BOOT}" == "1" && -f "${COMPOSE_FILE}" ]]; then
     soft_fail "docker compose build"
 fi
 
-# ---------------------------------------------------------------------------
 # 仕上げ
-# ---------------------------------------------------------------------------
 
 date -Is >"${STATE_DIR}/provisioned"
 

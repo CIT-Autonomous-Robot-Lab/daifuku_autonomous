@@ -46,25 +46,26 @@ polling them at 100 Hz is what wedges rtmouse on the real robot
 The three peripherals that are provided are optional in a way the motor path
 is not: if a line cannot be claimed the node says so and carries on driving.
 
-Three deliberate differences from raspimouse:
-  * the encoder and the stepper are counted separately.  On this robot a wheel
-    revolution is 1118 encoder pulses but only 570 motor steps (measured
-    2026-08-04), so the single number raspimouse uses cannot serve both:
+The motors are geared DC with encoders (26:1, RT-RASPICAT spec) and the control
+board closes its own loop around them, so the frequency written to a PWM
+channel is a speed command to that board -- not a step clock.  On a Raspberry
+Pi Mouse the same interface really is one, and the names kept here (step
+frequency, steps_per_revolution, StepClock) are that inheritance rather than a
+description of this hardware.  Do not put another PI around it: one lived here
+until 2026-08-09, and the +22% it was removing had been measured with
+steps_per_revolution still at 570 -- the floor calibration to 447 should
+account for that on its own (not yet measured without the trim).
+
+Two deliberate differences from raspimouse:
+  * the encoder and the command are counted separately.  On this robot a wheel
+    revolution is 1073 encoder counts but 447 command pulses (measured on the
+    floor 2026-08-08), so the single number raspimouse uses cannot serve both:
     pulses_per_revolution converts counts to metres, steps_per_revolution
-    converts cmd_vel to a step frequency.  raspimouse_component.cpp hardcodes
-    400.0 on the command side and cannot be corrected by a parameter at all.
+    converts cmd_vel to a frequency.  raspimouse_component.cpp hardcodes 400.0
+    on the command side and cannot be corrected by a parameter at all.
   * with the pulse counters live, the published Twist is measured rather than
     commanded.  mid360_ekf.yaml takes vx and vyaw (and nothing else) from this
     message, so feeding it the command would close a loop on our own output.
-  * control_mode defaults to "closed", which trims the step frequency from
-    that same measurement (control.py).  raspimouse has no equivalent -- it
-    writes the commanded frequency and never reads the counters back into the
-    command.  The trim is for slip and load, and it makes a stall worse: these
-    are steppers, so a wheel that is losing steps answers a raised frequency by
-    losing more of them, and the pulse deltas take their sign from the
-    direction line we last wrote, so neither the loop nor the odometry can see
-    that happening.  wheel_correction_limit is what bounds how bad that gets;
-    "open" is the way out, and is exactly what raspimouse does.
 
 An I2C stall cannot wedge the robot the way rtmouse does: the ioctl returns
 ETIMEDOUT to us, the counters are read in their own callback group, and
@@ -100,8 +101,6 @@ from .backend import LEFT
 from .backend import RIGHT
 from .backend import Wiring
 from .backend import create_backend
-from .control import WheelTrim
-from .control import trimmed_speed
 
 # Index into the GPIO line bundle opened by the backend; the first two are the
 # direction lines, so LEFT/RIGHT double as their indices.
@@ -128,8 +127,8 @@ class RaspicatDriver(LifecycleNode):
         self.declare_parameter("odometry_scale_right_wheel", 1.0)
         self.declare_parameter("wheel_diameter", 0.2)
         self.declare_parameter("wheel_tread", 0.35)
-        self.declare_parameter("pulses_per_revolution", 1118.0)
-        self.declare_parameter("steps_per_revolution", 570.0)
+        self.declare_parameter("pulses_per_revolution", 1073.0)
+        self.declare_parameter("steps_per_revolution", 447.0)
         self.declare_parameter("odom_hz", 50.0)
         self.declare_parameter("initial_motor_power", False)
         self.declare_parameter("cmd_vel_timeout", 60.0)
@@ -140,11 +139,6 @@ class RaspicatDriver(LifecycleNode):
 
         self.declare_parameter("min_step_frequency", 5.0)
         self.declare_parameter("max_step_frequency", 10000.0)
-
-        self.declare_parameter("control_mode", "closed")
-        self.declare_parameter("wheel_kp", 0.0)
-        self.declare_parameter("wheel_ki", 1.0)
-        self.declare_parameter("wheel_correction_limit", 2.0)
 
         self.declare_parameter("gpiochip_label", "")
         self.declare_parameter("gpiochip_device", "")
@@ -186,12 +180,10 @@ class RaspicatDriver(LifecycleNode):
         self._aux_group = MutuallyExclusiveCallbackGroup()
 
         self._state_lock = threading.Lock()
-        # The step clocks are written from the cmd_vel callback and, in closed
-        # mode, from the odometry tick as well.  Those are different callback
-        # groups, so without this they can be halfway through the same sysfs
-        # channel at once.
+        # The clocks are written from the cmd_vel callback and, on shutdown and
+        # watchdog stops, from other callback groups, so without this two
+        # threads can be halfway through the same sysfs channel at once.
         self._motor_lock = threading.Lock()
-        self._trim = (WheelTrim(), WheelTrim())
         self._backend = None
         self._hardware = Hardware()
         self._odom_pub = None
@@ -274,10 +266,9 @@ class RaspicatDriver(LifecycleNode):
 
         self._set_motor_power(False)
         self.get_logger().info(
-            "configured: model=%s (%s) gpiochip=%s pwmchip=%s counters=%s control=%s"
+            "configured: model=%s (%s) gpiochip=%s pwmchip=%s counters=%s"
             % (self._backend.name, self._backend.soc, self._hardware.gpiochip_path,
-               self._hardware.pwmchip_path, "on" if self._use_pulse_counters else "off",
-               "closed" if self._closed_loop else "open")
+               self._hardware.pwmchip_path, "on" if self._use_pulse_counters else "off")
         )
         self.get_logger().info(
             "peripherals: leds=%s switches=%s buzzer=%s"
@@ -383,10 +374,10 @@ class RaspicatDriver(LifecycleNode):
         )
         self._wheel_diameter = get("wheel_diameter").value
         self._wheel_tread = get("wheel_tread").value
-        # Two separate numbers, and on this robot they differ by 1.96: the
-        # encoder is not on the same shaft as the stepper.  Crossing them makes
-        # the robot travel at the wrong speed while odom reports the commanded
-        # one, which nothing but a tape measure can see.
+        # Two separate numbers, and on this robot they differ by 2.40: what the
+        # encoder counts is not what the control board is commanded in.
+        # Crossing them makes the robot travel at the wrong speed while odom
+        # reports the commanded one, which nothing but a tape measure can see.
         self._pulses_per_revolution = get("pulses_per_revolution").value
         self._steps_per_revolution = get("steps_per_revolution").value
         self._odom_hz = get("odom_hz").value
@@ -399,25 +390,6 @@ class RaspicatDriver(LifecycleNode):
         self._publish_tf = get("publish_tf").value
         self._min_step = get("min_step_frequency").value
         self._max_step = get("max_step_frequency").value
-        # Cached, unlike the gains below: flipping the mode at runtime would
-        # leave a correction applied on the way out to open.
-        mode = get("control_mode").value
-        if mode not in ("open", "closed"):
-            raise ValueError("control_mode must be open or closed, not %r" % mode)
-        self._closed_loop = mode == "closed"
-        if self._closed_loop and not self._use_pulse_counters:
-            # Not fatal, because closed is the default: refusing would mean
-            # that turning the counters off for a diagnostic fails configure,
-            # and a failed configure on robot_bringup takes the LiDAR and the
-            # EKF down with it and then loops on restart: unless-stopped.
-            # Falling back is only safe because it is said out loud -- the
-            # configured: line below reports what we ended up with.
-            self.get_logger().error(
-                "control_mode closed needs use_pulse_counters true; running open"
-            )
-            self._closed_loop = False
-        if get("wheel_correction_limit").value < 0.0:
-            raise ValueError("wheel_correction_limit must not be negative")
         self._counter_error_limit = get("counter_error_limit").value
         self._counter_retry_period = get("counter_retry_period").value
         self._switches_hz = get("switches_hz").value
@@ -506,10 +478,7 @@ class RaspicatDriver(LifecycleNode):
         self._counter_degraded = False
         self._last_raw = [0, 0]
         self._target_omega = [0.0, 0.0]       # wheel speed asked for [rad/s]
-        self._correction = [0.0, 0.0]         # what the trim adds to it
-        for trim in self._trim:
-            trim.reset()
-        # What each step clock is already doing, so an unchanged command is not
+        # What each clock is already doing, so an unchanged command is not
         # rewritten.  None means "unknown", which forces the next write.
         self._last_frequency = [None, None]
 
@@ -546,19 +515,15 @@ class RaspicatDriver(LifecycleNode):
         self._push_command()
 
     def _push_command(self):
-        """Write target-plus-trim to both step clocks.
+        """Write the commanded wheel speeds to both clocks.
 
-        The one place the clocks are driven from, so open and closed mode take
-        the same path: in open mode the trim is simply always zero, and a
-        cmd_vel arriving mid-interval carries the current trim with it rather
-        than undoing it until the next odometry tick.
+        The one place the clocks are driven from.  The control board closes its
+        own loop around the encoders, so the frequency written here is the
+        whole command; nothing reads the counters back into it.
         """
         turns_to_steps = self._steps_per_revolution / (2.0 * math.pi)
         with self._state_lock:
-            omega = [
-                trimmed_speed(self._target_omega[side], self._correction[side])
-                for side in (LEFT, RIGHT)
-            ]
+            omega = list(self._target_omega)
         with self._motor_lock:
             self._drive(LEFT, omega[LEFT] * turns_to_steps)
             self._drive(RIGHT, omega[RIGHT] * turns_to_steps)
@@ -570,10 +535,10 @@ class RaspicatDriver(LifecycleNode):
         if abs(frequency) < self._min_step:
             frequency = 0.0
         frequency = max(-self._max_step, min(self._max_step, frequency))
-        # In closed mode this runs at odom_hz, and most ticks ask the clock for
-        # what it is already doing.  Rewriting the period of a running stepper
-        # for no change is load on the odometry thread and an extra chance to
-        # land a write between two edges.
+        # cmd_vel repeats the same value for as long as a speed is held, so
+        # most calls ask the clock for what it is already doing.  Rewriting the
+        # period for no change is an extra chance to land a write between two
+        # edges.
         if frequency == self._last_frequency[side]:
             return
         # A write that does not complete leaves the clock in a state we cannot
@@ -595,7 +560,7 @@ class RaspicatDriver(LifecycleNode):
             return
         forward = frequency > 0.0
 
-        # Direction before clock: a stepper already running must not meet the
+        # Direction before clock: a wheel already turning must not meet the
         # next edge with the direction line still on the old level.
         gpio = self._hardware.gpio
         if gpio is not None and forward != self._forward[side]:
@@ -618,15 +583,11 @@ class RaspicatDriver(LifecycleNode):
         self._last_frequency[side] = frequency
 
     def _stop_motors(self):
-        # The target and the trim have to go with the clocks.  The closed-loop
-        # tick pushes the current target every interval, so a watchdog stop
-        # that only stopped the clocks would be undone 20 ms later.
+        # The target has to go with the clocks: anything that pushes the
+        # command again would otherwise write back the speed we just stopped.
         with self._state_lock:
             self._commanded = (0.0, 0.0)
             self._target_omega = [0.0, 0.0]
-            self._correction = [0.0, 0.0]
-        for trim in self._trim:
-            trim.reset()
         with self._motor_lock:
             for side in (LEFT, RIGHT):
                 clock = self._hardware.clocks[side]
@@ -774,11 +735,7 @@ class RaspicatDriver(LifecycleNode):
             self._pose[1] += advance * math.sin(self._pose[2])
             linear = advance / dt
             angular = delta_theta / dt
-            if self._closed_loop:
-                self._update_trim(left, right, dt)
         else:
-            if self._closed_loop:
-                self._release_trim()
             with self._state_lock:
                 linear, angular = self._commanded
             # A timed-out I2C transfer blocks this callback for about a second.
@@ -821,47 +778,6 @@ class RaspicatDriver(LifecycleNode):
         transform.transform.rotation.z = qz
         transform.transform.rotation.w = qw
         self._tf_broadcaster.sendTransform(transform)
-
-    def _update_trim(self, left, right, dt):
-        """Correct the step frequency by what the encoders say the wheels did.
-
-        Runs on the odometry tick because that is where the measurement already
-        is; a second timer would only read the same counters again over the
-        same I2C bus.  `left` and `right` are metres travelled over `dt`.
-        """
-        radius = self._wheel_diameter / 2.0
-        # Read live, unlike control_mode: config_sentinel drops the launch when
-        # the yaml is edited on a running robot, so `ros2 param set` is the
-        # only way to tune these against a wheel that is actually turning.
-        kp = self.get_parameter("wheel_kp").value
-        ki = self.get_parameter("wheel_ki").value
-        limit = self.get_parameter("wheel_correction_limit").value
-        measured = (left / radius / dt, right / radius / dt)
-
-        with self._state_lock:
-            target = list(self._target_omega)
-        correction = [
-            self._trim[side].step(target[side], measured[side], dt, kp, ki, limit)
-            for side in (LEFT, RIGHT)
-        ]
-        with self._state_lock:
-            self._correction = correction
-        self._push_command()
-
-    def _release_trim(self):
-        """Fall back to feed-forward while the counters are unavailable.
-
-        _read_counters already drops odometry to integrating cmd_vel when the
-        I2C bus stops answering; the loop has to let go of the same tick, or it
-        would hold the last correction it happened to have when the bus died.
-        """
-        with self._state_lock:
-            if self._correction == [0.0, 0.0]:
-                return
-            self._correction = [0.0, 0.0]
-        for trim in self._trim:
-            trim.reset()
-        self._push_command()
 
     def _read_counters(self, dt):
         """Distance travelled by each wheel since the last call, in metres.

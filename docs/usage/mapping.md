@@ -215,8 +215,8 @@ symlinkなので、そちらへ書くとホストに残るかどうかがsymlink
 （既定の地図へは落としません）。
 
 **新しい名前で保存したときと`overrides/`にファイルを足したときは、一度ビルドを通して
-ください**（`docker compose up -d`。`install/`のsymlinkはビルド時に張られ、
-`daifuku_config_manager`の`setup.py`の`glob`もビルド時にしか展開されません）。既にある
+ください**（`docker compose up -d`。`install/`のsymlinkはビルド時にしか張られないので、
+足しただけでは`map:=`にも`overrides:=`の一覧にも出てきません）。既にある
 名前へ上書きしたときは要りません。詳細は[設定](configuration.md)と
 `config/README.md`を参照してください。
 
