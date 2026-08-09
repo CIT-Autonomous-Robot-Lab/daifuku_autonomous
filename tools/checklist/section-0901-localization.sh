@@ -13,13 +13,21 @@ section 0901 "自己位置"
 
 need_ros
 
-if ! has_node /emcl2 && ! has_node /amcl; then
+# localization:=vi では emcl2 も amcl も居ない — 推定を持つのは vi_planner 自身
+# (上流の VIOLA)。**map -> odom を出すのもそちら** (publish_tf) なので下の目玉は
+# そのまま効き、違うのは推定姿勢のトピック名だけ。emcl2 構成でも vi_planner は
+# 立っているので、**見る順は emcl2 / amcl が先**。
+if has_node /emcl2 || has_node /amcl; then
+  LOCALIZER=/emcl2
+  has_node /amcl && LOCALIZER=/amcl
+  POSE_TOPIC=/mcl_pose
+elif has_node /vi_planner; then
+  LOCALIZER=/vi_planner
+  POSE_TOPIC=/viola_pose
+else
   skip "自己位置" "navigation が立っていない (ros2 launch daifuku_stack navigation.launch.py)"
   finish 0
 fi
-
-LOCALIZER=/emcl2
-has_node /amcl && LOCALIZER=/amcl
 result CHECK "自己位置推定" "${LOCALIZER}"
 
 require "/map がある" has_topic /map
@@ -43,9 +51,9 @@ item "map -> odom の時刻が進んでいる" tf_advancing map odom
 on_fail && diagnose "map -> odom が出ない" \
   "/mcl_pose は 20Hz で出ているか|**これがこの穴の顔**。publishOdomFrame が extrapolation で落ちるのを DEBUG で握り潰している|0501 へ戻る。odom -> base_footprint が古い (EKF が IMU を捨てて 5Hz に落ちた) のが根" \
   "RViz で地図もロボットも全部消えているか|Fixed Frame が map なので、この TF が無いと全部消える|上と同じ。トピックではなく TF を追うこと" \
-  "その場で推定姿勢が回り続けるか|スキャンが地図の壁を貫通している (地図と実環境の不整合)|overrides の emcl2 3 点 (alpha_threshold / expansion_radius_orientation / sensor_reset) は対症療法。**地図を取り直すのが本筋**"
+  "その場で推定姿勢が回り続けるか|スキャンが地図の壁を貫通している (地図と実環境の不整合)|overrides の emcl2 2 点 (alpha_threshold / expansion_radius_orientation) は対症療法。**地図を取り直すのが本筋**"
 
-item "/mcl_pose が 5Hz 以上" hz_at_least /mcl_pose 5
+item "${POSE_TOPIC} が 5Hz 以上" hz_at_least "${POSE_TOPIC}" 5
 
 # emcl2 は 1 枚のスキャンを odom_freq ÷ /scan の周期 回だけ食う。
 # ExpResetMcl2::sensorUpdate に「同じスキャンなら抜ける」ガードが無いので、

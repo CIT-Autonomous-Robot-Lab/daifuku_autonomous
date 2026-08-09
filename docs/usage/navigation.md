@@ -23,7 +23,7 @@ docker compose up -d
 ```bash
 cd ~/daifuku_autonomous
 tmux new-session -d -s nav -c "$PWD" -n nav
-tmux send-keys -t nav:nav 'docker compose exec ros2 /ros_entrypoint.sh ros2 launch daifuku_stack navigation.launch.py use_sim_time:=false localization:=emcl2 planner:=vi' Enter
+tmux send-keys -t nav:nav 'docker compose exec ros2 /ros_entrypoint.sh ros2 launch daifuku_stack navigation.launch.py use_sim_time:=false localization:=vi planner:=vi' Enter
 
 tmux new-window -t nav -c "$PWD" -n motor
 tmux send-keys -t nav:motor 'bash docker/raspberrypi/tools/control.sh motor on'
@@ -36,7 +36,7 @@ tmux attach -t nav
 
 | 窓 | 中身 | 操作 |
 |---|---|---|
-| `nav` | Nav2、EMCL2、価値反復プランナ、センサー | 終了は`Ctrl-C` |
+| `nav` | 価値反復プランナ（経路計画・追従・自己位置推定）、地図サーバ | 終了は`Ctrl-C` |
 | `motor` | モーター電源 | `Enter`で実行。止めるときは同じ窓で`control.sh stop` |
 | `check` | ノードとトピックの確認 | |
 
@@ -87,8 +87,13 @@ Mid-360の搭載高さ（接地面から275mm、2026-08-03実測）なので、�
 
 ## 基本起動
 
-EMCL2、価値反復グローバル／ローカルプランナ、Mid-360が既定構成です。RVizは既定では
+価値反復グローバル／ローカルプランナとMid-360が既定構成です。RVizは既定では
 起動しません（実機がheadlessのため。PC側から開きます）。
+
+**自己位置推定は場所で決まります。** 既定の`map_19f`は2026-08-09から`vi_planner`内蔵の
+推定器（VIOLA）なので`localization:=vi`が要り、`localization:=emcl2`のまま立てると
+**起動時に止まります**（[`localization:=vi`](#localizationviプランナ内蔵の推定器)）。
+`map_tsudanuma`は今までどおりEMCL2です。
 
 **地図も調整も渡しません。** 走らせる場所は`config/site`の1行（既定は`map_19f`）で、
 `overrides`はその名前の`config/overrides/<名前>.yaml`になります。**地図はその
@@ -115,7 +120,7 @@ site:
 
 ```bash
 ros2 launch daifuku_stack navigation.launch.py \
-  use_sim_time:=false localization:=emcl2
+  use_sim_time:=false localization:=vi
 ```
 
 **コマンドはLiDARの構成によらず同じです。** `/scan`を出すのは機体側なので、
@@ -127,7 +132,7 @@ Mid-360でも2D LiDARでもこちらは変わりません。RVizを同じ端末�
 ```bash
 docker compose exec ros2 \
   /ros_entrypoint.sh ros2 launch daifuku_stack navigation.launch.py \
-  use_sim_time:=false localization:=emcl2
+  use_sim_time:=false localization:=vi
 ```
 
 ## 自己位置推定を選ぶ
@@ -139,7 +144,57 @@ ros2 launch daifuku_stack navigation.launch.py \
   localization:=amcl
 ```
 
-指定可能な値は`emcl2`（別名`emcl`）と`amcl`です。
+指定可能な値は`emcl2`（別名`emcl`）と`amcl`と`vi`です。
+
+### `localization:=vi`（プランナ内蔵の推定器）
+
+`vi_planner`は2026-08-09の上流の更新から自己位置推定も持ちます（VIOLA）。これに
+切り替えると**emcl2を立てず**、`map -> odom`も`vi_planner`が出します（`map_server`は
+残ります）。`planner:=vi`と`nav2:=false`——どちらも既定——が要ります。
+
+**使うかどうかはこの引数、どれを使うかは`localizer`**です。断片
+（`config/stack/nav2/vi_planner.yaml`）の既定は`external`（＝外部の推定を読む）で、
+そのまま`localization:=vi`を渡すと**起動時に止まります**。
+
+**ただし同梱の`map_19f`（既定のoverrides）は2026-08-09から`belief`へ上書きしています。**
+つまりこの地図では`localization:=vi`のほうが要り、既定の`localization:=emcl2`のまま
+立てると**起動時に止まります**（下の「逆向きの取り違え」がそれ）。`map_tsudanuma`は
+この節を持たないので今までどおりemcl2です。**19Fの内蔵推定はまだ実機で確かめていません。**
+
+| 値 | 中身 |
+| --- | --- |
+| `adaptive` | 窓つきヒストグラムMCLの多重解像度版（belief窓は数MB）。観測が合わなくなると広域レベルへ広げて再定位するので、誘拐から戻れて未シードでも立ち上がる。**内蔵を使うならまずこれ** |
+| `grid` | その1レベル版（要シード、再定位なし） |
+| `belief` | 全地図にbeliefを持つ和積。未シードでも最初のスキャンからfree一様で立ち上がるが、窓がないぶん重い（VIと同じ格子＝`map_scale`後の全域に載る） |
+| `viterbi` | 同じ場をmin-plusで回す変種。1観測183 msで追従の40 ms予算を超えるため実走行向きではない |
+
+**「迷ったら分かる場所へ寄る」（`active_reloc`）は`localizer`だけでなく`solver`も選びます。**
+判別点を出せるのは`adaptive` / `belief` / `viterbi`の3つ（2026-08-09の上流の更新で
+`adaptive`だけではなくなった）ですが、アウトオブコアの解は単一ゴール専用なので、
+`solver: "frontier2d_sparse_compact"`のまま`true`と書くと起動時に止まります。
+**`map_19f`は2026-08-09に`solver`を密（`frontier2d_sparse`）へ戻して
+`active_reloc`を`true`にしてあります**——`map_scale: 2`込みで実測655 MBですが、
+`waypoint_prefetch: true`と重なると場が2本で**1.31 GB**になるので、**Pi 4（4 GB）では
+先読みのほうを外してください**（compactの頃は190 MBで済んでいました）。密へ戻す判断は
+[`config/README.md`](../../config/README.md)。同じ節で`map_clear_from_scan`（ビームが
+貫通したセルは地図が壁と言っていても開ける）と`qmdp`（最尤の1点ではなくbelief全体で
+行動を選ぶ）も`true`にしてあります。
+
+```bash
+# map_19f (既定の overrides) は localizer: "belief" 済み
+ros2 launch daifuku_stack navigation.launch.py \
+  localization:=vi
+```
+
+初期姿勢はRVizの**2D Pose Estimate**（`/initialpose`）で与えます。内蔵推定器にとって
+`pose_topic`は「自己位置の連続入力」ではなく**手動シード**で、メッセージが来るたび
+beliefを張り直すためです（`adaptive`と`belief`は未シードでも立ち上がります）。推定姿勢は
+`/mcl_pose`ではなく`/viola_pose`に出ます。
+
+逆向きの取り違え——`localizer`を内蔵にしたまま`localization:=emcl2`で立てる——も
+起動時に止まります。通すと`map -> odom`の出し手が2つになり、さらに`pose_topic`
+（`mcl_pose`）が20 Hzの手動シードとして読まれて、**エラーも警告も出ないまま自己位置
+だけが壊れる**ためです。
 
 ## プランナを選ぶ
 
@@ -198,8 +253,8 @@ BTを外すと、VIが損をしていた点が消えます。**毎秒の再計�
 ゴールが死ななくなり**（ロールアウトの振動＝`LoopDetected`は「方策が無い」とは別物です）、
 **投げ直しの待ちに意味が出ます**。最後のが一番効きます — BTの`Wait`のあいだは
 `follow_path`が走っていないので価値関数が1ミリも動かず、待っても状況が変わりません。
-`nav2:=false`では`goal_retry_settle_sec`（既定3秒）のあいだ**止まったままスキャンを
-取り込み続ける**ので、一度「通れない」と塗った場所のペナルティが実際に薄れていきます。
+`nav2:=false`では投げ直しの前に3秒（2026-08-09の上流の整理でノード内の固定値になりました。
+それまでは`goal_retry_settle_sec`）のあいだ**止まったままスキャンを取り込み続ける**ので、一度「通れない」と塗った場所のペナルティが実際に薄れていきます。
 投げ直しの上限は`goal_retry_limit`（既定3、負で無制限）です。
 
 読む設定ファイルも減ります。効くのは`config/stack/nav2/vi_planner.yaml`と`map_server.yaml`、
@@ -220,10 +275,12 @@ BTを外すと、VIが損をしていた点が消えます。**毎秒の再計�
 実時間は起動ログの`global sweep done in ...`に出ます。
 
 `map_19f`では`map_scale: 2`でプランナ内部だけを0.10 m/セルに粗くしています（地図、
-コストマップ、自己位置推定は0.05 mのままです）。solveと伝播を軽くするためで、必須では
-ありません。密ソルバ（`frontier2d_sparse`）に戻すこともできますが、そちらは状態1つ
-あたり80バイト要るので`map_scale: 2`とセットです（実測655 MB。`dense_limit_mb`を
-超える地図では、確保してからOOMされる代わりに起動を止めます）。値の導出は
+コストマップ、自己位置推定は0.05 mのままです）。**この地図は2026-08-09に密ソルバ
+（`frontier2d_sparse`）へ戻したので、`map_scale: 2`はいまは必須です**——`active_reloc`が
+アウトオブコアを受け付けないためで、密は状態1つあたり80バイト要り、scale 1では2.53 GBに
+なります（scale 2の実測655 MB。マシンの`MemAvailable`を
+超える地図では、確保してからOOMされる代わりに起動を止めます。上限のキー`dense_limit_mb`は
+2026-08-09の上流の整理で消え、`/proc/meminfo`の値そのものが基準になりました）。値の導出は
 [`config/README.md`](../../config/README.md)にあります。
 
 ## 広域地図（map_tsudanuma）で動かす
@@ -266,8 +323,8 @@ ros2 launch daifuku_stack navigation.launch.py \
 静止したままでもタイル修復は240秒回ってなお`queued 29`のまま減りませんでした。窓に壁が
 入っていれば毎tickペナルティが塗り直されるので、**走行中に`global sweep done in ...`は
 出ません**（設計どおり）。動いているかは2秒ごとの`tile repair running for ...`のほうで
-見てください。長すぎるようなら`global_sweep_budget_ms`と`global_sweep_idle_ms`の比を
-変えますが、**上限を決めているのはCPUではなく追従ループと共有するMutex**です
+見てください。長すぎるようなら`global_sweep_duty`（既定25 %。2026-08-09の上流の整理まで
+は`global_sweep_budget_ms`と`global_sweep_idle_ms`の比でした）を上げますが、**上限を決めているのはCPUではなく追従ループと共有するMutex**です
 （[`config/README.md`](../../config/README.md)の`global_sweep`の節）。
 
 NavFnとDWBで動かす場合、`map_tsudanuma`の価値反復向け設定は要りません。ただし
@@ -398,13 +455,14 @@ vi_planner: path with 412 poses in 0.34s (solved_now=true, iters=0, prefetched)
 有効なぶん代償も常時払います。価値関数が同時に2つ生きるので、場も2つ要ります。
 密ソルバではメモリがそのまま2倍です。compactでsinkがディスクへ出るのは
 `compact_sink_dir`を指定したときと`compact_ram_limit_mb`を超えたときだけで、
-**同梱の2地図はいまどちらも出ません**。したがって場は丸ごとRAMに載ります——19Fが
-95 MB×2、津田沼は`true`へ戻せば648 MB×2＝1.3 GBが匿名メモリとして居座ります。
+**同梱の2地図はいまどちらも出ません**。したがって場は丸ごとRAMに載ります——**19Fは
+2026-08-09に`solver`を密へ戻したので、sinkの95 MB×2ではなく場そのものが
+655 MB×2＝1.31 GB**です（密にはディスクへ逃がす口がありません）。津田沼は`true`へ
+戻せば648 MB×2＝1.3 GBが匿名メモリとして居座ります。
 solveのCPUも取られます（追従の`try_lock`は邪魔しませんが、10Hzの制御周期がずれ得ます）。
 **Pi 4（4 GB）で走らせるなら`overrides/map_19f.yaml`の`waypoint_prefetch`を`false`へ
 戻してください**——既定の場所が`map_19f`なので、引数を何も足さずに立てるとPi 4でも
-これが効きます（Pi 5の8 GBを前提にしている点は`dense_limit_mb`・
-`compact_ram_limit_mb`と同じ事情です）。
+これが効きます（Pi 5の8 GBを前提にしている点は`compact_ram_limit_mb`と同じ事情です）。
 走行中に固まるようになったときも、まずここを戻して切り分けます。
 **まだ実機でもpi4_simでも通していません。**
 
@@ -416,7 +474,8 @@ solveのCPUも取られます（追従の`try_lock`は邪魔しませんが、10
 いるのは地図の全域ぶんの価値関数ですが、走り出すのに要るのは**いまの姿勢から
 ゴールまでの経路**だけなので、それが引けた時点でsolveを打ち切れます。
 
-`config/stack/nav2/vi_planner.yaml`の`early_start`を`true`にすると打ち切ります。判定は
+`early_start`を`true`にすると打ち切ります（断片の`config/stack/nav2/vi_planner.yaml`は
+`false`のままで、**同梱の2地図は`overrides/`で`true`にしています**）。判定は
 ロールアウトそのもの（`compute_path_to_pose`が返すのと同じ辿り方）なので、
 **打ち切った場でも経路は必ず引けます**。先読みとは別物なので、両方同時に有効に
 できます。
@@ -439,7 +498,8 @@ vi_planner: dropped the truncated value function (early_start) after 30 ticks wi
 **走りながら**埋まっていきます（密は全域掃き、compactは追従が窓を書き戻すたびに積まれる
 タイル修復）。
 
-**効かない地図があります。** compact（同梱の既定）の確定は値バンド単位でしか進まず、
+**効かない地図があります。** compact（断片の既定。2026-08-09に`map_19f`を密へ戻したので、
+いまcompactなのは津田沼だけです）の確定は値バンド単位でしか進まず、
 バンド幅は`4 × 1手で進む最大セル数 × 最大ペナルティ`です
 （`frontier2d_sparse_compact.rs`の`couple_margin`）。`map_19f`の
 0.1 m/セル・`action_forward_m` 0.5 m・`safety_radius_penalty: 30`なら
@@ -447,7 +507,10 @@ vi_planner: dropped the truncated value function (early_start) after 30 ticks wi
 値を入れただけで、実測ではありません**（バンド幅の実測は取っていません）。
 地図の値域が丸ごと1バンドに収まると波2つで解き終わってしまい、打ち切る隙がありません。
 このとき**エラーも警告も出ず、ただ何も短くなりません**。建物1フロア程度の広さは
-こちら側の見込みで、効くのは津田沼のような広域地図です。前進量とペナルティを下げても
+こちら側の見込みで、効くのは津田沼のような広域地図です（津田沼は0.25 m/セル・
+`safety_radius_penalty: 1`なので4×2×1＝8ステップ）。**2地図とも`true`にしてあります。
+19Fは密へ戻したのでバンドが無くなり、効くようになりました**（上の600ステップの話は
+compactだった頃のものです）。前進量とペナルティを下げても
 `map_scale`を上げてもバンドは狭くなり、効きやすくなります（津田沼が
 `safety_radius_penalty: 1`なのは別の理由——貪欲ロールアウトが降下できないため——ですが、
 バンドもそのぶん狭くなります）。効いたかは上のログの`cut short` /

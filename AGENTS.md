@@ -204,6 +204,31 @@ Docker 越しに叩く形は
   直に立てていて `follow` を渡さないので、`follow: false` と書いてあると
   **`follow_path` のサーバが立たないまま standalone が上がり、エラーも警告も出ない
   まま機体が追従しない**。`standalone` と対で、どちらも渡すのは launch だけ。
+- **`vi_planner` は 2026-08-09 の上流の更新から自己位置推定も持つ（VIOLA）。使うかは
+  launch の `localization:=vi`、どれを使うかは `config` の `localizer` で、この
+  2 つは別の場所にある。** 噛み合わなければ起動時に止まる（`backends.
+  validate_localization`）——どちらの向きも、通せば**エラーも警告も出ないまま自己
+  位置だけが壊れる**ため。`localizer` が `external`（既定）でないのに `emcl2` を
+  立てると、`map→odom` の出し手が 2 つになるうえ、`pose_topic` の意味が「自己位置の
+  連続入力」ではなく**手動シード**に変わって `mcl_pose` の 20Hz で belief が張り
+  直され、素通しと変わらなくなる。逆に `localization:=vi` なのに `external` のままだと、
+  **誰も `map→odom` を出さないまま起動する**。`localization:=vi` は
+  `planner:=vi` と `nav2:=false`（既定）が要る——`nav2:=true` の navigation は上流の
+  `navigation_launch.py` 経由で、あちらに `publish_tf` を渡す口が無い。**その
+  `publish_tf` は `standalone` / `follow` と同じ launch 専用のキーで、`config/` に
+  書かないこと**（`localizer` は逆に `config/` にしか無い）。`localization:=vi` では
+  `pose_topic` が `initialpose` になり、emcl2 は立たず `map_server` だけが残る。
+  **2026-08-09 から既定の `map_19f` が `localizer: "belief"` を上書きしているので、
+  この地図では `localization:=vi` のほうが要る** — 引数を足さずに（＝既定の
+  `localization:=emcl2` で）立てると上の 1 つめに当たって起動時に止まる。`active_reloc`
+  と組なので `solver` も密へ戻してあり（compact = アウトオブコアは単一ゴール専用で、
+  そのままだと同じく起動時に止まる）、`map_scale: 2` と `waypoint_prefetch` の
+  1.31GB がそこにぶら下がる。**津田沼は密だと 3.17GB で OOM なのでこの節を持てない。**
+  **この地図で立つのは `localization:=vi planner:=vi nav2:=false` の 1 通りだけになる** —
+  `planner:=navfn` / `local_planner:=nav2` / `nav2:=true` はどれも起動時に落ちる
+  （前 2 つは `nav2:=auto|true` を要求し、それが `localization:=vi` と噛み合わない。
+  `emcl2` へ落とせば今度は `localizer` の側で落ちる）。逃げ道は `overrides:=none` だけで、
+  そちらは emcl2 の対症療法ごと落ちる。
 - **`nav2` の既定は `false` で、そのとき Nav2 の navigation は BT ごと
   立たない。** `planner:=navfn` / `local_planner:=nav2` へ落とすときは
   **`nav2:=auto` を足さないと起動時にエラーで止まる**（`navigate_to_pose` を出す
@@ -328,17 +353,20 @@ Docker 越しに叩く形は
   29 秒、津田沼が 87 秒）。価値関数が同時に 2 つ生きるので、**密ソルバでは
   メモリが 2 倍要る**。compact でも同梱の 2 地図は sink が RAM なので（2026-08-04 に
   津田沼の `compact_sink_dir` を外した）、そのまま 2 倍が匿名メモリに乗る
-  （19F 95MB×2、津田沼は戻せば 648MB×2 = 1.3GB）。**Pi 4 (4GB) では `true` に
+  （**19F は 2026-08-09 に密へ戻したので 655MB×2 = 1.31GB**。compact の頃は 95MB×2。
+  津田沼は戻せば 648MB×2 = 1.3GB）。**Pi 4 (4GB) では `true` に
   しないこと。ただし既定の `map_19f` が `true` なので、引数を何も
   足さずに立てると Pi 4 でもこれが効く。** 外すには使う地図の
   `overrides/*.yaml` の `waypoint_prefetch` を消すか `false` と書くしかない（キー 1 つだけ外す launch 引数は無い。
   津田沼は後者で、断片と同値の `false` を切り分けの目印として明示してある。
-  `overrides:=none` にすると emcl2 の 3 つの対症療法ごと落ちて、19F では自己位置が
-  その場で回り出す）。2026-08-04 に一度**断片**で `true` へ反転したときは同日の実機で
+  `overrides:=none` にすると emcl2 の 2 つの対症療法ごと落ちて、19F では自己位置が
+  その場で回り出す（3 つめの `sensor_reset` は 2026-08-09 に断片ごと `false` に
+  なったので、両 overrides から消えた）。2026-08-04 に一度**断片**で `true` へ反転したときは同日の実機で
   走行中の固まりが出て、容疑者の 1 つとして戻した（切り分けは未了）ので、
   再発したらまずここを疑う。
 - **`vi_planner` の `early_start` は compact では効かない地図がある。** ゴールまで
-  方策が繋がった時点で solve を打ち切る機能だが、compact（同梱の既定 solver）の確定は
+  方策が繋がった時点で solve を打ち切る機能だが、compact（断片の solver。2026-08-09 に
+  `map_19f` だけ密へ戻したので、compact なのは津田沼だけ）の確定は
   値バンド単位でしか進まず、そのバンド幅は「4 × 1 手の最大移動セル数（`action_forward_m`
   ÷ 解像度）× 最大ペナルティ（`safety_radius_penalty`）」（`couple_margin`）。**地図の値域が
   丸ごと 1 バンドに収まると波 2 つで解き終わって打ち切る隙が無く、エラーも警告も出ないまま
@@ -353,7 +381,8 @@ Docker 越しに叩く形は
 - **以下 2 つは `nav2:=true` のときの話。`nav2:=false` では `behavior_server` も
   `waypoint_follower` も立たないので起こらない**（`lifecycle_manager_navigation` は
   残るが、管理下が `velocity_smoother` 1 つなので停止順で固まる相手が居ない。
-  代わりに投げ直しは `vi_planner` の `goal_retry_limit` / `goal_retry_settle_sec`）。
+  代わりに投げ直しは `vi_planner` の `goal_retry_limit` と、その合間の 3 秒（2026-08-09 に
+  ノード内の固定値になった。それまでは `goal_retry_settle_sec`）。
 - **RViz の「Navigation 2」パネルの `Reset` を押すと停止順で固まる。** 停止は逆順なので
   `velocity_smoother` が先に落ち、`waypoint_follower` の停止で（走りっぱなしの
   コールバックを待って）固まり、`behavior_server` だけが active で残る。
@@ -450,8 +479,9 @@ Docker 越しに叩く形は
 - **1 行でまとめる。** キーの右に `# 既定 <ノード既定値>: <説明>` の形で書き、既存の行と
   同じ書式・同じ語彙にそろえる。キーの上に段落を積まない。実測値は 1 行に収まる範囲で
   入れてよいが、導出や背景は `config/README.md` / `docs/` / 実装 (例:
-  `vi_ros2/vi_planner/src/core.rs` 冒頭) に置いて参照で済ませる。
-- 「既定」= 各ノードの `main.rs` などが持つ宣言時の値、`overrides/` での「断片」=
+  `vi_rs/vi_planner/src/core/mod.rs` 冒頭) に置いて参照で済ませる。
+- 「既定」= 各ノードの `main.rs`（`vi_planner` は `src/node/params.rs`）などが持つ
+  宣言時の値、`overrides/` での「断片」=
   重ねる先の設定ファイル（そのノードを宣言している `config/stack/nav2/*.yaml` や
   `config/stack/localization/emcl2.yaml` など）の値。値を変えたら `既定 同左` や
   `# 断片 <値>:`、ファイル冒頭の

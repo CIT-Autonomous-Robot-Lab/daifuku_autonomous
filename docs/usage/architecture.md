@@ -153,8 +153,16 @@ Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。
 
 ## 自己位置推定
 
-- `localization:=emcl2`: 外部パッケージ`emcl2`が`map -> odom`を推定
+- `localization:=emcl2`（既定）: 外部パッケージ`emcl2`が`map -> odom`を推定
 - `localization:=amcl`: Nav2標準`nav2_amcl`を使用
+- `localization:=vi`: **emcl2を立てず**、`vi_planner`自身が推定する（上流のVIOLA）。
+  `map_server`は残る。`map -> odom`を出すのも`vi_planner`（`publish_tf`）で、
+  `pose_topic`は`initialpose`＝**手動シード**（RVizの2D Pose Estimate）になる。
+  `planner:=vi`と`nav2:=false`（どちらも既定）が要る
+
+**どの推定器を使うかはlaunchではなく`config/stack/nav2/vi_planner.yaml`の`localizer`**
+（`external`／`grid`／`adaptive`／`belief`／`viterbi`）。launch引数が持つのは
+「内蔵を使うか」だけなので、2つが噛み合わなければ起動時に止まります。
 
 ## 経路計画と追従
 
@@ -217,7 +225,7 @@ BTを挟まなくなることで、VIが損をしていた点が4つ消えます
 | --- | --- |
 | BTが`ComputePathToPose`を毎秒呼ぶ。キャッシュヒットでもロールアウトと補間を**共有ロックの中で**回すので、10 Hzの追従ループと毎秒取り合う | ロールアウトはゴールにつき1回だけ。しかも`plan`トピックへの**表示専用**で、走行は方策を1手ずつ引く |
 | ロールアウトが振動（`LoopDetected`）すると`ComputePathToPose`が失敗し、ゴールごと死ぬ | 経路が引けなくても走る。「方策が無い」と「貪欲降下が振動した」は別物なので、後者では走れることが多い |
-| リカバリの`Spin`／`BackUp`は`local_costmap/costmap_raw`を待つので、コストマップの無いVI構成では**必ず失敗**する。動くのは`Wait`だけで、その`Wait`の間は`follow_path`が走っていない＝価値関数が1ミリも動かない | 投げ直しの間に`goal_retry_settle_sec`（既定3秒）だけ**止まったまま場を更新する**。スキャンを取り込み続けるので、一度「通れない」と塗った場所のペナルティが半減で消えていく |
+| リカバリの`Spin`／`BackUp`は`local_costmap/costmap_raw`を待つので、コストマップの無いVI構成では**必ず失敗**する。動くのは`Wait`だけで、その`Wait`の間は`follow_path`が走っていない＝価値関数が1ミリも動かない | 投げ直しの間に3秒（ノード内の固定値）だけ**止まったまま場を更新する**。スキャンを取り込み続けるので、一度「通れない」と塗った場所のペナルティが半減で消えていく |
 | 巡回の先読み（`waypoint_prefetch`）は`/waypoints`を出すものがいないと**警告も出さずに何もしない** | 順路は`follow_waypoints`のゴールそのものなので、必ず届く |
 
 投げ直しの回数は`goal_retry_limit`（既定3、負で無制限）で、BTの

@@ -111,7 +111,10 @@ bt_timeout = os.environ.get("BT_SERVER_TIMEOUT", "")
 if solver:
     put("vi_planner", "solver", solver)
 if pub_vf:
-    put("vi_planner", "publish_value_function", pub_vf.lower() == "true")
+    # 配信の on/off だった publish_value_function は 2026-08-09 の上流の整理で
+    # value_publish_interval_ms に吸収された (負 = 配信そのものを立てない)。
+    put("vi_planner", "value_publish_interval_ms",
+        500 if pub_vf.lower() == "true" else -1)
 if map_scale:
     put("vi_planner", "map_scale", int(map_scale))
 if sink_dir:

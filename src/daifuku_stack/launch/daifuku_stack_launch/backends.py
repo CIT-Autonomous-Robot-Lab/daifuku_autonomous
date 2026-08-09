@@ -15,7 +15,7 @@
 
 navigation.launch.py が扱う 4 つの選択肢:
 
-  localization  : amcl / emcl2
+  localization  : amcl / emcl2 / vi
   planner       : navfn (nav2 標準) / vi (価値反復)
   local_planner : auto / nav2 / vi
   nav2          : false (既定) / true / auto
@@ -37,12 +37,19 @@ behavior_server / waypoint_follower / smoother_server が丸ごと不要にな�
 それを起こすためだけの lifecycle_manager_navigation (管理下 1 ノード) だけ。
 地図を配る map_server と自己位置の emcl2 はそのまま (これらは navigation では
 なく localization 側)。
+
+**localization:=vi** はその emcl2 も外し、自己位置推定まで vi_planner に持たせる
+(上流が 2026-08-09 に足した VIOLA)。map_server は残る — 地図はどちらの推定器も
+/map から読む。どの推定器を使うかは launch ではなく **config の `localizer`** が
+持ち、ここはその値と launch 引数が噛み合っているかだけを見る
+(validate_localization)。
 """
 
 from ament_index_python.packages import PackageNotFoundError, get_package_prefix
 from launch.substitutions import PythonExpression
 
 from daifuku_config_manager import value
+from daifuku_config_manager.params import load
 
 
 def resolve_local_planner(planner, local_planner):
@@ -115,13 +122,25 @@ def validate_nav2(context, *args, effective_nav2, effective_local_planner, **kwa
     return []
 
 
-def validate_localization(context, *args, **kwargs):
-    """localization:= の値と、emcl2 を選んだ場合のパッケージの有無を見る。"""
+def config_localizer(context):
+    """合成後の params_file が vi_planner に渡す `localizer` の値。
+
+    **compose の後に呼ぶこと** (params_file は overrides を重ねた一時ファイルに
+    差し替わっている)。書かれていなければノードの既定と同じ "external"。
+    """
+    body = load(value(context, "params_file")).get("vi_planner") or {}
+    got = (body.get("ros__parameters") or {}).get("localizer")
+    return str(got).strip() if got else "external"
+
+
+def validate_localization(context, *args, effective_nav2=None, **kwargs):
+    """localization:= の値と、選んだ推定器を立てられる前提を見る。"""
     selected = value(context, "localization")
-    if selected not in ("amcl", "emcl", "emcl2"):
+    if selected not in ("amcl", "emcl", "emcl2", "vi"):
         raise RuntimeError(
             f"Unsupported localization: {selected}\n"
-            "Use localization:=amcl or localization:=emcl2."
+            "Use localization:=amcl, localization:=emcl2 or localization:=vi "
+            "(vi_planner's own estimator; no emcl2)."
         )
 
     if selected in ("emcl", "emcl2"):
@@ -134,6 +153,54 @@ def validate_localization(context, *args, **kwargs):
                 "Clone/build the emcl2_ros2 repository in this workspace or source an "
                 "underlay that provides it before launching with localization:=emcl2."
             ) from exc
+
+    # 内蔵推定器 (VIOLA) を使うかどうかは launch 引数、**どれを使うかは config**。
+    # 2 か所に分かれるので、噛み合っていなければここで止める。黙って通すと
+    # どちらの向きも**エラーも警告も出ないまま自己位置だけが壊れる**:
+    #   config が内蔵 + localization:=emcl2 -> map->odom を emcl2 と 2 人が出し、
+    #     さらに pose_topic (mcl_pose) が「連続入力」ではなく手動シードとして
+    #     読まれて 20Hz で belief が張り直される。
+    #   config が external + localization:=vi -> 誰も map->odom を出さないまま
+    #     起動し、RViz からは Fixed Frame ごと全部消える。
+    localizer = config_localizer(context)
+    if selected != "vi":
+        if localizer != "external":
+            raise RuntimeError(
+                f"config sets vi_planner's localizer to {localizer!r}, but "
+                f"localization:={selected} brings up its own estimator.\n"
+                "Both would own map->odom, and vi_planner would treat pose_topic as a "
+                "manual seed instead of a pose input — neither logs anything.\n"
+                "Set localizer: \"external\" back in config/stack/nav2/vi_planner.yaml "
+                "(or the overrides file that changed it), or launch with "
+                "localization:=vi to use it."
+            )
+        return []
+
+    if value(context, "planner") != "vi":
+        raise RuntimeError(
+            "localization:=vi needs planner:=vi — the estimator lives in vi_planner, "
+            "and planner:=navfn does not launch it."
+        )
+    if effective_nav2 is not None and effective_nav2.perform(context) != "false":
+        # nav2:=true の navigation は vi 版 navigation_launch.py 経由で立つが、
+        # あちらは publish_tf を渡す口を持たない (params_file 頼み)。config に
+        # 書かせると localization:=emcl2 のときに二重配信へ戻るので、この組は
+        # 通さない。
+        raise RuntimeError(
+            "localization:=vi requires nav2:=false (the default).\n"
+            "With the Nav2 stack up, vi_planner is launched through vi_planner's "
+            "navigation_launch.py, which has no way to hand it publish_tf — nobody "
+            "would publish map->odom."
+        )
+    if localizer == "external":
+        raise RuntimeError(
+            "localization:=vi asks vi_planner to localize, but config leaves "
+            "localizer: \"external\" (= consume someone else's pose).\n"
+            "Pick an estimator in config/stack/nav2/vi_planner.yaml (or an overrides "
+            "file): \"adaptive\" (windowed multi-resolution; recovers from kidnapping "
+            "and starts unseeded), \"grid\", \"belief\" or \"viterbi\".\n"
+            "Leaving it external here would launch with nothing publishing map->odom."
+        )
     return []
 
 
@@ -164,7 +231,9 @@ def validate_planner(context, *args, **kwargs):
 # (sink への書き戻し + タイル修復) ので、その検査は消してある。
 #
 # メモリの上限判定もここではやらない。地図の実寸はノードしか知らないので、
-# ``dense_limit_mb`` としてノード側にある (超えたら起動時にエラーで止まる)。
+# ノード側が /proc/meminfo の MemAvailable と突き合わせる (超えたら起動時に
+# エラーで止まり、半分を超えたら警告)。2026-08-09 の上流の整理まではキー
+# ``dense_limit_mb`` だった。
 
 
 def validate_local_planner(context, *args, **kwargs):

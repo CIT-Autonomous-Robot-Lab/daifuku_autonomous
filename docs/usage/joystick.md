@@ -238,8 +238,8 @@ STARTとBACKを同時に2秒押すと、`waypoints_file`のYAMLを読んで
 それでも`stop_on_failure: false`なので、1点ずつ失敗しながら最後まで進みます。外から
 見える形は構成で変わります。
 
-- 既定の`nav2:=false`では、`vi_planner`が1点ごとに`goal_retry_settle_sec`（3秒）
-  止まったまま`goal_retry_limit`（3回）投げ直して次へ移ります。**その場で止まったまま
+- 既定の`nav2:=false`では、`vi_planner`が1点ごとに3秒（ノード内の固定値）止まったまま
+  `goal_retry_limit`（3回）投げ直して次へ移ります。**その場で止まったまま
   何も起きない機体**に見えます。
 - `nav2:=true`では**その場で左に回り続けます** — 経路が引けないので
   `navigate_to_pose`が失敗し、nav2のrecoveryが`spin`（+1.57 rad = 反時計回り、

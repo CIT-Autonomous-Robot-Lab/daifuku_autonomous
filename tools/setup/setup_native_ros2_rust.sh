@@ -130,29 +130,33 @@ colcon build --merge-install \
   --parallel-workers "${BUILD_JOBS}" \
   --packages-up-to rclrs
 
-echo "[5/5] Checking nav2_msgs Rust bindings"
-if [[ ! -d /opt/ros/humble/share/nav2_msgs/rust ]]; then
-  echo "nav2_msgs Rust bindings are missing; building from source"
-  if [[ ! -d "${RUST_WORKSPACE}/src/nav2_msgs" ]]; then
-    NAV2_SOURCE="$(mktemp -d -t navigation2.XXXXXX)"
-    cleanup() {
-      case "${NAV2_SOURCE}" in
-        /tmp/navigation2.*) rm -rf -- "${NAV2_SOURCE}" ;;
-        *) echo "Refusing to remove unexpected temporary path: ${NAV2_SOURCE}" >&2 ;;
-      esac
-    }
-    trap cleanup EXIT
-    git clone --depth 1 --branch humble \
-      https://github.com/ros-navigation/navigation2.git "${NAV2_SOURCE}"
-    cp -a "${NAV2_SOURCE}/nav2_msgs" "${RUST_WORKSPACE}/src/nav2_msgs"
+echo "[5/5] Checking message package Rust bindings"
+# vi_plannerが使うメッセージパッケージのうち、/opt/ros/humbleがRustバインディング
+# を同梱していないものだけソースからビルドする。tf2_msgsは2026-08-09に加わった
+# （上流がpublish_tf＝AMCL相当のmap->odom配信を足したため）。
+MISSING_PKGS=()
+for spec in "nav2_msgs https://github.com/ros-navigation/navigation2.git" \
+            "tf2_msgs https://github.com/ros2/geometry2.git"; do
+  read -r pkg url <<<"${spec}"
+  if [[ -d "/opt/ros/humble/share/${pkg}/rust" ]]; then
+    echo "${pkg} Rust bindings are already installed"
+    continue
   fi
+  echo "${pkg} Rust bindings are missing; building from source"
+  if [[ ! -d "${RUST_WORKSPACE}/src/${pkg}" ]]; then
+    MSG_SOURCE="$(mktemp -d -t "msgsrc.XXXXXX")"
+    git clone --depth 1 --branch humble "${url}" "${MSG_SOURCE}"
+    cp -a "${MSG_SOURCE}/${pkg}" "${RUST_WORKSPACE}/src/${pkg}"
+    rm -rf -- "${MSG_SOURCE}"
+  fi
+  MISSING_PKGS+=("${pkg}")
+done
+if ((${#MISSING_PKGS[@]})); then
   # shellcheck disable=SC1091
   source "${RUST_WORKSPACE}/install/local_setup.bash"
   colcon build --merge-install \
     --parallel-workers "${BUILD_JOBS}" \
-    --packages-select nav2_msgs
-else
-  echo "nav2_msgs Rust bindings are already installed"
+    --packages-select "${MISSING_PKGS[@]}"
 fi
 
 cat <<EOF

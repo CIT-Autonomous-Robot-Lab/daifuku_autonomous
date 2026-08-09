@@ -19,7 +19,7 @@
 # `ros2 launch daifuku_bringup robot_bringup.launch.py` を通しておくこと
 # (/scan が来ないと emcl2 も costmap も動かない)。
 #
-# 選べる組み合わせは 3 通り (localization x planner)。どれを選んでも RViz
+# 選べる組み合わせは 4 通り (localization x planner)。どれを選んでも RViz
 # (use_rviz:=true のとき) は共通で、違うのはその下のスタックだけ。
 #
 #   localization:=amcl  + planner:=navfn -> nav2 の bringup_launch.py をそのまま
@@ -27,9 +27,17 @@
 #                                           vi_planner の navigation_launch.py
 #   localization:=emcl2 + navfn / vi     -> map_server + emcl2 を自前で立て、
 #                                           その上に nav2 / vi の navigation
+#   localization:=vi    + planner:=vi    -> **emcl2 を立てない**。map_server だけ
+#                                           残し、自己位置推定も vi_planner が持つ
+#                                           (上流の VIOLA。publish_tf で map->odom を
+#                                           出し、pose_topic は initialpose = 手動シード)
 #
 # emcl2 は nav2 のノードではないので、標準の bringup には乗らない。map_server と
 # lifecycle_manager_localization をここで立てているのはそのため。
+#
+# **どの推定器を使うかは config の `localizer`** で、この引数は「内蔵を使うか」
+# だけを決める。2 か所に分かれるので、噛み合わなければ backends.validate_localization
+# が起動時に止める (どちらの向きも、通すと自己位置だけが静かに壊れる)。
 #
 # その navigation を **Nav2 抜き**で組むのが nav2:=false で、これが**既定**。
 # 何が立たなくなるかは AGENTS.md、何が変わるかは docs/usage/architecture.md。
@@ -56,7 +64,7 @@ from launch.substitutions import (
     PythonExpression,
 )
 from launch_ros.actions import Node, PushRosNamespace, SetParameter, SetParametersFromFile
-from launch_ros.descriptions import ParameterFile
+from launch_ros.descriptions import ParameterFile, ParameterValue
 from launch_ros.substitutions import FindPackageShare
 from nav2_common.launch import RewrittenYaml
 
@@ -120,6 +128,12 @@ def generate_launch_description():
 
     # どのスタックを立てるかの条件
     use_emcl2 = PythonExpression(["'", localization, "' in ['emcl', 'emcl2']"])
+    # 自己位置推定も vi_planner に持たせる (VIOLA)。emcl2 を立てないだけで、
+    # map_server から下は emcl2 構成と同じものを使う。
+    use_vi_loc = PythonExpression(["'", localization, "' == 'vi'"])
+    # emcl2 と vi は「map_server を自前で立てる」側で同じ。違うのは emcl2 の
+    # ノードを立てるかと、vi_planner へ渡す pose_topic / publish_tf だけ。
+    use_own_map_server = PythonExpression([use_emcl2, " or ", use_vi_loc])
     use_amcl_navfn = PythonExpression(
         ["'", localization, "' == 'amcl' and '", planner, "' == 'navfn'"]
     )
@@ -148,6 +162,14 @@ def generate_launch_description():
     # リマップ先を substitution にしてあるのは、Node を 2 つに割らずに済ませるため。
     vi_cmd_vel_topic = PythonExpression(
         ["'cmd_vel_nav' if ", use_smoother, " else 'cmd_vel'"]
+    )
+    # localization:=vi では pose_topic の意味が変わる。内蔵推定器にとってあれは
+    # 「自己位置の連続入力」ではなく**手動シード**なので、mcl_pose (emcl2 の 20Hz
+    # 出力) に向けたままだと毎メッセージで belief が張り直され、**エラーも警告も
+    # 出ないまま素通しと変わらなくなる**。RViz の 2D Pose Estimate が出す
+    # initialpose に向ける。
+    own_pose_topic = PythonExpression(
+        ["'initialpose' if ", use_vi_loc, " else 'mcl_pose'"]
     )
 
     # スタックの部品
@@ -248,8 +270,13 @@ def generate_launch_description():
             ),
         ]
 
-    def emcl2_localization_nodes():
-        """emcl2 による自己位置推定一式 (nav2 の localization_launch.py の代わり)。"""
+    def own_localization_nodes():
+        """自前の自己位置推定一式 (nav2 の localization_launch.py の代わり)。
+
+        map_server と lifecycle_manager は localization:=emcl2 と
+        localization:=vi で共通。**emcl2 のノードだけが emcl2 側**で、vi では
+        推定そのものを vi_planner が持つ (standalone_navigation を参照)。
+        """
         return [
             Node(
                 package="nav2_map_server",
@@ -263,6 +290,7 @@ def generate_launch_description():
                 remappings=remappings,
             ),
             Node(
+                condition=IfCondition(use_emcl2),
                 package=LaunchConfiguration("emcl2_package"),
                 executable=LaunchConfiguration("emcl2_executable"),
                 name=LaunchConfiguration("emcl2_node_name"),
@@ -387,6 +415,12 @@ def generate_launch_description():
                             "standalone": True,
                             "pose_topic": pose_topic,
                             "scan_topic": "scan",
+                            # map->odom を出すのは localization:=vi のときだけ。
+                            # **これも config には書かないこと** — emcl2 構成で
+                            # 真になっていると出し手が 2 人になり、TF の約束
+                            # (区間ごとに所有者は 1 つ) が破れて自己位置だけが
+                            # 静かに壊れる。渡すのは launch と 1 対 1 のここ。
+                            "publish_tf": ParameterValue(use_vi_loc, value_type=bool),
                         },
                     ],
                     arguments=["--ros-args", "--log-level", log_level],
@@ -442,17 +476,20 @@ def generate_launch_description():
         ],
     )
 
-    # emcl2 + navfn / vi: 自己位置推定を自前で立て、その上に navigation を載せる。
-    emcl2_stack = GroupAction(
-        condition=IfCondition(use_emcl2),
-        actions=stack_prelude() + emcl2_localization_nodes() + [
+    # emcl2 / vi + navfn / vi: 自己位置推定を自前で立て、その上に navigation を
+    # 載せる。localization:=vi では emcl2 のノードだけが抜け、推定は下の
+    # standalone_navigation が立てる vi_planner が持つ (nav2:=true との併用は
+    # backends.validate_localization が弾くので、間の 2 つの include には来ない)。
+    own_localization_stack = GroupAction(
+        condition=IfCondition(use_own_map_server),
+        actions=stack_prelude() + own_localization_nodes() + [
             navigation_include(navigation_launch, condition=IfCondition(use_navfn)),
             navigation_include(
                 vi_navigation_launch,
                 pose_topic="mcl_pose",
                 condition=IfCondition(PythonExpression([use_vi, " and ", use_nav2])),
             ),
-            standalone_navigation("mcl_pose"),
+            standalone_navigation(own_pose_topic),
         ],
     )
 
@@ -519,7 +556,14 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "localization",
             default_value="emcl2",
-            description="Localization backend: amcl or emcl2.",
+            description="Localization backend: amcl, emcl2 or vi. vi drops emcl2 and "
+                        "lets vi_planner localize itself (map_server stays): it "
+                        "publishes map->odom and takes pose_topic as a manual seed "
+                        "(initialpose), not as a pose input. **Which estimator** is "
+                        "config's business — set localizer: in "
+                        "config/stack/nav2/vi_planner.yaml (or an overrides file) to "
+                        "adaptive / grid / belief / viterbi; leaving it external here "
+                        "stops the launch. Needs planner:=vi and nav2:=false.",
         ),
         DeclareLaunchArgument("emcl2_package", default_value="emcl2"),
         DeclareLaunchArgument("emcl2_executable", default_value="emcl2_node"),
@@ -616,7 +660,11 @@ def generate_launch_description():
             function=params.sentinel_actions,
             kwargs={"package": "daifuku_stack", "config_root": config_root},
         ),
-        OpaqueFunction(function=backends.validate_localization),
+        # **compose の後**に置くこと。localizer は合成後の params_file から読む。
+        OpaqueFunction(
+            function=backends.validate_localization,
+            kwargs={"effective_nav2": effective_nav2},
+        ),
         OpaqueFunction(function=backends.validate_planner),
         OpaqueFunction(
             function=backends.validate_local_planner,
@@ -632,7 +680,7 @@ def generate_launch_description():
 
         amcl_navfn_stack,
         amcl_vi_stack,
-        emcl2_stack,
+        own_localization_stack,
 
         system_monitor,
         rviz,
