@@ -446,7 +446,7 @@ docker compose build --build-arg BUILD_JOBS=1
 
 `vi_planner`は狭域（±1mウィンドウ）で上げた値を全域へ広げますが、確かめるときに引っかかるところが2つあります。
 
-まず**見るトピック**です。RVizで走行中に動いて見えるのは`/local_window_value`（±1m）だけで、これは機体と一緒に動きます。離れると下から`/value_function`が出てくるため、**上げた値が上書きされたように見えます**。`/value_function`は掃きスレッドが2秒ごとに出し直しますが、それには`global_sweep: true`と`publish_value_function: true`の両方が要ります（`--show-args`ではなく`ros2 param get /vi_planner global_sweep`で確認）。
+まず**見るトピック**です。RVizで走行中に動いて見えるのは`/local_window_value`（±1m）だけで、これは機体と一緒に動きます。離れると下から`/value_function`が出てくるため、**上げた値が上書きされたように見えます**。`/value_function`は掃きスレッドが2秒ごとに出し直しますが、それには`global_sweep: true`と`value_publish_interval_ms`が正であることの両方が要ります（`--show-args`ではなく`ros2 param get /vi_planner global_sweep`で確認）。
 
 次に**塞ぎ方**です。スキャンが置くのは壁ではなくコストなので、通路の一部だけを塞いでも脇を抜けられるなら遠方の値はほとんど上がりません（host実測で+0.75ステップ＝`cost_drawing_threshold: 60`なら色1段）。幅いっぱいを塞ぐと桁が変わります（同13→38ステップ）。迂回できるなら上がらないのが正しい挙動です。
 

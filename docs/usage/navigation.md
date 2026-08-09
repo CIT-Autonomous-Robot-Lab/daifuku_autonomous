@@ -198,8 +198,8 @@ BTを外すと、VIが損をしていた点が消えます。**毎秒の再計�
 ゴールが死ななくなり**（ロールアウトの振動＝`LoopDetected`は「方策が無い」とは別物です）、
 **投げ直しの待ちに意味が出ます**。最後のが一番効きます — BTの`Wait`のあいだは
 `follow_path`が走っていないので価値関数が1ミリも動かず、待っても状況が変わりません。
-`nav2:=false`では`goal_retry_settle_sec`（既定3秒）のあいだ**止まったままスキャンを
-取り込み続ける**ので、一度「通れない」と塗った場所のペナルティが実際に薄れていきます。
+`nav2:=false`では投げ直しの前に3秒（2026-08-09の上流の整理でノード内の固定値になりました。
+それまでは`goal_retry_settle_sec`）のあいだ**止まったままスキャンを取り込み続ける**ので、一度「通れない」と塗った場所のペナルティが実際に薄れていきます。
 投げ直しの上限は`goal_retry_limit`（既定3、負で無制限）です。
 
 読む設定ファイルも減ります。効くのは`config/stack/nav2/vi_planner.yaml`と`map_server.yaml`、
@@ -222,8 +222,9 @@ BTを外すと、VIが損をしていた点が消えます。**毎秒の再計�
 `map_19f`では`map_scale: 2`でプランナ内部だけを0.10 m/セルに粗くしています（地図、
 コストマップ、自己位置推定は0.05 mのままです）。solveと伝播を軽くするためで、必須では
 ありません。密ソルバ（`frontier2d_sparse`）に戻すこともできますが、そちらは状態1つ
-あたり80バイト要るので`map_scale: 2`とセットです（実測655 MB。`dense_limit_mb`を
-超える地図では、確保してからOOMされる代わりに起動を止めます）。値の導出は
+あたり80バイト要るので`map_scale: 2`とセットです（実測655 MB。マシンの`MemAvailable`を
+超える地図では、確保してからOOMされる代わりに起動を止めます。上限のキー`dense_limit_mb`は
+2026-08-09の上流の整理で消え、`/proc/meminfo`の値そのものが基準になりました）。値の導出は
 [`config/README.md`](../../config/README.md)にあります。
 
 ## 広域地図（map_tsudanuma）で動かす
@@ -266,8 +267,8 @@ ros2 launch daifuku_stack navigation.launch.py \
 静止したままでもタイル修復は240秒回ってなお`queued 29`のまま減りませんでした。窓に壁が
 入っていれば毎tickペナルティが塗り直されるので、**走行中に`global sweep done in ...`は
 出ません**（設計どおり）。動いているかは2秒ごとの`tile repair running for ...`のほうで
-見てください。長すぎるようなら`global_sweep_budget_ms`と`global_sweep_idle_ms`の比を
-変えますが、**上限を決めているのはCPUではなく追従ループと共有するMutex**です
+見てください。長すぎるようなら`global_sweep_duty`（既定25 %。2026-08-09の上流の整理まで
+は`global_sweep_budget_ms`と`global_sweep_idle_ms`の比でした）を上げますが、**上限を決めているのはCPUではなく追従ループと共有するMutex**です
 （[`config/README.md`](../../config/README.md)の`global_sweep`の節）。
 
 NavFnとDWBで動かす場合、`map_tsudanuma`の価値反復向け設定は要りません。ただし
@@ -402,8 +403,8 @@ vi_planner: path with 412 poses in 0.34s (solved_now=true, iters=0, prefetched)
 匿名メモリとして居座ることになります。solveのCPUも取られます（追従の`try_lock`は
 邪魔しませんが、10Hzの制御周期がずれ得ます）。**Pi 4（4 GB）で走らせるなら、使う
 地図の`overrides`（`map_19f.yaml` / `map_tsudanuma.yaml`）の`waypoint_prefetch`を
-`false`へ戻してください**（Pi 5の8 GBを前提にしている点は`dense_limit_mb`・
-`compact_ram_limit_mb`と同じ事情です）。
+`false`へ戻してください**（Pi 5の8 GBを前提にしている点は`compact_ram_limit_mb`と
+同じ事情です）。
 走行中に固まるようになったときも、まずここを戻して切り分けます。
 **まだ実機でもpi4_simでも通していません。**
 

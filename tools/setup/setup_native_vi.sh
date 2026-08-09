@@ -118,8 +118,9 @@ colcon build "${COLCON_ARGS[@]}"
 echo "[2/2] Verifying vi_planner launch files"
 # cargo-ament-buildがpackage.xmlの<install>launch</install>を取りこぼす環境が
 # あるため、navigation_launch.pyが無い場合だけ補完する。
-# 2026-08-08の上流の整理まで、このlaunchはvi_global_plannerパッケージにあった。
-LAUNCH_SRC="${VI_DIR}/vi_ros2/vi_planner/launch/navigation_launch.py"
+# 2026-08-08の上流の整理まで、このlaunchはvi_global_plannerパッケージにあった
+# （2026-08-09にパッケージ自体がvi_ros2/からvi_rs/へ移った）。
+LAUNCH_SRC="${VI_DIR}/vi_rs/vi_planner/launch/navigation_launch.py"
 LAUNCH_DST="${WORKSPACE}/install/vi_planner/share/vi_planner/launch/navigation_launch.py"
 if [[ -e "${LAUNCH_DST}" ]]; then
   echo "Already installed: ${LAUNCH_DST}"
@@ -127,7 +128,10 @@ elif [[ -f "${LAUNCH_SRC}" ]]; then
   install -D -m 0644 "${LAUNCH_SRC}" "${LAUNCH_DST}"
   echo "Installed: ${LAUNCH_DST}"
 else
+  # 上流がまた移したとき、警告だけ出して成功で抜けるとlocal_planner:=nav2が
+  # 起動時に「navigation_launch.pyが無い」で落ちる（原因から遠い）。
   echo "Launch source was not found: ${LAUNCH_SRC}" >&2
+  exit 1
 fi
 
 cat <<EOF

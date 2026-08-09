@@ -1,6 +1,6 @@
-# 価値反復プランナ (value_iteration3, Rust)。「既定」= ノードの main.rs が
-# declare_parameter で持つ値。既定と違うのは solver / map_wait_sec /
-# compact_ram_limit_mb / dense_limit_mb / window_cost_drawing_threshold の 5 つだけ。
+# 価値反復プランナ (value_iteration3, Rust)。「既定」= ノードの
+# src/node/params.rs が declare_parameter で持つ値。既定と違うのは
+# solver / map_wait_sec / compact_ram_limit_mb / action_forward_m の 4 つだけ。
 # 地図ごとの調整は ../overrides/<地図名>.yaml。合成順序と上書きは ../README.md を参照。
 #
 # **ノードは 1 つだけ**。local_planner はこのノードの立ち方を選ぶ:
@@ -30,8 +30,11 @@ vi_planner:
   ros__parameters:
     use_sim_time: false
     solver: "frontier2d_sparse_compact"  # 既定 frontier2d_sparse (密): アウトオブコア。常駐が数 MB で済むので地図の大きさに耐える (密へ戻す判断は ../README.md)
-    dense_limit_mb: 4096          # 既定 1500 [MB]: 密の常駐の上限 (超えたら起動を止める)。**compact の間は効かない**。Pi 5 前提なので 4GB 機では 2048 以下へ
-    compact_ram_limit_mb: 4096    # 既定 512 [MB]: sink を RAM に置ける上限 (超過分は /tmp/vi_planner_sink へ退避)。**compact_sink_dir を指定すると効かない**
+    compact_ram_limit_mb: 4096    # 既定 0 (= MemAvailable の半分で自動): sink を RAM に置ける上限 [MB]。超過分は /tmp/vi_planner_sink = SD カードへ落ち、追従が置き直しのたびに読む。**compact_sink_dir を指定すると効かない**
+    # ▲ 密の常駐の上限だった dense_limit_mb は 2026-08-09 の上流の整理で**キーごと消えた**。
+    #   地図の実寸に対する可否はマシンが持っている値でしか決まらないので、ノードが
+    #   /proc/meminfo の MemAvailable を見て「超えたら起動を止める・半分を超えたら警告」に
+    #   なっている (書いても読まれない)。
     theta_cell_num: 60            # 既定 60: 姿勢の離散数。360 を割り切ること (t_resolution = 360/この値 が整数除算)
     safety_radius: 0.2            # 既定 0.2 [m]: 障害物近傍ペナルティの半径 (VI 内部の膨張)
     safety_radius_penalty: 30     # 既定 30 [秒/セル]: 障害物に近寄る代わりに払う迂回コスト
@@ -39,20 +42,25 @@ vi_planner:
     goal_margin_theta: 15.0       # 既定 15.0 [deg]: 同、角度
     map_wait_sec: 60              # 既定 30 [s]: /map の到着待ち上限。広域地図では遅い
     vi_threads: 0                 # 既定 0 (= 論理コア数): 価値反復のスレッド数 (VI_THREADS)
-    solve_chunk: 64               # 既定 64 [イテレーション]: プリエンプト (中断要求) を見る間隔
-    max_solve_iter: 1000000       # 既定 1000000: 価値反復の打ち切り回数
     goal_tolerance_xy: 0.25       # 既定 0.25 [m]: 価値関数キャッシュを再利用するゴール一致判定
     goal_tolerance_deg: 10.0      # 既定 10.0 [deg]: 同、角度
     unknown_as_obstacle: true     # 既定 true: 未観測セルを障害物として扱う
     # ── 広域 (compute_path_to_pose) ──
     max_rollout_steps: 10000      # 既定 10000: 方策を辿って経路を作るときの最大手数
-    start_tolerance: 0.5          # 既定 0.5 [m]: start が方策なしセルのときの近傍スナップ半径
     path_spacing: 0.05            # 既定 0.05 [m]: 出力する Path の姿勢間隔 (0 で補間しない)
     # ── 狭域 (follow_path) ──
     control_frequency: 10.0       # 既定 10.0 [Hz]: cmd_vel を出す周期
     refine_budget_ms: 40          # 既定 40 [ms/tick]: ローカルウィンドウ価値反復に使う時間予算
-    action_tolerance: 0.2         # 既定 0.2 [m]: 方策なしセルでの近傍行動探索半径
     no_action_timeout_sec: 3.0    # 既定 3.0 [s]: pose か方策が無い状態がこれだけ続いたら追従を中断。15 へ延ばしても粘れず、1 点飛ばすまでが 2 分に伸びただけだったので戻した (2026-08-04 実機)
+    # ── 未設定 (既定のまま。2026-08-09 に上流が足した。**localizer とは無関係に効く**) ──
+    # footprint_clear_m: 0.2      # 既定 0.2 [m]: スキャンを注入するたび、機体の周囲この半径の
+    #                             # local_penalty を消す。自己位置がずれて機体の真上にゴースト壁が
+    #                             # 立つと、それが広域の勾配との間に挟まって**動けなくなる**のを
+    #                             # 構造的に防ぐ。0 で無効 = 2026-08-09 より前の挙動。
+    #     ▲ **既定が 0 ではなく 0.2 なので、この pull で両方の地図の挙動が変わった**
+    #       (localizer: external でも follow ループの注入経路をそのまま通る)。壁際で
+    #       止まりにくくなる代わりに、機体の真下 0.2m に本物の障害物があっても消える。
+    #       **どちらも未検証。**
     # ── 未設定 (既定のまま。狭域 1 tick の判断器。2026-08-08 に上流が足した) ──
     # 場も solve も全域掃きも変わらず、**変わるのは「場から速度指令を引く読み方」だけ**。
     # 既定の greedy は上の action_* の離散 6 行動そのもの (本家 ViNode::decision 準拠) で、
@@ -65,21 +73,27 @@ vi_planner:
     # **同梱の overrides で dwa にしてあるのは map_19f だけ** (津田沼は既定の greedy)。
     # follow_controller: "greedy"   # greedy (既定) / dwa / mppi
     # dwa_horizon_s: 1.0          # dwa・mppi の前方シミュレーション時間 [s]
-    # dwa_n_v: 7                  # dwa の並進候補数 (計算量 ∝ n_v x n_w x horizon)
-    # dwa_n_w: 11                 # dwa の旋回候補数
+    # dwa_lethal_penalty: 2.0     # 既定 2.0 [PROB_BASE 倍]: 軌道の途中で margin 帯を踏む候補を棄却する
+    #     ▲ **2026-08-09 に上流が足した新しい既定**で、それまでの dwa には無かった。
+    #       0 にすると「壁を掠める」旧挙動へ戻る (上流の実機での言い分)。dwa にして
+    #       あるのは map_19f だけなので、**あの地図の挙動だけがこの pull で変わった**。
     # mppi_samples: 256           # mppi のサンプル本数
-    # mppi_lambda: 1.0            # mppi の温度 (softmax 重み)
-    # mppi_sigma_v: 0.0           # mppi の並進ノイズ (0 = 行動集合から自動)
-    # mppi_sigma_w_deg: 0.0       # mppi の旋回ノイズ [deg] (同上)
+    #     ▲ 候補数 (dwa 7x11) と温度・ノイズは同じ整理でキーごと消え、ノード内の
+    #       const になった (dwa_n_v / dwa_n_w / mppi_lambda / mppi_sigma_* は書いても読まれない)。
     # ── スタンドアロン (nav2:=false のときだけ効く。standalone は launch が渡す) ──
     goal_retry_limit: 3           # 既定 3: 追従が失敗したときにゴールを投げ直す上限 (負で無制限)。BT の RecoveryNode number_of_retries: 6 の置き換え
-    goal_retry_settle_sec: 3.0    # 既定 3.0 [s]: 投げ直す前に止まったまま場を更新する時間。**BT の Wait と違い penalty の半減が実際に進む** (0 で即座に投げ直す)
+    # ▲ 投げ直す前に止まったまま場を更新する時間 (goal_retry_settle_sec) は 2026-08-09 に
+    #   キーごと消え、ノード内の const 3.0 秒に固定された。**BT の Wait と違い penalty の
+    #   半減が実際に進む**のは変わらない (書いても読まれない)。
     stop_on_failure: false        # 既定 false: follow_waypoints で 1 点失敗したら残りを諦めるか。nav2 構成の ./behaviors.yaml の waypoint_follower の同名キーと同義で、**nav2:=false ではあちらは読まれない**
     waypoint_pause_sec: 0.2       # 既定 0.2 [s]: 1 点に着いてから次の点へ向かうまで。あちらの waypoint_pause_duration: 200 [ms] と同義。この間も場は更新し続ける
     # ── 狭域 → 広域のフィードバック (共有価値関数の全域掃き。仕組みと実測は ../README.md) ──
     global_sweep: true            # 既定 true: 全域掃き (compact ではタイル修復) を回すか。切ると狭域が「通れない」と判断しても広域は塞がった通路を指し続ける
-    global_sweep_budget_ms: 20    # 既定 20 [ms]: 1 回のロック取得で掃きに使う時間。60 へ上げたら機体が 1〜2 秒おきに固まったので戻した (2026-08-04 実機。犯人の切り分けは未了)
-    global_sweep_idle_ms: 60      # 既定 60 [ms]: そのあとロックを手放して待つ時間 (20:60 = 1 コアの 25%)。budget を伸ばすときは一緒に伸ばすこと
+    # ▲ 掃きの配分は 2026-08-09 に **budget/idle の 2 つから global_sweep_duty [%] の 1 つ**
+    #   へまとまった (既定 25 = ここにあった 20ms 掃き : 60ms 待ちと同じ割合なので、値は
+    #   据え置きで未設定にしてある)。**上げないこと** — 掃きが 1 回で握るロックが長くなる
+    #   ぶんだけ追従に譲られる隙間が狭くなり、budget を 20 → 60ms へ上げた 2026-08-04 の
+    #   実機では機体が 1〜2 秒おきに固まった (犯人の切り分けは未了)。100 で掃きっぱなし。
     # ── ウェイポイントの先読み (代償と条件は ../../../../docs/usage/navigation.md) ──
     waypoint_prefetch: false      # 既定 false: 次のウェイポイントを走行中に解いておくか。価値関数が 2 つ生きるので場も 2 倍で、走行中ずっと 1 コアを使う。**同梱の overrides で true なのは map_19f だけ** (95MB x2。**4GB 機では外すこと**)。津田沼は 2026-08-08 に false へ戻した (648MB x2 = 1.3GB、走行中の固まりの切り分け)
     # ── 未設定 (既定のまま。上の先読みが効くかどうかを決める 2 つ) ──
@@ -88,10 +102,14 @@ vi_planner:
     # ── 走り出しの短縮 (効かない地図がある。../../../../docs/usage/navigation.md) ──
     early_start: false            # 既定 false: ゴールまで方策が繋がった時点で solve を打ち切るか。経路から外れると場を捨てて解き直す間ずっと止まる。**未検証**
     # ── 可視化 (経路計算には影響しない) ──
-    publish_value_function: true  # 既定 true: /value_function を配信するか。追従中の出し直しは掃きスレッドが行うので、global_sweep が false だと固まる
-    value_publish_interval_ms: 500  # 既定 500 [ms]: solve 途中経過の配信間隔 (0 で完了時のみ。追従中の出し直しも止まる)。掃きスレッドが全域スライス (19F 13 万 / 津田沼 94 万セル) をロック内で 2 秒ごとに作るので、2026-08-04 の「2 秒おきに固まる」の容疑者。0 が戻し方
+    value_publish_interval_ms: 500  # 既定 500 [ms]: 配信間隔。**負で可視化そのものを立てず、0 で solve 完了時のみ** (追従中の出し直しも止まる)。掃きスレッドが全域スライス (19F 13 万 / 津田沼 94 万セル) をロック内で 2 秒ごとに作るので、2026-08-04 の「2 秒おきに固まる」の容疑者。0 か -1 が戻し方
+    # ▲ 配信そのものの on/off だった publish_value_function は 2026-08-09 にキーごと消え、
+    #   このキーの符号に吸収された (書いても読まれない)。追従中の出し直しを掃きスレッドが
+    #   行う点は変わらないので、**global_sweep: false だと途中で止まる**のも同じ。
     cost_drawing_threshold: 60    # 既定 60: 色スケール上限 [ステップ数≒秒]。**地図ごとに測り直す値**で、同梱の 2 地図はどちらも ../overrides/ で上げてある (19F 108 / 津田沼 600)。この 60 が出るのはどちらでもない地図のとき (../README.md)
-    window_cost_drawing_threshold: 10  # 既定 60: /local_window_value (±1m 窓) の色スケール上限
+    # ▲ /local_window_value (±1m 窓) 用に別の上限を持っていた window_cost_drawing_threshold も
+    #   同じ整理で消え、**全域スライスと窓が上の 1 つを共有する**ようになった。19F の
+    #   108 のような広い上限を入れると、窓のほうは階調がほぼ 1 色に潰れる (表示だけの話)。
     # ── 行動集合 (前進量と回転量の組。3 つの配列で要素数を揃えること。6 個でなくてよい) ──
     # 前進量は**価値反復の 1 手の長さであると同時に linear.x の指令値そのもの**で、1 手 = 1 秒。
     # 前へ出る 3 つ (forward/rightfw/leftfw) を 0.5 にしてある。旋回付きが既定の 0.2 だと 1m
@@ -120,3 +138,32 @@ vi_planner:
     # pose_topic: "mcl_pose"      # 自己位置を読むトピック。launch が上書きする
     # scan_topic: "scan"          # スキャンを読むトピック。launch が上書きする
     # global_frame: "map"         # 出力する Path のフレーム
+    # local_xy_range: 1.0         # 追従が見る・スキャンで補正する窓の半径 [m]。広げると 1 tick の
+    #                             # refine 対象と compact パッチ (辺 ∝ 2×半径) が増える。**ここまで
+    #                             # 「±1m 窓」と書いてあるのはこの既定のこと**で、2026-08-09 から
+    #                             # 動かせる値になった (窓の大きさを前提にした記述はこちらに従う)
+    #
+    # ── 自己位置推定 (2026-08-09 に上流が足した。**この構成では使わない**) ──
+    # localizer: "external"       # external (既定) / grid / adaptive / belief / viterbi
+    #     ▲ **external のままにすること。** 内蔵推定器を選ぶと 2 つ壊れる。
+    #       (1) pose_topic の意味が「自己位置の連続入力」から**手動シード**へ変わり、
+    #           メッセージが来るたび belief を張り直す。既定の mcl_pose (emcl2 の 20Hz
+    #           出力) に向けたままだと毎メッセージでリセットされ、**エラーも警告も出ない
+    #           まま素通しと変わらなくなる** (向けるなら initialpose)。
+    #       (2) 内蔵推定器は publish_tf: true と組で map→odom を出す口だが、emcl2 が
+    #           同じ区間を出しているので**二重になり自己位置だけが静かに壊れる**
+    #           (../../../../AGENTS.md の TF 所有者の約束)。
+    #       同時に増えた belief_* / scan_quality_gate / sigma_margin_gain /
+    #       map_clear_from_scan / qmdp / active_reloc も、external では読まれないか
+    #       実質無効 (既定 off、あるいは quality が 1.0 固定) なので**ここには書かない**。
+    #       **例外が footprint_clear_m** で、あれは localizer と無関係に効く (下を参照)。
+    # publish_tf: false           # map→odom を自分で出すか。**emcl2 が出しているので false 固定**
+    # transform_tolerance: 0.5    # 上を true にしたときの TF スタンプの未来日付け [s]
+    # odom_topic: "odom"          # 同、T_odom→base の出どころ
+    #
+    # ── 2026-08-09 に消えたキー (書いても読まれない。ノード内の const になった) ──
+    #   solve_chunk / max_solve_iter … プリエンプトを見る間隔と反復の打ち切り回数
+    #   start_tolerance / action_tolerance … 方策なしセルでの近傍スナップ・行動探索半径
+    #   dense_limit_mb / publish_value_function / window_cost_drawing_threshold /
+    #   goal_retry_settle_sec / global_sweep_budget_ms / global_sweep_idle_ms /
+    #   dwa_n_v / dwa_n_w / mppi_lambda / mppi_sigma_v / mppi_sigma_w_deg … 上の各所を参照

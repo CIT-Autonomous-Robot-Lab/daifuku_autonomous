@@ -87,6 +87,11 @@ daifuku_stack:
       cost_drawing_threshold: 108        # 断片 60: 色スケール上限 [ステップ数≒秒] ≒54m (1 ステップ 0.5m)
       waypoint_prefetch: true            # 断片 false: 次の点を走行中に解いておく。点あたり 29 秒の停止が消える代わりに場が 2 本 (190MB) + 1 コア
       follow_controller: "dwa"           # 既定 greedy (断片は未設定): 場は変えず読み方だけ連続に。**未検証** — 1 手 0.5m の旋回半径 1.43m を外れた指令が出る側
+      # ▲ **2026-08-09 の上流の更新で dwa の中身が変わった。** 軌道の途中で margin 帯
+      #   (penalty >= 2xPROB_BASE) を踏む候補を棄却する dwa_lethal_penalty が入り、既定が
+      #   2.0 = 有効。**dwa にしてあるのはこの地図だけ**なので、変わったのもここだけ。
+      #   壁際が通れなくなって経路が出ないなら dwa_lethal_penalty: 0.0 で以前の
+      #   「壁を掠める」挙動に戻る (どちらも未検証)。
       # ▲ local_planner:=nav2 (広域だけ VI) でも読まれるのはこの節。2026-08-08 の上流の
       #   整理で vi_global_planner ノードが消え、同じ vi_planner が follow: false で立つ
       #   ようになったので、ここにあった同名の節は消した (両者で値を揃える必要も消えた)。
@@ -104,5 +109,6 @@ daifuku_stack:
 #     そもそも退避しない。逃がすなら速い実ディスクを明示すること。
 #   vi_*.downsample_policy … 通路のセル幅が足りず波がゴール近傍で止まるとき。optimistic が
 #     要るのは map_scale >= 4 からで、2 では通路が片側 0.05m しか細らない。
-#   vi_planner.window_cost_drawing_threshold … 断片の 10 のまま。/local_window_value は
-#     ±1m 窓なので、上の cost_drawing_threshold を上げても連動しない (別の色スケール)。
+#   （/local_window_value 用の window_cost_drawing_threshold は 2026-08-09 にキーごと消え、
+#     上の cost_drawing_threshold を全域スライスと窓で共有するようになった。108 は 54m 相当
+#     なので、±1m の窓のほうは階調がほぼ潰れる — 表示だけの話。）

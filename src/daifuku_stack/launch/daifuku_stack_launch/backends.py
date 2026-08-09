@@ -164,7 +164,9 @@ def validate_planner(context, *args, **kwargs):
 # (sink への書き戻し + タイル修復) ので、その検査は消してある。
 #
 # メモリの上限判定もここではやらない。地図の実寸はノードしか知らないので、
-# ``dense_limit_mb`` としてノード側にある (超えたら起動時にエラーで止まる)。
+# ノード側が /proc/meminfo の MemAvailable と突き合わせる (超えたら起動時に
+# エラーで止まり、半分を超えたら警告)。2026-08-09 の上流の整理まではキー
+# ``dense_limit_mb`` だった。
 
 
 def validate_local_planner(context, *args, **kwargs):

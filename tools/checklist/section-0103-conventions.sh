@@ -135,7 +135,9 @@ check_waypoint_topic() {
     echo "パネルか joy_teleop からトピック名を読めない"
     return 1
   }
-  main_rs="${ROOT}/src/value_iteration3/vi_ros2/vi_planner/src/main.rs"
+  # 2026-08-09 の上流の整理でパッケージが vi_ros2/ から vi_rs/ へ移り、パラメータの
+  # 宣言も main.rs から node/params.rs へ分かれた。
+  main_rs="${ROOT}/src/value_iteration3/vi_rs/vi_planner/src/node/params.rs"
   vi="$(sed -n 's/.*"waypoint_topic"[^"]*"\([^"]*\)".*/\1/p' "${main_rs}" 2>/dev/null | head -n 1)"
   # 比べるのは先頭の / を落とした形。絶対名なのはパネルだけ。
   if [[ -z "${vi}" ]]; then

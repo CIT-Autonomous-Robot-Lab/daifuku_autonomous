@@ -197,6 +197,15 @@ Docker 越しに叩く形は
   直に立てていて `follow` を渡さないので、`follow: false` と書いてあると
   **`follow_path` のサーバが立たないまま standalone が上がり、エラーも警告も出ない
   まま機体が追従しない**。`standalone` と対で、どちらも渡すのは launch だけ。
+- **`vi_planner` は 2026-08-09 の上流の更新から自己位置推定も持つが、この構成では
+  使わない（`localizer` は既定の `external` のまま）。** 内蔵推定器を選ぶと 2 つ壊れる。
+  1 つは `pose_topic` の意味が変わること —— 内蔵のときあれは「自己位置の連続入力」では
+  なく**手動シード**で、メッセージが来るたび belief を張り直す。launch が渡している
+  `mcl_pose`（emcl2 の 20Hz 出力）に向けたままだと**毎メッセージでリセットされ、
+  エラーも警告も出ないまま素通しと変わらなくなる**（向けるなら `initialpose`）。
+  もう 1 つは `publish_tf`（既定 `false`）で、真にすると `map→odom` の出し手が emcl2 と
+  2 つになり、下の TF の約束どおり**自己位置だけが静かに壊れる**。載せ替えるなら
+  emcl2 を止めてからで、`config/` にではなく launch に書くこと。
 - **`nav2` の既定は `false` で、そのとき Nav2 の navigation は BT ごと
   立たない。** `planner:=navfn` / `local_planner:=nav2` へ落とすときは
   **`nav2:=auto` を足さないと起動時にエラーで止まる**（`navigate_to_pose` を出す
@@ -346,7 +355,8 @@ Docker 越しに叩く形は
 - **以下 2 つは `nav2:=true` のときの話。`nav2:=false` では `behavior_server` も
   `waypoint_follower` も立たないので起こらない**（`lifecycle_manager_navigation` は
   残るが、管理下が `velocity_smoother` 1 つなので停止順で固まる相手が居ない。
-  代わりに投げ直しは `vi_planner` の `goal_retry_limit` / `goal_retry_settle_sec`）。
+  代わりに投げ直しは `vi_planner` の `goal_retry_limit` と、その合間の 3 秒（2026-08-09 に
+  ノード内の固定値になった。それまでは `goal_retry_settle_sec`）。
 - **RViz の「Navigation 2」パネルの `Reset` を押すと停止順で固まる。** 停止は逆順なので
   `velocity_smoother` が先に落ち、`waypoint_follower` の停止で（走りっぱなしの
   コールバックを待って）固まり、`behavior_server` だけが active で残る。
@@ -443,8 +453,9 @@ Docker 越しに叩く形は
 - **1 行でまとめる。** キーの右に `# 既定 <ノード既定値>: <説明>` の形で書き、既存の行と
   同じ書式・同じ語彙にそろえる。キーの上に段落を積まない。実測値は 1 行に収まる範囲で
   入れてよいが、導出や背景は `config/README.md` / `docs/` / 実装 (例:
-  `vi_ros2/vi_planner/src/core.rs` 冒頭) に置いて参照で済ませる。
-- 「既定」= 各ノードの `main.rs` などが持つ宣言時の値、`overrides/` での「断片」=
+  `vi_rs/vi_planner/src/core/mod.rs` 冒頭) に置いて参照で済ませる。
+- 「既定」= 各ノードの `main.rs`（`vi_planner` は `src/node/params.rs`）などが持つ
+  宣言時の値、`overrides/` での「断片」=
   重ねる先の設定ファイル（そのノードを宣言している `config/stack/nav2/*.yaml` や
   `config/stack/localization/emcl2.yaml` など）の値。値を変えたら `既定 同左` や
   `# 断片 <値>:`、ファイル冒頭の

@@ -408,6 +408,11 @@ goal (4.28,-2.92)) だけで、これは観測済み領域内の 120,753 セル�
 
 ### 実装したもの (value_iteration3 側)
 
+> 当時の名前で書いてある。2026-08-09 の上流の整理で `vi_reference` クレートは
+> `vi_lib` へ、`vi_planner` パッケージは `vi_ros2/` から `vi_rs/` へ移った
+> （`vi_global_planner` はその前、2026-08-08 に `vi_planner` の `follow: false` へ
+> 吸収されて消えている）。
+
 | 変更 | 内容 |
 |---|---|
 | `vi_reference::bridge::downsample_occupancy` | 障害物優先の整数倍ダウンサンプル |

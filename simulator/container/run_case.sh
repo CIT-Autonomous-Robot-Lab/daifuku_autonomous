@@ -26,7 +26,8 @@
 #   MAP_FREE_THRESH=            指定すると map.yaml の free_thresh を差し替えた
 #                               コピーを使う (実機は 0.25 = 未観測 205 が free 扱い)
 #   VI_SOLVER=                  vi_*_planner の solver パラメータ上書き
-#   VI_PUBLISH_VF=true|false    publish_value_function 上書き
+#   VI_PUBLISH_VF=true|false    /value_function の配信 (value_publish_interval_ms
+#                               を 500 か -1 に振る)
 #   INITIALPOSE_MAX_TRIES=      /initialpose の再送上限 (fake_robot 既定 8)。
 #                               広域地図 + 低 CPU では emcl2 が最初のループを回すまで
 #                               100 秒以上かかることがあり、既定の 8 回 x 5 秒では
@@ -140,7 +141,10 @@ bt_timeout = os.environ.get("BT_SERVER_TIMEOUT", "")
 if solver:
     put("vi_planner", "solver", solver)
 if pub_vf:
-    put("vi_planner", "publish_value_function", pub_vf.lower() == "true")
+    # 配信の on/off だった publish_value_function は 2026-08-09 の上流の整理で
+    # value_publish_interval_ms に吸収された (負 = 配信そのものを立てない)。
+    put("vi_planner", "value_publish_interval_ms",
+        500 if pub_vf.lower() == "true" else -1)
 if map_scale:
     put("vi_planner", "map_scale", int(map_scale))
 if sink_dir:

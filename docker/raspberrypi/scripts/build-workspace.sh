@@ -119,15 +119,14 @@ colcon build --merge-install --symlink-install \
     --cargo-args --release
 
 # ament_cargo は package.xml の <install>launch</install> を実行しないので、
-# launch ファイルは自前で install/ へ置く。
-for pkg in vi_planner; do
-  src_dir="src/value_iteration3/vi_ros2/${pkg}/launch"
-  [[ -d "${src_dir}" ]] || continue
-  for launch_file in "${src_dir}"/*.py; do
-    [[ -f "${launch_file}" ]] || continue
-    install -D -m 0644 "${launch_file}" \
-        "${WS}/install/share/${pkg}/launch/${launch_file##*/}"
-  done
+# launch ファイルは自前で install/ へ置く。**上流の移動でパスが変わったら黙って
+# 何も入らないのではなく落ちること** — 入らないと local_planner:=nav2 が
+# navigation_launch.py を見つけられず、原因から遠いところで起動時に落ちる
+# (2026-08-09 の上流の整理で vi_ros2/ から vi_rs/ へ移った)。
+src_dir="src/value_iteration3/vi_rs/vi_planner/launch"
+for launch_file in "${src_dir}"/*.py; do
+  install -D -m 0644 "${launch_file}" \
+      "${WS}/install/share/vi_planner/launch/${launch_file##*/}"
 done
 
 printf '\nワークスペースのビルドが完了しました: %s/install\n' "${WS}"

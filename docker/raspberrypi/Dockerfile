@@ -75,7 +75,7 @@ RUN git clone --depth 1 --branch "${LIVOX_SDK2_REF}" \
     && cmake --install /tmp/Livox-SDK2/build \
     && rm -rf /tmp/Livox-SDK2
 
-# vi_planner と vi_global_planner は rclrs を使う。compose は user: "1000:1000"
+# vi_planner は rclrs を使う。compose は user: "1000:1000"
 # で回すので、/root (0700) ではなく誰でも読める /opt にツールチェーンを置く。
 # クレートのレジストリは層には残さない (キャッシュマウントなので、イメージには
 # 入らないまま次回のビルドからは再利用される)。ワークスペースのビルド時は
@@ -108,21 +108,28 @@ RUN --mount=type=cache,target=/opt/cargo/registry \
          --packages-up-to rclrs \
     && rm -rf build log
 
-# Some Humble installations do not ship nav2_msgs Rust bindings.  Build the
-# source fallback only on those installations.
+# Some Humble installations do not ship Rust bindings for the message packages
+# vi_planner depends on.  Build the source fallback only for the missing ones.
+# tf2_msgs joined the list on 2026-08-09 (upstream added publish_tf, the
+# AMCL-contract map->odom broadcaster).
 RUN --mount=type=cache,target=/opt/cargo/registry \
-    if [[ ! -d "/opt/ros/${ROS_DISTRO}/share/nav2_msgs/rust" ]]; then \
-      git clone --depth 1 --branch humble \
-        https://github.com/ros-navigation/navigation2.git /tmp/navigation2; \
-      cp -a /tmp/navigation2/nav2_msgs /opt/ros2_rust_ws/src/nav2_msgs; \
-      rm -rf /tmp/navigation2; \
-    fi \
-    && if [[ -d /opt/ros2_rust_ws/src/nav2_msgs ]]; then \
+    pkgs=""; \
+    for spec in "nav2_msgs https://github.com/ros-navigation/navigation2.git" \
+                "tf2_msgs https://github.com/ros2/geometry2.git"; do \
+      set -- ${spec}; \
+      if [[ ! -d "/opt/ros/${ROS_DISTRO}/share/$1/rust" ]]; then \
+        git clone --depth 1 --branch "${ROS_DISTRO}" "$2" "/tmp/$1_src"; \
+        cp -a "/tmp/$1_src/$1" "/opt/ros2_rust_ws/src/$1"; \
+        rm -rf "/tmp/$1_src"; \
+        pkgs="${pkgs} $1"; \
+      fi; \
+    done \
+    && if [[ -n "${pkgs}" ]]; then \
       source /opt/ros/${ROS_DISTRO}/setup.bash; \
       source /opt/ros2_rust_ws/install/local_setup.bash; \
       colcon build --merge-install \
         --parallel-workers "${BUILD_JOBS}" \
-        --packages-select nav2_msgs; \
+        --packages-select ${pkgs}; \
     fi \
     && rm -rf /opt/ros2_rust_ws/build /opt/ros2_rust_ws/log
 
