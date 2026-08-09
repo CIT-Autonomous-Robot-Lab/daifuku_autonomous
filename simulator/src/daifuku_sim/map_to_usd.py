@@ -23,9 +23,9 @@ Gazebo 版 (rt-net/raspicat_sim) のワールドは `empty.world` / `iscas_museu
 
 `--unknown wall` は fake_robot.py の `unknown_as_obstacle` / run_case.sh の
 `SIM_UNKNOWN_AS_OBSTACLE=1` に対応する。既定 (`free`) では未観測セルは素通しに
-なる。map_19f.yaml の `free_thresh: 0.25` では未観測画素 (205, p=0.196) が free 側に
-落ちるため、既定でも「地図の 74.66% が未観測」という事実はワールドに現れない。
-これは意図した挙動で、既存ハーネスの既定と揃えてある (simulator/docs/pi4_sim.md)。
+なる。map_19f.yaml は 2026-08-09 まで `free_thresh: 0.25` で、未観測画素 (205, p=0.196)
+が free 側に落ちていた (いまは 0.15 なので unknown のまま)。`--unknown wall` を付けたのに
+壁が増えないときは、その地図の `free_thresh` を見ること (simulator/docs/pi4_sim.md)。
 
 出力は `pxr` (usd-core) を使わない**手書きの .usda テキスト**。Isaac Sim の
 Python でしか読めない形式を避けることで、GPU の無い開発機でも生成・検査できる。

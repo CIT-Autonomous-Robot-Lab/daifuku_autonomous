@@ -99,7 +99,8 @@ simulator/
 │   ├── run_pi4_sim.ps1           #   pi4_sim 版 (Windows / podman)
 │   └── run_matrix.ps1            #   pi4_sim 版をケース一式まとめて回す
 ├── docs/pi4_sim.md               # pi4_sim 版のドキュメントと実測記録
-└── tests/verify_usda.py          # 生成 USD を地図に焼き戻して検算
+├── tests/verify_usda.py          # 生成 USD を地図に焼き戻して検算
+└── tests/verify_map_thresholds.py # 地図の未観測が free に化けていないかを検算
 ```
 
 > **`container/` を `src/daifuku_sim/` に入れないこと。** ROS 2 Humble は
@@ -257,11 +258,11 @@ uv run --project simulator map-to-usd /tmp/ts4.yaml -o /tmp/ts4.usda
 ```
 
 > **`--unknown wall` が効かないように見えたら、それは地図側の問題**
-> `map_19f.yaml` は `free_thresh: 0.25`。map_saver の未観測画素 205 は p=0.196 なので
-> **free 側に落ちて未観測と判定されない**。実測では `--unknown wall` を付けても
-> 占有セルは 9,146 → 9,147 と 1 セルしか増えなかった。`free_thresh` を ROS 既定の
-> 0.196 に直すと 403,307 セル (76.39%) が壁になる。これは `simulator/docs/pi4_sim.md`
-> が指摘している「地図の 74.66% が未観測なのに free に化けている」問題そのもの。
+> 2026-08-09 まで `map_19f.yaml` は `free_thresh: 0.25` で、map_saver の未観測画素 205 は
+> p=0.196 なので **free 側に落ちて未観測と判定されなかった**。実測では `--unknown wall`
+> を付けても占有セルは 9,146 → 9,147 と 1 セルしか増えなかった。いまは `0.15` なので
+> 413,191 セル (78.26%) が壁になる。自分で用意した地図で同じ症状が出たら、そちらの
+> `free_thresh` を疑うこと（[`docs/pi4_sim.md`](docs/pi4_sim.md#free_thresh-を下げるときの注意)）。
 
 ### 2. ロボット USD を作る
 
@@ -521,9 +522,10 @@ PLANNER=navfn PLANNER_EXPECTED_FREQ=20 bash simulator/scripts/run_isaac_case.sh 
 同じ経路で `VI_SOLVER` / `VI_MAP_SCALE` / `VI_COMPACT_SINK_DIR` /
 `VI_PUBLISH_VF` / `BT_SERVER_TIMEOUT` も渡せる。
 
-このとき地図の `free_thresh` は実機のまま (0.25) にすること。7.6Hz は 518k セルが
+このとき地図の `free_thresh` は `MAP_FREE_THRESH=0.25` で戻すこと。7.6Hz は 518k セルが
 free の地図で測った値で、しきい値を直すと navfn の問題規模が 1/4 になり、まったく
-違う quota に合わせてしまう。
+違う quota に合わせてしまう（同梱の `map_19f.yaml` は 2026-08-09 に 0.15 = 105k セルへ
+直した）。
 
 ## ファイル
 
@@ -546,3 +548,4 @@ free の地図で測った値で、しきい値を直すと navfn の問題規�
 | `container/probe.py` | `python3` (コンテナ内) | ゴール投入と `/plan` `/cmd_vel` の計数、RSS / cgroup メモリのサンプリング。**両ハーネスで共有** |
 | `container/fastdds_local.xml` | — | 実機 DDS プロファイルのローカル版 (SHM + ループバック UDP) |
 | `tests/verify_usda.py` | `uv run python tests/...` | 生成 USD を地図グリッドに焼き戻して一致を検算 (主に y 反転の検出) |
+| `tests/verify_map_thresholds.py` | `uv run python tests/...` | 地図の `free_thresh` が未観測画素 205 を free に落としていないかを検算。`map_saver_cli` の既定 0.25 だと落ちる |

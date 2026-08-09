@@ -94,7 +94,8 @@ symlink になるので、効くのは**ソース側の権限**です。Windows 
 自動テストはありません。`colcon test` で走るのは lint だけです（`raspicat_driver` の
 `test/test_control.py` が唯一の例外でしたが、2026-08-09 に PI 補正ごと消しました）。
 挙動の確認は実機か `simulator/` のハーネスで行います。単体で回せるのは
-`map-to-usd` の出力検算だけです。
+`simulator/tests/` の 2 つ（`map-to-usd` の出力検算と、地図の `free_thresh` の検算）
+だけです。
 
 **実機で通すぶんは `tools/checklist/` にあります。** `colcon test` からは走りません
 （人に聞く項も機体が動く項もあるため）。使いかたと番号の意味は `checkall.sh` の冒頭に
@@ -126,6 +127,7 @@ lint は詰め合わせ（`ament_lint_common`）を使わず、自前 7 パッ�
 
 ```bash
 cd simulator && uv run python tests/verify_usda.py <map.yaml> <world.usda> free
+cd simulator && uv run python tests/verify_map_thresholds.py ../src/daifuku_stack/maps/*.yaml
 ```
 
 ```bash

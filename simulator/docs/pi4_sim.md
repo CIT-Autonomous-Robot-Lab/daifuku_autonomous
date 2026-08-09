@@ -19,15 +19,15 @@ Aborted になる (`plan=0`)」を手元の Podman で切り分けるための�
 ```powershell
 cd simulator\scripts
 
-# 実機と同じ設定 (地図 free_thresh 0.25 / planner vi。solver はリポジトリの
+# 実機と同じ設定 (planner vi。solver はリポジトリの
 # config のまま = 2026-08-04 以降 frontier2d_sparse_compact。VI_SOLVER で上書き可)
 .\run_pi4_sim.ps1 -Case baseline
 
 # 制限なし (全速) との対照
 .\run_pi4_sim.ps1 -Case nolimits -Container pi4sim_full -NoLimits
 
-# 地図しきい値だけ直した場合
-.\run_pi4_sim.ps1 -Case fixed_map -CaseEnv @{ MAP_FREE_THRESH = "0.15" }
+# 地図しきい値が 0.25 だった頃 (下の 1. の当時) を再現する
+.\run_pi4_sim.ps1 -Case old_map -CaseEnv @{ MAP_FREE_THRESH = "0.25" }
 ```
 
 ## 再現方式と、その限界
@@ -64,15 +64,16 @@ CPU quota のキャリブレーションは、実機で取れている数少な�
 # run_case.sh が nav.log から "current loop rate is X Hz" を拾って出す
 ```
 
-このとき **地図の free_thresh は実機のまま (上書きしない)** こと。7.6Hz は
-518k セルが free の地図で測った値で、しきい値を直すと navfn の問題規模が
-1/4 になり、まったく違う quota に合わせてしまう。
+このとき **`MAP_FREE_THRESH=0.25` を渡すこと**。7.6Hz は 518k セルが free の
+地図で測った値で、しきい値を直すと navfn の問題規模が 1/4 になり、まったく違う
+quota に合わせてしまう。**2026-08-09 に `map_19f.yaml` を 0.15 へ直した**ので、
+「実機のまま」= 105k セルになった（下の 1.）。
 
 ## 実機に触らずに判明したこと (2026-07-25)
 
-### 1. 地図の 74.66% は「未観測」だが、free として扱われている
+### 1. 地図の 74.66% は「未観測」だが、free として扱われている → 2026-08-09 に解消
 
-`map_19f.pgm` の画素分布:
+当時の `map_19f.pgm` の画素分布:
 
 | 画素値 | 割合 | 意味 |
 |---|---|---|
@@ -88,6 +89,13 @@ CPU quota のキャリブレーションは、実機で取れている数少な�
 - `unknown_as_obstacle: true` も `track_unknown_space: true` も効かない
   (未観測セルが存在しないことになるため)
 - nav2 が未観測領域を通る経路を平気で引く
+
+**2026-08-09 に `free_thresh: 0.15` へ直し、あわせて建物の外へ漏れていた放射状の
+free 19,030 セルを 205 で塗った**（窓の隙間から抜けたビームで、機体幅 0.5m より狭い
+口の先かつ画像の縁とつながった未観測に接するものを落とした）。いまの画素分布は
+205 が 78.26% / 254 が 20.01% / 0 が 1.73% で、free は **105,618 セル**（うち
+103,986 = 98.5% が同一の 4 近傍成分）。上の数字を再現するには
+`MAP_FREE_THRESH=0.25` を渡すこと。
 
 ### 2. VI の状態数と、それを決めるパラメータの制約
 
@@ -367,6 +375,9 @@ BT XML はファイルを追加しただけで launch からは参照してい�
 | VI をやめて `planner:=navfn` | 実機の地図のまま Pi4 相当で走破する (実測 24 秒 / 557 MB)。必要なのは timeout 変更だけ | VI 研究の目的から外れる |
 
 ### `free_thresh` を下げるときの注意
+
+**2026-08-09 に `map_19f.yaml` へ適用した**ので、以下は同梱の地図では済んだ話。
+別の地図を直すときと、当時の値を再現するときのために残す。
 
 0.15 にすると **地図の 74.66% が「未観測」になり、`unknown_as_obstacle: true` の
 VI では通行不能**、nav2 のコストマップでは NO_INFORMATION になる。今回
