@@ -113,6 +113,17 @@ colcon build --merge-install --symlink-install \
 
 # 価値反復プランナは rclrs を使うので、上で建てた install/ を載せてから建てる。
 source "${WS}/install/local_setup.bash"
+# **見えなければ落ちること。** colcon が vi_planner を見つけられないとき
+# --packages-select は警告 1 行で 0 個ビルドし、exit 0 で下まで抜ける。機体は
+# 前のバイナリのまま上がるので、docker compose up を何度通しても直らない
+# (2026-08-09 の実機。vi_rs が仮想マニフェストになって以降、上流の
+# workspace.metadata.colcon が無いとクロールごと止まっていた)。
+colcon list --packages-select vi_planner --names-only 2>/dev/null \
+    | grep -qx vi_planner || {
+  printf 'vi_planner が colcon から見えません (vi_rs/Cargo.toml の\n' >&2
+  printf '[workspace.metadata.colcon] additional-packages を確認)\n' >&2
+  exit 1
+}
 colcon build --merge-install --symlink-install \
     --parallel-workers "${BUILD_JOBS}" \
     --packages-select vi_planner \
