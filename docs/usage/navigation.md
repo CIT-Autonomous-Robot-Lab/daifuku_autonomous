@@ -449,7 +449,8 @@ vi_planner: path with 412 poses in 0.34s (solved_now=true, iters=0, prefetched)
 いるのは地図の全域ぶんの価値関数ですが、走り出すのに要るのは**いまの姿勢から
 ゴールまでの経路**だけなので、それが引けた時点でsolveを打ち切れます。
 
-`config/stack/nav2/vi_planner.yaml`の`early_start`を`true`にすると打ち切ります。判定は
+`early_start`を`true`にすると打ち切ります（断片の`config/stack/nav2/vi_planner.yaml`は
+`false`のままで、**同梱の2地図は`overrides/`で`true`にしています**）。判定は
 ロールアウトそのもの（`compute_path_to_pose`が返すのと同じ辿り方）なので、
 **打ち切った場でも経路は必ず引けます**。先読みとは別物なので、両方同時に有効に
 できます。
@@ -480,7 +481,9 @@ vi_planner: dropped the truncated value function (early_start) after 30 ticks wi
 値を入れただけで、実測ではありません**（バンド幅の実測は取っていません）。
 地図の値域が丸ごと1バンドに収まると波2つで解き終わってしまい、打ち切る隙がありません。
 このとき**エラーも警告も出ず、ただ何も短くなりません**。建物1フロア程度の広さは
-こちら側の見込みで、効くのは津田沼のような広域地図です。前進量とペナルティを下げても
+こちら側の見込みで、効くのは津田沼のような広域地図です（津田沼は0.25 m/セル・
+`safety_radius_penalty: 1`なので4×2×1＝8ステップ）。**2地図とも`true`にしてあります
+が、19Fのほうは効かない見込み**という状態です。前進量とペナルティを下げても
 `map_scale`を上げてもバンドは狭くなり、効きやすくなります（津田沼が
 `safety_radius_penalty: 1`なのは別の理由——貪欲ロールアウトが降下できないため——ですが、
 バンドもそのぶん狭くなります）。効いたかは上のログの`cut short` /
