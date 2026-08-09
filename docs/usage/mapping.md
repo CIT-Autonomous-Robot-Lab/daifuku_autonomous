@@ -207,6 +207,15 @@ symlinkなので、そちらへ書くとホストに残るかどうかがsymlink
 - `src/daifuku_stack/maps/map_19f.yaml`
 - `src/daifuku_stack/maps/map_19f.pgm`
 
+**保存したら`free_thresh`を`0.15`へ直してください。** `map_saver_cli`が書く既定は
+`0.25`ですが、同じ`map_saver_cli`が未観測に使う画素205はp=(255-205)/255=0.196なので、
+`p < free_thresh`が成立して**未観測セルが全部「空き」として読み込まれます**。そうなると
+VIの`unknown_as_obstacle`もコストマップの`track_unknown_space`も、未観測が存在しない
+ことになるので**エラーも警告も出ないまま効きません**（19Fの地図では自由セルが実際の
+10.6万に対し51.9万＝4.9倍に膨れ、建物の外まで経路が引けます）。0.196ちょうどではなく
+0.15にするのは、0.196が205のpとほぼ同値で実装によって空き側へ転びうるためです
+（[`simulator/docs/pi4_sim.md`](../../simulator/docs/pi4_sim.md#free_thresh-を下げるときの注意)）。
+
 `map_19f`は19Fの地図の名前で、`config/site`の既定値でもあります。別の場所の地図を
 作るときは名前を変えてください。そのとき`config/overrides/<同じ名前>.yaml`も用意し、
 `tools/site.sh <名前>`で切り替えます。**どの地図を読むかは、そのoverridesの`site:`節に

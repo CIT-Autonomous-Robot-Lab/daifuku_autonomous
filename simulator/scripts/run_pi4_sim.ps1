@@ -35,7 +35,7 @@
 
 .EXAMPLE
   .\run_pi4_sim.ps1 -Case baseline
-  .\run_pi4_sim.ps1 -Case fixed_map -CaseEnv @{ MAP_FREE_THRESH = "0.196" }
+  .\run_pi4_sim.ps1 -Case old_map -CaseEnv @{ MAP_FREE_THRESH = "0.25" }
 #>
 [CmdletBinding()]
 param(
