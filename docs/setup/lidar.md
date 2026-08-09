@@ -27,11 +27,20 @@ Mid-360       : /livox/lidar → elevation_filter.py（仰角フィルタ）
                 → /livox/lidar_elevation → pointcloud_to_laserscan
                 → /scan_mid360_prestamp → restamp_scan.py
                 → /scan_raw → 角度フィルタ → /scan
-IMU（Mid-360）: /livox/imu → prepare_mid360_imu.py → /imu/mid360 ┐
-                                                                  ├ ekf_node
-                車輪ドライバ → /wheel/odom ──────────────────────┘
+IMU（Mid-360）: /livox/imu → throttle（50指定、実測44Hz）
+                → /livox/imu_throttled → prepare_mid360_imu.py
+                → /imu/mid360 ┐
+                              ├ ekf_node
+                車輪ドライバ → /wheel/odom ┘
                 → /odom、odom → base_footprint
 ```
+
+IMUだけ間引きが入るのは、rclpyが1通受けるたびに払う代金が重いためです。生の200 Hzを
+`prepare_mid360_imu.py`に直に食わせるとPi 4で1コアの24%を使い、そのうち自前の計算は
+1.7ポイントしかありません（残りは受信21ポイント・送信2.4ポイント。2026-08-09実測）。
+C++の`topic_tools throttle`を挟むと合計10%に落ちます。EKFは`frequency: 30.0`なので
+44 Hzで足ります。**この`throttle`が落ちると`/imu/mid360`ごと止まり、EKFは`imu0`が
+一度も来ないまま車輪だけで回ります**（エラーも警告も出ません）。
 
 **LiDARの帯（仰角と高さ）を場所ごとに変えるには`tools/site.sh <名前>`を使います。**
 読むのは常駐しているraspicatサービスなので、`navigation`や`mapping`を立て直すだけでは
@@ -213,8 +222,8 @@ navigationを立てるときではなくbootのとき**です。Mid-360のジャ
 でした。放置すると静止しているだけで48 deg/minヨーが回ります。`robot_localization`は
 センサのバイアスを推定しないので、`prepare_mid360_imu`が起動後の静止区間から測って
 引きます（`config/bringup/sensors/mid360_ekf.yaml`の`prepare_mid360_imu`節）。
-測定はメッセージ駆動（静止した400サンプルが溜まるまで待つ）なので、`/livox/imu`が
-後から来ても取りこぼしません。
+測定はメッセージ駆動（静止した100サンプルが溜まるまで待つ）なので、IMUが後から来ても
+取りこぼしません。100サンプルは間引き後の44 Hzで2.3秒です。
 
 測れたかはログで分かります。
 

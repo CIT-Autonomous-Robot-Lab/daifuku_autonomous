@@ -453,6 +453,17 @@ Docker 越しに叩く形は
   起動後の静止区間から測って引く。**そのため起動時は機体を静止させておくこと**
   （動いていると測れないまま補正なしで通り、ログに `still moving` が出るだけ）。
   同じノードが加速度を g から m/s² へ直している（Livox が出すのは g）。
+- **`prepare_mid360_imu` の前に `topic_tools throttle`（`imu_throttle`）が挟まって
+  いて、これを外すと Pi 4 で 1 コアの 24% が戻ってくる。** rclpy はメッセージ 1 通
+  ごとに約 1.2ms 払うので、Mid-360 の 200 Hz（ドライバ側に間引く口は無い。
+  `publish_freq` は点群専用）を Python に直に食わせるとそれだけで 21 ポイント——
+  自前の計算は 1.7 ポイントしかない（2026-08-09 実測。C++ を挟んで 24% → 10%）。
+  踏むのは 2 つ。**この 1 段が落ちると `/imu/mid360` ごと止まり、EKF は `imu0` が
+  一度も来ないまま車輪だけで回る**（`robot_localization` は黙るだけなので、エラーも
+  警告も出ない）。もう 1 つ、**`bias_samples` は間引き後のレート前提**なので、
+  throttle のレートだけ変えると静止窓の長さが掛け算で動く（50 指定 = 実測 44 Hz に
+  対して 100 サンプル = 2.3 秒）。**レートを触ったら `tools/checklist/
+  section-0501-imu-odom.sh` の hz 判定も動く。**
 - TF は区間ごとに所有者を 1 つだけにする（`map→odom` は emcl2/amcl、
   `odom→base_footprint` は本体ドライバ（raspimouse / raspicat_driver）または EKF、
   リンク間は robot_state_publisher）。

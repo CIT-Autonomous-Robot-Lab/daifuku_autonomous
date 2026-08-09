@@ -14,9 +14,11 @@
 
 # 車輪オドメトリと Mid-360 の IMU を EKF で融合する。
 #
-#   /wheel/odom (本体ドライバ) ─┐
-#                               ├─ ekf_node ─> /odom, odom -> base_footprint
-#   /livox/imu ─> prepare_mid360_imu.py ─> /imu/mid360 ─┘
+#   /livox/imu ─> throttle ─> prepare_mid360_imu.py ─> /imu/mid360 ─┐
+#                                                                   ├─ ekf_node
+#   /wheel/odom (本体ドライバ) ──────────────────────────────────────┘
+#
+#   ekf_node ─> /odom, odom -> base_footprint
 #
 # **robot_bringup.launch.py から include される。** 本体ドライバと同じ launch に
 # 居るのが要点で、`use_mid360_imu:=true` は「ドライバが /wheel/odom を出して TF を
@@ -27,7 +29,7 @@
 #
 # **入力の片方 (/livox/imu) は lidar_bringup.launch.py の livox ドライバが出す。**
 # トピックの縁だけで、起動順の依存は無い。バイアス測定はメッセージ駆動 (静止した
-# 400 サンプルが溜まるまで待つ) なので、IMU が後から来ても取りこぼさない。
+# 100 サンプルが溜まるまで待つ) なので、IMU が後から来ても取りこぼさない。
 #
 # `use_mid360_imu:=false` では何も立たない。そのとき odom -> base_footprint と /odom
 # を出すのは本体ドライバ側になる (TF の所有者は区間ごとに 1 つだけ)。
@@ -75,6 +77,26 @@ def generate_launch_description():
     odom_topic = LaunchConfiguration("odom_topic")
     base_frame = LaunchConfiguration("base_frame")
 
+    # Mid-360 の IMU は 200 Hz 固定 (ドライバ側に間引く口は無く、lddc.cpp の
+    # PollingLidarImuData がキューを空になるまで吐く)。その 200 Hz を Python の
+    # prepare_mid360_imu に直に食わせると Pi 4 で 1 コアの 24% を持っていく——
+    # **中身の計算ではなく rclpy がメッセージを 1 通受けるたびに払う代金**で、
+    # 何もしない購読だけで 21%、自前の処理はそのうち 1.7 ポイントしかない
+    # (2026-08-09 実測)。C++ のここで間引いて 10% に落とす (throttle 4.5 +
+    # prepare 5.4)。EKF は frequency: 30.0 なので 50 指定 (実測 44 Hz) で足りる。
+    # **落ちると /imu/mid360 ごと止まり、EKF は imu0 が一度も来ないまま車輪だけで
+    # 回る (エラーも警告も出ない)。** 立ち上がりの順序は問わない——generic
+    # subscription が入力トピックの出現を待つ (無い状態で 25 秒待たせても拾う)。
+    imu_throttle = Node(
+        condition=IfCondition(use_mid360_imu),
+        package="topic_tools",
+        executable="throttle",
+        name="imu_throttle",
+        output="screen",
+        parameters=[{"use_sim_time": use_sim_time}],
+        arguments=["messages", "/livox/imu", "50.0", "/livox/imu_throttled"],
+    )
+
     # Livox が出す IMU をそのまま EKF に入れられる形へ直す。ジャイロの電源投入時
     # バイアスを起動後の静止区間から測って引き、加速度を g から m/s^2 へ直す
     # (robot_localization はセンサのバイアスを推定しない)。**そのため起動時は機体を
@@ -89,7 +111,13 @@ def generate_launch_description():
         # overrides/ から両方のノードを 1 つのファイルで触れる (行き先はノード名で
         # 決まるので、どの設定ファイルにも無いノード名は起動時に弾かれる)。
         parameters=[mid360_ekf_params_file, {"use_sim_time": use_sim_time}],
-        remappings=[("imu_in", "/livox/imu"), ("imu_out", "/imu/mid360")],
+        remappings=[
+            # 生の /livox/imu ではなく上の throttle の出口。**bias_samples は
+            # このレートを前提にした値**なので、片方だけ変えると静止窓の長さが
+            # 掛け算で変わる (config/bringup/sensors/mid360_ekf.yaml)。
+            ("imu_in", "/livox/imu_throttled"),
+            ("imu_out", "/imu/mid360"),
+        ],
     )
 
     ekf = Node(
@@ -152,6 +180,7 @@ def generate_launch_description():
             },
         ),
 
+        imu_throttle,
         prepare_imu,
         ekf,
     ])

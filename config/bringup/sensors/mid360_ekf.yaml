@@ -6,13 +6,17 @@
 # odom -> base_footprint TF を出す。lidar_bringup.launch.py が両ノードへ直接渡す。
 # **車輪ノード側も同じ引数で /wheel/odom + TF なしに切り替えること** (robot_bringup)。
 
-# 生の /livox/imu に共分散を付け、ジャイロのバイアスを引き、加速度を g から m/s^2 へ
-# 直して /imu/mid360 へ出す。**起動時は機体を静止させておくこと** (バイアスを測る)。
+# 生の IMU に共分散を付け、ジャイロのバイアスを引き、加速度を g から m/s^2 へ直して
+# /imu/mid360 へ出す。**起動時は機体を静止させておくこと** (バイアスを測る)。
+# **入力は生の /livox/imu (200 Hz) ではなく throttle が 50 指定で間引いた
+# /livox/imu_throttled (実測 44 Hz)。** rclpy の 1 通あたりの代金が重く、200 Hz を
+# 直に食わせると Pi 4 で 1 コアの 24% を使う (odom_fusion.launch.py)。下の
+# bias_samples はそのレートを前提にした値。
 prepare_mid360_imu:
   ros__parameters:
     estimate_gyro_bias: true    # 既定 同左: 起動後の静止区間からバイアスを測るか。false なら下の値を使う
     gyro_bias: [0.0, 0.0, 0.0]  # 既定 同左 [rad/s]: 引くバイアス (x, y, z)。実測 z=+0.014168 (2026-08-05)
-    bias_samples: 400           # 既定 同左: 1 区間の標本数 (200 Hz なので 2 秒)
+    bias_samples: 100           # 既定 同左: 1 区間の標本数 (throttle 後の 44 Hz なので 2.3 秒。平均の標準誤差 0.48 deg/min で、引く 41 deg/min に対しては無視できる)
     bias_max_sd: 0.005          # 既定 同左 [rad/s]: z 軸の標準偏差がこれを超えたら静止していないとみなす。実測 0.0014 (x は 0.0054 と 4 倍うるさいので見ない)
     bias_max: 0.05              # 既定 同左 [rad/s]: z 軸の平均がこれを超えたら同上 (定常旋回は sd が小さいので平均でも見る)
     gyro_variance: 4.0e-4       # 既定 同左 [(rad/s)^2]: 角速度の分散 (sigma 0.02 rad/s = 1.15 deg/s。実測のノイズ 0.074 deg/s より保守的)
