@@ -202,7 +202,7 @@ def load_waypoints(path):
         ValueError: 書式が違うとき。1 点でも欠けていれば読み込みごと失敗させる
             (黙って飛ばすと、経路の途中が抜けた巡回が静かに走ってしまう)。
     """
-    # encoding を明示する。同梱の waypoints_tsudanuma.yaml は冒頭に日本語の注記を
+    # encoding を明示する。同梱の waypoints_tsudanuma v1.0.yaml は冒頭に日本語の注記を
     # 持っていて、ロケールが C の環境 (実機のコンテナは LANG を持たない) では
     # 既定の encoding が ASCII になり、**読み込みごと失敗する**。
     # daifuku_config_manager/params.py が同じ理由で明示しているのと同じ。

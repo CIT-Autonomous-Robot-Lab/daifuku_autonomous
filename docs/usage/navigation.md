@@ -354,8 +354,9 @@ RVizで次の順に操作します。
 RVizを立て直したあと、「Nav2 Goal」の単発ゴール——もこれで止まります。詳細は
 [`src/daifuku_waypoint_manager/README.md`](../../src/daifuku_waypoint_manager/README.md)。
 
-`daifuku_stack/waypoints/waypoints_tsudanuma.yaml`に津田沼の73点を置いてあります。
-パネルの「Load YAML」で読みます（`map_19f`では座標が地図の外に出るため使えません）。
+`daifuku_stack/waypoints/`に津田沼の順路を版ごとに置いてあります（`v1.0`と`v1.1`が
+73点、`v1.2`が69点）。パネルの「Load YAML」で読みます（`map_19f`では座標が地図の外に
+出るため使えません）。
 
 RVizのFixed Frameとwaypointの`frame_id`が一致している必要があります。ずれていると
 追加も追加読み込みも拒否され、パネルのステータス行にだけ理由が出ます。
