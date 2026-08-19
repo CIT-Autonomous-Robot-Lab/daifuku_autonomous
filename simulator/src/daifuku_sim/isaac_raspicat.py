@@ -78,6 +78,7 @@ import json
 import math
 import os
 import sys
+import tempfile
 
 # 引数は SimulationApp を起動する **前** に解釈する。SimulationApp を作った時点で
 # Kit が sys.argv を触りにいくため、後から argparse すると取りこぼす。
@@ -102,11 +103,15 @@ def parse_args():
                     help="LiDAR 構成 (既定: 2d)")
     ap.add_argument("--lidar-config",
                     help="RTX LiDAR のプロファイル JSON。省略時は configs/ の "
-                         "raspicat_2d_lidar.json / livox_mid360.json を使う")
+                         "raspicat_2d_lidar.json / livox_mid360.json を使う。"
+                         "**Isaac 6.0 では使えない** (JSON を読む機構が無いので"
+                         "指定すると起動時に止まる)")
     ap.add_argument("--lidar-profile",
                     help="Isaac Sim 同梱のプロファイル名を直接使う "
-                         "(例: Example_Rotary)。--lidar-config より優先する。"
-                         "configs/*.json のスキーマが手元の Isaac と合わないときの逃げ道")
+                         "(例: Example_Rotary_2D)。--lidar-config より優先する。"
+                         "Isaac 6.0 ではプロファイルはこれしか選べず、省略時は "
+                         "lidar に応じた既定 (2d=Example_Rotary_2D / "
+                         "mid360=Example_Solid_State) に落ちる")
     ap.add_argument("--lidar-prim-path", default="/base_link/lidar_rtx",
                     help="ロボット配下に作る RTX LiDAR のパス (--robot-prim からの相対)")
     ap.add_argument("--lidar-xyz", default="0.144,0.0,0.0289",
@@ -205,39 +210,69 @@ from pxr import Gf, UsdGeom  # noqa: E402
 
 _NS_CANDIDATES = {
     "ros2": ("isaacsim.ros2.bridge", "omni.isaac.ros2_bridge"),
-    "core": ("isaacsim.core.nodes", "omni.isaac.core_nodes"),
+    # OnPlaybackTick だけは 6.0 で Kit 側 (omni.graph.action) にしか無い。
+    # Isaac* の 4 つは isaacsim.core.nodes のままなので、そちらを先に見る。
+    "core": ("isaacsim.core.nodes", "omni.graph.action", "omni.isaac.core_nodes"),
     "wheeled": ("isaacsim.robot.wheeled_robots", "omni.isaac.wheeled_robots"),
-    "rtx_sensor": ("isaacsim.sensors.experimental.rtx",
+    "graph": ("omni.graph.nodes",),
+    # 6.0 の IsaacCreateRenderProduct は isaacsim.core.nodes、IsaacReadIMU は
+    # isaacsim.sensors.physics に居る。RTX センサの Python API
+    # (isaacsim.sensors.experimental.rtx) は OmniGraph のノードを出さない。
+    "rtx_sensor": ("isaacsim.core.nodes", "isaacsim.sensors.physics",
+                   "isaacsim.sensors.experimental.rtx",
                    "isaacsim.sensors.rtx", "omni.isaac.sensor"),
 }
 _NS_RESOLVED = {}
 
 
-def _registered_types():
+def _type_exists(full_name):
+    """`full_name` のノード型がレジストリに在るか。
+
+    **`og.get_node_type()` で判定しないこと。** あれは未登録でも例外を投げずに
+    オブジェクトを返すので、常に「在る」になる。`ObjectLookup.node_type()` の
+    ほうは無ければ OmniGraphError を投げる (`og.Controller.edit` が内部で使うのも
+    こちら)。
+    """
     try:
-        return set(og.GraphRegistry().get_node_types())
+        og.ObjectLookup.node_type(full_name)
+        return True
     except Exception:
-        # 古い API 名。取れない場合は空集合を返して既定 (5.x) にフォールバックする。
-        return set()
-
-
-_REGISTRY = _registered_types()
+        return False
 
 
 def node_type(group, name):
-    """`group` の名前空間を解決して `<ns>.<name>` を返す。"""
-    if group not in _NS_RESOLVED:
-        chosen = _NS_CANDIDATES[group][0]
+    """`<ns>.<name>` のうち実在するものを返す。
+
+    **解決はグループ単位ではなくノード名ごと**に行う。6.0 で名前空間がノード
+    単位で散った (OnPlaybackTick が omni.graph.action、IsaacCreateRenderProduct が
+    isaacsim.core.nodes) ため、グループの先頭を一度決め打ちにすると
+    そのグループの他のノードが道連れで壊れる。
+
+    呼ぶのは拡張を有効化したあと (= グラフ構築時) に限ること。
+    """
+    key = (group, name)
+    if key not in _NS_RESOLVED:
         for ns in _NS_CANDIDATES[group]:
-            if not _REGISTRY or any(t.startswith(ns + ".") for t in _REGISTRY):
-                chosen = ns
+            if _type_exists(f"{ns}.{name}"):
+                _NS_RESOLVED[key] = ns
+                print(f"[isaac_raspicat] node type {name} -> {ns}")
                 break
-        _NS_RESOLVED[group] = chosen
-        print(f"[isaac_raspicat] namespace {group} -> {chosen}")
-    return f"{_NS_RESOLVED[group]}.{name}"
+        else:
+            raise SystemExit(
+                f"OmniGraph のノード型 {name} が見つからない。"
+                f"探した名前空間: {_NS_CANDIDATES[group]}。"
+                "拡張が有効化されていないか、この Isaac では名前が違う。"
+            )
+    return f"{_NS_RESOLVED[key]}.{name}"
 
 
 def enable_ros2_bridge():
+    """ROS 2 ブリッジ拡張を有効化する。
+
+    有効化が要るのはこれだけ。`isaacsim.core.nodes` /
+    `isaacsim.robot.wheeled_robots` / `omni.graph.action` は
+    `isaacsim.exp.base` の experience が既に立てている。
+    """
     for ns in _NS_CANDIDATES["ros2"]:
         try:
             enable_extension(ns)
@@ -271,7 +306,38 @@ def import_urdf(urdf_path, dest_prim):
     無視されるだけだが、差動駆動やセンサはこのスクリプトが OmniGraph で作り直す
     ので、URDF 側に残っていると「どちらが効いているのか」が分からなくなる。
     """
-    # モジュールパスは 5.x と 4.x で違う。OmniGraph のノード型名と同様に両対応する。
+    urdf_path = os.path.abspath(urdf_path)
+    if not os.path.isfile(urdf_path):
+        raise SystemExit(f"URDF not found: {urdf_path}")
+
+    # 6.0 で C++ の `_urdf` インタフェースが消え、URDF -> USD ファイルに落として
+    # 参照する形になった。RTX LiDAR / TransformTree と同じく、版数ではなく
+    # **実行時に何が在るか**で分岐させる。
+    try:
+        from isaacsim.asset.importer.urdf import URDFImporter, URDFImporterConfig
+    except Exception:
+        URDFImporter = None
+    if URDFImporter is not None:
+        print("[isaac_raspicat] urdf importer: isaacsim.asset.importer.urdf (6.0 API)")
+        # 出力先を URDF と同じディレクトリにしないこと。package:// の解決は
+        # URDF の置き場基準なので、生成物を混ぜると 2 度目以降が変わる。
+        out_dir = os.path.join(tempfile.gettempdir(), "isaac_raspicat_urdf")
+        os.makedirs(out_dir, exist_ok=True)
+        robot_usd = URDFImporter().import_urdf(URDFImporterConfig(
+            urdf_path=urdf_path,
+            usd_path=out_dir,
+            # 固定ジョイントを畳まない理由は下の 5.x 側と同じ。
+            merge_fixed_joints=False,
+            allow_self_collision=False,
+            fix_base=False,                 # 移動ロボットなので base は固定しない
+        ))
+        stage = omni.usd.get_context().get_stage()
+        prim = stage.DefinePrim(dest_prim, "Xform")
+        prim.GetReferences().AddReference(robot_usd)
+        print(f"[isaac_raspicat] imported URDF {urdf_path} -> {robot_usd} -> {dest_prim}")
+        return dest_prim
+
+    # 5.x / 4.x: モジュールパスが違うだけで API は同じ。
     _urdf = None
     for mod in ("isaacsim.asset.importer.urdf",      # 5.x
                 "omni.importer.urdf",                # 4.x
@@ -287,10 +353,6 @@ def import_urdf(urdf_path, dest_prim):
             "URDF importer 拡張が見つからない。--robot に変換済みの USD を渡すか、"
             "Isaac Sim の URDF Importer 拡張を有効化すること。"
         )
-
-    urdf_path = os.path.abspath(urdf_path)
-    if not os.path.isfile(urdf_path):
-        raise SystemExit(f"URDF not found: {urdf_path}")
 
     cfg = _urdf.ImportConfig()
     # 固定ジョイントを畳まない。畳むと base_link / lidar_mount_link といった
@@ -339,16 +401,40 @@ def add_robot(stage, args):
 def add_rtx_lidar(stage, args, robot_prim):
     """RTX LiDAR をロボット配下に作る。
 
-    プロファイル JSON がセンサの走査パターン (FOV / 分解能 / 回転数 / 到達距離) を
-    決める。2D は raspicat_description の Gazebo 設定 (min_range 0.1 / max_range 30) に
-    寄せ、mid360 は非回転走査の**近似**にしてある (configs/livox_mid360.json の
-    コメント参照)。
+    プロファイルがセンサの走査パターン (FOV / 分解能 / 回転数 / 到達距離) を決める。
+    どこから取るかは Isaac のバージョンで変わる:
+
+    * 4.x / 5.x — configs/*.json。2D は raspicat_description の Gazebo 設定
+      (min_range 0.1 / max_range 30) に寄せ、mid360 は非回転走査の**近似**
+      (configs/livox_mid360.json のコメント参照)。
+    * 6.0 — **JSON は使えない。** Lidar.create が受け取るのは同梱レジストリの
+      名前 (SUPPORTED_LIDAR_CONFIGS) かセンサ資産の USD だけで、実体は
+      get_assets_root_path() から引かれる。_BUNDLED_PROFILE で代用する。
     """
+    _, registry_only = _rtx_lidar_factory()
+
     if args.lidar_profile:
         # 同梱プロファイルをそのまま使う。configs/*.json のスキーマが手元の
         # Isaac のバージョンと合わなかった場合の確実な逃げ道。
         profile = args.lidar_profile
         print(f"[isaac_raspicat] using bundled lidar profile: {profile}")
+    elif registry_only:
+        if args.lidar_config:
+            raise SystemExit(
+                f"--lidar-config ({args.lidar_config}) はこの Isaac では使えない。"
+                "6.0 の Lidar.create は同梱レジストリの名前 (SUPPORTED_LIDAR_CONFIGS) か "
+                "センサ資産の USD しか受け取らず、JSON のプロファイルを読む機構"
+                " (/app/sensors/nv/lidar/profileBaseFolder) は参照されない。"
+                "--lidar-profile <名前> を使うこと。"
+            )
+        profile = _BUNDLED_PROFILE[args.lidar]
+        print(f"[isaac_raspicat] using bundled lidar profile: {profile}")
+        # **黙って落とさない。** 走査諸元が実機と違うことは、スキャンを見ても
+        # 「それらしい」ので気づけない。観測数に依存する評価 (emcl2 の重み、
+        # コストマップの追従) をこの構成で読むときは、ここを承知しておくこと。
+        print(f"[isaac_raspicat] warn: configs/{args.lidar} の JSON はこの Isaac "
+              "では使えないため、同梱プロファイルで代用している。"
+              "**走査諸元 (FOV / 分解能 / 回転数 / 到達距離) は実機と違う。**")
     else:
         cfg_path = args.lidar_config or os.path.join(
             HERE, "configs",
@@ -375,8 +461,20 @@ def add_rtx_lidar(stage, args, robot_prim):
     rpy = [float(v) for v in args.lidar_rpy.split(",")]
 
     lidar_path = robot_prim + args.lidar_prim_path
-    lidar = _make_rtx_lidar(lidar_path, profile, xyz, _rpy_to_quat(rpy))
-    print(f"[isaac_raspicat] RTX lidar: {lidar_path} profile={profile}")
+    lidar = _make_rtx_lidar(lidar_path, profile)
+
+    # 取り付け位置は**作ったあとに自分で入れる**。6.0 の Lidar.create() は
+    # config と path しか受け取らず、translation / orientation を渡しても
+    # 黙って捨てられる (_make_rtx_lidar が warn を出すのはそのため)。原点に
+    # 置いたままでも 2m の壁を撃つ限りもっともらしいスキャンが返るので、
+    # 気づけないまま帯だけがずれる。
+    xform = UsdGeom.Xformable(stage.GetPrimAtPath(lidar_path))
+    xform.ClearXformOpOrder()
+    xform.AddTranslateOp().Set(Gf.Vec3d(*xyz))
+    xform.AddRotateXYZOp().Set(Gf.Vec3d(*(math.degrees(v) for v in rpy)))
+
+    print(f"[isaac_raspicat] RTX lidar: {lidar_path} profile={profile} "
+          f"xyz={xyz} rpy={rpy}")
     return lidar, lidar_path
 
 
@@ -387,43 +485,60 @@ def add_rtx_lidar(stage, args, robot_prim):
 # そこで「どちらが在るか」を実行時に見て、引数名は **シグネチャを調べて詰める**。
 # 引数名を決め打ちすると、どちらのバージョンでも TypeError で落ちるだけになり、
 # 「LiDAR が作れない」以上のことが分からない。
+# **姿勢 (translation / orientation) はここでは渡さない。** 6.0 の
+# Lidar.create は複数プリムを一度に作る API で、名前が複数形
+# (translations / orientations) なうえ orientations は**ワールド系**、
+# translations は**ローカル系**という混在。取り付け位置は add_rtx_lidar が
+# 作成後に USD の xform へ入れるので、経路を 1 本にしてある。
 _LIDAR_ALIASES = {
     "prim_path":   ("prim_path", "path"),
-    "name":        ("name",),
     "profile":     ("config_file_name", "config"),      # 5.x -> 6.0 で改名
-    "translation": ("translation", "position"),
-    "orientation": ("orientation",),
 }
 
+# configs/*.json が使えない Isaac (6.0) での代用。**実機の諸元ではない**。
+# 2D は回転式、mid360 は非回転 (ソリッドステート) というところだけを合わせてある。
+# 実機に合わせたいなら、JSON ではなくセンサ資産の USD を作って
+# Lidar.create(usd_path=...) に渡す経路になる (未着手)。
+_BUNDLED_PROFILE = {"2d": "Example_Rotary_2D", "mid360": "Example_Solid_State"}
 
-def _make_rtx_lidar(lidar_path, profile, xyz, quat):
+_RTX_FACTORY = None
+
+
+def _rtx_lidar_factory():
+    """(factory, registry_only) を返す。
+
+    `registry_only` が真なら、プロファイルは**同梱レジストリの名前**でしか
+    指定できない (6.0)。偽なら JSON のプロファイル名が使える (4.x / 5.x)。
+    """
+    global _RTX_FACTORY
+    if _RTX_FACTORY is None:
+        for mod_name, attr, maker, registry_only in (
+            ("isaacsim.sensors.experimental.rtx", "Lidar", "create", True),   # 6.0+
+            ("isaacsim.sensors.rtx", "LidarRtx", None, False),                # 4.x / 5.x
+        ):
+            try:
+                cls = getattr(__import__(mod_name, fromlist=[attr]), attr)
+            except (ImportError, AttributeError):
+                continue
+            _RTX_FACTORY = (getattr(cls, maker) if maker else cls, registry_only)
+            print(f"[isaac_raspicat] rtx lidar api -> {mod_name}.{attr}"
+                  + (f".{maker}" if maker else ""))
+            break
+        else:
+            raise SystemExit(
+                "RTX LiDAR の API が見つからない。isaacsim.sensors.experimental.rtx "
+                "(6.0+) と isaacsim.sensors.rtx (4.x/5.x) のどちらも import できない。"
+            )
+    return _RTX_FACTORY
+
+
+def _make_rtx_lidar(lidar_path, profile):
     import inspect
 
-    factory = None
-    for mod_name, attr, maker in (
-        ("isaacsim.sensors.experimental.rtx", "Lidar", "create"),   # 6.0+
-        ("isaacsim.sensors.rtx", "LidarRtx", None),                 # 4.x / 5.x
-    ):
-        try:
-            cls = getattr(__import__(mod_name, fromlist=[attr]), attr)
-        except (ImportError, AttributeError):
-            continue
-        factory = getattr(cls, maker) if maker else cls
-        print(f"[isaac_raspicat] rtx lidar api -> {mod_name}.{attr}"
-              + (f".{maker}" if maker else ""))
-        break
-    if factory is None:
-        raise SystemExit(
-            "RTX LiDAR の API が見つからない。isaacsim.sensors.experimental.rtx "
-            "(6.0+) と isaacsim.sensors.rtx (4.x/5.x) のどちらも import できない。"
-        )
-
+    factory, _ = _rtx_lidar_factory()
     values = {
         "prim_path": lidar_path,
-        "name": "raspicat_lidar",
         "profile": profile,
-        "translation": xyz,
-        "orientation": quat,
     }
     try:
         accepted = set(inspect.signature(factory).parameters)
@@ -443,19 +558,6 @@ def _make_rtx_lidar(lidar_path, profile, xyz, quat):
     return factory(**kwargs)
 
 
-def _rpy_to_quat(rpy):
-    r, p, y = rpy
-    cr, sr = math.cos(r / 2), math.sin(r / 2)
-    cp, sp = math.cos(p / 2), math.sin(p / 2)
-    cy, sy = math.cos(y / 2), math.sin(y / 2)
-    return [
-        cr * cp * cy + sr * sp * sy,  # w
-        sr * cp * cy - cr * sp * sy,  # x
-        cr * sp * cy + sr * cp * sy,  # y
-        cr * cp * sy - sr * sp * cy,  # z
-    ]
-
-
 # ROS 2 ブリッジのグラフ
 
 def build_ros_graph(args, robot_prim, lidar_path):
@@ -473,6 +575,10 @@ def build_ros_graph(args, robot_prim, lidar_path):
 
         # /cmd_vel -> 車輪速度
         ("SubTwist", node_type("ros2", "ROS2SubscribeTwist")),
+        # Twist は 3 次元ベクトル、DifferentialController が取るのはスカラ。
+        # **繋ぐには分解が要る** (下の connections のコメント参照)。
+        ("BreakLin", node_type("graph", "BreakVector3")),
+        ("BreakAng", node_type("graph", "BreakVector3")),
         ("DiffDrive", node_type("wheeled", "DifferentialController")),
         ("Articulation", node_type("core", "IsaacArticulationController")),
 
@@ -485,8 +591,8 @@ def build_ros_graph(args, robot_prim, lidar_path):
     # 旧来の直接プリム入力は 6.0 でも deprecated として残るとされているが、
     # 「残るかどうか」ではなく**レジストリに新ノードが在るか**で分岐する。
     # バージョン番号で分岐すると、shim が外れた版で静かに TF が止まる。
-    split_tf = publish_link_tf and any(
-        t.endswith(".IsaacComputeTransformTree") for t in _REGISTRY
+    split_tf = publish_link_tf and _type_exists(
+        "isaacsim.core.nodes.IsaacComputeTransformTree"
     )
     if publish_link_tf:
         if split_tf:
@@ -513,8 +619,15 @@ def build_ros_graph(args, robot_prim, lidar_path):
 
         ("SimTime.outputs:simulationTime", "PubOdom.inputs:timeStamp"),
 
-        ("SubTwist.outputs:linearVelocity", "DiffDrive.inputs:linearVelocity"),
-        ("SubTwist.outputs:angularVelocity", "DiffDrive.inputs:angularVelocity"),
+        # **直結してはいけない。** ROS2SubscribeTwist の出力は double3
+        # (vector)、DifferentialController の入力は double。OmniGraph は
+        # 型が合わない接続を**警告 1 行だけ出して黙って落とす**ので、
+        # グラフは組み上がり Isaac も普通に走り、`/cmd_vel` を投げても
+        # 機体が動かないだけになる。前進は x、旋回は z を取り出す。
+        ("SubTwist.outputs:linearVelocity", "BreakLin.inputs:tuple"),
+        ("BreakLin.outputs:x", "DiffDrive.inputs:linearVelocity"),
+        ("SubTwist.outputs:angularVelocity", "BreakAng.inputs:tuple"),
+        ("BreakAng.outputs:z", "DiffDrive.inputs:angularVelocity"),
         ("DiffDrive.outputs:velocityCommand", "Articulation.inputs:velocityCommand"),
 
         ("ComputeOdom.outputs:linearVelocity", "PubOdom.inputs:linearVelocity"),

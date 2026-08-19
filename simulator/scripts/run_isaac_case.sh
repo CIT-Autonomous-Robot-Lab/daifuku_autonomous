@@ -143,6 +143,22 @@ case "$ISAAC_RUNTIME" in
             echo "    uv run --no-sync python -c 'import sys; print(sys.version)'" >&2
             exit 2
         fi
+        # **内蔵 ROS 2 を使うので、起動前に環境変数を立てる。** pip 版は
+        # isaacsim.ros2.core/<distro>/lib に Humble 一式を同梱していて、
+        # ROS_DISTRO / RMW_IMPLEMENTATION と共有ライブラリの探索パスが
+        # 揃っていないと `ROS2 Bridge startup failed` で**ブリッジだけが死ぬ**。
+        # Kit 自体は上がりトピックも出ないので、原因がグラフや DDS に見える。
+        # ホストに ROS 2 を source 済みならそちらが優先される (上書きしない)。
+        ros2_lib=$("${UVRUN[@]}" --extra isaac --no-sync python -c             "import isaacsim, os; print(os.path.join(os.path.dirname(isaacsim.__file__), 'exts', 'isaacsim.ros2.core', 'humble', 'lib'))"             2>/dev/null) || ros2_lib=""
+        export ROS_DISTRO=${ROS_DISTRO:-humble}
+        export RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}
+        if [ -n "$ros2_lib" ] && [ -d "$ros2_lib" ]; then
+            export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:+$LD_LIBRARY_PATH:}$ros2_lib"
+            export PATH="$PATH:$ros2_lib"     # Windows (Git Bash) はこちらを見る
+            echo "  ros2 libs: $ros2_lib"
+        else
+            echo "  warn: 内蔵 ROS 2 の lib が見つからない。ホスト側の ROS 2 に頼る。" >&2
+        fi
         ISAAC_CMD=("${UVRUN[@]}" --extra isaac --no-sync python)
         ;;
     *)
@@ -253,7 +269,7 @@ $ENGINE exec \
     -e PLANNER="${PLANNER:-vi}" \
     -e LOCAL_PLANNER="${LOCAL_PLANNER:-auto}" \
     -e NAV2="${NAV2:-auto}" \
-    -e LOCALIZATION="${LOCALIZATION:-emcl2}" \
+    -e LOCALIZATION="${LOCALIZATION:-vi}" \
     -e OVERRIDES="${OVERRIDES:-}" \
     -e EXTRA_PARAMS="${EXTRA_PARAMS:-}" \
     -e VI_SOLVER="${VI_SOLVER:-}" \

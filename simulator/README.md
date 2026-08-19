@@ -44,18 +44,21 @@ nav2 側の構成・制約・キャリブレーションはそのまま引き継
 
 ## 動作確認の状態
 
-このリポジトリの開発機には NVIDIA GPU が無く (AMD Radeon 780M)、Isaac Sim は
-起動できない。**どこまで実測で確かめたかを明示しておく**:
+**どこまで実測で確かめたかを明示しておく**。2026-08-20 に RTX 4060 Ti 16GB /
+Windows 11 の機体で pip 版 (6.0.1) を初めて実際に動かし、Isaac 単体で
+`/scan_raw` を出すところまで通した (nav2 と繋いだ通しはまだ)。それ以前の記述は
+GPU の無い開発機 (AMD Radeon 780M) で書いたもの。
 
 | ファイル | 状態 |
 |---|---|
 | `src/daifuku_sim/map_to_usd.py` | **実測検証済み**。`map_19f` / `map_tsudanuma` で生成し、出力 USD の Wall プリムを地図グリッドに焼き直して元の占有と**完全一致** (欠落0・余剰0) を確認。検算は `tests/verify_usda.py` (手元で再実行できる) |
 | `src/daifuku_sim/rtf_gate.py` | **実測検証済み**。合成 RTF ログで PASS / FAIL(3) / WARN の分岐を確認 |
 | `pyproject.toml` / `uv.lock` | **実測検証済み**。`uv lock` / `uv sync` / `uv run map-to-usd` / `uv run rtf-gate` の成功を確認 |
-| extra `isaac` (pip 版 Isaac Sim 6.0.1) | **解決のみ検証済み**。`uv lock` が 166 パッケージで解決し、`uv sync --extra isaac --dry-run` が `isaacsim-*` 22 個を含む 144 個を入れると出すことを確認。lock には linux (x86_64 / aarch64) と win_amd64 の wheel が入っている。**実際にインストールして起動したことは無い** (GPU 必須) |
-| `src/daifuku_sim/src/daifuku_config/*.json` | 生成ロジックは検証済みだが、**Isaac の RTX LiDAR プロファイルのスキーマとの適合は未検証**。6.0 でプロファイル探索パスの機構が変わったかは NVIDIA のドキュメントに記載が無く、確認できていない |
-| `src/daifuku_sim/isaac_raspicat.py` | **未検証** (GPU 必須)。5.x 向けに書き、6.0 の変更 2 点 (RTX LiDAR API / TransformTree の分割) への分岐を後から入れた。**分岐の条件は実行時判定だが、6.0 側の分岐が通ることは一度も確かめていない** |
-| `scripts/run_isaac_case.sh` / `container/nav_container.sh` | 構文チェックのみ。**未実行** |
+| extra `isaac` (pip 版 Isaac Sim 6.0.1) | **実測検証済み** (2026-08-20)。`uv sync --extra isaac` で 147 パッケージが入り、Kit が起動することを確認 (venv 実測 2.2GB + extscache)。**`all` だけでは起動しない**ことが分かったので `all,extscache` に直した (下の「Isaac Sim 6.0 で変わったところ」) |
+| `src/daifuku_sim/configs/*.json` | **6.0 では使えないことが確定** (2026-08-20 実測)。JSON を読む機構そのものが無くなったので、6.0 では `_BUNDLED_PROFILE` の同梱プロファイルで代用する。**走査諸元は実機と違う**ので、観測数に依存する評価をこの構成で読まないこと。4.x / 5.x 向けの JSON 経路は残してあるが、そちらは**未検証のまま** |
+| `src/daifuku_sim/isaac_raspicat.py` | **実測検証済み** (2026-08-20、6.0.1 / `--lidar 2d` / `--headless`)。world 読み込み → URDF 取り込み → RTX LiDAR → ROS 2 グラフ → `/scan_raw` の発行まで通り、`--rtf-report` の出力が `rtf-gate` を PASS する。**未検証は `--lidar mid360` と `--publish-link-tf isaac` の 2 経路**、および ROS 2 側で実際にトピックを受けるところ |
+| `scripts/run_pi4_sim.ps1` / `container/run_case.sh` / `container/fake_robot.py` / `container/probe.py` | **実測検証済み** (2026-08-20、Windows + podman/WSL、amd64)。`LOCALIZATION=vi` で `PROBE_SUMMARY {"result": "SUCCEEDED", "first_plan_s": 6.8, "elapsed_s": 19.2}`、`vi_planner` peak RSS 820MB / cgroup peak 1.08GB (上限 3GB、OOM 0)、throttle 24.1s / 2457 回。プロセス死なし |
+| `scripts/run_isaac_case.sh` / `container/nav_container.sh` | 構文チェックのみ。**未実行**。Isaac 側 (Windows) と nav2 側 (WSL の podman) が別のネットワーク名前空間に居るので、この機体では `--network host` が噛み合わず DDS が通らない。README 冒頭の「同じマシンに置くこと」は Linux ホスト前提 |
 | `lidar_bringup.launch.py` / `robot_bringup.launch.py` / `navigation.launch.py` の変更 | 構文チェックのみ。既定値は現行のままで実機の挙動は変えていない |
 
 最初に動かすときは、下の「立ち上げ順序」に従って**段階的に**確認すること。
@@ -140,18 +143,30 @@ Isaac Sim の入れ方は 2 通りあり、**どちらでも同じ `isaac_raspic
 | バージョン | 手元次第 | **6.0.1** (`uv.lock` で固定) |
 | 動かす Python | Kit 同梱 (この venv は**見ない**) | この venv (3.12) |
 | 起動 | `$ISAACSIM/python.sh <path>` | `uv run --extra isaac --no-sync python <path>` |
-| 取得量 | 配布物次第 | 新規 **144 パッケージ** (lock 上の総サイズ 22.9 GiB) |
+| 取得量 | 配布物次第 | 新規 **147 パッケージ**。実測で venv 2.2GB + extscache (`kit` 単体で 5.5 GiB。3 つの取得に 20 分) |
 
 ```bash
 # pip 版を使う場合
 cd simulator
-uv sync --extra isaac                       # 144 パッケージ。Python 3.12 必須
+uv sync --extra isaac                       # 147 パッケージ。Python 3.12 必須
 ISAAC_RUNTIME=pip bash scripts/run_isaac_case.sh baseline
 ```
 
 pip 版には `isaacsim-ros2` (OmniGraph の ROS 2 ブリッジ) と `isaacsim-sensor`
-(RTX LiDAR) を含む `isaacsim-*` 22 個が入るので、このハーネスが使う機能は揃う。
-wheel は linux (x86_64 / aarch64) と win_amd64 の 3 つが lock に入っている。
+(RTX LiDAR) を含む `isaacsim-*` 22 個に加え、Kit の拡張本体を運ぶ
+`isaacsim-extscache-*` 3 個が入る。wheel は linux (x86_64 / aarch64) と
+win_amd64 の 3 つが lock に入っている。
+
+> **`extscache` を extras から外さないこと。** `all` に入るのは `isaacsim-*` の
+> 22 個だけで、Kit の拡張 493 個は `extscache` が運ぶ。外すと
+> `isaacsim.exp.base.kit` が要求する 4 つの schema 拡張が**どこにも無く**、
+> Kit が起動 2 秒で `Failed to resolve extension dependencies` で終わる。
+> experience を替えても全部 `isaacsim.exp.base` を継承するので逃げられない。
+
+> **初回起動は EULA の同意を対話で聞かれる。** 標準入力が無いと
+> `Unable to bootstrap inner kit kernel: EOF when reading a line` で止まる。
+> 一度だけ端末から起動して `Yes` と答えるか、`OMNI_KIT_ACCEPT_EULA=YES` を
+> 立てること。
 
 > **`--no-sync` を省かないこと。** `uv run --extra isaac` は**その場で同期を始める**
 > ので、「入っているか確認するだけ」のつもりの 1 行が 20 GiB 超のダウンロードに
@@ -177,16 +192,35 @@ wheel は linux (x86_64 / aarch64) と win_amd64 の 3 つが lock に入って�
 
 ### Isaac Sim 6.0 で変わったところ
 
-`isaac_raspicat.py` は元々 5.x 向けに書いたが、6.0 で当たる変更が 2 つあった。
-どちらも**バージョン番号ではなく「実行時に何が在るか」で分岐**させてある。
-版数で分岐すると、互換 shim が外れた版で静かに壊れる。
+`isaac_raspicat.py` は元々 5.x 向けに書いた。**2026-08-20 に 6.0.1 で実際に
+動かして、当たる変更が 6 つあることが分かった** (それ以前は 2 つと書いていたが、
+どちらも机上で、うち 1 つは見立てが違っていた)。バージョン番号ではなく
+**「実行時に何が在るか」で分岐**させる方針はそのまま。版数で分岐すると、
+互換 shim が外れた版で静かに壊れる。
 
-| 変更 | 対応 |
-|---|---|
-| `isaacsim.sensors.rtx.LidarRtx` → `isaacsim.sensors.experimental.rtx.Lidar.create()`。引数も `config_file_name` → `config` に改名 | `_make_rtx_lidar()` が import できたほうを使い、引数名は `inspect.signature` で詰める |
-| `ROS2PublishTransformTree` がプリムを自分で解決するのをやめ、`IsaacComputeTransformTree` の出力を受け取る形に | ノードレジストリに `IsaacComputeTransformTree` が在ればグラフを 2 段に組む |
+| # | 変更 | 対応 |
+|---|---|---|
+| 1 | **`isaacsim[all]` に Kit の拡張本体が入らない。** `isaacsim.exp.base.kit` が要求する `isaacsim.anim.robot.schema` / `isaacsim.replicator.agent.schema` / `omni.metropolis.schema` / `omni.behavior.tree.schema` がどこにも無く、Kit が起動 2 秒で `Failed to resolve extension dependencies` で終わる。experience を替えても全部 `isaacsim.exp.base` を継承するので逃げられない | `pyproject.toml` の extra を `isaacsim[all,extscache]` に。`extscache` の 3 パッケージ (kit / kit-sdk / physics) が `isaacsim/extscache/` の 493 拡張を運ぶ。**kit 単体で 5.5 GiB** |
+| 2 | **pip 版の ROS 2 ブリッジは内蔵 Humble を使う。** 起動前に `ROS_DISTRO` / `RMW_IMPLEMENTATION` と `isaacsim.ros2.core/humble/lib` の探索パスが要り、無いと `ROS2 Bridge startup failed` で**ブリッジだけが死ぬ** (Kit は上がるのでグラフや DDS の問題に見える) | `run_isaac_case.sh` の `pip` 分岐が立てる。手で起動するときは自分で立てること (下の「立ち上げ順序」) |
+| 3 | **URDF importer の C++ インタフェース `_urdf` が廃止。** `ImportConfig()` / `acquire_urdf_interface()` / `import_robot()` が無い | `import_urdf()` が `URDFImporter` / `URDFImporterConfig` を import できたらそちらへ。6.0 は「USD ファイルに落として参照する」形なので、生成先を URDF の隣にしないこと (`package://` の解決が URDF の置き場基準のため) |
+| 4 | **RTX LiDAR がプロファイル JSON を読まなくなった。** `isaacsim.sensors.rtx.LidarRtx` (`config_file_name`) ごと消え、残る `isaacsim.sensors.experimental.rtx.Lidar.create` は `SUPPORTED_LIDAR_CONFIGS` の名前かセンサ資産の USD しか受けない。実体は `get_assets_root_path()` から引かれる。`/app/sensors/nv/lidar/profileBaseFolder` は**参照されない** | `_rtx_lidar_factory()` が「レジストリ名しか使えない API か」を返し、そうなら `_BUNDLED_PROFILE` (2d=`Example_Rotary_2D` / mid360=`Example_Solid_State`) で代用して**走査諸元が実機と違うことを警告する**。`--lidar-config` を明示したときは黙って無視せず止める |
+| 5 | **OmniGraph のノード型名の名前空間がノード単位で散った。** `OnPlaybackTick` は `omni.graph.action`、`IsaacCreateRenderProduct` は `isaacsim.core.nodes`、`IsaacReadIMU` は `isaacsim.sensors.physics`。`ROS2*` と残りの `Isaac*` は据え置き | `node_type()` の解決を**グループ単位からノード名ごと**に変え、`og.ObjectLookup.node_type()` で実在を照合してから使う。グループの先頭を決め打ちにすると、そのグループの他のノードが道連れで壊れる |
+| 6 | `ROS2PublishTransformTree` がプリムを自分で解決するのをやめ、`IsaacComputeTransformTree` の出力を受け取る形に | ノードレジストリに `IsaacComputeTransformTree` が在ればグラフを 2 段に組む。**ここだけは未検証** (`PUBLISH_LINK_TF=isaac` の経路) |
 
-後者は `PUBLISH_LINK_TF=isaac` のときしか通らない (既定は `rsp`)。
+> **ノード型が在るかを `og.get_node_type()` で判定しないこと。** あれは
+> 未登録でも例外を投げずにオブジェクトを返すので、常に「在る」になる。
+> 判定に使えるのは `og.ObjectLookup.node_type()` のほう (`og.Controller.edit`
+> が内部で使うのもこちら)。なお `og.GraphRegistry().get_node_types()` は
+> omni.graph 1.142 に**存在しない** — 以前ここで名前空間を照合していたが、
+> 例外を握り潰して常に空集合を返していたので、実質ハードコードだった。
+
+> **LiDAR の取り付け位置は作成後に USD の xform へ入れる。** 6.0 の
+> `Lidar.create` は複数プリムを一度に作る API で、姿勢の引数が複数形
+> (`translations` / `orientations`) なうえ `orientations` は**ワールド系**、
+> `translations` は**ローカル系**という混在。原点に置いたままでも 2m の壁を
+> 撃つ限りもっともらしいスキャンが返るので、**帯だけがずれても気づけない**。
+
+6 番は `PUBLISH_LINK_TF=isaac` のときしか通らない (既定は `rsp`)。
 起動時に `[isaac_raspicat] rtx lidar api -> ...` と
 `[isaac_raspicat] link TF: ...` をログに出すので、**どちらの経路を選んだかは
 1 行目付近で確認できる**。ここが期待と違っていたら、以降の症状を追う前に見ること。
@@ -212,6 +246,53 @@ wheel は linux (x86_64 / aarch64) と win_amd64 の 3 つが lock に入って�
 
 ブリッジは Isaac 側に自前の DDS を持つので、nav2 は別プロセス・別コンテナのまま
 でよい。それがこのハーネスが Pi4 の減速をコンテナ側だけに掛けられる理由でもある。
+
+### コンテナイメージ `daifuku-autonomous:humble-amd64` の作り方
+
+**`docker/raspberrypi/Dockerfile` を建てただけでは足りない。** あの Dockerfile が
+作るのは `daifuku-autonomous:humble` — ワークスペースが**空**の実行イメージで、
+compose が `src/` をマウントし `build/install/log` を名前付きボリュームで受けて、
+`up` のたびにコンテナ内で `build-workspace` を回す前提になっている。一方この
+ハーネスは、素のコンテナを 1 つ立てて `podman cp` で流し込むだけなので、
+**イメージの中に `/opt/ros_ws/install` が要る**。無いと
+`"/opt/ros_ws/install/share/daifuku_stack/" could not be found` で止まる。
+
+リポジトリルートで:
+
+```bash
+C="podman -c podman-machine-default-root"     # 接続名は環境次第
+
+$C build -f docker/raspberrypi/Dockerfile -t daifuku-autonomous:humble-amd64 .
+$C run -d --name wsbuild --user root daifuku-autonomous:humble-amd64 sleep infinity
+$C cp src/. wsbuild:/opt/ros_ws/src/
+$C cp daifuku_autonomous.repos wsbuild:/opt/ros_ws/daifuku_autonomous.repos
+
+# **ワークスペースのルートで import すること。** repos.yaml のパスが src/… なので、
+# src/ の中で叩くと src/src/… になる。
+$C exec wsbuild bash -lc 'cd /opt/ros_ws && source /opt/ros/humble/setup.bash     && vcs import . < daifuku_autonomous.repos'
+
+# **ROS を自分で source すること。** podman exec はエントリポイントを通らないので、
+# 素で叩くと ament_cmake が見つからず全パッケージが落ちる。
+$C exec -e BUILD_JOBS=12 wsbuild bash -lc     'source /opt/ros/humble/setup.bash && cd /opt/ros_ws && build-workspace'
+
+$C exec wsbuild bash -lc 'chown -R 1000:1000 /opt/ros_ws'
+$C commit wsbuild daifuku-autonomous:humble-amd64 && $C rm -f wsbuild
+```
+
+> **Windows のチェックアウトから流し込むときは、実行ビットと CRLF を直すこと。**
+> `core.fileMode=false` なので作業ツリーに実行ビットが無く、`podman cp` は
+> それをそのまま持ち込む。`--symlink-install` の `install/lib/<pkg>/x.py` は
+> `src/` への symlink なので、**効くのはソース側の権限**。落ちかたが 2 段階で、
+> どちらも原因から遠く見える:
+>
+> * 実行ビットが無い → `executable 'system_monitor.py' not found on the
+>   libexec directory` (symlink は在るのに「無い」と言われる)
+> * シェバンが CRLF → 起動して **exit code 127** (`python3` を探しに行く)
+>
+> ```bash
+> LIST=$(git ls-files -s | awk '$1=="100755"{print $4}' | grep '^src/' | sed 's|^src/||')
+> $C exec wsbuild bash -lc "cd /opt/ros_ws/src && for f in $LIST; do >     sed -i 's/$//' \"$f\"; chmod +x \"$f\"; done"
+> ```
 
 ## 手順
 
@@ -293,6 +374,12 @@ $ISAACSIM/python.sh simulator/src/daifuku_sim/isaac_raspicat.py \
     --world /tmp/world.usda --urdf /tmp/raspicat_plain.urdf \
     --lidar 2d -x -1.27 -y -0.63
 # pip 版なら (--no-sync を落とさないこと。落とすとこの場で同期が始まる):
+#   pip 版は内蔵 ROS 2 を使うので、先にこれを見せる。無いと ROS2 Bridge
+#   だけが死ぬ (Kit は上がるので原因がグラフや DDS に見える)。
+#   run_isaac_case.sh の pip 分岐は自分でやるので、手起動のときだけ要る:
+#     export ROS_DISTRO=humble RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+#     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:<venv>/lib/site-packages/isaacsim/exts/isaacsim.ros2.core/humble/lib
+#     (Windows は LD_LIBRARY_PATH ではなく PATH)
 #   uv run --project simulator --extra isaac --no-sync python \
 #       simulator/src/daifuku_sim/isaac_raspicat.py --world ... (以下同じ)
 
@@ -302,8 +389,10 @@ ros2 topic hz /odom
 ros2 topic pub -r 5 /cmd_vel geometry_msgs/msg/Twist '{linear: {x: 0.1}}'   # 動くか
 ```
 
-`/scan_raw` が出なければ LiDAR プロファイルの問題が濃厚。`src/daifuku_config/*.json` の
-スキーマが手元の Isaac と合わない場合に備えて逃げ道を用意してある:
+`/scan_raw` が出なければ LiDAR プロファイルの問題が濃厚。**6.0 では
+`configs/*.json` は最初から使われず**、同梱プロファイル
+(2d=`Example_Rotary_2D` / mid360=`Example_Solid_State`) に落ちる。別のものを
+選ぶには:
 
 ```bash
 $ISAACSIM/python.sh simulator/src/daifuku_sim/isaac_raspicat.py ... --lidar-profile Example_Rotary

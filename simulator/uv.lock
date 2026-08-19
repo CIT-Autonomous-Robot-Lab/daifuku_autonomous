@@ -926,7 +926,7 @@ dependencies = [
 [package.optional-dependencies]
 isaac = [
     { name = "cuda-bindings", marker = "python_full_version == '3.12.*'" },
-    { name = "isaacsim", extra = ["all"], marker = "python_full_version == '3.12.*'" },
+    { name = "isaacsim", extra = ["all", "extscache"], marker = "python_full_version == '3.12.*'" },
     { name = "pyopengl", marker = "python_full_version == '3.12.*'" },
     { name = "tinyobjloader", marker = "python_full_version == '3.12.*'" },
 ]
@@ -934,7 +934,7 @@ isaac = [
 [package.metadata]
 requires-dist = [
     { name = "cuda-bindings", marker = "python_full_version == '3.12.*' and extra == 'isaac'", specifier = "==13.4.0b1" },
-    { name = "isaacsim", extras = ["all"], marker = "python_full_version == '3.12.*' and extra == 'isaac'", specifier = "==6.0.1.0", index = "https://pypi.nvidia.com/" },
+    { name = "isaacsim", extras = ["all", "extscache"], marker = "python_full_version == '3.12.*' and extra == 'isaac'", specifier = "==6.0.1.0", index = "https://pypi.nvidia.com/" },
     { name = "numpy", specifier = ">=1.24" },
     { name = "pillow", specifier = ">=10.0" },
     { name = "pyopengl", marker = "python_full_version == '3.12.*' and extra == 'isaac'", specifier = "==4.0.0a1" },
@@ -1304,6 +1304,11 @@ all = [
     { name = "isaacsim-test", marker = "python_full_version == '3.12.*'" },
     { name = "isaacsim-utils", marker = "python_full_version == '3.12.*'" },
 ]
+extscache = [
+    { name = "isaacsim-extscache-kit", marker = "python_full_version == '3.12.*'" },
+    { name = "isaacsim-extscache-kit-sdk", marker = "python_full_version == '3.12.*'" },
+    { name = "isaacsim-extscache-physics", marker = "python_full_version == '3.12.*'" },
+]
 
 [[package]]
 name = "isaacsim-app"
@@ -1458,6 +1463,28 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/46/a8/c39e0a8f091e3adeea78c758bc6ad08c37681ce06cdd1495745111ffe638/isaacsim_example-6.0.1.0-cp312-none-manylinux_2_35_aarch64.whl", hash = "sha256:339b1600c33811fba5ee34861b0d247691dbded741de10b675d0d754819d697e", size = 748078, upload-time = "2026-06-22T22:55:45.468Z" },
     { url = "https://files.pythonhosted.org/packages/ef/c2/ad0223f9a772047e867fe8b361626b0f4307ffb2ef219b5ed3a0e8b9e3f4/isaacsim_example-6.0.1.0-cp312-none-manylinux_2_35_x86_64.whl", hash = "sha256:4c22448a337a2bbf0b99934cb6d5c84ebde4692b088846acefba04e8b949f588", size = 2504366, upload-time = "2026-06-22T22:55:27.125Z" },
     { url = "https://files.pythonhosted.org/packages/08/b1/6866238d64b4aba9cb4b5f3825a87b3785f64398ffb088ba0fb3a0469488/isaacsim_example-6.0.1.0-cp312-none-win_amd64.whl", hash = "sha256:93ec10e41965bdada028f6b57a9f8f2e6d4f82a83d1e4435134955311aef0a4b", size = 1376797, upload-time = "2026-06-22T22:55:59.537Z" },
+]
+
+[[package]]
+name = "isaacsim-extscache-kit"
+version = "6.0.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f9/9d/22856e01cffe0fdba87ba1dad8e53d720c76f6d20aeb1fa4434ac0a74e24/isaacsim_extscache_kit-6.0.1.0.tar.gz", hash = "sha256:7f7dd10afa5e8e9ea4576e8acc9fc624b27e7274d9415d6318829e1eeae1d504", size = 857, upload-time = "2026-06-22T22:59:33.859Z" }
+
+[[package]]
+name = "isaacsim-extscache-kit-sdk"
+version = "6.0.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/bc/dd/72d0a6a1fcaf1498846971a822b22db00e52a0a9c87058b8115ff13becb5/isaacsim_extscache_kit_sdk-6.0.1.0.tar.gz", hash = "sha256:5ce65531d53abf71c4c6d326e80439c61c93f9d24293fa291504cd3a20ef3656", size = 870, upload-time = "2026-06-22T22:57:16.812Z" }
+
+[[package]]
+name = "isaacsim-extscache-physics"
+version = "6.0.1.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bc/4d/7eb8a7ce4dbc8ceef29be42adf4841cb493c4b48e81e82c4307beca22c7d/isaacsim_extscache_physics-6.0.1.0-cp312-none-manylinux_2_35_aarch64.whl", hash = "sha256:a88d45968f5c9976c81c06b96a0432498807113981e7ba607b0527fb18f19e14", size = 260288403, upload-time = "2026-06-22T22:56:05.264Z" },
+    { url = "https://files.pythonhosted.org/packages/be/2d/1de17c209279377a309442c761cad7b4c8dfcd58a61d272aa135774c500a/isaacsim_extscache_physics-6.0.1.0-cp312-none-manylinux_2_35_x86_64.whl", hash = "sha256:e666e4985f99752df68c3aee25daf8d8771d17a5546d76dde26c038985f60127", size = 258382012, upload-time = "2026-06-22T22:55:38.929Z" },
+    { url = "https://files.pythonhosted.org/packages/4b/d0/9c4e56ff1e80214863b3b2b9c419fef89931f72cd30723c456e8c8a6f6ee/isaacsim_extscache_physics-6.0.1.0-cp312-none-win_amd64.whl", hash = "sha256:367be0033e33e55865eb0cba62f2c14aed0305b9399c8ff373853da13be98aa1", size = 252209690, upload-time = "2026-06-22T22:56:43.943Z" },
 ]
 
 [[package]]

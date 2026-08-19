@@ -48,7 +48,12 @@ source /opt/ros/humble/setup.bash
 PLANNER=${PLANNER:-vi}
 LOCAL_PLANNER=${LOCAL_PLANNER:-auto}
 NAV2=${NAV2:-auto}
-LOCALIZATION=${LOCALIZATION:-emcl2}
+# **既定が emcl2 でないのは、既定の地図 (map_19f) がそれでは立たないため。**
+# src/daifuku_config/overrides/map_19f.yaml が vi_planner の localizer を
+# 'belief' (VIOLA) にしているので、localization:=emcl2 だと推定器が 2 つに
+# なり backends.validate_localization が起動時に止める。map_tsudanuma は
+# 逆に belief を置けない (密ソルバが要り 3.17GB で OOM) ので emcl2 に戻すこと。
+LOCALIZATION=${LOCALIZATION:-vi}
 START_X=${START_X:--1.27}
 START_Y=${START_Y:--0.63}
 START_YAW_DEG=${START_YAW_DEG:-0}

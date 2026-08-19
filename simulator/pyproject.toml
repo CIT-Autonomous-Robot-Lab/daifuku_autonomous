@@ -10,7 +10,7 @@ dependencies = [
     "pyyaml>=6.0",
 ]
 
-# Isaac Sim 本体。**既定では入らない** (新規 144 パッケージと大きいため)。
+# Isaac Sim 本体。**既定では入らない** (新規 147 パッケージと大きいため)。
 #
 #     uv sync --extra isaac        # pip 版 Isaac Sim を venv に入れる
 #
@@ -28,9 +28,18 @@ dependencies = [
 # isaacsim-core が == でプレリリースを指しているためで、[tool.uv] prerelease を
 # "explicit" にしたうえで**受け入れる 3 つだけを名指し**している。"allow" にすると
 # numpy などが将来の再 lock でプレリリースに化け得るので使わない。
+#
+# **extras は `all` だけでは足りず、`extscache` が要る。** `all` に入るのは
+# isaacsim-* の 22 個だけで、Kit の拡張本体 (isaacsim/extscache/ の 493 個) は
+# `extscache` の 3 パッケージ (kit / kit-sdk / physics。kit 単体で 5.5 GiB) が
+# 運んでいる。無いと `isaacsim.exp.base.kit` が要求する
+# isaacsim.anim.robot.schema / isaacsim.replicator.agent.schema /
+# omni.metropolis.schema / omni.behavior.tree.schema が**どこにも無く**、
+# Kit が起動 2 秒で `Failed to resolve extension dependencies` で終わる。
+# experience を替えても全部 isaacsim.exp.base を継承するので逃げられない。
 [project.optional-dependencies]
 isaac = [
-    "isaacsim[all]==6.0.1.0 ; python_full_version ~= '3.12.0'",
+    "isaacsim[all,extscache]==6.0.1.0 ; python_full_version ~= '3.12.0'",
     "tinyobjloader==2.0.0rc13 ; python_full_version ~= '3.12.0'",
     "cuda-bindings==13.4.0b1 ; python_full_version ~= '3.12.0'",
     "pyopengl==4.0.0a1 ; python_full_version ~= '3.12.0'",
