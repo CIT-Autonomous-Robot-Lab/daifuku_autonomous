@@ -21,10 +21,10 @@
 # vi_planner にはさらに **nav2:=false (この構成の既定) のスタンドアロン**があり、
 # そのとき navigate_to_pose と follow_waypoints もこのノードが出す。効くキーが
 # 増える (goal_retry_* / stop_on_failure / waypoint_pause_sec) 一方で、
-# ./bt_navigator.yaml ./controller_server.yaml ./costmaps.yaml と ../../behavior_trees/
-# は**丸ごと読まれなくなり**、./behaviors.yaml も velocity_smoother の節だけになる
-# (それ以外のノードが立たないため)。読む必要があるのはこのファイルと ./map_server.yaml
-# と ../localization/emcl2.yaml と ./behaviors.yaml の velocity_smoother の節だけに
+# nav2/bt_navigator.yaml nav2/controller_server.yaml nav2/costmaps.yaml と ../../behavior_trees/
+# は**丸ごと読まれなくなり**、nav2/behaviors.yaml も velocity_smoother の節だけになる
+# (それ以外のノードが立たないため)。読む必要があるのはこのファイルと nav2/map_server.yaml
+# と localization/emcl2.yaml と nav2/behaviors.yaml の velocity_smoother の節だけに
 # なる。切り替えは launch の nav2:= で、ここには書かない (下の未設定を参照)。
 
 # ── local_planner:=vi: 統合プランナ (planner_server + controller_server 置換) ──
@@ -78,7 +78,7 @@ vi_planner:
     # ▲ 投げ直す前に止まったまま場を更新する時間 (goal_retry_settle_sec) は 2026-08-09 に
     #   キーごと消え、ノード内の const 3.0 秒に固定された。**BT の Wait と違い penalty の
     #   半減が実際に進む**のは変わらない (書いても読まれない)。
-    stop_on_failure: false        # 既定 false: follow_waypoints で 1 点失敗したら残りを諦めるか。nav2 構成の ./behaviors.yaml の waypoint_follower の同名キーと同義で、**nav2:=false ではあちらは読まれない**
+    stop_on_failure: false        # 既定 false: follow_waypoints で 1 点失敗したら残りを諦めるか。nav2 構成の nav2/behaviors.yaml の waypoint_follower の同名キーと同義で、**nav2:=false ではあちらは読まれない**
     waypoint_pause_sec: 0.2       # 既定 0.2 [s]: 1 点に着いてから次の点へ向かうまで。あちらの waypoint_pause_duration: 200 [ms] と同義。この間も場は更新し続ける
     # ── 狭域 → 広域のフィードバック (共有価値関数の全域掃き。仕組みと実測は ../README.md) ──
     global_sweep: true            # 既定 true: 全域掃き (compact ではタイル修復) を回すか。切ると狭域が「通れない」と判断しても広域は塞がった通路を指し続ける

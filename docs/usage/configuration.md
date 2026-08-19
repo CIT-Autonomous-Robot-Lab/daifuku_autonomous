@@ -15,7 +15,7 @@
 |---|---|---|
 | `configs/site` | すべて | 走らせる場所を1行で持つ。すべてのlaunchが`overrides`の既定をここから取り、`navigation.launch.py`は`map`の既定もここから導く。**書き換えは`tools/site.sh`** |
 | `configs/overrides/*.yaml` | すべて | 地図・環境ごとの上書き（`overrides:=`で重ねる）。行き先は**パッケージ名とノード名**で決まるので、この表の`MID360_config.json`以外すべてを上書きできる |
-| `configs/stack/nav2/*.yaml` | `stack` | Nav2、価値反復プランナ、コストマップ、速度、ゴール判定（起動時に1つへ合成） |
+| `configs/stack/nav2/*.yaml`、`configs/stack/vi_planner.yaml` | `stack` | Nav2、価値反復プランナ、コストマップ、速度、ゴール判定（起動時に1つへ合成） |
 | `behavior_trees/*.xml` | `stack` | `planner:=vi`用のビヘイビアツリー（起動時に自動で選択）。**`nav2:=true`のときだけ読まれる**（既定では`bt_navigator`が立たない） |
 | `configs/stack/localization/emcl2.yaml` | `stack` | EMCL2のフレーム、初期姿勢、粒子数、オドメトリモデル |
 | `configs/stack/lifecycle_bond.yaml` | `stack` | ライフサイクルマネージャのbondタイムアウト |
@@ -178,7 +178,7 @@ daifuku_bringup:            # 機体側。変更後は docker compose up -d
       min_elevation_deg: 5.0
 
 daifuku_stack:              # 自律移動側
-  vi_planner:               # -> configs/stack/nav2/vi_planner.yaml（params_fileの合成結果）
+  vi_planner:               # -> configs/stack/vi_planner.yaml（params_fileの合成結果）
     ros__parameters:
       safety_radius_penalty: 1
 
@@ -220,4 +220,4 @@ daifuku_stack:              # 自律移動側
 - LiDAR搭載位置と除外角度
 - ゴール許容誤差
 
-ソルバ、スレッド数、キャッシュ許容差、経路補間間隔、制御周期、局所反復時間などは`configs/stack/nav2/vi_planner.yaml`で設定します。同ファイルの節は`vi_planner`の1つだけです（`local_planner:=nav2`の広域専用構成も同じノードを`follow: false`で立てるため。2026-08-08の上流の整理まで、あちらは`vi_global_planner`という別ノードで節も2つありました）。
+ソルバ、スレッド数、キャッシュ許容差、経路補間間隔、制御周期、局所反復時間などは`configs/stack/vi_planner.yaml`で設定します。同ファイルの節は`vi_planner`の1つだけです（`local_planner:=nav2`の広域専用構成も同じノードを`follow: false`で立てるため。2026-08-08の上流の整理まで、あちらは`vi_global_planner`という別ノードで節も2つありました）。

@@ -136,7 +136,7 @@ Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。
 | --- | --- | --- |
 | `params.py` | `daifuku_config_manager` | 設定ファイルへの上書きの合成（土台 → `overrides` → `extra_params_file`）と、`config_sentinel`の起動・停止の配線（`sentinel_actions`）。**すべてのlaunchが使う共有部品** |
 | `backends.py` | `daifuku_stack/launch/daifuku_stack_launch/` | `localization`／`planner`／`local_planner`／`nav2`の解決と起動前チェック |
-| `nav2_params.py` | `daifuku_stack/launch/daifuku_stack_launch/` | `configs/stack/nav2/*.yaml`の合成と、`overrides`からの`map:=`の決定。`params.py`へ`base_resolvers`で渡す |
+| `nav2_params.py` | `daifuku_stack/launch/daifuku_stack_launch/` | `configs/stack/nav2/*.yaml`と`configs/stack/vi_planner.yaml`の合成と、`overrides`からの`map:=`の決定。`params.py`へ`base_resolvers`で渡す |
 | `lidar.py` | `daifuku_bringup/launch/daifuku_bringup_launch/` | LiDAR構成の共通引数と`lidar_bringup`の`include` |
 
 `lidar`や`lidar_z`のようなLiDAR構成の引数は、`robot_bringup`と`lidar_bringup`の
@@ -160,7 +160,7 @@ Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。
   `pose_topic`は`initialpose`＝**手動シード**（RVizの2D Pose Estimate）になる。
   `planner:=vi`と`nav2:=false`（どちらも既定）が要る
 
-**どの推定器を使うかはlaunchではなく`configs/stack/nav2/vi_planner.yaml`の`localizer`**
+**どの推定器を使うかはlaunchではなく`configs/stack/vi_planner.yaml`の`localizer`**
 （`external`／`grid`／`adaptive`／`belief`／`viterbi`）。launch引数が持つのは
 「内蔵を使うか」だけなので、2つが噛み合わなければ起動時に止まります。
 

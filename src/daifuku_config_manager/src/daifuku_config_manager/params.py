@@ -372,7 +372,7 @@ def _base(context, name, base_resolvers):
     """launch 引数 name が指す設定ファイルを読む。
 
     base_resolvers に name があれば、そちらへ丸ごと委ねる。ファイル 1 つでは
-    済まない土台 (navigation の params_file は configs/stack/nav2/*.yaml の合成) を、
+    済まない土台 (navigation の params_file は configs/stack/nav2/*.yaml + vi_planner.yaml の合成) を、
     このモジュールがパッケージ構造を知らないまま扱うための口。
 
     Returns:

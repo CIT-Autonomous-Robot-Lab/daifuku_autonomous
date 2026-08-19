@@ -101,12 +101,14 @@ check_override_nodes() {
 }
 item "overrides の 2 段目のノード名に行き先がある" check_override_nodes
 
-# ── nav2 の断片 ─────────────────────────────────────────────────────────────
-# ファイル名順に 1 つの params_file へ束ねられる。**同じノード名が 2 つの断片に
-# あると起動時にエラーで止まる** (キーが重なっていなくても止まる)。
+# ── params_file の断片 ──────────────────────────────────────────────────────
+# stack/nav2/*.yaml と stack/vi_planner.yaml (Nav2 のノードではないので nav2/ の
+# 外に居るが合成には入る) がファイル名順に 1 つの params_file へ束ねられる。
+# **同じノード名が 2 つの断片にあると起動時にエラーで止まる** (キーが重なって
+# いなくても止まる)。
 check_nav2_dup() {
   local dup
-  dup="$(grep -ho '^[a-zA-Z_][a-zA-Z_0-9]*:' "${CONFIG}"/stack/nav2/*.yaml |
+  dup="$(grep -ho '^[a-zA-Z_][a-zA-Z_0-9]*:'     "${CONFIG}"/stack/nav2/*.yaml "${CONFIG}"/stack/vi_planner.yaml |
     tr -d ':' | sort | uniq -d | tr '\n' ' ')"
   [[ -z "${dup}" ]] || {
     echo "2 つの断片に居る: ${dup}"
@@ -114,7 +116,7 @@ check_nav2_dup() {
   }
   echo "重複なし"
 }
-item "configs/stack/nav2/*.yaml にノード名の重複が無い" check_nav2_dup
+item "params_file の断片にノード名の重複が無い" check_nav2_dup
 
 # standalone を設定に書くと、Nav2 構成で立てたとき navigate_to_pose のサーバが
 # bt_navigator と 2 つになる。**どちらに繋がったかはログにも ros2 action list にも
@@ -128,7 +130,7 @@ item "configs/stack/nav2/*.yaml にノード名の重複が無い" check_nav2_du
 # EKF と駆動ドライバにもあり、あちらは正しく設定で持つもの (odom->base_footprint)。
 #
 # **localizer は逆にここに書く側**。「どの推定器を使うか」を持つのは
-# configs/stack/nav2/vi_planner.yaml だけで、launch が持つのは「内蔵を使うか」
+# configs/stack/vi_planner.yaml だけで、launch が持つのは「内蔵を使うか」
 # (localization:=vi) だけ。噛み合わなければ backends.validate_localization が
 # 起動時に止めるので、この検査の対象には**入れない**。
 check_no_launch_only_keys() {

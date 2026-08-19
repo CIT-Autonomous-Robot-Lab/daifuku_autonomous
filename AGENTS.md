@@ -143,7 +143,10 @@ Docker 越しに叩く形は
 
 理由と実測は各ドキュメント側にあります。ここは「知らずに壊す」ものだけ。
 
-- `configs/stack/nav2/*.yaml` はファイル名順に 1 つの `params_file` へ束ねられる。ノード単位で
+- `configs/stack/nav2/*.yaml` と `configs/stack/vi_planner.yaml` はファイル名順に 1 つの
+  `params_file` へ束ねられる（`vi_planner` は Nav2 のノードではないので `nav2/` の外に
+  居るが、**合成には入れる** — 上流の `navigation_launch.py` は `params_file` を 1 つしか
+  受け取らず、`overrides` が重なれるノード名もこの合成結果で決まるため）。ノード単位で
   分けるのが前提で、**同じノード名が 2 つの断片にあると起動時にエラーで止まる**。
   キーが重なっていなくても止まるので、1 つのノードの設定を 2 ファイルに割れない。
   断片どうしは深くマージしない（深いマージが効くのは `overrides` を重ねるときだけ）。
@@ -198,7 +201,7 @@ Docker 越しに叩く形は
   `controller_server` に渡す）。**2026-08-08 の上流の整理まで後者は
   `vi_global_planner` という別パッケージ・別ノードで、両方立てると
   `compute_path_to_pose` にサーバが 2 つ載る、というのがここの罠だった**。消えたので、
-  設定（`configs/stack/nav2/vi_planner.yaml` と `overrides/`）も検査も名前を
+  設定（`configs/stack/vi_planner.yaml` と `overrides/`）も検査も名前を
   `vi_planner` に一本化してある。**`follow` を `configs/` に書かないこと。**
   `local_planner` を見て渡すのは vi 版 `navigation_launch.py` で、あちらは
   `parameters` の後ろに置くので設定より強い（書いても効かない）。**危ないのは
@@ -252,7 +255,7 @@ Docker 越しに叩く形は
   束ねる規則はそのまま）が、宛先のノードが立たないので**エラーも警告も出ないまま
   無視される**。`behaviors.yaml` の残り 3 ノード（`smoother_server` /
   `behavior_server` / `waypoint_follower`）がそれで、同名の設定を移した先は
-  `configs/stack/nav2/vi_planner.yaml`（`stop_on_failure` / `waypoint_pause_sec`）。
+  `configs/stack/vi_planner.yaml`（`stop_on_failure` / `waypoint_pause_sec`）。
   あちらを直しても効かない。BT の `RecoveryNode number_of_retries` に当たるものは
   同ファイルの `goal_retry_limit` で、こちらは名前が違う。
 - **`twist_mux:=true`（既定）だと、機体が動くのは `/cmd_vel` ではなく
@@ -349,7 +352,7 @@ Docker 越しに叩く形は
   絶対名なので、`namespace:=` を付けた構成でも噛み合わない）。**`nav2:=false` では
   この穴は無い** — `follow_waypoints` を `vi_planner` 自身が受けるので、順路はゴールと
   同じ経路で入る（トピックはもう 1 つの入口として残る）。**ノード側の宣言と
-  `configs/stack/nav2/vi_planner.yaml` は `false` で、同梱の overrides で `true` へ
+  `configs/stack/vi_planner.yaml` は `false` で、同梱の overrides で `true` へ
   上書きしているのは `map_19f` だけ**（津田沼は 2026-08-07 に `true` にしたあと
   2026-08-08 に `false` へ戻した。走行中の固まりの切り分けで、消える待ちは 19F が
   29 秒、津田沼が 87 秒）。価値関数が同時に 2 つ生きるので、**密ソルバでは
@@ -511,6 +514,7 @@ Docker 越しに叩く形は
 - 「既定」= 各ノードの `main.rs`（`vi_planner` は `src/node/params.rs`）などが持つ
   宣言時の値、`overrides/` での「断片」=
   重ねる先の設定ファイル（そのノードを宣言している `configs/stack/nav2/*.yaml` や
+  `configs/stack/vi_planner.yaml`、
   `configs/stack/localization/emcl2.yaml` など）の値。値を変えたら `既定 同左` や
   `# 断片 <値>:`、ファイル冒頭の
   「変えてあるのは○○だけ」といった要約も同じ変更で追随させる。

@@ -514,11 +514,12 @@ penalty を 1 にすると同じ地図・同じゴールで V 120→0 と単調�
 launch_ros は global params (SetParameter / SetParametersFromFile) を先に、
 ノード個別の `parameters=[...]` を後に渡す。ROS は後勝ちなので、
 **`params_file` に既にあるキーは上書きできない**。`bond_timeout` が効くのは
-`configs/stack/nav2/*.yaml` のどこにも無いキーだからで、`solver` や `map_scale` は効かない
+合成される断片 (`configs/stack/nav2/*.yaml` + `configs/stack/vi_planner.yaml`) の
+どこにも無いキーだからで、`solver` や `map_scale` は効かない
 (実測: overlay を書いても `map_scale=1` のまま起動した)。
 `navigation.launch.py` は `daifuku_config_manager` の `params.py` の `compose` で YAML の
 段階でマージし、`params_file` 自体を作っている (`overrides:=` / `extra_params_file:=`
-の両方がこの経路)。BT XML の 2 キーは `configs/stack/nav2/*.yaml` に無いので `SetParameter` で
+の両方がこの経路)。BT XML の 2 キーは断片のどこにも無いので `SetParameter` で
 足りる (`planner:=vi` の bringup はこれで通る)。
 
 ### 罠 3: `bt_navigator` の `wait_for_service_timeout` (既定 1000ms)

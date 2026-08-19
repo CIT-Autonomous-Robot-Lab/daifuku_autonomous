@@ -14,7 +14,8 @@
 """daifuku_stack だけが持つ、nav2 まわりの設定の解決。
 
 `daifuku_config_manager.params` は「launch 引数 1 つ = 設定ファイル 1 つ」しか
-知らない。navigation の params_file だけは `configs/stack/nav2/*.yaml` の合成なので、
+知らない。navigation の params_file だけは `configs/stack/nav2/*.yaml` と
+`configs/stack/vi_planner.yaml` の合成なので、
 土台の作り方をここに置いて `base_resolvers` 経由で渡す。あちらにパッケージ構造を
 持ち込むと、機体側 (daifuku_bringup) にも nav2 の知識が付いてくるため。
 
@@ -29,14 +30,21 @@ from ament_index_python.packages import get_package_share_directory
 from launch.actions import LogInfo, SetLaunchConfiguration
 
 from daifuku_config_manager import value
-from daifuku_config_manager.params import load, site_meta, site_name
+from daifuku_config_manager.params import config_root, load, site_meta, site_name
 
 
 def fragments_resolver(context):
     """params_file の土台を解決する (params.compose の base_resolvers 用)。
 
-    params_dir/*.yaml をファイル名順に合成する。断片はノード単位で重複しない前提
-    (configs/README.md) で、重なると「どちらが勝つか分からない」ので止める。
+    params_dir/*.yaml に configs/stack/vi_planner.yaml を足して、ファイル名順に
+    合成する。断片はノード単位で重複しない前提 (configs/README.md) で、重なると
+    「どちらが勝つか分からない」ので止める。
+
+    vi_planner だけ nav2/ の外に居るのは、あれが Nav2 のノードではないため。
+    それでも合成に入れるのは、**入れないと効かないから**: 上流の
+    navigation_launch.py は params_file を 1 つしか受け取らないし、overrides が
+    重なれるノード名はこの合成結果 (下の set(merged)) で決まるので、外すと
+    overrides の vi_planner: が「行き先の無いノード名」で起動時に落ちる。
 
     params_file:= を明示したときはそれを土台にするが、**上書きを受けるノード名は
     断片のものを使う**。nav2 のノード宛の節が params_file:= を渡した途端に黙って
@@ -46,7 +54,12 @@ def fragments_resolver(context):
         (中身, 上書きを受けるノード名, 出どころの表示, 常に一時ファイルを作るか)。
     """
     params_dir = value(context, "params_dir")
-    fragments = sorted(glob.glob(os.path.join(params_dir, "*.yaml")))
+    vi_frag = os.path.join(config_root("daifuku_stack"), "vi_planner.yaml")
+    if not os.path.isfile(vi_frag):
+        # 黙って落とさない。抜けると vi_planner が宣言時の既定だけで上がり、
+        # overrides の vi_planner: が「行き先の無いノード名」で落ちる。
+        raise RuntimeError(f"Missing parameter fragment: {vi_frag}")
+    fragments = sorted(glob.glob(os.path.join(params_dir, "*.yaml"))) + [vi_frag]
     if not fragments:
         raise RuntimeError(f"No parameter fragments found in {params_dir}")
 
@@ -58,12 +71,13 @@ def fragments_resolver(context):
                 raise RuntimeError(
                     f"Node '{node_name}' is defined in two fragments: "
                     f"{owner[node_name]} and {frag}.\n"
-                    "configs/stack/nav2/*.yaml must partition the nodes; put "
+                    "The fragments (configs/stack/nav2/*.yaml + "
+                    "configs/stack/vi_planner.yaml) must partition the nodes; put "
                     "map-specific overrides in configs/overrides/ instead."
                 )
             owner[node_name] = frag
         merged.update(body)
-    origin = f"{len(fragments)} fragments from {params_dir}"
+    origin = f"{len(fragments)} fragments from {params_dir} (+ vi_planner.yaml)"
 
     explicit = value(context, "params_file")
     if not explicit:

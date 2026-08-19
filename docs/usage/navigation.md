@@ -153,7 +153,7 @@ ros2 launch daifuku_stack navigation.launch.py \
 残ります）。`planner:=vi`と`nav2:=false`——どちらも既定——が要ります。
 
 **使うかどうかはこの引数、どれを使うかは`localizer`**です。断片
-（`configs/stack/nav2/vi_planner.yaml`）の既定は`external`（＝外部の推定を読む）で、
+（`configs/stack/vi_planner.yaml`）の既定は`external`（＝外部の推定を読む）で、
 そのまま`localization:=vi`を渡すと**起動時に止まります**。
 
 **ただし同梱の`map_19f`（既定のoverrides）は2026-08-09から`belief`へ上書きしています。**
@@ -257,7 +257,7 @@ BTを外すと、VIが損をしていた点が消えます。**毎秒の再計�
 それまでは`goal_retry_settle_sec`）のあいだ**止まったままスキャンを取り込み続ける**ので、一度「通れない」と塗った場所のペナルティが実際に薄れていきます。
 投げ直しの上限は`goal_retry_limit`（既定3、負で無制限）です。
 
-読む設定ファイルも減ります。効くのは`configs/stack/nav2/vi_planner.yaml`と`map_server.yaml`、
+読む設定ファイルも減ります。効くのは`configs/stack/vi_planner.yaml`と`map_server.yaml`、
 `configs/stack/localization/emcl2.yaml`、それに`behaviors.yaml`の`velocity_smoother`の節だけです。
 `bt_navigator.yaml`・`controller_server.yaml`・`costmaps.yaml`と`behaviors.yaml`の
 残り3ノード分、`behavior_trees/`は**合成には入るが宛先の
@@ -419,7 +419,7 @@ RVizのFixed Frameとwaypointの`frame_id`が一致している必要があり�
 追加も追加読み込みも拒否され、パネルのステータス行にだけ理由が出ます。
 
 点と点のあいだではいったん止まります。停止時間は既定（`nav2:=false`）では
-`configs/stack/nav2/vi_planner.yaml`の`waypoint_pause_sec`（0.2秒。この間も価値関数の更新は
+`configs/stack/vi_planner.yaml`の`waypoint_pause_sec`（0.2秒。この間も価値関数の更新は
 続きます）、`nav2:=true`では`configs/stack/nav2/behaviors.yaml`の`waypoint_pause_duration`
 （200 ms）です。行けない点があっても巡回は続き、完了時に取りこぼした点数がステータス行に
 出ます（`stop_on_failure: false`。これも構成ごとに置き場が違い、既定では
@@ -431,10 +431,10 @@ RVizのFixed Frameとwaypointの`frame_id`が一致している必要があり�
 ゴールごとに価値関数を解き直すので、**点が変わるたびに丸ごと1回のsolveが入り、その
 間ずっと機体が止まっています**（実測で19Fが29秒、津田沼が87秒）。
 
-`configs/stack/nav2/vi_planner.yaml`の`waypoint_prefetch`を`true`にすると、いまの点へ
+`configs/stack/vi_planner.yaml`の`waypoint_prefetch`を`true`にすると、いまの点へ
 走っているあいだに次の点を別スレッドで解いておき、着いたらsolveを飛ばして受け取ります。
 
-**いま`true`なのは`map_19f`だけです。** 断片（`configs/stack/nav2/vi_planner.yaml`）は
+**いま`true`なのは`map_19f`だけです。** 断片（`configs/stack/vi_planner.yaml`）は
 `false`で、それを上書きしているのは`overrides/map_19f.yaml`だけです。津田沼は
 2026-08-07に`true`にしたあと、**2026-08-08に`false`へ戻しました**——走行中の固まりの
 容疑者を切り分けるためで、あちらは場が648 MB×2＝1.3 GBになります。2026-08-04にも一度
@@ -474,7 +474,7 @@ solveのCPUも取られます（追従の`try_lock`は邪魔しませんが、10
 いるのは地図の全域ぶんの価値関数ですが、走り出すのに要るのは**いまの姿勢から
 ゴールまでの経路**だけなので、それが引けた時点でsolveを打ち切れます。
 
-`early_start`を`true`にすると打ち切ります（断片の`configs/stack/nav2/vi_planner.yaml`は
+`early_start`を`true`にすると打ち切ります（断片の`configs/stack/vi_planner.yaml`は
 `false`のままで、**同梱の2地図は`overrides/`で`true`にしています**）。判定は
 ロールアウトそのもの（`compute_path_to_pose`が返すのと同じ辿り方）なので、
 **打ち切った場でも経路は必ず引けます**。先読みとは別物なので、両方同時に有効に

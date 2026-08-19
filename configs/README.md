@@ -12,7 +12,7 @@
 | 場所 | 読む launch | 渡し方 |
 | --- | --- | --- |
 | `overrides/*.yaml` | すべて | 下のどれかへ重ねる（`overrides:=`）。行き先はパッケージ名とノード名で決まる |
-| `stack/nav2/*.yaml` | `navigation.launch.py` | 起動時に 1 つへ合成して `params_file` に渡る |
+| `stack/nav2/*.yaml` と `stack/vi_planner.yaml` | `navigation.launch.py` | 起動時に 1 つへ合成して `params_file` に渡る |
 | `stack/localization/emcl2.yaml` | `navigation.launch.py` | `emcl2_params_file` でノードへ直接 |
 | `stack/lifecycle_bond.yaml` | `navigation.launch.py` | `bond_params_file` を `SetParametersFromFile` でグループ内の全ノードへ注入 |
 | `stack/mapping/slam_toolbox.yaml` | `mapping.launch.py` | `slam_params_file` でノードへ直接 |
@@ -64,7 +64,7 @@ resample_interval: 1         # 既定 1: 何回の更新ごとにリサンプル
 | `nav2/costmaps.yaml` | `nav2_costmap_2d` の `costmap_2d_ros.cpp` と各レイヤプラグイン |
 | `nav2/map_server.yaml` | `nav2_map_server` の `map_server.cpp` / `map_saver.cpp` |
 | `nav2/planner_server.yaml` | `nav2_planner` と `nav2_navfn_planner` |
-| `nav2/vi_planner.yaml` | 各ノードの `main.rs` の `declare_parameter` |
+| `vi_planner.yaml` | 各ノードの `main.rs` の `declare_parameter` |
 | `localization/emcl2.yaml` | `src/emcl2_ros2` の `emcl2_node.cpp` |
 | `mapping/slam_toolbox.yaml` | `slam_toolbox` の `slam_toolbox_common.cpp` / `slam_mapper.cpp` / `laser_utils.cpp` / `ceres_solver.cpp` |
 | `sensors/mid360_ekf.yaml` | `robot_localization` の `ros_filter.cpp` |
@@ -101,13 +101,18 @@ resample_interval: 1         # 既定 1: 何回の更新ごとにリサンプル
 | `ekf_filter_node.odom0_nodelay` / `imu0_nodelay` | 上流ドキュメントにはあるが、ROS 2 版の `ros_filter.cpp` は読まない（ROS 1 の `tcpNoDelay` 由来） |
 | `controller_server.FollowPath.stateful` | DWB に無い。ゴール判定側の同名パラメータと混同したもの |
 
-## nav2/ の合成
+## params_file の合成
 
-`nav2/*.yaml` はファイル名順に読まれ、1 つの一時ファイルへ束ねられます。
-そのパスは起動ログに出ます。
+`nav2/*.yaml` に `vi_planner.yaml` を足したものがファイル名順に読まれ、1 つの
+一時ファイルへ束ねられます。そのパスは起動ログに出ます。
+
+`vi_planner.yaml` だけ `nav2/` の外に居るのは、あれが Nav2 のノードではないため
+です。それでも合成に入るのは**入れないと効かないから**で、上流の
+`navigation_launch.py` は `params_file` を 1 つしか受け取らず、`overrides` が
+重なれるノード名もこの合成結果で決まります。
 
 ```
-[INFO] [launch.user]: params: params_file: 8 fragments from .../daifuku_config/stack/nav2 -> /tmp/params_file_xxxx.yaml
+[INFO] [launch.user]: params: params_file: 8 fragments from .../daifuku_config/stack/nav2 (+ vi_planner.yaml) -> /tmp/params_file_xxxx.yaml
 ```
 
 分割は「ノード単位で重複なし」が前提です。同じノード名が 2 つの断片にあると、
@@ -125,14 +130,14 @@ resample_interval: 1         # 既定 1: 何回の更新ごとにリサンプル
 | `nav2/costmaps.yaml` | `local_costmap`, `global_costmap` |
 | `nav2/map_server.yaml` | `map_server`, `map_saver` |
 | `nav2/planner_server.yaml` | `planner_server`（navfn） |
-| `nav2/vi_planner.yaml` | `vi_planner` |
+| `vi_planner.yaml` | `vi_planner` |
 
 `amcl` が `localization/` ではなく `nav2/` にあるのは、nav2 の
 `localization_launch.py` が `params_file` の中から読むためです。
 
 ### 合成には入るが読まれない断片（`nav2:=false`）
 
-**束ねるのは常に 8 ファイル全部です。何が実際に読まれるかは、どのノードが立つかで
+**束ねるのは常に 8 ファイル全部です（`nav2/` の 7 つ + `vi_planner.yaml`）。何が実際に読まれるかは、どのノードが立つかで
 決まります。** `nav2` の既定は `false`（[navigation.md](../docs/usage/navigation.md#nav2を立てるかどうかnav2falseが既定)）
 で、素で起動すると Nav2 の navigation ノードが 1 つも立ちません。そのとき効くのは
 
@@ -158,7 +163,8 @@ override も**通ります**（そして黙って無視されます）。
 優先順位は下ほど強く、**後勝ち**です。
 
 1. 土台 = その launch が渡している設定ファイル（`navigation` の `params_file` だけは
-   `nav2/*.yaml` の合成結果。`params_file:=` を明示した場合はそのファイル）
+   `nav2/*.yaml` + `vi_planner.yaml` の合成結果。`params_file:=` を明示した場合は
+   そのファイル）
 2. `overrides:=<名前>` → `overrides/<名前>.yaml`（カンマ区切りで複数可）
 3. `extra_params_file:=<パス>` → 任意のファイル（リポジトリ外の一時的な上書き用）
 
@@ -186,7 +192,7 @@ override も**通ります**（そして黙って無視されます）。
 （`lidar_bringup` は `daifuku_stack:` の下を見ません）。
 
 `params_file:=` で土台を差し替えても行き先は変わりません。渡したファイルに
-書かれていなくても、`nav2/*.yaml` が宣言しているノードの節はそこへ載ります
+書かれていなくても、断片（`nav2/*.yaml` + `vi_planner.yaml`）が宣言しているノードの節はそこへ載ります
 （土台を替えた途端に nav2 宛の節が黙って消えると、探しようがないため）。
 
 上書きできるのは、上の表のうち `MID360_config.json` を除く全部です。
@@ -254,7 +260,7 @@ ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=nav2
 `(+ ...)` が「どの override のどの節を重ねたか」です。
 
 ```
-[INFO] [launch.user]: params: params_file: 8 fragments from .../daifuku_config/stack/nav2 -> /tmp/params_file_xxxx.yaml (+ overrides:map_19f -> vi_planner)
+[INFO] [launch.user]: params: params_file: 8 fragments from .../daifuku_config/stack/nav2 (+ vi_planner.yaml) -> /tmp/params_file_xxxx.yaml (+ overrides:map_19f -> vi_planner)
 [INFO] [launch.user]: params: emcl2_params_file: .../configs/stack/localization/emcl2.yaml -> /tmp/emcl2_params_file_xxxx.yaml (+ overrides:map_19f -> emcl2)
 ```
 
@@ -275,7 +281,7 @@ daifuku_bringup:            # 機体側。変えたら docker compose up -d
       min_elevation_deg: 5.0
 
 daifuku_stack:              # 自律移動側
-  vi_planner:               # -> nav2/vi_planner.yaml (params_file の合成結果)
+  vi_planner:               # -> stack/vi_planner.yaml (params_file の合成結果)
     ros__parameters:
       safety_radius_penalty: 1
 
@@ -300,7 +306,7 @@ daifuku_stack:              # 自律移動側
 2 通りです。黙って消えると「書いたのに効かない」を探せないためで、その launch が
 読まないだけの節（`mapping` での `emcl2:`）はエラーにしません。
 
-`nav2/*.yaml` を丸ごと複製しないでください。既定値が変わったときに追従できません。
+断片（`nav2/*.yaml` / `vi_planner.yaml`）を丸ごと複製しないでください。既定値が変わったときに追従できません。
 
 ### 効かないときに疑うところ
 
@@ -309,7 +315,7 @@ daifuku_stack:              # 自律移動側
 `parameters=` を後に渡すため、後勝ちでノード側が勝つ）。
 そのため override は設定ファイルそのものをマージして作っています。
 逆に `lifecycle_bond.yaml` の `bond_timeout` が `SetParametersFromFile` で効くのは、
-そのキーが `nav2/*.yaml` のどこにも無いからです。
+そのキーが断片のどこにも無いからです。
 
 上書きが効かないときに見るのは順に、起動ログの `params:` の行（上の節）、
 ノード名の綴り、`ros__parameters` の段（1 段忘れると節ごと無視されます。
@@ -719,7 +725,7 @@ nav2 既定は 1000ms。`planner:=vi` では `vi_planner` が `/map` を受け�
 表示専用（`value_function` の色スケール上限、単位はステップ数≒秒）。経路にもメモリにも
 影響しないので、読みにくければ動かして構いません。**地図ごとに測り直す値**で、同梱の
 2 地図はどちらも `overrides/` で上げてあります（19F が 100、津田沼が 600）。断片
-（`nav2/vi_planner.yaml`）の 60 が出るのは、どちらでもない地図のときです。
+（`stack/vi_planner.yaml`）の 60 が出るのは、どちらでもない地図のときです。
 
 **60 では 19F の階調はほとんど潰れます。** 2026-07-29 実機計測（19F の地図を 0.10 m/cell に
 縮めた 458x289 = いまの `map_scale: 2` と同じ条件）では、到達可能セルの 66% が 100 に
