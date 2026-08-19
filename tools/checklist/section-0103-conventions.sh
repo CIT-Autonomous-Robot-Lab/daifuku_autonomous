@@ -109,7 +109,7 @@ check_sentinel_placement() {
 }
 item "config_sentinel を立てるのが top-level launch だけ" check_sentinel_placement
 
-# site_manager は逆に**リポジトリ全体で 1 か所**。2 つ立てると同じ config/site を
+# site_manager は逆に**リポジトリ全体で 1 か所**。2 つ立てると同じ configs/site を
 # 2 つのノードが書きに行く。
 check_one_site_manager_launch() {
   local hit

@@ -27,10 +27,10 @@ jobs:
     runs-on: ubuntu-latest
     container: ros:humble-ros-base
     env:
-      # daifuku_config だけ src/ の外 (リポジトリルートの config/)。
-      PKGS_ALL: config src/daifuku_bringup src/daifuku_stack src/daifuku_config_manager src/daifuku_rqt src/daifuku_waypoint_manager src/raspicat_driver
+      # daifuku_config だけ src/ の外 (リポジトリルートの configs/)。
+      PKGS_ALL: configs src/daifuku_bringup src/daifuku_stack src/daifuku_config_manager src/daifuku_rqt src/daifuku_waypoint_manager src/raspicat_driver
       PKGS_PY: src/daifuku_bringup src/daifuku_stack src/daifuku_config_manager src/daifuku_rqt src/raspicat_driver
-      PKGS_CMAKE: config src/daifuku_bringup src/daifuku_stack src/daifuku_waypoint_manager
+      PKGS_CMAKE: configs src/daifuku_bringup src/daifuku_stack src/daifuku_waypoint_manager
     steps:
       - uses: actions/checkout@v4
       - name: linter を入れる
@@ -73,12 +73,12 @@ jobs:
           from daifuku_config_manager import params
 
           # share ではなくソースの overrides/ を見る (ここだけが ament 索引)。
-          params.overrides_dir = lambda: "config/overrides"
+          params.overrides_dir = lambda: "configs/overrides"
 
-          # share ではなくソースの config/ を見る (params.config_root は
+          # share ではなくソースの configs/ を見る (params.config_root は
           # daifuku_config の share を引くので、install していないここでは使えない)。
           ROOTS = {
-              package: os.path.join("config", sub)
+              package: os.path.join("configs", sub)
               for package, sub in params.CONFIG_DIRS.items()
           }
           MAPS = "src/daifuku_stack/maps"
@@ -99,14 +99,14 @@ jobs:
               if declared and not os.path.isfile(os.path.join(MAPS, declared)):
                   bad.append(f"{site}: site: map: {declared} が {MAPS}/ に無い")
 
-          # 断片の重複 (同じノード名が config/stack/nav2 の 2 ファイルに居ると起動時に
+          # 断片の重複 (同じノード名が configs/stack/nav2 の 2 ファイルに居ると起動時に
           # 止まる)。launch を立てずに呼ぶため context は空のものを作る。
           from launch import LaunchContext
 
           from daifuku_stack_launch import nav2_params
 
           context = LaunchContext()
-          context.launch_configurations["params_dir"] = "config/stack/nav2"
+          context.launch_configurations["params_dir"] = "configs/stack/nav2"
           context.launch_configurations["params_file"] = ""
           try:
               _, _, origin, _ = nav2_params.fragments_resolver(context)

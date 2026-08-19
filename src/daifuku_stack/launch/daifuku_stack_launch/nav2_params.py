@@ -14,7 +14,7 @@
 """daifuku_stack だけが持つ、nav2 まわりの設定の解決。
 
 `daifuku_config_manager.params` は「launch 引数 1 つ = 設定ファイル 1 つ」しか
-知らない。navigation の params_file だけは `config/stack/nav2/*.yaml` の合成なので、
+知らない。navigation の params_file だけは `configs/stack/nav2/*.yaml` の合成なので、
 土台の作り方をここに置いて `base_resolvers` 経由で渡す。あちらにパッケージ構造を
 持ち込むと、機体側 (daifuku_bringup) にも nav2 の知識が付いてくるため。
 
@@ -36,7 +36,7 @@ def fragments_resolver(context):
     """params_file の土台を解決する (params.compose の base_resolvers 用)。
 
     params_dir/*.yaml をファイル名順に合成する。断片はノード単位で重複しない前提
-    (config/README.md) で、重なると「どちらが勝つか分からない」ので止める。
+    (configs/README.md) で、重なると「どちらが勝つか分からない」ので止める。
 
     params_file:= を明示したときはそれを土台にするが、**上書きを受けるノード名は
     断片のものを使う**。nav2 のノード宛の節が params_file:= を渡した途端に黙って
@@ -58,8 +58,8 @@ def fragments_resolver(context):
                 raise RuntimeError(
                     f"Node '{node_name}' is defined in two fragments: "
                     f"{owner[node_name]} and {frag}.\n"
-                    "config/stack/nav2/*.yaml must partition the nodes; put "
-                    "map-specific overrides in config/overrides/ instead."
+                    "configs/stack/nav2/*.yaml must partition the nodes; put "
+                    "map-specific overrides in configs/overrides/ instead."
                 )
             owner[node_name] = frag
         merged.update(body)
@@ -97,7 +97,7 @@ def resolve_map(context, *args, **kwargs):
 
     **地図は overrides が持っている** (`site: map:`)。場所が変われば地図も
     LiDAR の帯も emcl2 の調整も一緒に変わるので、そのひとまとまりを 1 ファイルに
-    入れてある。人が動かす値は今どこか (config/site) の 1 つだけで、map:= の既定が
+    入れてある。人が動かす値は今どこか (configs/site) の 1 つだけで、map:= の既定が
     空なのはそのため。
 
     明示されたときは overrides の宣言と同じものを指しているかを見て、違えば止める。

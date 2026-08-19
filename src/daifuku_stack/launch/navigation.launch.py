@@ -42,7 +42,7 @@
 # その navigation を **Nav2 抜き**で組むのが nav2:=false で、これが**既定**。
 # 何が立たなくなるかは AGENTS.md、何が変わるかは docs/usage/architecture.md。
 #
-# パラメータの合成規則は daifuku_config_manager/params.py と config/README.md、
+# パラメータの合成規則は daifuku_config_manager/params.py と configs/README.md、
 # バックエンドの選択規則は daifuku_stack_launch/backends.py を参照。
 
 import os
@@ -215,7 +215,7 @@ def generate_launch_description():
         パラメータが無く through_poses を無効化できないので、木そのものを VI 用
         (behavior_trees/) に差し替える。
 
-        これらのキーは config/stack/nav2/*.yaml に存在しないので SetParameter (グループ全体への
+        これらのキーは configs/stack/nav2/*.yaml に存在しないので SetParameter (グループ全体への
         注入) で足りる。逆に params_file に**ある**キーは SetParameter /
         SetParametersFromFile では上書きできない (launch_ros は global params を先に、
         ノード個別の parameters= を後に渡すため、後勝ちでノード側が勝つ)。
@@ -545,7 +545,7 @@ def generate_launch_description():
             "params_dir",
             default_value=default_params_dir,
             description="合成する nav2 パラメータ断片のディレクトリ。"
-                        "*.yaml をファイル名順に深くマージする (config/README.md)。",
+                        "*.yaml をファイル名順に深くマージする (configs/README.md)。",
         ),
         *params.declare_args(),
         params.declare_watch_arg(),
@@ -561,7 +561,7 @@ def generate_launch_description():
                         "publishes map->odom and takes pose_topic as a manual seed "
                         "(initialpose), not as a pose input. **Which estimator** is "
                         "config's business — set localizer: in "
-                        "config/stack/nav2/vi_planner.yaml (or an overrides file) to "
+                        "configs/stack/nav2/vi_planner.yaml (or an overrides file) to "
                         "adaptive / grid / belief / viterbi; leaving it external here "
                         "stops the launch. Needs planner:=vi and nav2:=false.",
         ),
@@ -645,7 +645,7 @@ def generate_launch_description():
                 "package": "daifuku_stack",
                 "config_root": config_root,
                 "targets": ["params_file", "emcl2_params_file", "bond_params_file"],
-                # params_file だけは config/stack/nav2/*.yaml の合成が土台になる。
+                # params_file だけは configs/stack/nav2/*.yaml の合成が土台になる。
                 "base_resolvers": {"params_file": nav2_params.fragments_resolver},
             },
         ),

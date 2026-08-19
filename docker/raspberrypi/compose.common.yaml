@@ -66,8 +66,8 @@ services:
     volumes:
       - ../../src:/opt/ros_ws/src
       # 設定の実体 (daifuku_config)。**src/ の外にあるので別に要る。**
-      # ro にしないこと — site_manager が config/site を書く。
-      - ../../config:/opt/ros_ws/config
+      # ro にしないこと — site_manager が configs/site を書く。
+      - ../../configs:/opt/ros_ws/configs
       - ../../daifuku_autonomous.repos:/opt/ros_ws/daifuku_autonomous.repos:ro
       - autonomous-build:/opt/ros_ws/build
       - autonomous-install:/opt/ros_ws/install
@@ -119,7 +119,7 @@ services:
       # 立てない (消費するだけ)。
       #
       # **場所 (overrides と map) もここには要らない。** どちらの launch も
-      # daifuku_config_manager の config/site を既定として読む。src/ をマウント
+      # daifuku_config_manager の configs/site を既定として読む。src/ をマウント
       # しているのでファイルは両サービスから同じものが見えるし、環境変数と違って
       # コンテナを作り直さなくてよい (書き換えは tools/site.sh)。
     volumes:
@@ -134,8 +134,8 @@ services:
       # src をマウントし忘れるとリンク切れで launch も config も見えなくなる)。
       - ../../src:/opt/ros_ws/src
       # 設定の実体 (daifuku_config)。**src/ の外にあるので別に要る。**
-      # ro にしないこと — site_manager が config/site を書く。
-      - ../../config:/opt/ros_ws/config
+      # ro にしないこと — site_manager が configs/site を書く。
+      - ../../configs:/opt/ros_ws/configs
       - ../../daifuku_autonomous.repos:/opt/ros_ws/daifuku_autonomous.repos:ro
       - autonomous-build:/opt/ros_ws/build
       - autonomous-install:/opt/ros_ws/install
@@ -212,8 +212,8 @@ services:
       - ./fastdds_udp_whitelist.xml:/etc/fastdds/udp_whitelist.xml:ro
       - ../../src:/opt/ros_ws/src
       # 設定の実体 (daifuku_config)。**src/ の外にあるので別に要る。**
-      # ro にしないこと — site_manager が config/site を書く。
-      - ../../config:/opt/ros_ws/config
+      # ro にしないこと — site_manager が configs/site を書く。
+      - ../../configs:/opt/ros_ws/configs
       - ../../daifuku_autonomous.repos:/opt/ros_ws/daifuku_autonomous.repos:ro
       - autonomous-build:/opt/ros_ws/build
       - autonomous-install:/opt/ros_ws/install

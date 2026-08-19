@@ -115,7 +115,7 @@ Mid-360 + IMUの場合:
 
 - 車輪オドメトリを`/wheel/odom`へ配信
 - 車輪側の`odom -> base_footprint` TFを停止
-- `config/bringup/sensors/MID360_config.json`のIPとセンサーTFを設定
+- `configs/bringup/sensors/MID360_config.json`のIPとセンサーTFを設定
 
 詳しくは[LiDARとオドメトリ](../setup/lidar.md)を参照してください。
 
@@ -131,12 +131,12 @@ ros2 launch daifuku_stack mapping.launch.py use_sim_time:=false
 
 SLAM Toolboxの値を差し替えるなら、`slam_params_file:=`でファイルごと渡すほかに、
 `overrides:=`で一部のキーだけを重ねられます（`slam_toolbox:`の節を書きます。
-`mapping.launch.py`も既定で`config/site`の名前を受けるので、別の場所を測るときは
+`mapping.launch.py`も既定で`configs/site`の名前を受けるので、別の場所を測るときは
 先に`tools/site.sh`で切り替えるか、`overrides:=none`を渡してください）。書きかたは
 [設定](configuration.md)の「上書き（overrides）の行き先」にあります。
 
 **ただし、走らせたまま直さないでください。** `mapping.launch.py`も`config_sentinel`を
-1つ立てていて、`daifuku_stack`の`config/`の値が書き変わると**このlaunchごと終了します**。
+1つ立てていて、`daifuku_stack`の`configs/`の値が書き変わると**このlaunchごと終了します**。
 `navigation`と違って地図作成は途中経過に価値があるのに、上げ直す人は居らず、SLAM Toolboxは
 終了時に保存しないので、**そこまで走った分が消えます**。長丁場のときは見張りを黙らせて
 おくのが安全です。
@@ -216,8 +216,8 @@ VIの`unknown_as_obstacle`もコストマップの`track_unknown_space`も、未
 0.15にするのは、0.196が205のpとほぼ同値で実装によって空き側へ転びうるためです
 （[`simulator/docs/pi4_sim.md`](../../simulator/docs/pi4_sim.md#free_thresh-を下げるときの注意)）。
 
-`map_19f`は19Fの地図の名前で、`config/site`の既定値でもあります。別の場所の地図を
-作るときは名前を変えてください。そのとき`config/overrides/<同じ名前>.yaml`も用意し、
+`map_19f`は19Fの地図の名前で、`configs/site`の既定値でもあります。別の場所の地図を
+作るときは名前を変えてください。そのとき`configs/overrides/<同じ名前>.yaml`も用意し、
 `tools/site.sh <名前>`で切り替えます。**どの地図を読むかは、そのoverridesの`site:`節に
 書きます**（`site: map: <ファイル名>`。`maps/`からの相対パス）。overridesの名前と地図の
 ファイル名は揃っていなくて構いませんが、**書き忘れると起動時にエラーで止まります**
@@ -227,7 +227,7 @@ VIの`unknown_as_obstacle`もコストマップの`track_unknown_space`も、未
 ください**（`docker compose up -d`。`install/`のsymlinkはビルド時にしか張られないので、
 足しただけでは`map:=`にも`overrides:=`の一覧にも出てきません）。既にある
 名前へ上書きしたときは要りません。詳細は[設定](configuration.md)と
-`config/README.md`を参照してください。
+`configs/README.md`を参照してください。
 
 保存が終わったらモーター電源を切ります。
 

@@ -138,7 +138,7 @@ def parse_args():
     #   地面を蹴るのは URDF が定義した物理の車輪である。両者がずれると sim の
     #   移動量が指令とずれる。既定は raspicat_description の素の URDF の値。
     #
-    #   実機 (config/bringup/robot/raspicat.yaml) は 2026-08-03 の実測で
+    #   実機 (configs/bringup/robot/raspicat.yaml) は 2026-08-03 の実測で
     #   wheel_diameter 0.2 / wheel_tread 0.35、つまり半径 0.1 / トレッド 0.35 で
     #   あって、この既定とは違う。**sim は寸法的に実機ではない**。合わせたい
     #   なら URDF 側の車輪も直したうえで、この 2 値を 0.1 / 0.35 にすること。

@@ -17,7 +17,7 @@
 # docker compose up で常駐している。ここは slam_toolbox と RViz だけを足す。
 #
 # そのため、**地図を作る場所に合わせて LiDAR の帯 (仰角フィルタと高さ) を変えるには
-# SLAM を始める前に `tools/site.sh <名前>` を通す**必要がある (config/site を書いて
+# SLAM を始める前に `tools/site.sh <名前>` を通す**必要がある (configs/site を書いて
 # raspicat を立て直すところまでやる)。この launch へ overrides:= を渡しても効くのは
 # daifuku_stack: の部分木、すなわち slam_toolbox の節だけ。
 

@@ -12,20 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""今どこで走らせるか (config/site) を ROS から見えるようにするノード。
+"""今どこで走らせるか (configs/site) を ROS から見えるようにするノード。
 
 **このノードは何も立て直さない。** やるのは 3 つだけ:
 
   1. `site` パラメータで場所を受ける。**書く前に検査する** (params.precheck) ので、
      `ros2 param set` は綴り違いや壊れた overrides を**ファイルに残さず**断る
-  2. config/site を書く (temp + rename。書きかけを誰にも読ませない)
+  2. configs/site を書く (temp + rename。書きかけを誰にも読ませない)
   3. 今の場所を /daifuku/site へ latch して流す
 
 立て直すのは各 launch の config_sentinel で、こちらの出す値と自分が起動時に使った
 値を見比べている。**役割を分けてあるのは、機体が走行中かどうかを知っているのは
 各 launch の側だから** — ここで「書いた瞬間に落とす」と、走行中でも落ちてしまう。
 
-人が素手で config/site を直したときのために、ファイルは 2 秒ごとに読み直す
+人が素手で configs/site を直したときのために、ファイルは 2 秒ごとに読み直す
 (tools/site.sh も editor も同じ経路に乗る)。
 
   ros2 param get /site_manager site          今どこか
@@ -90,14 +90,14 @@ def validate(site):
 
 
 def write_site(path, site):
-    """config/site の値の行だけを差し替える。**書きかけを読ませない。**
+    """configs/site の値の行だけを差し替える。**書きかけを読ませない。**
 
     値の行 = 1 つめの空でない非コメント行 (params.read_site_file と同じ規則)。
     見出しのコメントはそのまま残す — ここで書式ごと書き直すと、説明文の写しが
     このファイルと tools/site.sh の 2 か所に散る。
 
     symlink は**先に実体へ解決する**。`--symlink-install` では
-    install/.../config/site が src/ への symlink なので、そこへ os.replace すると
+    install/.../configs/site が src/ への symlink なので、そこへ os.replace すると
     **symlink が普通のファイルに化けて、以降 src/ 側の変更が届かなくなる**。
     """
     real = os.path.realpath(path)
@@ -134,7 +134,7 @@ def write_site(path, site):
 
 
 class SiteManager(Node):
-    """config/site の読み書きと告知。"""
+    """configs/site の読み書きと告知。"""
 
     def __init__(self):
         super().__init__("site_manager")
@@ -149,12 +149,12 @@ class SiteManager(Node):
         # ここで投げると機体が上がらなくなるし、壊れているなら sentinel も
         # precheck で止まるので、立て直しには進まない。
         self.declare_parameter("site", current)
-        ok, reason = validate(current) if current else (False, "config/site が空です")
+        ok, reason = validate(current) if current else (False, "configs/site が空です")
         if ok:
             self.get_logger().info(f"site: {current} ({self._file})")
         else:
             self.get_logger().error(
-                f"config/site の値が使えません ({reason})。"
+                f"configs/site の値が使えません ({reason})。"
                 "このまま流しますが、切り替えは通らないままです。"
             )
 
@@ -198,9 +198,9 @@ class SiteManager(Node):
             try:
                 write_site(self._file, site)
             except OSError as err:
-                self.get_logger().error(f"config/site を書けません: {err}")
+                self.get_logger().error(f"configs/site を書けません: {err}")
                 return SetParametersResult(successful=False, reason=str(err))
-            self.get_logger().warning(f"site: {self._site} -> {site} (config/site を書きました)")
+            self.get_logger().warning(f"site: {self._site} -> {site} (configs/site を書きました)")
             self._site = site
             self._publish()
         return SetParametersResult(successful=True)
@@ -217,10 +217,10 @@ class SiteManager(Node):
             return
         ok, reason = validate(site)
         if ok:
-            self.get_logger().warning(f"site: {self._site} -> {site} (config/site が変わりました)")
+            self.get_logger().warning(f"site: {self._site} -> {site} (configs/site が変わりました)")
         else:
             self.get_logger().error(
-                f"config/site が {site} になりましたが、この場所では立ちません: {reason}"
+                f"configs/site が {site} になりましたが、この場所では立ちません: {reason}"
             )
         self._site = site
         self._syncing = True

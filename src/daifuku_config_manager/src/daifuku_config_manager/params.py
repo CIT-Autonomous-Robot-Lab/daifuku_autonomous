@@ -13,7 +13,7 @@
 
 """設定ファイルへの上書き (overrides) の合成。
 
-`config/overrides/<名前>.yaml` と `extra_params_file:=` は「**パッケージ名** ->
+`configs/overrides/<名前>.yaml` と `extra_params_file:=` は「**パッケージ名** ->
 ノード名 -> ros__parameters -> キー」の 4 段で書く。**行き先はパッケージ名と
 ノード名で決まる**。各 launch は自分のパッケージ名の部分木だけを読み、その節は、
 同じノード名を宣言している設定ファイル (自分の config_root の下のどれか) の上に
@@ -35,7 +35,7 @@
 1 つのファイルへ入れてある。パッケージ名の段は、その 1 ファイルをどちらの launch が
 どこまで読むかを**明示するため**にある。
 
-**どの launch も overrides:= の既定を config/site から取る。** 場所は人が運ぶたびに
+**どの launch も overrides:= の既定を configs/site から取る。** 場所は人が運ぶたびに
 変わるので、機体側と自律移動側で別々に指定させない。navigation の map:= もこの値に
 追随する (daifuku_stack の nav2_params.resolve_map) ので、切り替えで人が動かす値は
 1 つだけになる。
@@ -107,7 +107,7 @@ def read_site_file(path):
 
 
 def _read_site():
-    """config/site の 1 行を読む。**読めなくても落とさない。**
+    """configs/site の 1 行を読む。**読めなくても落とさない。**
 
     ここは params.py の import 時に走るので、投げるとワークスペース中の launch が
     全部立たなくなる。名前そのものの妥当性は後段 (_resolve_layers) が見るので、
@@ -121,7 +121,7 @@ def _read_site():
 
 
 # overrides の既定値。**場所が変わったら変えるもの**なので、リポジトリの中の
-# 1 ファイル (config/site) から取る。機体側 (LiDAR の帯) も、人が exec で叩く
+# 1 ファイル (configs/site) から取る。機体側 (LiDAR の帯) も、人が exec で叩く
 # navigation (emcl2 と vi の調整) も、navigation の map:= も同じ値を見るので、
 # 片方だけ古い場所で走ることが無い。書き換えは tools/site.sh。
 #
@@ -135,7 +135,7 @@ def _read_site():
 _SITE = _read_site()
 DEFAULT_OVERRIDES = env_default("OVERRIDES", _SITE)
 DEFAULT_OVERRIDES_ORIGIN = (
-    "環境変数 OVERRIDES" if os.environ.get("OVERRIDES", "").strip() else "config/site"
+    "環境変数 OVERRIDES" if os.environ.get("OVERRIDES", "").strip() else "configs/site"
 )
 
 # overrides ファイルの 1 段目に書けるパッケージ名と、そのパッケージの設定が
@@ -340,7 +340,7 @@ def _layer_bodies(context):
                 f"Unknown overrides name: {name}\n"
                 f"Available: {', '.join(available) or '(none)'}\n"
                 "Use extra_params_file:=<path> for a file outside "
-                "config/overrides/."
+                "configs/overrides/."
             )
         label = f"overrides:{name}"
         body = load(path)
@@ -372,7 +372,7 @@ def _base(context, name, base_resolvers):
     """launch 引数 name が指す設定ファイルを読む。
 
     base_resolvers に name があれば、そちらへ丸ごと委ねる。ファイル 1 つでは
-    済まない土台 (navigation の params_file は config/stack/nav2/*.yaml の合成) を、
+    済まない土台 (navigation の params_file は configs/stack/nav2/*.yaml の合成) を、
     このモジュールがパッケージ構造を知らないまま扱うための口。
 
     Returns:
@@ -468,7 +468,7 @@ def compose(context, *args, package, config_root, targets,
     Args:
         package: 呼び元のパッケージ名。overrides のこの部分木だけを読む。
         config_root: ノード名を宣言している設定ファイルを探す根 (呼び元の
-            パッケージの config/)。行き先の無い節を見つけるために使う。
+            パッケージの configs/)。行き先の無い節を見つけるために使う。
         targets: 上書きの対象になる launch 引数名の並び。値が空か実在しない
             ものは黙って飛ばす (選ばなかった構成のファイル)。
         base_resolvers: {launch 引数名: callable(context)} で土台の解決を
@@ -610,13 +610,13 @@ def follows_site(context):
 
     追随するのは**人が構成を指定しなかったとき**だけ。`overrides:=` を明示した
     人にも、`OVERRIDES` を渡した simulator にも、その構成で走らせたい理由が
-    あるはずで、config/site が変わったからといって勝手に落としてはいけない
+    あるはずで、configs/site が変わったからといって勝手に落としてはいけない
     (食い違いを言うのは、追随しないときも sentinel がやる)。
 
     既定値ちょうどを明示したときは追随する側に入るが、それは同じ値なので害が無い。
     """
     return (
-        DEFAULT_OVERRIDES_ORIGIN == "config/site"
+        DEFAULT_OVERRIDES_ORIGIN == "configs/site"
         and value(context, "overrides").strip() == DEFAULT_OVERRIDES
         and not value(context, "extra_params_file").strip()
     )
@@ -667,7 +667,7 @@ def sentinel_actions(context, *args, package, config_root, action=None,
 
     Args:
         package: この launch のパッケージ名 (overrides のどの部分木を見るか)。
-        config_root: このパッケージの config/ (指紋を取る範囲)。
+        config_root: このパッケージの configs/ (指紋を取る範囲)。
         action: shutdown / warn / off。省略すると launch 引数 config_watch。
         node_name: 既定は config_sentinel_<パッケージ名から daifuku_ を除いたもの>。
 

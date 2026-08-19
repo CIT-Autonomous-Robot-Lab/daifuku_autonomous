@@ -16,7 +16,7 @@ EKF）の2つで、どちらも単独でも立てられます（`simulator/`は�
 です。どちらも入力を`/scan_raw`へ集約し、角度フィルタ後の`/scan`をSLAMとNav2へ
 渡します。
 
-既定の`config/bringup/sensors/scan_filter.yaml`は、コネクタがある後方50度
+既定の`configs/bringup/sensors/scan_filter.yaml`は、コネクタがある後方50度
 （+155度から-155度まで、±180度をまたぐ範囲）を除外します。
 
 センサーごとのトピックの流れは次のとおりです。
@@ -81,7 +81,7 @@ costmapから消え、近くはセンサーの垂直FOVから外れて死角に�
 2026-08-08に5.0から戻しました）。0度は搭載高の水平面そのもの＝断片の
 `min_height: 0.275`と同じ切り方なので、仰角フィルタは実質素通しで、帯は全距離で
 `min_height`〜`max_height`のままです。地図ごとの値と経緯は
-`config/overrides/map_tsudanuma.yaml`にあります。
+`configs/overrides/map_tsudanuma.yaml`にあります。
 
 `range_max`の既定はセンサの測距上限に合わせた70m（反射率80%で70m、10%では40m）です。
 ただし実際に70mを使うのは`emcl2`だけで、costmapは`obstacle_max_range: 2.5`、
@@ -127,7 +127,7 @@ ros2 run <2d_lidar_package> <2d_lidar_node> \
 
 ### IPアドレス
 
-`config/bringup/sensors/MID360_config.json`を実ネットワークに合わせます。
+`configs/bringup/sensors/MID360_config.json`を実ネットワークに合わせます。
 
 - `host_net_info`内の4個の`*_data_ip`: ドライバを動かすPCの固定IP
 - `lidar_configs[0].ip`: Mid-360本体のIP
@@ -221,7 +221,7 @@ navigationを立てるときではなくbootのとき**です。Mid-360のジャ
 バイアスがあり、この個体はZ軸で+0.013960 rad/s（+0.800 deg/s、5001サンプル、2026-08-05実測）
 でした。放置すると静止しているだけで48 deg/minヨーが回ります。`robot_localization`は
 センサのバイアスを推定しないので、`prepare_mid360_imu`が起動後の静止区間から測って
-引きます（`config/bringup/sensors/mid360_ekf.yaml`の`prepare_mid360_imu`節）。
+引きます（`configs/bringup/sensors/mid360_ekf.yaml`の`prepare_mid360_imu`節）。
 測定はメッセージ駆動（静止した100サンプルが溜まるまで待つ）なので、IMUが後から来ても
 取りこぼしません。100サンプルは間引き後の44 Hzで2.3秒です。
 
@@ -237,7 +237,7 @@ prepare_mid360_imu: gyro bias = [+0.000112, -0.000305, +0.013960] rad/s
 
 ## スキャンフィルタを変更する
 
-恒久的に除外角度を変える場合は`config/bringup/sensors/scan_filter.yaml`の`angle_min`と`angle_max`をラジアンで編集します。別ファイルを使う場合:
+恒久的に除外角度を変える場合は`configs/bringup/sensors/scan_filter.yaml`の`angle_min`と`angle_max`をラジアンで編集します。別ファイルを使う場合:
 
 ```bash
 ros2 launch daifuku_bringup robot_bringup.launch.py \

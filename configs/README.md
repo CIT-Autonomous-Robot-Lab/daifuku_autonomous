@@ -1,4 +1,4 @@
-# config/
+# configs/
 
 **設定の実体はここに全部あります**（パッケージ名は `daifuku_config`）。合成規則
 （`params.py`）と `site_manager` / `config_sentinel` は `src/daifuku_config_manager`
@@ -189,7 +189,7 @@ override も**通ります**（そして黙って無視されます）。
 `ros__parameters` も無い）ので、この仕組みに乗りません。`mid360_config:=<パス>` で
 ファイルごと差し替えてください。
 
-`overrides` の既定値は **`config/site` の 1 行**（既定
+`overrides` の既定値は **`configs/site` の 1 行**（既定
 `map_19f`）で、すべての launch が同じものを見ます。さらに `navigation.launch.py` は
 `map` の既定もそこから導きます。場所が変われば LiDAR の帯も EMCL2 の調整も地図も
 一緒に変わるので、**人が動かす値を 1 つにしてある**という趣旨です。
@@ -216,10 +216,10 @@ raspicat サービスで、**起動時にしか読みません**。スクリプ�
 `tools/site.sh` を通してください）。
 
 ```bash
-# 場所を切り替える (config/site を書いて raspicat を立て直す)
+# 場所を切り替える (configs/site を書いて raspicat を立て直す)
 tools/site.sh map_tsudanuma
 
-# 自律移動側。map も overrides も config/site から来るので渡さない
+# 自律移動側。map も overrides も configs/site から来るので渡さない
 ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=nav2
 ```
 
@@ -241,7 +241,7 @@ ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=nav2
 渡します（`OVERRIDES=` で上書き可）。既定任せにすると同じ取り違えが起きるためです。
 **参照先は `daifuku_config` の share** で、`maps/` を持つ `daifuku_stack` とは
 置き場が違います（2026-08-08 まで後者の `config/overrides/` を見ていました。設定を
-`config/` へ出したときにそこは消えているので、**どの地図でも `none` に落ちていました**）。
+`configs/` へ出したときにそこは消えているので、**どの地図でも `none` に落ちていました**）。
 
 ### 何がどこへ行ったかを見る
 
@@ -250,7 +250,7 @@ ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=nav2
 
 ```
 [INFO] [launch.user]: params: params_file: 8 fragments from .../daifuku_config/stack/nav2 -> /tmp/params_file_xxxx.yaml (+ overrides:map_19f -> vi_planner)
-[INFO] [launch.user]: params: emcl2_params_file: .../config/stack/localization/emcl2.yaml -> /tmp/emcl2_params_file_xxxx.yaml (+ overrides:map_19f -> emcl2)
+[INFO] [launch.user]: params: emcl2_params_file: .../configs/stack/localization/emcl2.yaml -> /tmp/emcl2_params_file_xxxx.yaml (+ overrides:map_19f -> emcl2)
 ```
 
 行が出ないファイルは、重なるものが無かったので土台がそのままノードへ渡っています
@@ -259,7 +259,7 @@ ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=nav2
 
 ### 新しい override を足す
 
-`config/overrides/<地図名や状況>.yaml` を作り、
+`configs/overrides/<地図名や状況>.yaml` を作り、
 **変えたいキーだけ**を書きます。パッケージ名・ノード名・`ros__parameters` の 3 段が
 必要です。
 

@@ -60,7 +60,7 @@ class ElevationFilter(Node):
     def __init__(self):
         super().__init__("elevation_filter")
         # Declared wide open so this node is a pass-through until a
-        # parameter file narrows it. config/bringup/sensors/mid360_elevation.yaml
+        # parameter file narrows it. configs/bringup/sensors/mid360_elevation.yaml
         # holds the real values.
         min_deg = self.declare_parameter("min_elevation_deg", -90.0).value
         max_deg = self.declare_parameter("max_elevation_deg", 90.0).value

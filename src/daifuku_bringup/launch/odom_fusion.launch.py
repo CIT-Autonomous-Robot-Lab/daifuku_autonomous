@@ -114,7 +114,7 @@ def generate_launch_description():
         remappings=[
             # 生の /livox/imu ではなく上の throttle の出口。**bias_samples は
             # このレートを前提にした値**なので、片方だけ変えると静止窓の長さが
-            # 掛け算で変わる (config/bringup/sensors/mid360_ekf.yaml)。
+            # 掛け算で変わる (configs/bringup/sensors/mid360_ekf.yaml)。
             ("imu_in", "/livox/imu_throttled"),
             ("imu_out", "/imu/mid360"),
         ],

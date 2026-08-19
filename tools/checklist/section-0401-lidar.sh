@@ -14,7 +14,7 @@ section 0401 "LiDAR"
 
 need_ros
 
-MID360_JSON="${ROOT}/config/bringup/sensors/MID360_config.json"
+MID360_JSON="${ROOT}/configs/bringup/sensors/MID360_config.json"
 
 # ── センサが LAN に居るか ───────────────────────────────────────────────────
 if has_topic /livox/lidar || grep -q '"ip"' "${MID360_JSON}" 2>/dev/null; then

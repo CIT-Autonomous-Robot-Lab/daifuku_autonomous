@@ -27,7 +27,7 @@
 # register_shutting_down_transition。詳細は AGENTS.md)。
 #
 # 上流 raspicat_ros の raspicat.launch.py 相当だが、raspimouse ノードを自前で
-# 立てている (上流の parameters= に勝てないため。config/bringup/robot/raspicat.yaml
+# 立てている (上流の parameters= に勝てないため。configs/bringup/robot/raspicat.yaml
 # のコメント)。
 #
 # 自前化のついでに urg_node 関連は落としてある (LiDAR はどちらの構成でも
@@ -122,7 +122,7 @@ DRIVERS = {
 def _params_file(context, argument, default_name):
     """launch 引数が指すパラメータファイルを解決し、overrides を重ねる。
 
-    空なら config/bringup/robot/<default_name> に落とす。実在しないものをそのまま
+    空なら configs/bringup/robot/<default_name> に落とす。実在しないものをそのまま
     params.compose_path へ渡すと FileNotFoundError の traceback になり、**どの
     引数が悪いのか出ない**ので、ここで引数名を添えて落とす。
 
@@ -317,7 +317,7 @@ def launch_setup(context, *args, **kwargs):
     )
 
     # 今どこで走らせるかを ROS から読み書きできるようにする。**立てるのはここ
-    # 1 つだけ** — navigation 側にも置くと、2 つのノードが同じ config/site を
+    # 1 つだけ** — navigation 側にも置くと、2 つのノードが同じ configs/site を
     # 書きに行く。機体は docker compose で常駐しているので、人が navigation を
     # 立てていないあいだも `ros2 param set /site_manager site <名前>` が通る。
     site_manager = Node(
@@ -403,7 +403,7 @@ def generate_launch_description():
             "params_file",
             default_value="",
             description="ドライバのパラメータファイル。空なら driver:= に応じて "
-                        "config/bringup/robot/raspicat.yaml か raspicat_driver.yaml を使う。",
+                        "configs/bringup/robot/raspicat.yaml か raspicat_driver.yaml を使う。",
         ),
         DeclareLaunchArgument(
             "twist_mux",
@@ -419,7 +419,7 @@ def generate_launch_description():
             "twist_mux_params_file",
             default_value="",
             description="twist_mux のパラメータファイル。空なら "
-                        "config/bringup/robot/twist_mux.yaml を使う。",
+                        "configs/bringup/robot/twist_mux.yaml を使う。",
         ),
         DeclareLaunchArgument(
             "joy",
@@ -453,7 +453,7 @@ def generate_launch_description():
             "joy_teleop_params_file",
             default_value="",
             description="ゲームパッドのパラメータファイル (joy_node と joy_teleop の "
-                        "両方に渡る)。空なら config/bringup/robot/joy_teleop.yaml を使う。",
+                        "両方に渡る)。空なら configs/bringup/robot/joy_teleop.yaml を使う。",
         ),
         *params.declare_args(),
         params.declare_watch_arg(),

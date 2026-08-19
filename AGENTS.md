@@ -26,7 +26,7 @@ Raspberry Pi Cat を ROS 2 Humble / Nav2 で自律移動させる colcon ワー�
 `daifuku_config_manager` と `raspicat_driver` と `daifuku_rqt` と
 `daifuku_waypoint_manager` で、残りは `daifuku_autonomous.repos` からの
 `vcs import` です。**7 つめの `daifuku_config` だけは `src/` の下ではなく
-`src/` と並ぶ `config/`**（設定はどのパッケージのものでもないので、`src/` の下に
+`src/` と並ぶ `configs/`**（設定はどのパッケージのものでもないので、`src/` の下に
 置くとどこでも嘘が残る）。
 
 自前パッケージの役割分担は次のとおりで、**`daifuku_bringup` と `daifuku_stack` は
@@ -38,7 +38,7 @@ Raspberry Pi Cat を ROS 2 Humble / Nav2 で自律移動させる colcon ワー�
 | `daifuku_bringup` | 機体。駆動ドライバ・URDF・cmd_vel の仲裁・ゲームパッド・**LiDAR**・**EKF**。`docker compose up` で常駐する |
 | `daifuku_stack` | 自律移動。Nav2 / emcl2 / VI の launch、地図、ウェイポイント、RViz |
 | `daifuku_config_manager` | 設定の合成規則（`params.py`）と、`site_manager` / `config_sentinel`（設定が書き変わったことを見つける役。**どちらも他を import しない**）。**設定の実体は持たない** |
-| `daifuku_config`（`config/`） | 設定の実体だけ。`bringup/` と `stack/` と `overrides/` と `site` |
+| `daifuku_config`（`configs/`） | 設定の実体だけ。`bringup/` と `stack/` と `overrides/` と `site` |
 
 `vcs import` で入るものを直しても本リポジトリのコミットには入らないので、上流を
 直す必要があれば向こうで作業してください。
@@ -71,7 +71,7 @@ bash tools/setup/setup_native.sh              # --jobs 1 / --no-livox / --no-vi
 | 変えたもの | やること |
 | --- | --- |
 | `daifuku_bringup` / `daifuku_stack` / `daifuku_config_manager` / `raspicat_driver` の Python・launch・地図など | 何もしない。ノード再起動だけで反映される（`--symlink-install` のため）。ただし `raspicat_driver` の `setup.py` に `entry_points` を足したときはビルドが要る |
-| `config/` の値（`bringup/` `stack/` `overrides/` のどれでも） | 同上（ビルドは要らない）。ただし**走らせたまま直すと `config_sentinel` がその launch を落とす**。機体は `restart: unless-stopped` が上げ直すが、**`navigation` と `mapping` は人が立てたものなので終わったまま**になる（mapping では作りかけの地図が消える）。長丁場は `config_watch:=warn` |
+| `configs/` の値（`bringup/` `stack/` `overrides/` のどれでも） | 同上（ビルドは要らない）。ただし**走らせたまま直すと `config_sentinel` がその launch を落とす**。機体は `restart: unless-stopped` が上げ直すが、**`navigation` と `mapping` は人が立てたものなので終わったまま**になる（mapping では作りかけの地図が消える）。長丁場は `config_watch:=warn` |
 | C++ / Rust のコード、`CMakeLists.txt`、外部パッケージのソース | `docker compose up`（差分ビルド） |
 | apt 依存、`Dockerfile`、`package.xml`、`docker/` 配下のスクリプト | `docker compose build` からやり直す |
 
@@ -143,11 +143,11 @@ Docker 越しに叩く形は
 
 理由と実測は各ドキュメント側にあります。ここは「知らずに壊す」ものだけ。
 
-- `config/stack/nav2/*.yaml` はファイル名順に 1 つの `params_file` へ束ねられる。ノード単位で
+- `configs/stack/nav2/*.yaml` はファイル名順に 1 つの `params_file` へ束ねられる。ノード単位で
   分けるのが前提で、**同じノード名が 2 つの断片にあると起動時にエラーで止まる**。
   キーが重なっていなくても止まるので、1 つのノードの設定を 2 ファイルに割れない。
   断片どうしは深くマージしない（深いマージが効くのは `overrides` を重ねるときだけ）。
-- **場所は 1 つの値で決まる — `config/site` の 1 行。**
+- **場所は 1 つの値で決まる — `configs/site` の 1 行。**
   すべての launch が `overrides` の既定をここから取り、`navigation.launch.py` は
   `map` の既定もそこから導く。**導き方は「同じ名前の地図」ではなく、その overrides
   自身が書いている `site: map:`**（2026-08-07 に改めた。`nav2_params.declared_map` /
@@ -168,14 +168,14 @@ Docker 越しに叩く形は
   忘れやすかった。**環境変数 `OVERRIDES` 自体はファイルより強いまま残してある**が、
   compose はもう渡さない（`simulator/` が 1 回きりの構成を渡す口）。
 - **`site_manager` を立てるのは `robot_bringup` の 1 か所だけ。** 2 つ立てると同じ
-  `config/site` を 2 つのノードが書きに行く。機体は常駐しているので、人が navigation を
+  `configs/site` を 2 つのノードが書きに行く。機体は常駐しているので、人が navigation を
   立てていないあいだも `ros2 param set /site_manager site <名前>` が通る。対になる
   `config_sentinel` は逆に**各 top-level launch が 1 つずつ**立てる（`sentinel_actions`
   を `include` される側でも呼ぶと、1 つの launch 木に見張りが 3 つ立ってそれぞれが
   勝手に落としにかかる）。指紋を取るのは `config_root` の下の yaml **全部**だが、
   **リンク切れは飛ばす**（設定を別のパッケージへ移すと `install/` に古い symlink が
   残り、読みにいくと launch ごと落ちる。2026-08-07 の実機で `daifuku_stack` の share に
-  当時の `config/robot/joy_teleop.yaml` が居た。**設定を丸ごと `config/` へ出した
+  当時の `config/robot/joy_teleop.yaml` が居た。**設定を丸ごと `configs/` へ出した
   ときも同じことが起きる**ので、あの移行のあとは一度 `install/` を作り直すこと）。飛ばしたものは起動時のログに出るので、
   `find <install> -xtype l -delete` で掃除すること — **そのファイルは見張りの対象にも
   入っていない**。落とす合図の `SENTINEL_RESTART_CODE` を **0 にしないこと** —
@@ -184,12 +184,12 @@ Docker 越しに叩く形は
 - **`overrides/*.yaml` の行き先はパッケージ名とノード名で決まる。** 1 段目が
   `daifuku_bringup:` か `daifuku_stack:` で、各 launch は**自分のパッケージ名の
   部分木しか読まない**。2 段目がノード名で、同じノード名を宣言している設定ファイル
-  （そのパッケージの `config/` の下のどれか）に重なる。落ちるのは 2 通り:
+  （そのパッケージの `configs/` の下のどれか）に重なる。落ちるのは 2 通り:
   **知らないパッケージ名**（`params.py` の `KNOWN_PACKAGES`。誰も読まない部分木に
   なるため）と、**そのパッケージのどの設定ファイルにも無いノード名**。どちらも
   綴り違いが黙って消えるのを防ぐため。ノード名を持たない
   `sensors/MID360_config.json` だけは上書きできない。
-- **`overrides/*.yaml` の実体は `daifuku_config`（リポジトリルートの `config/`）にある。** 地図ごとの調整は
+- **`overrides/*.yaml` の実体は `daifuku_config`（リポジトリルートの `configs/`）にある。** 地図ごとの調整は
   LiDAR の帯（機体側）と emcl2 / VI（自律移動側）にまたがるので、どちらかに置くと
   他方がそちらへ依存してしまう。1 地図 = 1 ファイルのまま、葉のパッケージに置いて
   ある。
@@ -198,8 +198,8 @@ Docker 越しに叩く形は
   `controller_server` に渡す）。**2026-08-08 の上流の整理まで後者は
   `vi_global_planner` という別パッケージ・別ノードで、両方立てると
   `compute_path_to_pose` にサーバが 2 つ載る、というのがここの罠だった**。消えたので、
-  設定（`config/stack/nav2/vi_planner.yaml` と `overrides/`）も検査も名前を
-  `vi_planner` に一本化してある。**`follow` を `config/` に書かないこと。**
+  設定（`configs/stack/nav2/vi_planner.yaml` と `overrides/`）も検査も名前を
+  `vi_planner` に一本化してある。**`follow` を `configs/` に書かないこと。**
   `local_planner` を見て渡すのは vi 版 `navigation_launch.py` で、あちらは
   `parameters` の後ろに置くので設定より強い（書いても効かない）。**危ないのは
   `nav2:=false`（既定）のほう** — こちらは `navigation.launch.py` が `vi_planner` を
@@ -217,8 +217,8 @@ Docker 越しに叩く形は
   **誰も `map→odom` を出さないまま起動する**。`localization:=vi` は
   `planner:=vi` と `nav2:=false`（既定）が要る——`nav2:=true` の navigation は上流の
   `navigation_launch.py` 経由で、あちらに `publish_tf` を渡す口が無い。**その
-  `publish_tf` は `standalone` / `follow` と同じ launch 専用のキーで、`config/` に
-  書かないこと**（`localizer` は逆に `config/` にしか無い）。`localization:=vi` では
+  `publish_tf` は `standalone` / `follow` と同じ launch 専用のキーで、`configs/` に
+  書かないこと**（`localizer` は逆に `configs/` にしか無い）。`localization:=vi` では
   `pose_topic` が `initialpose` になり、emcl2 は立たず `map_server` だけが残る。
   **2026-08-09 から既定の `map_19f` が `localizer: "belief"` を上書きしているので、
   この地図では `localization:=vi` のほうが要る** — 引数を足さずに（＝既定の
@@ -242,17 +242,17 @@ Docker 越しに叩く形は
   **`lifecycle_manager_navigation` は名前のまま残る**が、管理下は
   `velocity_smoother` 1 つだけになる（`velocity_smoother:=false` にすると
   lifecycle ノードが navigation 側から消える）。アクション型は `nav2_msgs` のままなので
-  RViz も各パネルも配線は変わらない。**`standalone` を `config/` に書かないこと** —
+  RViz も各パネルも配線は変わらない。**`standalone` を `configs/` に書かないこと** —
   真のまま Nav2 構成で起動すると `navigate_to_pose` のサーバが `bt_navigator` と 2 つに
   なり、クライアントは先に見つけたほうへ繋ぐ（**どちらに繋がったかはログにも
   `ros2 action list` にも出ない**）。渡すのは launch だけ。
-- **`nav2:=false` では `config/stack/nav2/{bt_navigator,controller_server,costmaps}.yaml`
+- **`nav2:=false` では `configs/stack/nav2/{bt_navigator,controller_server,costmaps}.yaml`
   と `behavior_trees/` が丸ごと読まれず、`behaviors.yaml` も `velocity_smoother` の
   節だけになる**（そのノードだけは `nav2:=false` でも立つ）。合成には入る（ファイル名順に
   束ねる規則はそのまま）が、宛先のノードが立たないので**エラーも警告も出ないまま
   無視される**。`behaviors.yaml` の残り 3 ノード（`smoother_server` /
   `behavior_server` / `waypoint_follower`）がそれで、同名の設定を移した先は
-  `config/stack/nav2/vi_planner.yaml`（`stop_on_failure` / `waypoint_pause_sec`）。
+  `configs/stack/nav2/vi_planner.yaml`（`stop_on_failure` / `waypoint_pause_sec`）。
   あちらを直しても効かない。BT の `RecoveryNode number_of_retries` に当たるものは
   同ファイルの `goal_retry_limit` で、こちらは名前が違う。
 - **`twist_mux:=true`（既定）だと、機体が動くのは `/cmd_vel` ではなく
@@ -281,7 +281,7 @@ Docker 越しに叩く形は
   ノード側も起動時に拒否する）。`config.txt` のオーバレイもこれで変わる
   （[`docs/setup/raspberry-pi-4.md`](docs/setup/raspberry-pi-4.md)）。
 - `use_composition` の既定 `False` は意図的（Pi 4 でディスカバリ不能 + bond 心拍途絶）。
-  `config/stack/lifecycle_bond.yaml` の `bond_timeout: 60.0` も同じ事情。
+  `configs/stack/lifecycle_bond.yaml` の `bond_timeout: 60.0` も同じ事情。
 - **`daifuku_rqt` と `daifuku_waypoint_manager` は Pi では建てない。** 実機イメージ
   (`ros:humble-ros-base`) に rqt と RViz が無いため。両方の `build-workspace.sh` が
   `--packages-select` で名前を並べているので、Pi 側の一覧に足すと**ビルドが通らなく
@@ -349,7 +349,7 @@ Docker 越しに叩く形は
   絶対名なので、`namespace:=` を付けた構成でも噛み合わない）。**`nav2:=false` では
   この穴は無い** — `follow_waypoints` を `vi_planner` 自身が受けるので、順路はゴールと
   同じ経路で入る（トピックはもう 1 つの入口として残る）。**ノード側の宣言と
-  `config/stack/nav2/vi_planner.yaml` は `false` で、同梱の overrides で `true` へ
+  `configs/stack/nav2/vi_planner.yaml` は `false` で、同梱の overrides で `true` へ
   上書きしているのは `map_19f` だけ**（津田沼は 2026-08-07 に `true` にしたあと
   2026-08-08 に `false` へ戻した。走行中の固まりの切り分けで、消える待ちは 19F が
   29 秒、津田沼が 87 秒）。価値関数が同時に 2 つ生きるので、**密ソルバでは
@@ -417,7 +417,7 @@ Docker 越しに叩く形は
   下限が距離とともに上がるので、**`max_height` をその下に置くと帯が潰れ、
   `range_max` を伸ばしてもエラーも警告も出ないまま手前で何も入らなくなる**
   （5 度なら 70m 先の実効下限は 6.40m）。地図ごとの角度は `overrides/` 側。
-  設定は `config/bringup/sensors/` で、**変えたら `docker compose up -d`**
+  設定は `configs/bringup/sensors/` で、**変えたら `docker compose up -d`**
   （読むのは常駐している raspicat サービス）。
   `range_max` の既定 70.0 はセンサの測距上限だが、**そこまで使うのは `emcl2` だけ**
   （costmap は `obstacle_max_range: 2.5`、SLAM は `max_laser_range: 10.0` で頭打ち）。
@@ -487,16 +487,16 @@ Docker 越しに叩く形は
   `map→odom` だけが 1 度も出ない**（RViz は Fixed Frame が `map` なので全部消える。
   2026-08-07 の実機）。
 
-## 設定ファイル (`config/**/*.yaml`) のコメント
+## 設定ファイル (`configs/**/*.yaml`) のコメント
 
 - **1 行でまとめる。** キーの右に `# 既定 <ノード既定値>: <説明>` の形で書き、既存の行と
   同じ書式・同じ語彙にそろえる。キーの上に段落を積まない。実測値は 1 行に収まる範囲で
-  入れてよいが、導出や背景は `config/README.md` / `docs/` / 実装 (例:
+  入れてよいが、導出や背景は `configs/README.md` / `docs/` / 実装 (例:
   `vi_rs/vi_planner/src/core/mod.rs` 冒頭) に置いて参照で済ませる。
 - 「既定」= 各ノードの `main.rs`（`vi_planner` は `src/node/params.rs`）などが持つ
   宣言時の値、`overrides/` での「断片」=
-  重ねる先の設定ファイル（そのノードを宣言している `config/stack/nav2/*.yaml` や
-  `config/stack/localization/emcl2.yaml` など）の値。値を変えたら `既定 同左` や
+  重ねる先の設定ファイル（そのノードを宣言している `configs/stack/nav2/*.yaml` や
+  `configs/stack/localization/emcl2.yaml` など）の値。値を変えたら `既定 同左` や
   `# 断片 <値>:`、ファイル冒頭の
   「変えてあるのは○○だけ」といった要約も同じ変更で追随させる。
 
@@ -504,7 +504,7 @@ Docker 越しに叩く形は
 
 | 触るもの | 先に読む |
 | --- | --- |
-| `config/` の yaml の値 | [`config/README.md`](config/README.md)（合成・override の仕組みと、各値の由来。機体側の値もここにまとまっている） |
+| `configs/` の yaml の値 | [`configs/README.md`](configs/README.md)（合成・override の仕組みと、各値の由来。機体側の値もここにまとまっている） |
 | `overrides/` / 設定の合成そのもの | `src/daifuku_config_manager/src/daifuku_config_manager/params.py` の冒頭 |
 | `launch/` | [`docs/usage/architecture.md`](docs/usage/architecture.md#launchファイルの構成) |
 | `simulator/`（Isaac 版 / pi4_sim 版） | [`simulator/docs/pi4_sim.md`](simulator/docs/pi4_sim.md) を先に、次に [`simulator/README.md`](simulator/README.md) |
