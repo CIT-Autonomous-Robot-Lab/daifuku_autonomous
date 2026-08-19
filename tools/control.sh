@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-DOCKER_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+DOCKER_DIR="$(cd -- "${SCRIPT_DIR}/../docker/raspberrypi" && pwd)"
 source "$(cd -- "${DOCKER_DIR}/../common/lib" && pwd)/compose.sh"
 
 # 触るのは ros2 サービスだけで、そこは本体ドライバに依存しない。だから入口

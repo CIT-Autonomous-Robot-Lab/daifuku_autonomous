@@ -26,10 +26,10 @@ tmux new-session -d -s nav -c "$PWD" -n nav
 tmux send-keys -t nav:nav 'docker compose exec ros2 /ros_entrypoint.sh ros2 launch daifuku_stack navigation.launch.py use_sim_time:=false localization:=vi planner:=vi' Enter
 
 tmux new-window -t nav -c "$PWD" -n motor
-tmux send-keys -t nav:motor 'bash docker/raspberrypi/tools/control.sh motor on'
+tmux send-keys -t nav:motor 'bash tools/control.sh motor on'
 
 tmux new-window -t nav -c "$PWD" -n check
-tmux send-keys -t nav:check 'bash docker/raspberrypi/tools/control.sh status' Enter
+tmux send-keys -t nav:check 'bash tools/control.sh status' Enter
 
 tmux attach -t nav
 ```
@@ -46,9 +46,9 @@ tmux attach -t nav
 `check`の窓では、起動後に次を確認します。
 
 ```bash
-bash docker/raspberrypi/tools/control.sh ros topic hz /scan
-bash docker/raspberrypi/tools/control.sh ros topic hz /odom
-bash docker/raspberrypi/tools/control.sh nodes
+bash tools/control.sh ros topic hz /scan
+bash tools/control.sh ros topic hz /odom
+bash tools/control.sh nodes
 ```
 
 初期姿勢の設定とゴールの指定はRVizから行います。`docker/raspberrypi/`のイメージには
@@ -59,7 +59,7 @@ RVizが入っていないため、PC側の[GUI付き開発コンテナ](../setup
 作業を終えるときは、モーター電源を切ってからセッションを閉じます。
 
 ```bash
-bash docker/raspberrypi/tools/control.sh motor off
+bash tools/control.sh motor off
 tmux kill-session -t nav
 ```
 

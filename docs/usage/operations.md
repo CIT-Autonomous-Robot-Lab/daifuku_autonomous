@@ -44,7 +44,7 @@ docker compose exec ros2 \
 起動します。
 
 ```bash
-bash docker/raspberrypi/tools/shell.sh
+bash tools/shell.sh
 ```
 
 ## tmuxで作業する
@@ -86,11 +86,11 @@ tmux kill-session -t nav     # セッションごと終了する（中のノー�
 
 ## control.shで操作する
 
-`docker/raspberrypi/tools/control.sh`は、モーター電源、遠隔操作、状態確認をまとめたスクリプト
+`tools/control.sh`は、モーター電源、遠隔操作、状態確認をまとめたスクリプト
 です。こちらもコンテナを自動起動します。
 
 ```bash
-bash docker/raspberrypi/tools/control.sh help
+bash tools/control.sh help
 ```
 
 | サブコマンド | 動作 |
@@ -121,7 +121,7 @@ bash docker/raspberrypi/tools/control.sh help
 たとえば遠隔操作の速度を落とす場合:
 
 ```bash
-TELEOP_LINEAR_SPEED=0.1 bash docker/raspberrypi/tools/control.sh teleop keyboard
+TELEOP_LINEAR_SPEED=0.1 bash tools/control.sh teleop keyboard
 ```
 
 `motor off`は停止指令を送ってから電源を切ります。停止指令の送信に失敗した場合も、
@@ -289,7 +289,7 @@ ros2 topic echo /daifuku/site            # 流れている値
 ```bash
 docker compose logs
 docker compose logs -f ros2
-bash docker/raspberrypi/tools/control.sh logs -f
+bash tools/control.sh logs -f
 ```
 
 コンテナは`HOME=/tmp`で動くため、ROS 2のログファイルは`/tmp/ros/log`に出力されます。
@@ -308,7 +308,7 @@ docker compose cp ros2:/tmp/ros/log ./ros_log
 走行を伴う作業のあとは、コンテナを止める前にモーター電源を切ります。
 
 ```bash
-bash docker/raspberrypi/tools/control.sh motor off
+bash tools/control.sh motor off
 docker compose down
 ```
 

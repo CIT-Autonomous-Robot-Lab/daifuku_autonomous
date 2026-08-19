@@ -34,7 +34,7 @@ Piの空き（1.5GB程度）を数分で埋めます。SDへの書き込みは�
 黙って何も録れません**。録る前に実際の一覧を見てください。
 
 ```bash
-bash docker/raspberrypi/tools/shell.sh   # コンテナへ入る
+bash tools/shell.sh   # コンテナへ入る
 ros2 topic list
 ```
 

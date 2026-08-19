@@ -25,10 +25,10 @@ tmux new-session -d -s mapping -c "$PWD" -n slam
 tmux send-keys -t mapping:slam 'docker compose exec ros2 /ros_entrypoint.sh ros2 launch daifuku_stack mapping.launch.py use_sim_time:=false' Enter
 
 tmux new-window -t mapping -c "$PWD" -n teleop
-tmux send-keys -t mapping:teleop 'bash docker/raspberrypi/tools/control.sh motor on'
+tmux send-keys -t mapping:teleop 'bash tools/control.sh motor on'
 
 tmux new-window -t mapping -c "$PWD" -n check
-tmux send-keys -t mapping:check 'bash docker/raspberrypi/tools/control.sh status' Enter
+tmux send-keys -t mapping:check 'bash tools/control.sh status' Enter
 
 tmux attach -t mapping
 ```
@@ -43,7 +43,7 @@ tmux attach -t mapping
 自分で実行してください。モーター電源を入れたら、同じ窓で遠隔操作を始めます。
 
 ```bash
-TELEOP_LINEAR_SPEED=0.1 bash docker/raspberrypi/tools/control.sh teleop keyboard
+TELEOP_LINEAR_SPEED=0.1 bash tools/control.sh teleop keyboard
 ```
 
 走り終えたら`check`の窓で地図を保存します。**保存先は`src/`側**です（コンテナが
@@ -59,7 +59,7 @@ docker compose exec ros2 \
 先にモーター電源を切ってください。
 
 ```bash
-bash docker/raspberrypi/tools/control.sh motor off
+bash tools/control.sh motor off
 tmux kill-session -t mapping
 ```
 
@@ -164,17 +164,17 @@ docker compose exec ros2 \
 起動したターミナルとは別のターミナルで実行してください。
 
 ```bash
-bash docker/raspberrypi/tools/control.sh motor on
-bash docker/raspberrypi/tools/control.sh teleop keyboard
+bash tools/control.sh motor on
+bash tools/control.sh teleop keyboard
 # ジョイスティックを使う場合
-bash docker/raspberrypi/tools/control.sh teleop joystick
+bash tools/control.sh teleop joystick
 ```
 
 速度は`TELEOP_LINEAR_SPEED`と`TELEOP_ANGULAR_SPEED`で変更できます。地図作成では
 既定より遅くしたほうが安定します。
 
 ```bash
-TELEOP_LINEAR_SPEED=0.1 bash docker/raspberrypi/tools/control.sh teleop keyboard
+TELEOP_LINEAR_SPEED=0.1 bash tools/control.sh teleop keyboard
 ```
 
 RVizを使える環境では、次を確認しながら走行します。
@@ -232,7 +232,7 @@ VIの`unknown_as_obstacle`もコストマップの`track_unknown_space`も、未
 保存が終わったらモーター電源を切ります。
 
 ```bash
-bash docker/raspberrypi/tools/control.sh motor off
+bash tools/control.sh motor off
 ```
 
 保存後は[自律移動](navigation.md)へ進みます。

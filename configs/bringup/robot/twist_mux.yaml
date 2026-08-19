@@ -18,7 +18,7 @@ twist_mux:
         topic   : cmd_vel       # 購読するトピック。nav2 側の remap は変えていないのでここは /cmd_vel のまま
         timeout : 0.5           # [s] 自律側が勝つのは「出している間 + この時間」だけ。これだけ間が空いたら teleop へ譲る
         priority: 100           # [0-255] 大きいほうが勝つ
-      teleop:                   # 遠隔操作と手動の停止指令 (docker/raspberrypi/tools/control.sh)
+      teleop:                   # 遠隔操作と手動の停止指令 (tools/control.sh)
         topic   : cmd_vel_teleop
         timeout : 0.5           # [s] これだけ間が空いたら「出していない」とみなす
         priority: 10            # 自律側より下。自律側が黙っているあいだだけ通る
