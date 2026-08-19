@@ -445,18 +445,20 @@ docker compose build --build-arg BUILD_JOBS=1
 
 ## 通路を塞いでも`/value_function`が変わらない
 
-`vi_planner`は狭域（±1mウィンドウ）で上げた値を全域へ広げますが、確かめるときに引っかかるところが2つあります。
+`vi_planner`は狭域（追従の窓）で上げた値を全域へ広げますが、確かめるときに引っかかるところが2つあります。
 
-まず**見るトピック**です。RVizで走行中に動いて見えるのは`/local_window_value`（±1m）だけで、これは機体と一緒に動きます。離れると下から`/value_function`が出てくるため、**上げた値が上書きされたように見えます**。`/value_function`は掃きスレッドが2秒ごとに出し直しますが、それには`global_sweep: true`と`value_publish_interval_ms`が正であることの両方が要ります（`--show-args`ではなく`ros2 param get /vi_planner global_sweep`で確認）。
+まず**見るトピック**です。RVizで走行中に動いて見えるのは`/local_window_value`（追従の窓）だけで、これは機体と一緒に動きます。離れると下から`/value_function`が出てくるため、**上げた値が上書きされたように見えます**。`/value_function`は掃きスレッドが2秒ごとに出し直しますが、それには`global_sweep: true`と`value_publish_interval_ms`が正であることの両方が要ります（`--show-args`ではなく`ros2 param get /vi_planner global_sweep`で確認）。`value_publish_interval_ms: 0`だと出すのが伝播の完了時だけになりますが、壁沿いを走っているあいだは毎tick次の伝播が積まれて完了しないので、**エラーも警告も出ないまま全域スライスが固まったまま**になります。
 
 次に**塞ぎ方**です。スキャンが置くのは壁ではなくコストなので、通路の一部だけを塞いでも脇を抜けられるなら遠方の値はほとんど上がりません（host実測で+0.75ステップ＝`cost_drawing_threshold: 60`なら色1段）。幅いっぱいを塞ぐと桁が変わります（同13→38ステップ）。迂回できるなら上がらないのが正しい挙動です。
 
 伝播が動いているかはログで見ます。走行中は壁が窓に入るたびに次の伝播が積まれるので、**上の行はまず出ません**。
 
 ```
-vi_planner: global sweep done in 3.4s, 358 tiles (still_dirty=false)   # 待ち行列が空になった
-vi_planner: tile repair running for 6.0s (412 visits, 27 tiles queued) # 2秒ごとの進捗
+vi_planner: global propagation settled in 3.4s (358 tiles)                  # 待ち行列が空になった
+vi_planner: global propagation running for 6.0s (412 tiles done, 27 queued) # 2秒ごとの進捗
 ```
+
+単位は密（`frontier2d_sparse`）なら`cells`、compact（`frontier2d_sparse_compact`）なら`tiles`です。行そのものはどちらの経路でも同じです（2026-08-20の上流の更新まで、下の進捗はcompactでしか出ませんでした）。
 
 後者も出ないなら伝播が回っていません。`global_sweep`と、`planner:=vi`側の`solver`を確認してください（詳細は[`configs/README.md`](../../configs/README.md#効いているか確かめる)）。
 

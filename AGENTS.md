@@ -46,7 +46,7 @@ Raspberry Pi Cat を ROS 2 Humble / Nav2 で自律移動させる colcon ワー�
 罠が 2 つあります。`raspicat_ros` / `raspicat_description` / `raspimouse2` は
 `.gitignore` に**書かれていない**ので、Linux・Docker のチェックアウトでは untracked で
 現れます。それでも**コミット対象ではありません**。もう 1 つ、`src/value_iteration3`
-（`vi_planner` の実装）は**独自の `CLAUDE.md` を持つ**ので、中を
+（`vi_planner` の実装）は**独自の `AGENTS.md` を持つ**ので、中を
 触る前にそちらを読むこと。
 
 ## ビルド
@@ -532,7 +532,7 @@ Docker 越しに叩く形は
 | `src/raspicat_driver/` / `tools/image/udev/` | [`src/raspicat_driver/README.md`](src/raspicat_driver/README.md)、次に [`docs/setup/raspberry-pi-4.md`](docs/setup/raspberry-pi-4.md) と [`raspberry-pi-5.md`](docs/setup/raspberry-pi-5.md)（未検証の項目付き） |
 | `src/daifuku_rqt/` | [`src/daifuku_rqt/README.md`](src/daifuku_rqt/README.md)、次に [`docs/usage/control-panel.md`](docs/usage/control-panel.md) |
 | `src/daifuku_waypoint_manager/` / `daifuku_stack/waypoints/` | [`src/daifuku_waypoint_manager/README.md`](src/daifuku_waypoint_manager/README.md) |
-| `src/value_iteration3/` | 同ディレクトリの `CLAUDE.md` |
+| `src/value_iteration3/` | 同ディレクトリの `AGENTS.md` |
 | 実機の症状を追う | [`docs/usage/troubleshooting.md`](docs/usage/troubleshooting.md) |
 
 ドキュメントは日本語で書かれています。追記も日本語でそろえてください。

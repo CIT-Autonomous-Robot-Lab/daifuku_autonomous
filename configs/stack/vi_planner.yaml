@@ -1,6 +1,7 @@
 # 価値反復プランナ (value_iteration3, Rust)。「既定」= ノードの
 # src/node/params.rs が declare_parameter で持つ値。既定と違うのは
-# solver / map_wait_sec / compact_ram_limit_mb / action_forward_m の 4 つだけ
+# solver / map_wait_sec / compact_ram_limit_mb / action_forward_m と、追従の窓の
+# local_xy_range / local_xy_range_lat / local_shape / local_shape_ratio_max の 8 つだけ
 # (localizer も書いてあるが値は既定と同じ — あれは「どの推定器を使うか」を持つ
 # 唯一の場所なので、既定でも空欄にせず明示してある)。
 # 地図ごとの調整は ../overrides/<地図名>.yaml。合成順序と上書きは ../README.md を参照。
@@ -54,8 +55,30 @@ vi_planner:
     control_frequency: 10.0       # 既定 10.0 [Hz]: cmd_vel を出す周期
     refine_budget_ms: 40          # 既定 40 [ms/tick]: ローカルウィンドウ価値反復に使う時間予算
     no_action_timeout_sec: 3.0    # 既定 3.0 [s]: pose か方策が無い状態がこれだけ続いたら追従を中断。15 へ延ばしても粘れず、1 点飛ばすまでが 2 分に伸びただけだったので戻した (2026-08-04 実機)
+    # ── 追従の窓 (形と寸法。導出と代償は ../README.md) ──
+    # 4 つで「停止中は全周 2.0m 以上・全速前進で前 3.0m」になる (前後の和 a_fwd+a_bwd=2r
+    # 一定で半軸は [r/ratio_max, min(2r-r/ratio_max, r*ratio_max)] = [2.0, 3.0])。
+    # **到達距離は max(半軸, lat)** — 線分長が負だと 0 でクランプされるので、前後とも
+    # lat = 2.0m を下回らない (ratio_max を上げても同じ)。導出と代償は ../README.md。
+    local_shape: "capsule"        # 既定 square (地図軸の矩形 = 本家): 幅 lat の円を進行方向の線分に沿って掃いた形。ロボット座標系に載る。ellipse は前縁が尖って横被覆が落ちるのでこちら
+    local_xy_range: 2.5           # 既定 1.0 [m]: 窓の**前後**の基準半径 (停止中の前後到達距離そのもの)
+    local_xy_range_lat: 2.0       # 既定 0.0 (= local_xy_range と同じ) [m]: 窓の横半径。capsule は前縁でもこの幅を保つ
+    local_shape_ratio_max: 1.25   # 既定 1.5: 進行方向へ前後半軸を伸縮させる倍率上限。1.25 で「前 3.0m / 後 2.0m」に決まる
+    # ▲ **窓を広げた代償は 1 tick の refine が窓 1 周を終えられなくなること。**
+    #   refine_pass_until は毎 tick 窓の x 最小端から掃き直す (途中再開のカーソルが無い)
+    #   ので、上の refine_budget_ms 40ms で足りないと**窓の x 大きい側が一度も掃かれない**。
+    #   19F (map_scale 2 = 0.10m/cell) は窓 16.57m² = 約 1657 セル x60θ ≒ 99k 状態 ≒ 99ms
+    #   (Pi4 実測 約 1M states/s) で足りず、掃けるのは約 4 割。**同梱の overrides は 2 地図とも
+    #   follow_controller: dwa** で、あちらの軌道棄却は penalty を直に読む (スキャン注入が
+    #   毎 tick 効くので回避そのものは生きる) が、生き残り候補の順位付けは V̂ = 掃いた値なので
+    #   遅れる。greedy に戻すと**判断が丸ごと掃き待ち**になるので、そのときは refine_budget_ms を
+    #   上げるか窓を縮めること。津田沼 (scale 5 = 0.25m/cell) は 265 セル ≒ 16ms で収まる。
+    # ▲ **津田沼では形が変形しない**。update_axes の不感帯は 0.3 セル = 0.075m/tick で、
+    #   1 tick の最大変位 (action_forward_m 0.5 ÷ control_frequency 10 = 0.05m) がそれに届かない。
+    #   あの地図の窓は全周 2.5m の静止形のまま (最低 2m の要求は満たす)。19F は 0.03m なので
+    #   全速の 6 割から伸び始める。
     # ── 未設定 (既定のまま。狭域 1 tick の判断器。2026-08-08 に上流が足した) ──
-    # 場も solve も全域掃きも変わらず、**変わるのは「場から速度指令を引く読み方」だけ**。
+    # 場も solve も全域伝播も変わらず、**変わるのは「場から速度指令を引く読み方」だけ**。
     # 既定の greedy は上の action_* の離散 6 行動そのもの (本家 ViNode::decision 準拠) で、
     # dwa / mppi は同じ場を連続に読む (V̂ 三線形補間 + 軌道サンプリング)。速度範囲は行動集合
     # と同じままで、候補が全滅したら greedy へ落ちるので**失敗の形は変わらない**。上流実測
@@ -80,8 +103,8 @@ vi_planner:
     #   半減が実際に進む**のは変わらない (書いても読まれない)。
     stop_on_failure: false        # 既定 false: follow_waypoints で 1 点失敗したら残りを諦めるか。nav2 構成の nav2/behaviors.yaml の waypoint_follower の同名キーと同義で、**nav2:=false ではあちらは読まれない**
     waypoint_pause_sec: 0.2       # 既定 0.2 [s]: 1 点に着いてから次の点へ向かうまで。あちらの waypoint_pause_duration: 200 [ms] と同義。この間も場は更新し続ける
-    # ── 狭域 → 広域のフィードバック (共有価値関数の全域掃き。仕組みと実測は ../README.md) ──
-    global_sweep: true            # 既定 true: 全域掃き (compact ではタイル修復) を回すか。切ると狭域が「通れない」と判断しても広域は塞がった通路を指し続ける
+    # ── 狭域 → 広域のフィードバック (共有価値関数の全域伝播。仕組みと実測は ../README.md) ──
+    global_sweep: true            # 既定 true: 全域伝播 (値が動いた範囲だけの能動集合。粒度は密がセル、compact がタイル) を回すか。切ると狭域が「通れない」と判断しても広域は塞がった通路を指し続ける
     # ▲ 掃きの配分は 2026-08-09 に **budget/idle の 2 つから global_sweep_duty [%] の 1 つ**
     #   へまとまった (既定 25 = ここにあった 20ms 掃き : 60ms 待ちと同じ割合なので、値は
     #   据え置きで未設定にしてある)。**上げないこと** — 掃きが 1 回で握るロックが長くなる
@@ -95,12 +118,12 @@ vi_planner:
     # ── 走り出しの短縮 (効かない地図がある。../../../../docs/usage/navigation.md) ──
     early_start: false            # 既定 false: ゴールまで方策が繋がった時点で solve を打ち切るか。経路から外れると場を捨てて解き直す間ずっと止まる。**同梱の overrides は 2 地図とも true だが、compact の値バンドより地図の値域が狭いと打ち切る隙が無く、19F はそちら側 (帯 600 ステップ)**。**未検証**
     # ── 可視化 (経路計算には影響しない) ──
-    value_publish_interval_ms: 500  # 既定 500 [ms]: 配信間隔。**負で可視化そのものを立てず、0 で solve 完了時のみ** (追従中の出し直しも止まる)。掃きスレッドが全域スライス (19F 13 万 / 津田沼 94 万セル) をロック内で 2 秒ごとに作るので、2026-08-04 の「2 秒おきに固まる」の容疑者。0 か -1 が戻し方
+    value_publish_interval_ms: 500  # 既定 500 [ms]: 配信間隔。**負で可視化そのものを立てず、0 で伝播が落ち着いたときのみ** (壁沿いを走る間は落ち着かないので全域スライスが黙って固まる)。掃きスレッドが全域スライス (19F 13 万 / 津田沼 94 万セル) をロック内で 2 秒ごとに作るので、2026-08-04 の「2 秒おきに固まる」の容疑者。0 か -1 が戻し方
     # ▲ 配信そのものの on/off だった publish_value_function は 2026-08-09 にキーごと消え、
     #   このキーの符号に吸収された (書いても読まれない)。追従中の出し直しを掃きスレッドが
     #   行う点は変わらないので、**global_sweep: false だと途中で止まる**のも同じ。
     cost_drawing_threshold: 60    # 既定 60: 色スケール上限 [ステップ数≒秒]。**地図ごとに測り直す値**で、同梱の 2 地図はどちらも ../overrides/ で上げてある (19F 100 / 津田沼 600)。この 60 が出るのはどちらでもない地図のとき (../README.md)
-    # ▲ /local_window_value (±1m 窓) 用に別の上限を持っていた window_cost_drawing_threshold も
+    # ▲ /local_window_value (追従の窓) 用に別の上限を持っていた window_cost_drawing_threshold も
     #   同じ整理で消え、**全域スライスと窓が上の 1 つを共有する**ようになった。19F の
     #   100 のような広い上限を入れると、窓のほうは階調がほぼ 1 色に潰れる (表示だけの話)。
     # ── 行動集合 (前進量と回転量の組。3 つの配列で要素数を揃えること。6 個でなくてよい) ──
@@ -131,10 +154,18 @@ vi_planner:
     # pose_topic: "mcl_pose"      # 自己位置を読むトピック。launch が上書きする
     # scan_topic: "scan"          # スキャンを読むトピック。launch が上書きする
     # global_frame: "map"         # 出力する Path のフレーム
-    # local_xy_range: 1.0         # 追従が見る・スキャンで補正する窓の半径 [m]。広げると 1 tick の
-    #                             # refine 対象と compact パッチ (辺 ∝ 2×半径) が増える。**ここまで
-    #                             # 「±1m 窓」と書いてあるのはこの既定のこと**で、2026-08-09 から
-    #                             # 動かせる値になった (窓の大きさを前提にした記述はこちらに従う)
+    # local_shape_slew_per_sec: 1.0  # 既定 1.0 [m/s]: 半軸の変化率上限。belief 系の推定器は再収束で姿勢が 1 tick に数 m 飛ぶ
+    #                             # ので要る。10Hz なら 1 tick 0.1m = 2.5m から 3.0m まで 0.5 秒
+    #     ▲ 形の候補は square (地図軸の矩形 = 本家) / circle / ellipse / capsule。**凸であること** —
+    #       凹形 (扇形・前方コーン) を足すと clear_map_from_scan が再入するビームを黙って切る。
+    #       形の定義は in_local_area 1 か所で、スキャン注入・狭域の掃き・σ マージン膨張が全部そこを通る。
+    #     ▲ **compact の追従パッチは「変形の上限込み」の外接半径で決まる**が、**square では
+    #       ratio_max が入らない** (外接半径は前後と横の大きいほう)。上の capsule では
+    #       max(2.5x1.25, 2.0) = 3.125m で、津田沼 (0.25m/cell) の追従パッチは 27x27x60 = 2.5MB から
+    #       59x59x60 = 約 11MB になる。実寸は起動ログの
+    #       "vi_planner: follow patch <辺>x<辺>x<θ> = <MB>" に出るので、4GB 機ではそこを見ること
+    #       (門は half を win から作るぶん構造上鳴らないので、**気付く手掛かりはこのログだけ**)。
+    #     ▲ RViz の /local_window_value は形の外を未知 (-1) で出すので、窓の形はそのまま見える。
     #
     # ── 自己位置推定 (2026-08-09 に上流が足した VIOLA。**この構成の既定では使わない**) ──
     # **どれを使うかを持つのはここだけ**で、使うかどうかは launch の
@@ -178,10 +209,3 @@ vi_planner:
     #       専用**なので、同梱の frontier2d_sparse_compact のまま true にすると
     #       起動時に止まる。使うなら密ソルバごと戻すこと (map_19f がそうしている)。
     #
-    # ── 2026-08-09 に消えたキー (書いても読まれない。const になったか機能ごと消えた) ──
-    #   solve_chunk / max_solve_iter … プリエンプトを見る間隔と反復の打ち切り回数
-    #   start_tolerance / action_tolerance … 方策なしセルでの近傍スナップ・行動探索半径
-    #   dense_limit_mb / publish_value_function / window_cost_drawing_threshold /
-    #   goal_retry_settle_sec / global_sweep_budget_ms / global_sweep_idle_ms /
-    #   dwa_n_v / dwa_n_w / mppi_lambda / mppi_sigma_v / mppi_sigma_w_deg … 上の各所を参照
-    #   footprint_clear_m … 足された日に消えた。**機能ごと**無いので、自己位置がずれて真上に立つゴースト壁に挟まって動けなくなる逃げ道も無い

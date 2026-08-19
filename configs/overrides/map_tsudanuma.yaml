@@ -91,7 +91,7 @@ daifuku_stack:
       #   棄却するようになった (dwa_lethal_penalty、既定 2.0 = 有効)。壁際が通れず経路が
       #   出ないなら dwa_lethal_penalty: 0.0 で以前の挙動に戻る (どちらも未検証)。
       # ▲ global_sweep は断片のまま (compact でもタイル修復として効く)。動いているかは
-      #   2 秒ごとの "tile repair running for" で見る ("global sweep done in" は出ない)。
+      #   2 秒ごとの "global propagation running for" で見る (settled は走行中は出ない)。
 
 # ── ここで上書きしていないもの ────────────────────────────────────────────
 # いずれも**未検証**。次も上書きが要るかもしれない。
