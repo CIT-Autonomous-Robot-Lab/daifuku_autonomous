@@ -189,6 +189,11 @@ ip addr replace 192.168.1.4/24 dev eth0
   ディストロの終了でVMが落ちれば、`wsl --shutdown`を明示しなくても次の起動で反映
   されます。編集した時点で意図しないタイミングの切り替わりが起こり得ます。
 
+つながったら、RVizは`tools/rviz.sh`（引数なしで`navigation.rviz`、`mapping`で地図作成用）
+で立てます。機体側のスタックはPiのDockerが持っているので、WSLで建てるのはRVizの
+パネルプラグイン（`daifuku_waypoint_manager`）1つだけです——初回だけ2分ほどかかり、
+`~/.cache/daifuku_rviz_ws`に入ります（`ROS_DOMAIN_ID`は未設定なら90）。
+
 ## 接続を確認する
 
 ```bash
