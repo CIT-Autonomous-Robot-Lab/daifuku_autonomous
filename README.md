@@ -7,11 +7,11 @@
 - 2D LiDARまたはLivox Mid-360に対応
 - SLAM Toolboxによる地図作成
 - EMCL2またはAMCLによる自己位置推定
-- 価値反復プランナ（既定。この構成ではNav2のnavigationノードを立てません）またはNavFnによる経路計画
+- 価値反復プランナ（既定）またはNavFnによる経路計画
 - キーボードとジョイスティックによる遠隔操作
 - Docker（ヘッドレス）またはUbuntu 22.04 / ROS 2 Humbleで実行可能
 
-> 本体ドライバは2つから選べます。標準は自前実装（`driver:=original`、[`src/raspicat_driver`](src/raspicat_driver/README.md)）で、モーター経路をこのリポジトリが持ちます。`.env`の雛形である`.env.example`もこちら（`compose.original.yaml`）を指しています（`.env`自体は`.gitignore`）。もう一方の公式実装（rtmouse + raspimouse、`driver:=raspimouse`）を使う場合、モータードライバと車輪オドメトリはこのリポジトリに含まれず、rtmouseが動くRaspberry Pi 4に限られます（[Pi 4](docs/setup/raspberry-pi-4.md) / [Pi 5](docs/setup/raspberry-pi-5.md)）。`driver:=`という引数そのものの既定値は`raspimouse`ですが、Docker運用ではcomposeが`original`を渡すので、実際に立つのは自前実装です。
+本体ドライバは自前実装（`driver:=original`、[`src/raspicat_driver`](src/raspicat_driver/README.md)）と公式実装（rtmouse + raspimouse）から選べます。Docker運用の標準は前者で、公式実装はrtmouseが動くRaspberry Pi 4に限られます（[Pi 4](docs/setup/raspberry-pi-4.md) / [Pi 5](docs/setup/raspberry-pi-5.md)）。
 
 ## はじめる
 
@@ -20,35 +20,14 @@
 
 ## ドキュメント
 
-- [セットアップ](docs/setup/README.md)
-  - [Raspberry Pi 4で動かす](docs/setup/raspberry-pi-4.md)
-  - [Raspberry Pi 5で動かす](docs/setup/raspberry-pi-5.md)
-  - [SDカードを作る](tools/image/README.md)
-  - [Docker環境](docs/setup/docker.md)
-  - [ネイティブ環境](docs/setup/native.md)
-  - [ROS 2ネットワーク](docs/setup/network.md)
-  - [LiDARとオドメトリ](docs/setup/lidar.md)
-  - [GUI付き開発コンテナ](docs/setup/development-container.md)
-- [使い方](docs/usage/README.md)
-  - [地図作成](docs/usage/mapping.md)
-  - [自律移動](docs/usage/navigation.md)
-  - [日常操作と確認](docs/usage/operations.md)
-  - [操作パネル（rqt）](docs/usage/control-panel.md)
-  - [ゲームパッドで操作する](docs/usage/joystick.md)
-  - [設定リファレンス](docs/usage/configuration.md)
-  - [構成とパッケージ](docs/usage/architecture.md)
-  - [走行を記録して再生する](docs/usage/recording.md)
-  - [トラブルシューティング](docs/usage/troubleshooting.md)
+個々のページは下の目次から辿ってください。**ここに一覧を写さないこと**（二重に持つと片方が古くなる）。
 
-`docker/`以下には、実機用（`raspberrypi/`）と開発用（`dev/`）の2つのDocker環境があります。
-全体像は[`docker/README.md`](docker/README.md)、各環境のディレクトリ構成は
-[`docker/raspberrypi/README.md`](docker/raspberrypi/README.md)と
-[`docker/dev/README.md`](docker/dev/README.md)にまとめています。
-
-実機に載せる前にRaspberry Pi 4相当の速度で試すハーネスが[`simulator/`](simulator/README.md)に
-あります。Isaac Sim版と疑似ロボット版の2つです。実機で観測した事象の実測記録は
-[`simulator/docs/pi4_sim.md`](simulator/docs/pi4_sim.md)にまとまっているので、どちらを使う
-場合でも先に読んでください。
+- [セットアップ](docs/setup/README.md) — 実行環境・SDカード・LiDAR・ネットワーク
+- [使い方](docs/usage/README.md) — 地図作成・自律移動・日常操作・トラブルシューティング
+- [`configs/README.md`](configs/README.md) — 設定の合成規則と、各値の由来
+- [`docker/README.md`](docker/README.md) — 実機用（`raspberrypi/`）と開発用（`dev/`）の2環境
+- [`simulator/README.md`](simulator/README.md) — 実機の前にPi 4相当の速度で試すハーネス。実機で観測した事象の実測記録は[`simulator/docs/pi4_sim.md`](simulator/docs/pi4_sim.md)
+- [`AGENTS.md`](AGENTS.md) — このリポジトリで作業するエージェント向けの指針
 
 ## ライセンス
 
