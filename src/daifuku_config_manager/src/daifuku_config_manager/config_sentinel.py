@@ -20,7 +20,7 @@
 
 見ているのは 2 つ。
 
-  * **設定値** … params.config_digest。自分のパッケージの config/ 全体と、
+  * **設定値** … params.config_digest。自分のパッケージの configs/ 全体と、
     overrides の自分の部分木。**正規化してから指紋を取る**ので、コメントを
     直しただけでは反応しない
   * **場所** … /daifuku/site (site_manager の告知)。自分が起動時に使った名前と

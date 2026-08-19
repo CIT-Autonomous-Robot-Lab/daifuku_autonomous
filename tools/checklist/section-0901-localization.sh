@@ -32,12 +32,12 @@ result CHECK "自己位置推定" "${LOCALIZER}"
 
 require "/map がある" has_topic /map
 
-# 地図は config/site → その overrides の site: map: で決まる。走っている
+# 地図は configs/site → その overrides の site: map: で決まる。走っている
 # map_server がそれと違うものを読んでいたら、別の場所の地図で推定している。
 check_map_matches_site() {
   local site ov want got
   site="$(site_name)"
-  ov="${ROOT}/config/overrides/${site}.yaml"
+  ov="${ROOT}/configs/overrides/${site}.yaml"
   want="$(sed -n '/^site:/,/^[^ #]/p' "${ov}" 2>/dev/null |
     sed -n 's/^[[:space:]]*map:[[:space:]]*//p' | head -n 1)"
   got="$(ros_run 10 param get /map_server yaml_filename 2>/dev/null |
@@ -45,7 +45,7 @@ check_map_matches_site() {
   echo "site=${site} 期待 ${want:-?} / 実際 ${got##*/}"
   [[ -n "${want}" && "${got##*/}" == "${want##*/}" ]]
 }
-item "map_server が config/site の指す地図を読んでいる" check_map_matches_site
+item "map_server が configs/site の指す地図を読んでいる" check_map_matches_site
 
 item "map -> odom の時刻が進んでいる" tf_advancing map odom
 on_fail && diagnose "map -> odom が出ない" \

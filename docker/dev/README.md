@@ -318,7 +318,7 @@ ls $(ros2 pkg prefix daifuku_bringup)/lib/daifuku_bringup/
 
 ```bash
 gdb --args install/emcl2/lib/emcl2/emcl2_node \
-  --ros-args --params-file config/stack/localization/emcl2.yaml
+  --ros-args --params-file configs/stack/localization/emcl2.yaml
 ```
 
 キーボード操作の例:

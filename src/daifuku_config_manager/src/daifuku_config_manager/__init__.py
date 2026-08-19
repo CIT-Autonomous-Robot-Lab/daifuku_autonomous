@@ -22,7 +22,7 @@
 launch/ の下に残してある。
 
   params.py           設定ファイルへの overrides の合成
-  site_manager.py     今どこか (config/site) を ROS から読み書きできるようにするノード
+  site_manager.py     今どこか (configs/site) を ROS から読み書きできるようにするノード
   config_sentinel.py  起動時に読んだ設定が書き変わっていないかを見張るノード
 
 **ノードを 2 つ持つが、葉であることは変わらない。** どちらも向こう 2 つの

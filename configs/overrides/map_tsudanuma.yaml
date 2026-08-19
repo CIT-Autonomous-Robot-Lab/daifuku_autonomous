@@ -1,12 +1,12 @@
 # map_tsudanuma.yaml (5888x4000 @0.05m = 294.4m x 200m) 用の上書き。
 # 「断片」= 重ねる先の設定ファイルの値で、
-# config/bringup/sensors/{mid360_scan,mid360_elevation}.yaml、
-# config/stack/nav2/vi_planner.yaml (= ノードの既定) と
-# config/stack/nav2/behaviors.yaml (velocity_smoother の節)、config/stack/localization/emcl2.yaml。
+# configs/bringup/sensors/{mid360_scan,mid360_elevation}.yaml、
+# configs/stack/nav2/vi_planner.yaml (= ノードの既定) と
+# configs/stack/nav2/behaviors.yaml (velocity_smoother の節)、configs/stack/localization/emcl2.yaml。
 #
-#   tools/site.sh map_tsudanuma                    # config/site を書いて機体を立て直す
+#   tools/site.sh map_tsudanuma                    # configs/site を書いて機体を立て直す
 #   ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=vi
-#   # map も overrides も config/site から来るので渡さない
+#   # map も overrides も configs/site から来るので渡さない
 #
 # **1 段目はパッケージ名。** 各 launch は自分の名前の部分木しか読まない。
 # 機体側 (daifuku_bringup:) は docker compose up で常駐しているので、そちらを
@@ -15,7 +15,7 @@
 # 0.05m のまま解くと 14.1 億状態 = 密ソルバで 79GB を確保して起動と同時に死ぬ。
 # プランナ内部だけ粗くし (map_scale)、密な states を確保しない compact で解くことで通す。
 # 実測値・導出・既知の制約 (行動集合を変えるので value_iteration3 は ec2579d 以降が要る、
-# 全域スライスが重い、pi4_sim では BT がリカバリして ABORT する) は config/README.md を参照。
+# 全域スライスが重い、pi4_sim では BT がリカバリして ABORT する) は configs/README.md を参照。
 #
 # **overrides は置き換えなので、既定の map_19f はこのとき外れる**。この地図は 68.2% が
 # 未観測で占有セルが 0.4% しかなく 19F と同じ alpha 崩壊が起きる余地があるため、
@@ -142,7 +142,7 @@ daifuku_stack:
   # local_planner:=vi (vi_planner 1 ノード構成) 用。以下 4 つ (map_scale /
   # downsample_policy / action_forward_m / goal_margin_radius) は**セットで効く**。1 つでも
   # 欠けると波がゴール近傍で止まり、到達列 1 で「収束」する。scale 6 は楽観でも通路の
-  # セル幅が足りず解けない。狭域追従が密な states をどう用立てるかは config/README.md と
+  # セル幅が足りず解けない。狭域追従が密な states をどう用立てるかは configs/README.md と
   # vi_planner/src/core/compact.rs 冒頭。
   vi_planner:
     ros__parameters:
@@ -178,7 +178,7 @@ daifuku_stack:
       # 2026-08-09 に budget/idle から global_sweep_duty [%] 1 つへまとまった (既定 25 =
       # 従来の 20:60 と同じ割合。上げると追従に譲られる隙間が狭くなる)。
       # **走行中に "global sweep done in" は出ない**のが設計どおりで、動いているかは
-      # 2 秒ごとの "tile repair running for" のほうで見る (config/README.md)。
+      # 2 秒ごとの "tile repair running for" のほうで見る (configs/README.md)。
       # ▲ planner:=vi かつ local_planner:=nav2 (広域だけ VI) でも読まれるのはこの節。
       #   2026-08-08 の上流の整理で vi_global_planner ノードが消え、同じ vi_planner が
       #   follow: false で立つようになったので、ここにあった同名の節 (この節と同じ 8 つを
@@ -207,4 +207,4 @@ daifuku_stack:
 #     **この地図では全域スライス 1 枚 (94 万セル) が重い**。掃きスレッドがそれをロックを
 #     握ったまま 2 秒ごとに作るので、走行中に /cmd_vel_mux が 2 秒おきに途切れる恐れが
 #     ある。2026-08-04 の実機はまさにこの止まり方だったが、犯人の切り分けは未了 —
-#     再発したら value_publish_interval_ms: 0 をここへ足すのが戻し方 (config/README.md)。
+#     再発したら value_publish_interval_ms: 0 をここへ足すのが戻し方 (configs/README.md)。

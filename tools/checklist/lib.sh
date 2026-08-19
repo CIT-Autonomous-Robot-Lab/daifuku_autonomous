@@ -20,7 +20,7 @@
 #
 # ## このツールが守る 2 つのこと
 #
-# **config/ の下には一切書かない。** 書くと config_sentinel が指紋の変化を見て
+# **configs/ の下には一切書かない。** 書くと config_sentinel が指紋の変化を見て
 # launch を落とす。機体は restart: unless-stopped が上げ直すが、人が立てた
 # navigation / mapping は終わったままになる (mapping では作りかけの地図が消える)。
 # ここは読むだけ。
@@ -434,10 +434,10 @@ param_num() {
 }
 
 # ── 静的検査で使う小物 ──────────────────────────────────────────────────────
-# 自前パッケージの場所。daifuku_config だけ src/ の下ではなく config/ に居る。
+# 自前パッケージの場所。daifuku_config だけ src/ の下ではなく configs/ に居る。
 OWN_PKGS=(
   src/daifuku_bringup src/daifuku_stack src/daifuku_config_manager
-  src/daifuku_rqt src/daifuku_waypoint_manager src/raspicat_driver config
+  src/daifuku_rqt src/daifuku_waypoint_manager src/raspicat_driver configs
 )
 
 # /proc/net/snmp の Ip: / Udp: 行を「見出し 行」の組で読む。カウンタの位置は
@@ -448,9 +448,9 @@ snmp_counter() { # snmp_counter Ip ReasmFails
                 else       { for (i = 2; i <= NF; i++) if (k[i] == key) print $i } }
   ' /proc/net/snmp 2>/dev/null | head -n 1
 }
-# config/site の値 (params.read_site_file と同じ規則: 1 つめの空でない非コメント行)
+# configs/site の値 (params.read_site_file と同じ規則: 1 つめの空でない非コメント行)
 site_name() {
-  sed -e 's/[[:space:]]*$//' "${ROOT}/config/site" 2>/dev/null |
+  sed -e 's/[[:space:]]*$//' "${ROOT}/configs/site" 2>/dev/null |
     grep -v '^[[:space:]]*#' | grep -v '^[[:space:]]*$' | head -n 1
 }
 

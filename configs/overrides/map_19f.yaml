@@ -1,15 +1,15 @@
 # map_19f.yaml (19F、915x577 @0.05m = 45.8m x 28.9m) 用の上書き。**overrides の既定値**。
 # 「断片」= 重ねる先の設定ファイルの値で、
-# config/bringup/sensors/{mid360_scan,mid360_elevation}.yaml、
-# config/stack/nav2/vi_planner.yaml と
-# config/stack/nav2/behaviors.yaml (velocity_smoother の節)、config/stack/localization/emcl2.yaml。
+# configs/bringup/sensors/{mid360_scan,mid360_elevation}.yaml、
+# configs/stack/nav2/vi_planner.yaml と
+# configs/stack/nav2/behaviors.yaml (velocity_smoother の節)、configs/stack/localization/emcl2.yaml。
 #
 # **map_tsudanuma.yaml とはキーの集合をそろえてある。** 片方にしか要らない値も、
 # もう片方へ断片と同じ値で書いて並べる (地図ごとの違いが縦に並んで見えるように)。
 # だから「断片も同じ値」の行は消しても挙動は変わらない。**例外は下の内蔵推定器 (VIOLA)
 # の 4 つ**で、あれは津田沼には置けない (密ソルバが要り、あちらは密だと 3.17GB で OOM)。
 #
-#   tools/site.sh map_19f                             # config/site (既定)。機体も立て直す
+#   tools/site.sh map_19f                             # configs/site (既定)。機体も立て直す
 #   ros2 launch daifuku_stack navigation.launch.py    # map も overrides も既定
 #
 # **1 段目はパッケージ名。** 各 launch は自分の名前の部分木しか読まない
@@ -20,7 +20,7 @@
 # 19F 用の調整は自動的に外れる。ここに置くのは「19F の地図だからこの値」というものだけ
 # で、機体固有 (base_frame_id) や Pi4 固有 (default_server_timeout) は断片側。
 #
-# 値の由来は config/README.md。
+# 値の由来は configs/README.md。
 
 # ── その場所そのものに付く値 (ノードのパラメータではない) ─────────────────────
 # **どの地図を読むかはここで決まる。** navigation の map:= の既定がこれで
@@ -87,7 +87,7 @@ daifuku_stack:
   # **2026-08-09 に密へ戻したので、この scale 2 は必須になった** (scale 1 は 2.5GB)。
   # 状態数が 1/4 になるぶん solve も伝播も速い。
   # 両ノードに同じ値を置くのは、片方だけだと同じ地図なのに 2 構成で別の経路が出るため。
-  # 代償・見積もり・先読みとの兼ね合いは config/README.md。**未検証** —
+  # 代償・見積もり・先読みとの兼ね合いは configs/README.md。**未検証** —
   # この地図・この scale での solve 時間と経路、狭域 → 広域の伝播にかかる実時間は
   # 測っていない。
   #
@@ -170,9 +170,9 @@ daifuku_stack:
 #     (= この地図にも効いている。両地図に効くので、19F だけ別値にしたくなったときここへ
 #     足す)。尤度場の幅であると同時に**貫通判定の「壁の先の空き」の距離**でもあるので、
 #     地図と実物の壁が 1m 未満ずれていても貫通と数えなくなる = 上の対症療法の 2 段目。
-#     理屈と戻し方は config/README.md。**未検証**。
+#     理屈と戻し方は configs/README.md。**未検証**。
 #   costmaps.*.inflation_radius … 通路幅が足りず経路が出ないとき。ただし外接円 0.408m を
-#     下回らせないこと (config/stack/nav2/costmaps.yaml)。
+#     下回らせないこと (configs/stack/nav2/costmaps.yaml)。
 #   vi_planner.compact_sink_dir … sink を RAM から追い出すとき。19F は scale 2 で 0.095GB なので
 #     そもそも退避しない。逃がすなら速い実ディスクを明示すること。
 #   （safety_radius_penalty と downsample_policy は上に**断片と同値で書いてある**

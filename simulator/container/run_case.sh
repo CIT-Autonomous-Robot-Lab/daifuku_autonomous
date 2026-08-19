@@ -20,9 +20,9 @@
 #   VI_COMPACT_SINK_DIR=        compact 経路の確定出力を置くディレクトリ ("" = RAM)
 #   SIM_UNKNOWN_AS_OBSTACLE=1   シム LiDAR が未観測セルも壁として返す
 #   OVERRIDES=                  navigation.launch.py の overrides
-#                               (config/overrides/<名前>.yaml。例 map_tsudanuma)
+#                               (configs/overrides/<名前>.yaml。例 map_tsudanuma)
 #   EXTRA_PARAMS=               navigation.launch.py の extra_params_file
-#                               (config/overrides/ に無い任意パスの上書き)
+#                               (configs/overrides/ に無い任意パスの上書き)
 #   MAP_FREE_THRESH=            指定すると map.yaml の free_thresh を差し替えた
 #                               コピーを使う (実機は 0.25 = 未観測 205 が free 扱い)
 #   VI_SOLVER=                  vi_*_planner の solver パラメータ上書き
@@ -80,7 +80,7 @@ ros2 daemon stop >/dev/null 2>&1
 
 SHARE=/opt/ros_ws/install/share/daifuku_stack
 # overrides は daifuku_config の share。**maps/ を持つ daifuku_stack とは置き場が違う**
-# (2026-08-08 まで $SHARE/config/overrides/ を見ていた。設定を config/ へ出して
+# (2026-08-08 まで $SHARE/config/overrides/ を見ていた。設定を configs/ へ出して
 # daifuku_stack がその段を install しなくなった時点から、**どの地図でも overrides:=none
 # に落ちていたはず** — この修正ともども**未検証**。効かせるには一度ビルドが要る)。
 CONFIG_SHARE=/opt/ros_ws/install/share/daifuku_config
@@ -122,7 +122,7 @@ elif free_thresh:
     print(f"MAP_OVERRIDE {out} free_thresh={free_thresh}")
 
 # パラメータの上書きは launch と同じ経路 (extra_params_file) に載せる。ここで
-# nav2_params 相当を作り直すと config/stack/nav2/*.yaml の合成を素通りしてしまうので、
+# nav2_params 相当を作り直すと configs/stack/nav2/*.yaml の合成を素通りしてしまうので、
 # 環境変数で触るキーだけの overlay を書く。
 # BT の差し替え (planner:=vi 用) は navigation.launch.py 自身が behavior_trees/ を
 # 指すので、ハーネス側では何もしない。

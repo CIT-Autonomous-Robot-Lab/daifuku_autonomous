@@ -48,13 +48,13 @@ PWM チャネルに載せ替えられます（手順と理由は
 - **エンコーダと指令パルスを別のパラメータで数えます。** この機体は車輪 1 回転が
   エンコーダ 1073 パルス・指令パルス 447 回で、**2.4 倍違います**（2026-08-08 に床の上で
   実測。浮かせて数えた 2026-08-04 の 1118 / 570 を置き換えたもの。由来は
-  [`config/README.md`](../../config/README.md)）。`odom` は
+  [`configs/README.md`](../../configs/README.md)）。`odom` は
   `pulses_per_revolution`、`cmd_vel` → 指令周波数は `steps_per_revolution`。
   上流の `raspimouse_component.cpp` は換算側に 400.0 を直書きしていてパラメータは
   オドメトリ側にしか効かないので、公式実装だとこの機体は指令の 89%（400 / 447）で
   走ります。
 - パルスカウンタが生きているとき、`odom` の Twist は**指令値ではなく実測値**です。
-  `config/bringup/sensors/mid360_ekf.yaml` はこのメッセージから vx と vyaw だけを取るので、
+  `configs/bringup/sensors/mid360_ekf.yaml` はこのメッセージから vx と vyaw だけを取るので、
   指令値を入れると自分の出力でループを閉じることになります。
 - `odom_hz` の既定は 50.0（raspimouse は 100.0）。1 周期あたり I2C を 6 トランザク
   ション使うので、62.5 kHz のバスの占有率を半分に落としてあります（カウンタ 1 個に
@@ -67,7 +67,7 @@ PWM チャネルに載せ替えられます（手順と理由は
 
 ## rtmouse の固着は起きない
 
-`config/README.md` に書いてあるとおり、rtmouse は I2C が 1 回タイムアウトすると
+`configs/README.md` に書いてあるとおり、rtmouse は I2C が 1 回タイムアウトすると
 カーネルの mutex を握ったままになり、`/dev/rtcounter_*` を読む者が全員 D 状態で
 固着して**リブートでしか復旧しません**。
 
@@ -231,7 +231,7 @@ ros2 topic pub --times 20 /cmd_vel geometry_msgs/msg/Twist \
 2026-08-04 に Pi 5 Model B Rev 1.1（8GB・Ubuntu 24.04.4・6.8.0-1060-raspi）に
 Raspberry Pi Cat の HAT を載せ、**車輪を浮かせた状態でモータを回すところまで**
 確かめました。走行はまだです。ピン・チャネル・アドレス・デバイスパスはすべて
-パラメータに出してあるので、`config/bringup/robot/raspicat_driver.yaml` を直せばコードは
+パラメータに出してあるので、`configs/bringup/robot/raspicat_driver.yaml` を直せばコードは
 触らずに済みます。
 
 `/cmd_vel` から PWM までは一致します。指令周波数は
@@ -242,7 +242,7 @@ Raspberry Pi Cat の HAT を載せ、**車輪を浮かせた状態でモータ�
 **較正はこの段階で 1 度、車輪を浮かせて済ませました。** 右車輪だけを回して 11148
 パルスぶん（9.972 回転）測り、`pulses_per_revolution = 1118`（エンコーダ）と
 `steps_per_revolution = 570`（ステップ）を得ています。導出は
-[`config/README.md`](../../config/README.md)。
+[`configs/README.md`](../../configs/README.md)。
 
 **ただし浮かせて数えた値は床の上では合いませんでした。** 2026-08-08 に Mid-360 が
 見る前方の壁を物差しに 0.10〜0.40 m/s で 20 脚測り、**1073 / 447** へ替えました
@@ -277,7 +277,7 @@ Raspberry Pi Cat の HAT を載せ、**車輪を浮かせた状態でモータ�
 
 ## 関連
 
-- [`config/README.md`](../../config/README.md) — 設定値の由来
+- [`configs/README.md`](../../configs/README.md) — 設定値の由来
 - [`tools/image/README.md`](../../tools/image/README.md) — SD カードの作成
 - [`docker/raspberrypi/README.md`](../../docker/raspberrypi/README.md) — コンテナ構成
 - [Raspberry Pi 4 で動かす](raspberry-pi-4.md) — Pi 4 での差分と、公式実装（rtmouse）を選ぶ場合
