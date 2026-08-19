@@ -530,6 +530,7 @@ compactだった頃のものです）。前進量とペナルティを下げて�
 - `/value_function`: 価値関数のθ=0スライス。計算途中も既定500 ms間隔で更新
 - `/local_window_value`: 機体周辺±1 mの値。スキャン由来のペナルティと局所反復をリアルタイムに表示
   （`local_planner:=vi`のときのみ）
+- `/belief`: VIOLAの自己位置belief（`localization:=vi`かつ`localizer`が`external`以外のときのみ）。**既定では表示オフ**——未収束のbeliefは自由空間ほぼ全域が非ゼロで、最前面に0.9の濃さで塗ると地図も価値関数も隠れるため。見るときはDisplaysでチェックを入れる
 
 価値関数は1本しかないため、以前あった`/local_value_function`はありません。
 

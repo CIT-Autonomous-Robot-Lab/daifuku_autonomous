@@ -241,7 +241,8 @@ ros2 topic echo /rosout --field msg | grep 'Begin navigating'
 `stop_on_failure: false`なので1点ずつ失敗しながら最後まで進み、**そのあいだずっと
 左回りが続きます**。
 
-止めるのはモータ電源です。**RVizの「Navigation 2」パネルの`Reset`を押してはいけません。**
+止めるのはモータ電源です。**RVizの「Navigation 2」パネルの`Reset`を押しては
+いけません**（同梱の`navigation.rviz`にこのパネルは入っていません。自分で足したときの話です）。
 ライフサイクルマネージャは逆順に停止するので、先に`velocity_smoother`が落ち、
 `waypoint_follower`の停止で（走りっぱなしのコールバックを待って）固まります。すると
 `behavior_server`だけがactiveのまま残り、**`spin`は`velocity_smoother`を経由せず

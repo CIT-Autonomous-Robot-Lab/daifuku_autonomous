@@ -385,7 +385,9 @@ Docker 越しに叩く形は
   残るが、管理下が `velocity_smoother` 1 つなので停止順で固まる相手が居ない。
   代わりに投げ直しは `vi_planner` の `goal_retry_limit` と、その合間の 3 秒（2026-08-09 に
   ノード内の固定値になった。それまでは `goal_retry_settle_sec`）。
-- **RViz の「Navigation 2」パネルの `Reset` を押すと停止順で固まる。** 停止は逆順なので
+- **RViz の「Navigation 2」パネルは `navigation.rviz` から外してある**（下の
+  `/waypoints` の項）。以下は自分で足したときの話。**`Reset` を押すと停止順で
+  固まる。** 停止は逆順なので
   `velocity_smoother` が先に落ち、`waypoint_follower` の停止で（走りっぱなしの
   コールバックを待って）固まり、`behavior_server` だけが active で残る。
   `lifecycle_manager_navigation` は `is_active` にも応答しなくなり、抜けるには launch を
@@ -395,6 +397,19 @@ Docker 越しに叩く形は
   回転だけが止まらない**状態になった。**2026-08-08 に上流（`6e803f7`）が張ったので、
   いまは `spin` も `velocity_smoother` を通る** —— 裏を返すと、
   `velocity_smoother` が落ちているときは以前と違って**回転も効かない**。**未検証**。
+- **`navigation.rviz` に `nav2_rviz_plugins/Navigation 2` パネルを足さないこと。**
+  あちらは `/waypoints` へ `visualization_msgs/MarkerArray` を、
+  `daifuku_waypoint_manager/WaypointManagerPanel` は同じ名前へ
+  `nav_msgs/Path` を出す。RViz は 1 プロセス = 1 参加者なので、後から立った
+  ほうが `create_publisher() called for existing topic name rt/waypoints with
+  incompatible type` で落ち、**そこで設定の読み込みが止まる** —— 自前パネルも
+  `/waypoints` を見る表示も出ないまま、他の表示だけが揃って上がるので、
+  **気づく手掛かりはログの 1 行だけ**（2026-08-19 に WSL の実測）。
+  同じ理由で `/waypoints` を見る表示は
+  `Path` でなければならない（`MarkerArray` にすると購読側で同じ衝突が起きる）。
+  点そのものは `/waypoint_markers` の `Waypoint Manager` が出す。
+  ツールの `Nav2 Goal`（`nav2_rviz_plugins/GoalTool`）はトピックを持たないので
+  そのままでよい。
 - **`navigation.rviz` の `2D Goal Pose` は `/goal_pose` を出さない。**
   `daifuku_waypoint_manager` へ waypoint を渡すため `/waypoint_pose` に付け替えて
   ある。単発ゴールは `Nav2 Goal` (`nav2_rviz_plugins/GoalTool`) のほうを使う。

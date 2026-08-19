@@ -231,7 +231,11 @@ BTを挟まなくなることで、VIが損をしていた点が4つ消えます
 投げ直しの回数は`goal_retry_limit`（既定3、負で無制限）で、BTの
 `RecoveryNode number_of_retries: 6`の置き換えです。
 
-RVizの「Navigation 2」パネルは**ほぼ空になります**。あれはライフサイクル
+「Navigation 2」パネルは`navigation.rviz`に**入っていません**。あれは`/waypoints`へ
+MarkerArrayを出し、自前の`WaypointManagerPanel`が同じ名前へ出すPathと型が衝突して、
+**自前パネルと`/waypoints`の表示が出ないまま上がる**ためです（他の表示は揃うので、
+手掛かりはログの1行だけ。AGENTS.md）。自分で足しても
+**ほぼ空になります**。あれはライフサイクル
 マネージャを叩くパネルで、`nav2:=false`で管理下にあるのは`velocity_smoother`
 1つだけ（`velocity_smoother:=false`ならマネージャ自体が居ません）。故障ではあり
 ません。ゴールを出すのは同じ「Nav2 Goal」ツールで、経路は`/plan`にそのまま出ます
