@@ -1,4 +1,4 @@
-# configs/
+# src/daifuku_config/
 
 **設定の実体はここに全部あります**（パッケージ名は `daifuku_config`）。合成規則
 （`params.py`）と `site_manager` / `config_sentinel` は `src/daifuku_config_manager`
@@ -138,7 +138,7 @@ resample_interval: 1         # 既定 1: 何回の更新ごとにリサンプル
 ### 合成には入るが読まれない断片（`nav2:=false`）
 
 **束ねるのは常に 8 ファイル全部です（`nav2/` の 7 つ + `vi_planner.yaml`）。何が実際に読まれるかは、どのノードが立つかで
-決まります。** `nav2` の既定は `false`（[navigation.md](../docs/usage/navigation.md#nav2を立てるかどうかnav2falseが既定)）
+決まります。** `nav2` の既定は `false`（[navigation.md](../../docs/usage/navigation.md#nav2を立てるかどうかnav2falseが既定)）
 で、素で起動すると Nav2 の navigation ノードが 1 つも立ちません。そのとき効くのは
 
 | 断片 | `nav2:=false` |
@@ -200,7 +200,7 @@ override も**通ります**（そして黙って無視されます）。
 `ros__parameters` も無い）ので、この仕組みに乗りません。`mid360_config:=<パス>` で
 ファイルごと差し替えてください。
 
-`overrides` の既定値は **`configs/site` の 1 行**（既定
+`overrides` の既定値は **`src/daifuku_config/site` の 1 行**（既定
 `map_19f`）で、すべての launch が同じものを見ます。さらに `navigation.launch.py` は
 `map` の既定もそこから導きます。場所が変われば LiDAR の帯も EMCL2 の調整も地図も
 一緒に変わるので、**人が動かす値を 1 つにしてある**という趣旨です。
@@ -227,10 +227,10 @@ raspicat サービスで、**起動時にしか読みません**。スクリプ�
 `tools/site.sh` を通してください）。
 
 ```bash
-# 場所を切り替える (configs/site を書いて raspicat を立て直す)
+# 場所を切り替える (src/daifuku_config/site を書いて raspicat を立て直す)
 tools/site.sh map_tsudanuma
 
-# 自律移動側。map も overrides も configs/site から来るので渡さない
+# 自律移動側。map も overrides も src/daifuku_config/site から来るので渡さない
 ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=nav2
 ```
 
@@ -252,7 +252,7 @@ ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=nav2
 渡します（`OVERRIDES=` で上書き可）。既定任せにすると同じ取り違えが起きるためです。
 **参照先は `daifuku_config` の share** で、`maps/` を持つ `daifuku_stack` とは
 置き場が違います（2026-08-08 まで後者の `config/overrides/` を見ていました。設定を
-`configs/` へ出したときにそこは消えているので、**どの地図でも `none` に落ちていました**）。
+`src/daifuku_config/` へ出したときにそこは消えているので、**どの地図でも `none` に落ちていました**）。
 
 ### 何がどこへ行ったかを見る
 
@@ -261,7 +261,7 @@ ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=nav2
 
 ```
 [INFO] [launch.user]: params: params_file: 8 fragments from .../daifuku_config/stack/nav2 (+ vi_planner.yaml) -> /tmp/params_file_xxxx.yaml (+ overrides:map_19f -> vi_planner)
-[INFO] [launch.user]: params: emcl2_params_file: .../configs/stack/localization/emcl2.yaml -> /tmp/emcl2_params_file_xxxx.yaml (+ overrides:map_19f -> emcl2)
+[INFO] [launch.user]: params: emcl2_params_file: .../src/daifuku_config/stack/localization/emcl2.yaml -> /tmp/emcl2_params_file_xxxx.yaml (+ overrides:map_19f -> emcl2)
 ```
 
 行が出ないファイルは、重なるものが無かったので土台がそのままノードへ渡っています
@@ -270,7 +270,7 @@ ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=nav2
 
 ### 新しい override を足す
 
-`configs/overrides/<地図名や状況>.yaml` を作り、
+`src/daifuku_config/overrides/<地図名や状況>.yaml` を作り、
 **変えたいキーだけ**を書きます。パッケージ名・ノード名・`ros__parameters` の 3 段が
 必要です。
 
@@ -410,7 +410,7 @@ Pi 5 実機で、右車輪だけを一定周波数で回してエンコーダで
 2.40 へ動きましたが別物という結論は同じ）。導出と、`pulses_per_revolution` が 1 つの値で
 全速度に合わない理由（不足が距離ではなく経過時間に比例する。**原因は未解明で、カウンタの
 読み出しではない**）は
-[`src/raspicat_driver/README.md`](../src/raspicat_driver/README.md#較正2026-08-08-に床の上で測り直し)。
+[`src/raspicat_driver/README.md`](../raspicat_driver/README.md#較正2026-08-08-に床の上で測り直し)。
 
 `raspimouse` ノード（`driver:=raspimouse`）はここが直せません。`cmd_vel` → 指令周波数の
 換算に **400 を直書き**していてパラメータはオドメトリ側にしか効かないので、この機体を
@@ -426,7 +426,7 @@ Pi 5 実機で、右車輪だけを一定周波数で回してエンコーダで
 
 `raspicat.yaml` は公式実装（`driver:=raspimouse`）用で、rtmouse カーネルモジュールが
 出す `/dev/rt*` を読む構成が前提です。自前実装（`driver:=original`、
-[`src/raspicat_driver`](../src/raspicat_driver/README.md)）はモータ経路をユーザ空間から
+[`src/raspicat_driver`](../raspicat_driver/README.md)）はモータ経路をユーザ空間から
 直接扱い、そのパラメータがこのファイルです。**リポジトリの標準はこちら**で、Docker の
 入口（`.env` の `COMPOSE_FILE`）が `driver:=original` を渡します（`driver:` という引数
 そのものの既定値だけは `raspimouse` のまま）。**Pi 5 ではこちらしか選べず**（rtmouse は
@@ -437,8 +437,8 @@ BCM2711 のレジスタを `ioremap` するので RP1 の Pi 5 では動かな�
 Pi 4 と Pi 5 で 1 ファイルです。機種差は `model: auto` が device-tree から判定してチップの
 同定（`gpiochip` のラベルと `pwmchip`）だけを切り替えます。ピン番号・PWM チャネル・I2C
 アドレスは制御基板側の性質なので両機種で同じです。`raspicat.yaml` と違うのは次の 5 点で、
-理由は [`docs/setup/raspberry-pi-4.md`](../docs/setup/raspberry-pi-4.md) と
-[`raspberry-pi-5.md`](../docs/setup/raspberry-pi-5.md)。
+理由は [`docs/setup/raspberry-pi-4.md`](../../docs/setup/raspberry-pi-4.md) と
+[`raspberry-pi-5.md`](../../docs/setup/raspberry-pi-5.md)。
 
 * **`pulses_per_revolution`（1073.0）と `steps_per_revolution`（447.0）が別のキー**です。
   前者はエンコーダのパルス数で `odom` 専用、後者は基板への指令パルス数で `cmd_vel` →
@@ -831,7 +831,7 @@ p90 と p99 の間へ置くと運用上通る範囲に階調を集中させ遠�
 外してください。** ノードのメモリ判定が見ているのが 1 本ぶんか 2 本の合計かは**未確認**です。
 `true` にしている理由（巡回で点が変わるたびの solve 29 秒を消す）と、津田沼が 2026-08-08 に
 `false` へ戻した経緯（あちらは solve 87 秒、場は 648 MB × 2 = 1.3 GB）は
-[`docs/usage/navigation.md`](../docs/usage/navigation.md#次の点を走行中に解いておくwaypoint_prefetch)。
+[`docs/usage/navigation.md`](../../docs/usage/navigation.md#次の点を走行中に解いておくwaypoint_prefetch)。
 
 代償は 0.10 m/cell の粗さと、保守的プーリングで通路が片側最大 0.05 m 細ること。津田沼の
 `map_scale: 5` と違って `downsample_policy` などとのセットは要りません（2 では 1 手 = 5 セル、

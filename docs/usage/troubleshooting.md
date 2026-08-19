@@ -31,7 +31,7 @@ pc : osq_lock+0x7c/0x1a0
 note: raspimouse[...] exited with preempt_count 1
 ```
 
-`configs/bringup/robot/raspicat.yaml`の`use_light_sensors`は`false`にしてあります。
+`src/daifuku_config/bringup/robot/raspicat.yaml`の`use_light_sensors`は`false`にしてあります。
 `/light_sensors`を使うものはこのワークスペースにありません。
 
 背景として、mainlineの`mcp320x`（IIO）が同じSPIチップセレクトを掴んでいます。
@@ -218,7 +218,7 @@ Pi 4のCPU飽和によるゴール受理ackの取りこぼし（`nav2:=true`の�
 
 自律走行のつもりが前へ進まず、その場で反時計回りにぐるぐる回り続ける場合です。
 **これは故障ではなくnav2のrecoveryです。** `spin`は`+1.57 rad`（反時計回り）を
-`max_rotational_vel`（`configs/stack/nav2/behaviors.yaml`、1.0 rad/s）で回すので、失敗した
+`max_rotational_vel`（`src/daifuku_config/stack/nav2/behaviors.yaml`、1.0 rad/s）で回すので、失敗した
 ゴールの数だけ左回りが繰り返されます。
 
 ```bash
@@ -258,7 +258,7 @@ ros2 topic echo /rosout --field msg | grep 'Begin navigating'
 プロセスが同時に立ち上がってloadが10〜19まで跳ね、bond形成が既定の4秒に間に合いま
 せん。
 
-`configs/stack/lifecycle_bond.yaml`でタイムアウトを60秒へ延長しています。値が効いて
+`src/daifuku_config/stack/lifecycle_bond.yaml`でタイムアウトを60秒へ延長しています。値が効いて
 いるか確認してください。
 
 ```bash
@@ -315,8 +315,8 @@ RESETのログが毎スキャン出て、推定姿勢が回り続ける場合で
 2. ずれている場合は[地図作成](mapping.md)からやり直す
 3. 地図を取り直すまでの暫定処置として、`alpha_threshold`を下げ、
    `expansion_radius_orientation`を狭め、`sensor_reset: false`にしてリセットを抑制する。
-   この3つは地図固有の値なので、断片の`configs/stack/localization/emcl2.yaml`ではなく
-   `configs/overrides/map_19f.yaml`に置く（19Fの地図では設定済み）
+   この3つは地図固有の値なので、断片の`src/daifuku_config/stack/localization/emcl2.yaml`ではなく
+   `src/daifuku_config/overrides/map_19f.yaml`に置く（19Fの地図では設定済み）
 
 現在の設定値と背景は[設定リファレンス](configuration.md#自己位置推定の暫定設定)を
 参照してください。地図を取り直したあとは既定寄りの値へ戻してください。
@@ -337,7 +337,7 @@ RESETのログが毎スキャン出て、推定姿勢が回り続ける場合で
 
 ## Mid-360で`bind failed`になる
 
-`configs/bringup/sensors/MID360_config.json`の`host_net_info`に設定したIPが、ROS 2ノードを動かすPCの対象NICへ実際に割り当てられているか確認します。LiDAR本体IPも同一セグメントに合わせます。
+`src/daifuku_config/bringup/sensors/MID360_config.json`の`host_net_info`に設定したIPが、ROS 2ノードを動かすPCの対象NICへ実際に割り当てられているか確認します。LiDAR本体IPも同一セグメントに合わせます。
 
 ## TFが競合または不安定になる
 
@@ -460,7 +460,7 @@ vi_planner: global propagation running for 6.0s (412 tiles done, 27 queued) # 2�
 
 単位は密（`frontier2d_sparse`）なら`cells`、compact（`frontier2d_sparse_compact`）なら`tiles`です。行そのものはどちらの経路でも同じです（2026-08-20の上流の更新まで、下の進捗はcompactでしか出ませんでした）。
 
-後者も出ないなら伝播が回っていません。`global_sweep`と、`planner:=vi`側の`solver`を確認してください（詳細は[`configs/README.md`](../../configs/README.md#効いているか確かめる)）。
+後者も出ないなら伝播が回っていません。`global_sweep`と、`planner:=vi`側の`solver`を確認してください（詳細は[`src/daifuku_config/README.md`](../../src/daifuku_config/README.md#効いているか確かめる)）。
 
 ## ログを確認する
 

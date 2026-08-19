@@ -95,8 +95,8 @@ Mid-360の搭載高さ（接地面から275mm、2026-08-03実測）なので、�
 **起動時に止まります**（[`localization:=vi`](#localizationviプランナ内蔵の推定器)）。
 `map_tsudanuma`は今までどおりEMCL2です。
 
-**地図も調整も渡しません。** 走らせる場所は`configs/site`の1行（既定は`map_19f`）で、
-`overrides`はその名前の`configs/overrides/<名前>.yaml`になります。**地図はその
+**地図も調整も渡しません。** 走らせる場所は`src/daifuku_config/site`の1行（既定は`map_19f`）で、
+`overrides`はその名前の`src/daifuku_config/overrides/<名前>.yaml`になります。**地図はその
 overrides自身が`site:`節で宣言します。**
 
 ```yaml
@@ -153,7 +153,7 @@ ros2 launch daifuku_stack navigation.launch.py \
 残ります）。`planner:=vi`と`nav2:=false`——どちらも既定——が要ります。
 
 **使うかどうかはこの引数、どれを使うかは`localizer`**です。断片
-（`configs/stack/vi_planner.yaml`）の既定は`external`（＝外部の推定を読む）で、
+（`src/daifuku_config/stack/vi_planner.yaml`）の既定は`external`（＝外部の推定を読む）で、
 そのまま`localization:=vi`を渡すと**起動時に止まります**。
 
 **ただし同梱の`map_19f`（既定のoverrides）は2026-08-09から`belief`へ上書きしています。**
@@ -176,7 +176,7 @@ ros2 launch daifuku_stack navigation.launch.py \
 `active_reloc`を`true`にしてあります**——`map_scale: 2`込みで実測655 MBですが、
 `waypoint_prefetch: true`と重なると場が2本で**1.31 GB**になるので、**Pi 4（4 GB）では
 先読みのほうを外してください**（compactの頃は190 MBで済んでいました）。密へ戻す判断は
-[`configs/README.md`](../../configs/README.md)。同じ節で`map_clear_from_scan`（ビームが
+[`src/daifuku_config/README.md`](../../src/daifuku_config/README.md)。同じ節で`map_clear_from_scan`（ビームが
 貫通したセルは地図が壁と言っていても開ける）と`qmdp`（最尤の1点ではなくbelief全体で
 行動を選ぶ）も`true`にしてあります。
 
@@ -257,8 +257,8 @@ BTを外すと、VIが損をしていた点が消えます。**毎秒の再計�
 それまでは`goal_retry_settle_sec`）のあいだ**止まったままスキャンを取り込み続ける**ので、一度「通れない」と塗った場所のペナルティが実際に薄れていきます。
 投げ直しの上限は`goal_retry_limit`（既定3、負で無制限）です。
 
-読む設定ファイルも減ります。効くのは`configs/stack/vi_planner.yaml`と`map_server.yaml`、
-`configs/stack/localization/emcl2.yaml`、それに`behaviors.yaml`の`velocity_smoother`の節だけです。
+読む設定ファイルも減ります。効くのは`src/daifuku_config/stack/vi_planner.yaml`と`map_server.yaml`、
+`src/daifuku_config/stack/localization/emcl2.yaml`、それに`behaviors.yaml`の`velocity_smoother`の節だけです。
 `bt_navigator.yaml`・`controller_server.yaml`・`costmaps.yaml`と`behaviors.yaml`の
 残り3ノード分、`behavior_trees/`は**合成には入るが宛先の
 ノードが立たないので黙って無視されます**。`behaviors.yaml`の`waypoint_follower`にあった
@@ -282,7 +282,7 @@ BTを外すと、VIが損をしていた点が消えます。**毎秒の再計�
 なります（scale 2の実測655 MB。マシンの`MemAvailable`を
 超える地図では、確保してからOOMされる代わりに起動を止めます。上限のキー`dense_limit_mb`は
 2026-08-09の上流の整理で消え、`/proc/meminfo`の値そのものが基準になりました）。値の導出は
-[`configs/README.md`](../../configs/README.md)にあります。
+[`src/daifuku_config/README.md`](../../src/daifuku_config/README.md)にあります。
 
 ## 広域地図（map_tsudanuma）で動かす
 
@@ -291,7 +291,7 @@ BTを外すと、VIが損をしていた点が消えます。**毎秒の再計�
 0.05 mのまま解くと状態数は14.1億に達し、既定の密ソルバは状態配列だけで79 GBを要求
 するため、起動と同時に落ちます。
 
-`configs/overrides/map_tsudanuma.yaml`を`overrides:=map_tsudanuma`で重ねると、プランナ内部だけが
+`src/daifuku_config/overrides/map_tsudanuma.yaml`を`overrides:=map_tsudanuma`で重ねると、プランナ内部だけが
 0.25 m/セル（`map_scale: 5`、1178×800×60＝5650万状態）に粗くなり、状態配列を確保しない
 アウトオブコアソルバ（`frontier2d_sparse_compact`）へ切り替わります。確定した価値関数と方策
 （実測648 MB）はRAMに置かれます。地図サーバ、コストマップ、自己位置推定は0.05 mのままです。
@@ -331,7 +331,7 @@ compactでも同じです（2026-08-20の上流の更新まで、密だけが地
 出ません**（設計どおり）。動いているかは2秒ごとの`global propagation running for ...`のほうで
 見てください（`... (412 tiles done, 27 queued)`。密なら単位は`cells`で、こちらも
 2026-08-20から同じ行が出ます）。長すぎるようなら`global_sweep_duty`（既定25 %）を上げますが、**上限を決めているのはCPUではなく追従ループと共有するMutex**です
-（[`configs/README.md`](../../configs/README.md)の`global_sweep`の節）。
+（[`src/daifuku_config/README.md`](../../src/daifuku_config/README.md)の`global_sweep`の節）。
 
 NavFnとDWBで動かす場合、`map_tsudanuma`の価値反復向け設定は要りません。ただし
 `overrides:=none`はEMCL2の調整も一緒に落とすので、**ふつうは場所を切り替えたまま
@@ -350,7 +350,7 @@ ros2 launch daifuku_stack navigation.launch.py \
 - `map_scale: 5`は単独では効きません。`downsample_policy: optimistic`（ブロック内にfreeが
   1つでもあればfree）、`action_forward_m`、`goal_margin_radius`が
   セットで、1つでも欠けると波がゴール近傍で止まります。値は
-  `configs/overrides/map_tsudanuma.yaml`のコメントにそろえてあります。
+  `src/daifuku_config/overrides/map_tsudanuma.yaml`のコメントにそろえてあります。
 - 保守的プーリング（障害物優先。`downsample_policy`の既定）だと通路のセル幅が価値反復の
   遷移分布（約2セル幅）を下回り、`map_scale`が4以上で波がゴール近傍から広がりません。
   楽観側は通路を細らせない代わりに、自由セルの境界が壁へ寄ります。
@@ -382,8 +382,8 @@ ros2 launch daifuku_stack navigation.launch.py \
   スキャンマッチングは占有セルの尤度場に依存するため、現状では自己位置推定の
   拠り所がほとんどありません（経路計画とは別の課題です）。
 
-実測値の出どころは`configs/overrides/map_tsudanuma.yaml`のヘッダ（2026-08-01）と
-`configs/README.md`です。`simulator/docs/pi4_sim.md`にもPi 4相当での
+実測値の出どころは`src/daifuku_config/overrides/map_tsudanuma.yaml`のヘッダ（2026-08-01）と
+`src/daifuku_config/README.md`です。`simulator/docs/pi4_sim.md`にもPi 4相当での
 走行記録がありますが、そちらは`map_scale: 3`＋保守的プーリングだった頃のものなので、
 所要時間もメモリもここの値とは一致しません。
 
@@ -425,8 +425,8 @@ RVizのFixed Frameとwaypointの`frame_id`が一致している必要があり�
 追加も追加読み込みも拒否され、パネルのステータス行にだけ理由が出ます。
 
 点と点のあいだではいったん止まります。停止時間は既定（`nav2:=false`）では
-`configs/stack/vi_planner.yaml`の`waypoint_pause_sec`（0.2秒。この間も価値関数の更新は
-続きます）、`nav2:=true`では`configs/stack/nav2/behaviors.yaml`の`waypoint_pause_duration`
+`src/daifuku_config/stack/vi_planner.yaml`の`waypoint_pause_sec`（0.2秒。この間も価値関数の更新は
+続きます）、`nav2:=true`では`src/daifuku_config/stack/nav2/behaviors.yaml`の`waypoint_pause_duration`
 （200 ms）です。行けない点があっても巡回は続き、完了時に取りこぼした点数がステータス行に
 出ます（`stop_on_failure: false`。これも構成ごとに置き場が違い、既定では
 `vi_planner.yaml`の側です）。
@@ -437,10 +437,10 @@ RVizのFixed Frameとwaypointの`frame_id`が一致している必要があり�
 ゴールごとに価値関数を解き直すので、**点が変わるたびに丸ごと1回のsolveが入り、その
 間ずっと機体が止まっています**（実測で19Fが29秒、津田沼が87秒）。
 
-`configs/stack/vi_planner.yaml`の`waypoint_prefetch`を`true`にすると、いまの点へ
+`src/daifuku_config/stack/vi_planner.yaml`の`waypoint_prefetch`を`true`にすると、いまの点へ
 走っているあいだに次の点を別スレッドで解いておき、着いたらsolveを飛ばして受け取ります。
 
-**いま`true`なのは`map_19f`だけです。** 断片（`configs/stack/vi_planner.yaml`）は
+**いま`true`なのは`map_19f`だけです。** 断片（`src/daifuku_config/stack/vi_planner.yaml`）は
 `false`で、それを上書きしているのは`overrides/map_19f.yaml`だけです。津田沼は
 2026-08-07に`true`にしたあと、**2026-08-08に`false`へ戻しました**——走行中の固まりの
 容疑者を切り分けるためで、あちらは場が648 MB×2＝1.3 GBになります。2026-08-04にも一度
@@ -480,7 +480,7 @@ solveのCPUも取られます（追従の`try_lock`は邪魔しませんが、10
 いるのは地図の全域ぶんの価値関数ですが、走り出すのに要るのは**いまの姿勢から
 ゴールまでの経路**だけなので、それが引けた時点でsolveを打ち切れます。
 
-`early_start`を`true`にすると打ち切ります（断片の`configs/stack/vi_planner.yaml`は
+`early_start`を`true`にすると打ち切ります（断片の`src/daifuku_config/stack/vi_planner.yaml`は
 `false`のままで、**同梱の2地図は`overrides/`で`true`にしています**）。判定は
 ロールアウトそのもの（`compute_path_to_pose`が返すのと同じ辿り方）なので、
 **打ち切った場でも経路は必ず引けます**。先読みとは別物なので、両方同時に有効に

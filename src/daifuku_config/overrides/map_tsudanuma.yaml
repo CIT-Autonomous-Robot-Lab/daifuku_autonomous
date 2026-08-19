@@ -1,12 +1,12 @@
 # map_tsudanuma.yaml (5888x4000 @0.05m = 294.4m x 200m) 用の上書き。
-# 「断片」= 重ねる先の設定ファイルの値 (configs/bringup/sensors/{mid360_scan,mid360_elevation}.yaml、
-# configs/stack/nav2/{vi_planner,behaviors}.yaml、configs/stack/localization/emcl2.yaml)。
-# 値の由来・実測 (2026-08-01 の bench と solve 87 秒)・既知の制約は configs/README.md、
+# 「断片」= 重ねる先の設定ファイルの値 (src/daifuku_config/bringup/sensors/{mid360_scan,mid360_elevation}.yaml、
+# src/daifuku_config/stack/nav2/{vi_planner,behaviors}.yaml、src/daifuku_config/stack/localization/emcl2.yaml)。
+# 値の由来・実測 (2026-08-01 の bench と solve 87 秒)・既知の制約は src/daifuku_config/README.md、
 # 仰角フィルタは docs/setup/lidar.md。
 #
-#   tools/site.sh map_tsudanuma                    # configs/site を書いて機体を立て直す
+#   tools/site.sh map_tsudanuma                    # src/daifuku_config/site を書いて機体を立て直す
 #   ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=vi
-#   # map も overrides も configs/site から来るので渡さない
+#   # map も overrides も src/daifuku_config/site から来るので渡さない
 #
 # **1 段目はパッケージ名。** 各 launch は自分の名前の部分木しか読まない。機体側
 # (daifuku_bringup:) は docker compose up で常駐しているので、変えたら
@@ -102,4 +102,4 @@ daifuku_stack:
 #   compact_ram_limit_mb … 断片が 4096MB。効いている条件は「> sink 648MB」だけ。下げると
 #     黙って /tmp/vi_planner_sink = SD カードへ落ちる。
 #   value_publish_interval_ms … 断片の 500ms。**この地図では全域スライス 1 枚 (94 万セル) が
-#     重い**ので、走行中に 2 秒おきの途切れが再発したら 0 をここへ足す (configs/README.md)。
+#     重い**ので、走行中に 2 秒おきの途切れが再発したら 0 をここへ足す (src/daifuku_config/README.md)。

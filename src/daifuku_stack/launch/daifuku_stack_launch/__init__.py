@@ -27,5 +27,6 @@ launch 引数の小道具 (value / is_true / env_bool_default / env_default) は
 daifuku_config_manager にあり、機体側 (daifuku_bringup) と共有している。
 
   backends.py     localization / planner バックエンドの選択と検証
-  nav2_params.py  configs/stack/nav2/*.yaml + vi_planner.yaml の合成と、overrides からの map:= の決定
+  nav2_params.py  src/daifuku_config/stack/nav2/*.yaml + vi_planner.yaml の合成と、
+                  overrides からの map:= の決定
 """

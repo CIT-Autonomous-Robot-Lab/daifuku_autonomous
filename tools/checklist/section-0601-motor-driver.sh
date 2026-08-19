@@ -57,7 +57,7 @@ if has_node /twist_mux; then
   }
   item "/cmd_vel_teleop を twist_mux が購読している" check_teleop_wired
   on_fail && diagnose "手動の指令が仲裁に入っていない" \
-    "twist_mux のノードは居るのに購読者に出ないか|configs/bringup/robot/twist_mux.yaml の topics: の綴り違い。**TwistMux に既定値は無く、綴りを間違えても黙って動く**|yaml の teleop: topic: を見る" \
+    "twist_mux のノードは居るのに購読者に出ないか|src/daifuku_config/bringup/robot/twist_mux.yaml の topics: の綴り違い。**TwistMux に既定値は無く、綴りを間違えても黙って動く**|yaml の teleop: topic: を見る" \
     "0701 で車輪を回すのにこのまま進みたいか|/cmd_vel_teleop へ投げても誰も聞かない|CMD_VEL_TOPIC=/cmd_vel を渡して直接ドライバへ入れる (仲裁を外すので自律側と喧嘩する)"
 
   check_mux_to_driver() {

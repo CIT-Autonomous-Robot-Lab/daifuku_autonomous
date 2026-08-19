@@ -70,7 +70,7 @@ ros2 daemon stop >/dev/null 2>&1
 
 SHARE=/opt/ros_ws/install/share/daifuku_stack
 # overrides は daifuku_config の share。**maps/ を持つ daifuku_stack とは置き場が違う**
-# (2026-08-08 まで $SHARE/config/overrides/ を見ていた。設定を configs/ へ出して
+# (2026-08-08 まで $SHARE/config/overrides/ を見ていた。設定を src/daifuku_config/ へ出して
 # daifuku_stack がその段を install しなくなった時点から、**どの地図でも overrides:=none
 # に落ちていたはず** — この修正ともども**未検証**。効かせるには一度ビルドが要る)。
 CONFIG_SHARE=/opt/ros_ws/install/share/daifuku_config
@@ -86,7 +86,7 @@ if [ ! -f "$MAP" ]; then
 fi
 
 # パラメータの上書きは launch と同じ経路 (extra_params_file) に載せる。
-# ここで nav2_params 相当を作り直すと configs/stack/nav2/*.yaml の合成を素通りするので、
+# ここで nav2_params 相当を作り直すと src/daifuku_config/stack/nav2/*.yaml の合成を素通りするので、
 # 環境変数で触るキーだけの overlay を書く (run_case.sh と同じ方式)。
 python3 - "$RUN" <<'PY'
 import os, sys, yaml

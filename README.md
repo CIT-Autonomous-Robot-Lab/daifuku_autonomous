@@ -24,7 +24,7 @@
 
 - [セットアップ](docs/setup/README.md) — 実行環境・SDカード・LiDAR・ネットワーク
 - [使い方](docs/usage/README.md) — 地図作成・自律移動・日常操作・トラブルシューティング
-- [`configs/README.md`](configs/README.md) — 設定の合成規則と、各値の由来
+- [`src/daifuku_config/README.md`](src/daifuku_config/README.md) — 設定の合成規則と、各値の由来
 - [`docker/README.md`](docker/README.md) — 実機用（`raspberrypi/`）と開発用（`dev/`）の2環境
 - [`simulator/README.md`](simulator/README.md) — 実機の前にPi 4相当の速度で試すハーネス。実機で観測した事象の実測記録は[`simulator/docs/pi4_sim.md`](simulator/docs/pi4_sim.md)
 - [`AGENTS.md`](AGENTS.md) — このリポジトリで作業するエージェント向けの指針

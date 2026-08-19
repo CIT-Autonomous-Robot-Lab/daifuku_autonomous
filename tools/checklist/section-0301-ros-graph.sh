@@ -37,7 +37,7 @@ check_discovery_stable() {
 item "ノード一覧が 2 回とも同じ" check_discovery_stable
 
 # site_manager を立てるのは robot_bringup の 1 か所だけ。2 つ立つと同じ
-# configs/site を 2 つのノードが書きに行く。
+# src/daifuku_config/site を 2 つのノードが書きに行く。
 check_one_site_manager() {
   local n
   n="$(grep -c '/site_manager$' <<<"${ROS_NODES}")"

@@ -6,7 +6,7 @@
 #   tools/site.sh map_19f --file-only   ファイルを書くだけ (ROS にも Docker にも触らない)
 #
 # 場所が決まれば LiDAR の帯 (仰角と高さ) も emcl2 / 価値反復の調整も地図も決まる。
-# その 1 つを configs/site に置いてあり、機体側
+# その 1 つを src/daifuku_config/site に置いてあり、機体側
 # (docker compose で常駐) も人が立てる navigation も同じ値を見る。
 #
 # **切り替えの本体は ROS 側にある。** 機体で site_manager ノードが上がっていて、
@@ -14,7 +14,7 @@
 #   ros2 param set /site_manager site <名前>
 #
 # を受けると、両方のパッケージについて「その場所で本当に立つか」を検査してから
-# configs/site を書き、/daifuku/site へ流す。機体の launch に居る config_sentinel が
+# src/daifuku_config/site を書き、/daifuku/site へ流す。機体の launch に居る config_sentinel が
 # それを見て、**機体が止まっていることを確かめてから**自分を終了し、compose の
 # restart: unless-stopped が新しい設定で上げ直す。このスクリプトは
 # その `ros2 param set` を叩くための薄い口で、**走行中に切り替えても
@@ -26,8 +26,8 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-SITE_FILE=$ROOT/configs/site
-OVERRIDES_DIR=$ROOT/configs/overrides
+SITE_FILE=$ROOT/src/daifuku_config/site
+OVERRIDES_DIR=$ROOT/src/daifuku_config/overrides
 
 current() {
     # params.read_site_file と同じ規則 (1 つめの空でない非コメント行)。

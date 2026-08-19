@@ -4,30 +4,30 @@
 # ここが見るのは「起動時にエラーで止まる」ものと「エラーも警告も出ないまま
 # 効かない」ものの 2 種類。launch を立てる前にどちらも分かる。
 #
-# **読むだけ。** configs/ の下に書くと config_sentinel が指紋の変化で launch を
+# **読むだけ。** src/daifuku_config/ の下に書くと config_sentinel が指紋の変化で launch を
 # 落とし、人が立てた navigation / mapping は終わったままになる。
 
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
 section 0102 "設定の整合"
 
-CONFIG="${ROOT}/configs"
+CONFIG="${ROOT}/src/daifuku_config"
 PARAMS_PY="${ROOT}/src/daifuku_config_manager/src/daifuku_config_manager/params.py"
 
-require "configs/ がある" test -d "${CONFIG}"
+require "src/daifuku_config/ がある" test -d "${CONFIG}"
 
-# ── 場所 (configs/site) ──────────────────────────────────────────────────────
+# ── 場所 (src/daifuku_config/site) ──────────────────────────────────────────────────────
 SITE="$(site_name)"
 
 check_site_exists() {
   [[ -n "${SITE}" ]] || {
-    echo "configs/site が空"
+    echo "src/daifuku_config/site が空"
     return 1
   }
   echo "${SITE}"
   test -f "${CONFIG}/overrides/${SITE}.yaml"
 }
-require "configs/site の名前が overrides にある" check_site_exists
+require "src/daifuku_config/site の名前が overrides にある" check_site_exists
 
 # 地図は「同じ名前の地図」ではなく、その overrides 自身の site: map: が決める。
 # 無いと navigation は既定の地図へ落とさずに起動時で止まる (別の場所の地図で
@@ -130,7 +130,7 @@ item "params_file の断片にノード名の重複が無い" check_nav2_dup
 # EKF と駆動ドライバにもあり、あちらは正しく設定で持つもの (odom->base_footprint)。
 #
 # **localizer は逆にここに書く側**。「どの推定器を使うか」を持つのは
-# configs/stack/vi_planner.yaml だけで、launch が持つのは「内蔵を使うか」
+# src/daifuku_config/stack/vi_planner.yaml だけで、launch が持つのは「内蔵を使うか」
 # (localization:=vi) だけ。噛み合わなければ backends.validate_localization が
 # 起動時に止めるので、この検査の対象には**入れない**。
 check_no_launch_only_keys() {
@@ -150,7 +150,7 @@ check_no_launch_only_keys() {
   }
   echo "書かれていない"
 }
-item "configs/stack と configs/overrides に standalone: / follow: / publish_tf: が無い" \
+item "src/daifuku_config/stack と src/daifuku_config/overrides に standalone: / follow: / publish_tf: が無い" \
   check_no_launch_only_keys
 
 # ── .env ────────────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 # map_19f.yaml (19F、915x577 @0.05m = 45.8m x 28.9m) 用の上書き。**overrides の既定値**。
-# 「断片」= 重ねる先の設定ファイルの値 (configs/bringup/sensors/{mid360_scan,mid360_elevation}.yaml、
-# configs/stack/nav2/{vi_planner,behaviors}.yaml、configs/stack/localization/emcl2.yaml)。
-# 値の由来・実測・経緯は configs/README.md、仰角フィルタは docs/setup/lidar.md。
+# 「断片」= 重ねる先の設定ファイルの値 (src/daifuku_config/bringup/sensors/{mid360_scan,mid360_elevation}.yaml、
+# src/daifuku_config/stack/nav2/{vi_planner,behaviors}.yaml、src/daifuku_config/stack/localization/emcl2.yaml)。
+# 値の由来・実測・経緯は src/daifuku_config/README.md、仰角フィルタは docs/setup/lidar.md。
 #
 # **map_tsudanuma.yaml とはキーの集合をそろえてある。** 片方にしか要らない値も、もう
 # 片方へ断片と同じ値で書いて並べる (地図ごとの違いが縦に並んで見えるように)。だから
@@ -9,7 +9,7 @@
 # 4 つ**で、あれは津田沼には置けない (密ソルバが要り、あちらは密だと 3.17GB で OOM)。
 #
 # **この地図が立つ組み合わせは 1 通りだけ。** 下の localizer: belief があるので
-#   tools/site.sh map_19f   # configs/site (既定)。機体も立て直す
+#   tools/site.sh map_19f   # src/daifuku_config/site (既定)。機体も立て直す
 #   ros2 launch daifuku_stack navigation.launch.py localization:=vi
 # 以外 (既定の localization:=emcl2、planner:=navfn、local_planner:=nav2、nav2:=true) は
 # どれも起動時に落ちる。map も overrides も既定なので渡さない。
@@ -88,7 +88,7 @@ daifuku_stack:
 # この地図では断片 (= ほぼノード既定) のままで足りている。要るとしたら次の順で疑う。
 #   emcl2.range_threshold … 貫通と見なす角度幅 [rad]。上げるほど判定が緩む。
 #   emcl2.laser_likelihood_max_dist … 2026-08-09 に断片ごと 0.2 -> 1.0 (両地図に効いている)。
-#     19F だけ別値にしたくなったらここへ足す。理屈は configs/README.md。
+#     19F だけ別値にしたくなったらここへ足す。理屈は src/daifuku_config/README.md。
 #   costmaps.*.inflation_radius … 通路幅が足りず経路が出ないとき。外接円 0.408m を下回らせない。
 #   vi_planner.safety_radius_penalty / downsample_policy … 上に断片と同値で書いてある
 #     (津田沼との差を縦に並べるため)。動かすのは通路が細くて貪欲ロールアウトが固着する

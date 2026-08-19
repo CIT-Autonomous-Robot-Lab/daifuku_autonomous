@@ -53,7 +53,7 @@ nav2 側の構成・制約・キャリブレーションはそのまま引き継
 | `src/daifuku_sim/rtf_gate.py` | **実測検証済み**。合成 RTF ログで PASS / FAIL(3) / WARN の分岐を確認 |
 | `pyproject.toml` / `uv.lock` | **実測検証済み**。`uv lock` / `uv sync` / `uv run map-to-usd` / `uv run rtf-gate` の成功を確認 |
 | extra `isaac` (pip 版 Isaac Sim 6.0.1) | **解決のみ検証済み**。`uv lock` が 166 パッケージで解決し、`uv sync --extra isaac --dry-run` が `isaacsim-*` 22 個を含む 144 個を入れると出すことを確認。lock には linux (x86_64 / aarch64) と win_amd64 の wheel が入っている。**実際にインストールして起動したことは無い** (GPU 必須) |
-| `src/daifuku_sim/configs/*.json` | 生成ロジックは検証済みだが、**Isaac の RTX LiDAR プロファイルのスキーマとの適合は未検証**。6.0 でプロファイル探索パスの機構が変わったかは NVIDIA のドキュメントに記載が無く、確認できていない |
+| `src/daifuku_sim/src/daifuku_config/*.json` | 生成ロジックは検証済みだが、**Isaac の RTX LiDAR プロファイルのスキーマとの適合は未検証**。6.0 でプロファイル探索パスの機構が変わったかは NVIDIA のドキュメントに記載が無く、確認できていない |
 | `src/daifuku_sim/isaac_raspicat.py` | **未検証** (GPU 必須)。5.x 向けに書き、6.0 の変更 2 点 (RTX LiDAR API / TransformTree の分割) への分岐を後から入れた。**分岐の条件は実行時判定だが、6.0 側の分岐が通ることは一度も確かめていない** |
 | `scripts/run_isaac_case.sh` / `container/nav_container.sh` | 構文チェックのみ。**未実行** |
 | `lidar_bringup.launch.py` / `robot_bringup.launch.py` / `navigation.launch.py` の変更 | 構文チェックのみ。既定値は現行のままで実機の挙動は変えていない |
@@ -87,7 +87,7 @@ simulator/
 │   ├── rtf_gate.py               # -> uv run rtf-gate
 │   ├── downsample_map.py         # -> uv run downsample-map (コンテナ内でも走る。後述)
 │   ├── isaac_raspicat.py         # -> python.sh か uv run --extra isaac python
-│   └── configs/*.json            # RTX LiDAR プロファイル
+│   └── src/daifuku_config/*.json            # RTX LiDAR プロファイル
 ├── container/                    # コンテナ内 (ROS 2 Humble / Python 3.10 / rclpy)
 │   ├── nav_container.sh          #   Isaac 版のコンテナ側
 │   ├── run_case.sh               #   pi4_sim 版のコンテナ側 (fake_robot もここが起動)
@@ -197,7 +197,7 @@ wheel は linux (x86_64 / aarch64) と win_amd64 の 3 つが lock に入って�
 > ROS 2 ブリッジで行う。これは pip 版にしても変わらない (むしろ 5.0 の 3.11 より
 > 差が開いた)。
 
-`configs/*.json` は `__file__` 基準で解決するので、インストール形態に関係なく
+`src/daifuku_config/*.json` は `__file__` 基準で解決するので、インストール形態に関係なく
 見つかる。
 
 ## 必要なもの
@@ -302,7 +302,7 @@ ros2 topic hz /odom
 ros2 topic pub -r 5 /cmd_vel geometry_msgs/msg/Twist '{linear: {x: 0.1}}'   # 動くか
 ```
 
-`/scan_raw` が出なければ LiDAR プロファイルの問題が濃厚。`configs/*.json` の
+`/scan_raw` が出なければ LiDAR プロファイルの問題が濃厚。`src/daifuku_config/*.json` の
 スキーマが手元の Isaac と合わない場合に備えて逃げ道を用意してある:
 
 ```bash
@@ -310,7 +310,7 @@ $ISAACSIM/python.sh simulator/src/daifuku_sim/isaac_raspicat.py ... --lidar-prof
 ```
 
 同梱プロファイルで `/scan_raw` が出るなら原因は JSON のスキーマなので、
-手元の Isaac が持つ `Example_Rotary.json` と `configs/raspicat_2d_lidar.json` を
+手元の Isaac が持つ `Example_Rotary.json` と `src/daifuku_config/raspicat_2d_lidar.json` を
 diff して合わせる。
 
 ### 4. Pi4 相当で 1 ケース通す
@@ -488,7 +488,7 @@ Isaac が良くするのはセンサの現実感であって、CPU タイミン�
   pi4_sim ハーネスのほうが実機に近い。emcl2 の収束や `map→odom` の挙動そのものを
   見たい場合は pi4_sim 側で見ること。Isaac 側が優れるのは環境の幾何とセンサの
   現実感であって、オドメトリの誤差モデルではない。
-- **MID360 の非繰り返し走査は近似。** `configs/livox_mid360.json` は公称 FOV
+- **MID360 の非繰り返し走査は近似。** `src/daifuku_config/livox_mid360.json` は公称 FOV
   (水平 360° / 垂直 −7〜+52°) を 40 本の等間隔ラインで覆う回転式に置き換えてある
   (288,000 pts/s、実機の公称は 200,000 pts/s)。「時間をかけると隙間が埋まる」という
   MID360 固有の性質は再現されない。`pointcloud_to_laserscan` で 0.30–0.50 m を
@@ -537,8 +537,8 @@ free の地図で測った値で、しきい値を直すと navfn の問題規�
 | `src/daifuku_sim/rtf_gate.py` | `uv run rtf-gate` | RTF レポートを読んで実行の成立/不成立を判定 |
 | `src/daifuku_sim/downsample_map.py` | `uv run downsample-map` / コンテナ内で `python3` | 占有格子地図の整数倍ダウンサンプル (障害物優先)。**両ハーネスとホストで共有** |
 | `src/daifuku_sim/isaac_raspicat.py` | `$ISAACSIM/python.sh <path>` | Isaac Sim standalone。ロボット読込 + OmniGraph ROS 2 ブリッジ + RTF 計測 |
-| `src/daifuku_sim/configs/raspicat_2d_lidar.json` | — | RTX LiDAR プロファイル (360°/0.5°/10Hz/0.1–30 m) |
-| `src/daifuku_sim/configs/livox_mid360.json` | — | 同 (MID360 の近似。40 ライン) |
+| `src/daifuku_sim/src/daifuku_config/raspicat_2d_lidar.json` | — | RTX LiDAR プロファイル (360°/0.5°/10Hz/0.1–30 m) |
+| `src/daifuku_sim/src/daifuku_config/livox_mid360.json` | — | 同 (MID360 の近似。40 ライン) |
 | `scripts/run_isaac_case.sh` | `bash` (ホスト) | Isaac 版オーケストレータ (world 生成 → Isaac → nav2 コンテナ → RTF 判定) |
 | `scripts/run_pi4_sim.ps1` | `powershell` (ホスト) | pi4_sim 版オーケストレータ。詳細は `docs/pi4_sim.md` |
 | `scripts/run_matrix.ps1` | `powershell` (ホスト) | pi4_sim 版をケース一式まとめて回して `PROBE_SUMMARY` を集める |

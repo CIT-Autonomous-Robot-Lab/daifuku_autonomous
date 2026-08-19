@@ -26,8 +26,8 @@ RViz2 上で waypoint を作り、並べ替え・YAML 保存/読込を行い、N
 
 | | 受けるノード | 停止時間 | 取りこぼしの扱い |
 | --- | --- | --- | --- |
-| `nav2:=false`（既定） | `vi_planner` 自身 | `configs/stack/vi_planner.yaml` の `waypoint_pause_sec`（0.2 s） | 同ファイルの `stop_on_failure: false` |
-| `nav2:=true` | `nav2_waypoint_follower` | `configs/stack/nav2/behaviors.yaml` の `waypoint_pause_duration`（200 ms） | 同ファイルの `stop_on_failure: false` |
+| `nav2:=false`（既定） | `vi_planner` 自身 | `src/daifuku_config/stack/vi_planner.yaml` の `waypoint_pause_sec`（0.2 s） | 同ファイルの `stop_on_failure: false` |
+| `nav2:=true` | `nav2_waypoint_follower` | `src/daifuku_config/stack/nav2/behaviors.yaml` の `waypoint_pause_duration`（200 ms） | 同ファイルの `stop_on_failure: false` |
 
 代償として **nav2 に「通過点をまとめて 1 本の経路にする」最適化はさせない**（1 点
 ずつ止まって次を計画する）。どちらの構成でも `stop_on_failure: false` なので、途中で
@@ -164,7 +164,7 @@ latch して出す。**これは他ノードが読むためのもの**で、い�
 そのまま届く（このトピックはもう 1 つの入口として残っているだけ）。
 
 `vi_planner` 側はトピック名が `waypoints`。`waypoint_prefetch` は
-`configs/stack/vi_planner.yaml`・ノードの宣言ともに `false` だが、
+`src/daifuku_config/stack/vi_planner.yaml`・ノードの宣言ともに `false` だが、
 **既定の場所である `map_19f` の overrides が `true` へ上書きしている**ので、引数を何も
 足さずに立てれば先読みは入っている（`map_tsudanuma` は 2026-08-07 に `true` にしたあと
 2026-08-08 に `false` へ戻した。走行中の固まりの切り分けで、2026-08-04 に断片で反転した

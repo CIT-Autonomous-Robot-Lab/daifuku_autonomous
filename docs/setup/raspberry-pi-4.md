@@ -71,7 +71,7 @@ rtmouse は out-of-tree モジュールで、キャラクタデバイスのメ�
 
 ## パルスカウンタは切ってある（公式実装）
 
-`configs/bringup/robot/raspicat.yaml` の `use_pulse_counters` は `false`（`cmd_vel` の積分）
+`src/daifuku_config/bringup/robot/raspicat.yaml` の `use_pulse_counters` は `false`（`cmd_vel` の積分）
 です。これは rtmouse を経由する公式実装の話で、自前実装（`raspicat_driver.yaml`）は
 `true` が既定です。本来は `true`（`/dev/rtcounter_{l,r}*` のロータリエンコーダ）が正しい設定
 ですが、この個体の I2C カウンタが走行中にランダムで固着します。
@@ -83,7 +83,7 @@ rtmouse は out-of-tree モジュールで、キャラクタデバイスのメ�
 同じで、確認のつもりで打つと機体ごと道連れになります。
 
 運用に効く帰結が 2 つあります。天秤と経緯は
-[`configs/README.md`](../../configs/README.md) にあります。
+[`src/daifuku_config/README.md`](../../src/daifuku_config/README.md) にあります。
 
 - **モータ OFF の dry-run が成立しません。** `odom` は指令値の積分なので、モータ
   電源を切ったまま指令を出しても自己位置だけがゴールまで「走り」ます（自前実装は
@@ -110,7 +110,7 @@ Pi 4 のメモリとコア数に由来するもので、Pi 5 では緩みます�
   全部外れるため。`compose.common.yaml` の `args:` に入れていない）。
 - **`use_composition` の既定 `False` は意図的です。** `True` にすると参加者あたりの
   エンドポイントが増えすぎて新規参加者からディスカバリできなくなり、CPU 飢餓で bond の
-  心拍も途絶えます。`configs/stack/lifecycle_bond.yaml` の `bond_timeout: 60.0` も同じ事情
+  心拍も途絶えます。`src/daifuku_config/stack/lifecycle_bond.yaml` の `bond_timeout: 60.0` も同じ事情
   （既定の 4 秒では 8 プロセス同時起動の load 10〜19 に間に合わない）。
 - **UDP だけだと TF が遅れます。** 参加者が 20 個近くになるとカーネルが飽和し、TF の
   タイムスタンプが 20 秒以上遅れてゴールが次々と中断します。同一ホスト内は SHM を
@@ -134,7 +134,7 @@ rtmouse はレジスタを `ioremap` していて鳴らす瞬間だけ GPIO19 �
 叩いて鳴らします（音程がわずかに揺れる。理由と Pi 5 での回避策は
 [`src/raspicat_driver/README.md`](../../src/raspicat_driver/README.md)）。
 
-**測距センサだけは切ってあります**（`configs/bringup/robot/raspicat.yaml` の
+**測距センサだけは切ってあります**（`src/daifuku_config/bringup/robot/raspicat.yaml` の
 `use_light_sensors: false`）。`true` に戻すと `raspimouse` が
 `/dev/rtlightsensor0` を 100 Hz で読み、rtmouse 側でカーネル oops を起こして
 プロセスごと落ちます。ログには何も出ず、`odom` が来ないという形でだけ現れます
@@ -286,14 +286,14 @@ Pi 4 でも Pi 5 でも走らせた実績はまだありません。見る順に
 
 | 項目 | 分かっていること | 出どころ |
 | --- | --- | --- |
-| 寸法 | 車輪径 200 mm / トレッド 350 mm（2026-08-03 の実測値）。上流 raspicat の既定 152.4 / 279.18 mm に戻すと並進が 1.31 倍ずれる | [`configs/README.md`](../../configs/README.md) |
+| 寸法 | 車輪径 200 mm / トレッド 350 mm（2026-08-03 の実測値）。上流 raspicat の既定 152.4 / 279.18 mm に戻すと並進が 1.31 倍ずれる | [`src/daifuku_config/README.md`](../../src/daifuku_config/README.md) |
 | オドメトリの検算 | モータ ON で 0.1 m/s を 10 秒指令し、巻尺の実移動距離と `/odom` の変位を比べる。ずれる場合は補正係数ではなく寸法側で詰める | 同上 |
 | パルスカウンタ | I2C タイムアウト → mutex 固着 → リブートでしか戻らない。切ってある側（`false`）の実害も 2026-07-29 の実機で確認済み | 同上 |
 | DDS とライフサイクル | UDP のみでは TF が 20 秒以上遅れる。bond は既定 4 秒では間に合わない | [`troubleshooting.md`](../usage/troubleshooting.md) |
 
 ## 関連
 
-- [`configs/README.md`](../../configs/README.md) — 設定値の由来
+- [`src/daifuku_config/README.md`](../../src/daifuku_config/README.md) — 設定値の由来
 - [`tools/image/README.md`](../../tools/image/README.md) — SD カードの作成
 - [`docker/raspberrypi/README.md`](../../docker/raspberrypi/README.md) — コンテナ構成
 - [Raspberry Pi 5 で動かす](raspberry-pi-5.md) — Pi 5 での差分

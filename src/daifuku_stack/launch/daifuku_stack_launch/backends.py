@@ -170,7 +170,7 @@ def validate_localization(context, *args, effective_nav2=None, **kwargs):
                 f"localization:={selected} brings up its own estimator.\n"
                 "Both would own map->odom, and vi_planner would treat pose_topic as a "
                 "manual seed instead of a pose input — neither logs anything.\n"
-                "Set localizer: \"external\" back in configs/stack/vi_planner.yaml "
+                "Set localizer: \"external\" back in src/daifuku_config/stack/vi_planner.yaml "
                 "(or the overrides file that changed it), or launch with "
                 "localization:=vi to use it."
             )
@@ -196,7 +196,7 @@ def validate_localization(context, *args, effective_nav2=None, **kwargs):
         raise RuntimeError(
             "localization:=vi asks vi_planner to localize, but config leaves "
             "localizer: \"external\" (= consume someone else's pose).\n"
-            "Pick an estimator in configs/stack/vi_planner.yaml (or an overrides "
+            "Pick an estimator in src/daifuku_config/stack/vi_planner.yaml (or an overrides "
             "file): \"adaptive\" (windowed multi-resolution; recovers from kidnapping "
             "and starts unseeded), \"grid\", \"belief\" or \"viterbi\".\n"
             "Leaving it external here would launch with nothing publishing map->odom."

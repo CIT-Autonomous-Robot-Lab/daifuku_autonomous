@@ -12,7 +12,7 @@ setup(
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),
-        # **設定の実体はここには無い。** リポジトリルートの configs/
+        # **設定の実体はここには無い。** src/daifuku_config/
         # (daifuku_config パッケージ) に置いてある。こちらはその合成規則
         # (params.py) とノード 2 つだけを持つ。
     ],
@@ -20,7 +20,7 @@ setup(
     zip_safe=True,
     maintainer="Keita Sekiguchi / nop",
     maintainer_email="noplab90@gmail.com",
-    description="設定ファイルの合成規則と見張り。設定の実体は daifuku_config (configs/)",
+    description="設定ファイルの合成規則と見張り。設定の実体は daifuku_config",
     license="Apache-2.0",
     tests_require=["pytest"],
     # **ここを足したときはビルドが要る** (entry_points はビルド時にしか展開されない。

@@ -149,11 +149,11 @@ TELEOP_LINEAR_SPEED=0.1 bash tools/control.sh teleop keyboard
 | 変更したもの | やること |
 |---|---|
 | `src/daifuku_stack`配下のlaunch、behavior_trees、maps、rviz、src | 何もしない。`--symlink-install`なのでノードを再起動するだけで反映される |
-| `configs/stack/`の**値**（`nav2/`・`localization/`・`mapping/`・`lifecycle_bond.yaml`） | 同じく再ビルドは不要。ただし**走らせたまま直すと`config_sentinel`がそのlaunchを終了します**（下） |
-| `configs/bringup/`（LiDAR・EKF・ドライバ）と`configs/overrides/`の**値** | 再ビルドは不要だが、読むのは常駐している`raspicat`サービスなので立て直しが要る。**`config_sentinel`が変化に気づいて自分で上がり直します**（機体が止まっていて、その設定でも立つときだけ。`config_watch:=warn`で止められる）。コメントだけの変更には反応しません |
-| `src/daifuku_bringup`配下のlaunchと`src/`のPython | 再ビルドは不要だが、**`config_sentinel`は気づきません**（見張っているのは`configs/`の`*.yaml`だけ）。`docker compose up -d`で自分で立て直す |
-| `configs/overrides/`に**ファイルを新しく足した** | 一度ビルドを通す（`install/`のsymlinkはビルド時にしか張られないので、足しただけでは`overrides:=`の一覧に出てこない）。そのあと`docker compose up -d` |
-| `configs/site`（走らせる場所） | **`tools/site.sh <名前>`**。書き換えと`raspicat`の立て直しを両方やる（下） |
+| `src/daifuku_config/stack/`の**値**（`nav2/`・`localization/`・`mapping/`・`lifecycle_bond.yaml`） | 同じく再ビルドは不要。ただし**走らせたまま直すと`config_sentinel`がそのlaunchを終了します**（下） |
+| `src/daifuku_config/bringup/`（LiDAR・EKF・ドライバ）と`src/daifuku_config/overrides/`の**値** | 再ビルドは不要だが、読むのは常駐している`raspicat`サービスなので立て直しが要る。**`config_sentinel`が変化に気づいて自分で上がり直します**（機体が止まっていて、その設定でも立つときだけ。`config_watch:=warn`で止められる）。コメントだけの変更には反応しません |
+| `src/daifuku_bringup`配下のlaunchと`src/`のPython | 再ビルドは不要だが、**`config_sentinel`は気づきません**（見張っているのは`src/daifuku_config/`の`*.yaml`だけ）。`docker compose up -d`で自分で立て直す |
+| `src/daifuku_config/overrides/`に**ファイルを新しく足した** | 一度ビルドを通す（`install/`のsymlinkはビルド時にしか張られないので、足しただけでは`overrides:=`の一覧に出てこない）。そのあと`docker compose up -d` |
+| `src/daifuku_config/site`（走らせる場所） | **`tools/site.sh <名前>`**。書き換えと`raspicat`の立て直しを両方やる（下） |
 | `src/raspicat_driver`のPython | 何もしない。ただし`setup.py`の`entry_points`を増やしたときはビルドが要る |
 | C++やRustのコード、`CMakeLists.txt`、外部パッケージのソース | `docker compose up`で差分ビルドする |
 | aptの依存、`Dockerfile`、`package.xml`の依存、`docker/`配下のスクリプト | `docker compose build`からやり直す |
@@ -198,14 +198,14 @@ top-levelのlaunchはそれぞれ`config_sentinel`を1つ立てていて、**自
 上げ直すかは、そのlaunchを誰が立てたかで変わります。
 
 - **機体**（`raspicat`サービス）は`restart: unless-stopped`なので、そのまま新しい設定で
-  上がり直します。上の表の`configs/bringup/`の行がこれです
+  上がり直します。上の表の`src/daifuku_config/bringup/`の行がこれです
 - **`navigation`と`mapping`は人が立てたものなので、上げ直す人が居ません。** 終わったまま
   です。とくに`mapping`では、**そこまで作った地図が消えます**（SLAM Toolboxは終了時に
   保存しません）
 
-見張っているのは自分のパッケージの`configs/`の`*.yaml`（`overrides/`は除く）と、重ねて
+見張っているのは自分のパッケージの`src/daifuku_config/`の`*.yaml`（`overrides/`は除く）と、重ねて
 いる`overrides`のうち自分の部分木です。**そのlaunchが実際に読まないファイルも入ります**
-——`navigation`を走らせたまま`configs/stack/mapping/slam_toolbox.yaml`を直しても落ちます
+——`navigation`を走らせたまま`src/daifuku_config/stack/mapping/slam_toolbox.yaml`を直しても落ちます
 （取りこぼして黙るより、余分に反応するほうを選んでいます）。**値を正規化してから指紋を
 取るので、コメントや並び順の変更には反応しません。**
 
@@ -225,7 +225,7 @@ ros2 launch daifuku_stack mapping.launch.py config_watch:=warn
 
 19Fと津田沼のように場所が変わると、**LiDARの帯（仰角と高さ）・`emcl2`と価値反復の調整・
 地図**が3つとも変わります。これは1つの話なので、人が動かす値も1つだけです——
-`configs/site`の1行です。
+`src/daifuku_config/site`の1行です。
 
 ```bash
 tools/site.sh                 # 今の値と、選べる名前
@@ -238,7 +238,7 @@ tools/site.sh map_19f --no-restart   # ファイル経由に落ちたとき、�
 ファイル経由になったときだけです（ROS経由で通った場合、立て直すかどうかを決めるのは
 機体側の`config_sentinel`なので、こちらからは止められません）。
 
-名前は`configs/overrides/<名前>.yaml`を指します。**地図はそのファイル自身が`site:`節で
+名前は`src/daifuku_config/overrides/<名前>.yaml`を指します。**地図はそのファイル自身が`site:`節で
 宣言します**（`site: map: <ファイル名>`。`daifuku_stack`の`maps/`からの相対パス）ので、
 overridesの名前と地図のファイル名は揃っていなくて構いません。切り替えたあとは
 `navigation`を立て直すだけで、`map:=`も`overrides:=`も渡す必要はありません（どちらも
@@ -248,7 +248,7 @@ overridesの名前と地図のファイル名は揃っていなくて構いま�
 **機体側は起動時にしかこの値を読みません。** ファイルを直しただけでは、LiDARの帯だけが
 前の場所のまま走ることになります。これを塞いでいるのが常駐している2つのノードです。
 
-- **`site_manager`**（`robot_bringup`が立てる。機体側に1つだけ）——`configs/site`の
+- **`site_manager`**（`robot_bringup`が立てる。機体側に1つだけ）——`src/daifuku_config/site`の
   読み書きと告知。`ros2 param set /site_manager site <名前>`でも切り替えられ、**書く前に
   両パッケージについて検査する**ので、綴り違いや壊れた`overrides`はファイルに残りません。
   素手で直したときのために2秒ごとに読み直し、いまの値を`/daifuku/site`へlatchします
@@ -277,7 +277,7 @@ ros2 topic echo /daifuku/site            # 流れている値
 **この1行に入っていない場所依存が1つあります**——`joy_teleop`の`waypoints_file`
 （パッド巡回の順路）です。既定は空で、空のあいだはSTART+BACKが巡回を断ります。絶対パスな
 ので場所ごとの`overrides`には書きにくく、いまは手で渡す扱いのままです
-（`configs/bringup/robot/joy_teleop.yaml`）。
+（`src/daifuku_config/bringup/robot/joy_teleop.yaml`）。
 
 > かつてはリポジトリルートの`.env`の`OVERRIDES`でした（2026-08-07まで）。`.env`は
 > `COMPOSE_FILE`や`INPUT_GID`のように「機体を仕立てるときに1度決める」値の置き場で、
