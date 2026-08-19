@@ -16,7 +16,7 @@ pointcloud_to_laserscan:
     angle_increment: 0.008726646    # 既定 pi/180 (0.01745) [rad]: 角度分解能 (0.5 度)
     queue_size: 4                   # 既定 論理コア数: 点群購読キュー長
     scan_time: 0.10                 # 既定 1/30 (0.0333) [s]: 出力に載せる 1 スキャン所要時間
-    range_min: 0.23                 # 既定 0.0 [m]: これより近い点を捨てる (機体の自己反射よけ)
+    range_min: 0.0                  # 既定 同左 [m]: これより近い点を捨てる。自己反射は後方 50 度を消す scan_filter.yaml 側で足りる
     range_max: 70.0                 # 既定 DBL_MAX [m]: これより遠い点を捨てる。Mid-360 の測距上限 (反射率 80% で 70m、10% では 40m)
     use_inf: true                   # 既定 true: 範囲外を inf にする (false なら range_max + inf_epsilon)
 

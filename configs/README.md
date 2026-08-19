@@ -97,7 +97,7 @@ resample_interval: 1         # 既定 1: 何回の更新ごとにリサンプル
 | キー | 状況 |
 | --- | --- |
 | `emcl2.open_space_threshold` | 上流 README の表にはあるが、この版の `emcl2_ros2` は `declare_parameter` していない |
-| `emcl2.laser_min_range` / `laser_max_range` | 宣言はされ `initPF` で一度読まれるが、`Mcl::setScan` が毎スキャン `/scan` の `range_min` / `range_max` で上書きする。実効値は `sensors/mid360_scan.yaml` の 0.23 / 70.0（同じ `Scan` の `scan_increment` のほうは上書きされないので効く） |
+| `emcl2.laser_min_range` / `laser_max_range` | 宣言はされ `initPF` で一度読まれるが、`Mcl::setScan` が毎スキャン `/scan` の `range_min` / `range_max` で上書きする。実効値は `sensors/mid360_scan.yaml` の 0.0 / 70.0（同じ `Scan` の `scan_increment` のほうは上書きされないので効く） |
 | `ekf_filter_node.odom0_nodelay` / `imu0_nodelay` | 上流ドキュメントにはあるが、ROS 2 版の `ros_filter.cpp` は読まない（ROS 1 の `tcpNoDelay` 由来） |
 | `controller_server.FollowPath.stateful` | DWB に無い。ゴール判定側の同名パラメータと混同したもの |
 
