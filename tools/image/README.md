@@ -11,7 +11,7 @@
 
 | ファイル | 実行場所 | 用途 |
 |---|---|---|
-| `create_image.py` | 手元のPC（Windows / Linux / macOS） | ベースイメージの取得・検証・書き込みと、ブートパーティションへの設定注入 |
+| `create_image.py` | 手元のPC（Windows / Linux） | ベースイメージの取得・検証・書き込みと、ブートパーティションへの設定注入 |
 | `provision.sh` | Raspberry Pi | 初回起動時のホスト側セットアップ。単体でも実行できる |
 
 `create_image.py`はPython 3.8以上の標準ライブラリだけで動きます。追加のパッケージは
@@ -46,7 +46,7 @@ python3 tools/image/create_image.py devices
 
 ### 2. カードを作る
 
-管理者（Windows）またはroot（Linux / macOS）で実行します。
+管理者（Windows）またはroot（Linux）で実行します。
 
 ```bash
 sudo python3 tools/image/create_image.py all \
