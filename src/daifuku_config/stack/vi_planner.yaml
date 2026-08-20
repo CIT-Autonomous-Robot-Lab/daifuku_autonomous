@@ -39,7 +39,7 @@ vi_planner:
     #   /proc/meminfo の MemAvailable を見て「超えたら起動を止める・半分を超えたら警告」に
     #   なっている (書いても読まれない)。
     theta_cell_num: 60            # 既定 60: 姿勢の離散数。360 を割り切ること (t_resolution = 360/この値 が整数除算)
-    safety_radius: 0.2            # 既定 0.2 [m]: 障害物近傍ペナルティの半径 (VI 内部の膨張)
+    safety_radius: 0.3            # 既定 0.2 [m]: 障害物近傍ペナルティの半径 (VI 内部の膨張)。2026-08-20 の屋外実験で 0.2 から広げた
     safety_radius_penalty: 30     # 既定 30 [秒/セル]: 障害物に近寄る代わりに払う迂回コスト
     goal_margin_radius: 0.3       # 既定 0.3 [m]: ゴール圏 (final_state) 判定半径 = ゴール許容差
     goal_margin_theta: 15.0       # 既定 15.0 [deg]: 同、角度
