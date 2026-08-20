@@ -614,18 +614,37 @@ def _make_rtx_lidar(lidar_path, profile):
 
 # ROS 2 ブリッジのグラフ
 
+def _time_source(use_sim_time):
+    """タイムスタンプの出どころを (ノード型, 出力アトリビュート) で返す。
+
+    **既定 (`--use-sim-time` なし) でシム時間を打たないこと。** そちらでは nav2 が
+    ウォールクロックで走るので、起動からの秒で刻印すると全メッセージが 56 年前に
+    なる。TF の引きが軒並み extrapolation で失敗し、`scan_to_scan_filter_chain` は
+    `/scan` を出さなくなり、**エラーも警告も出ないまま自己位置だけが壊れる**
+    (2026-08-20 の実測: `/scan_raw` の stamp が 767 秒でコンテナのウォールクロックが
+    1787197524。VIOLA が真値から 2.6m ずれ、機体が壁へ突っ込んだ)。`/clock` を出すのは
+    `--use-sim-time` のときだけなので、シム時間で刻印してよいのもそのときだけ。
+    """
+    if use_sim_time:
+        return (node_type("core", "IsaacReadSimulationTime"),
+                "SimTime.outputs:simulationTime")
+    return (node_type("core", "IsaacReadSystemTime"),
+            "SimTime.outputs:systemTime")
+
+
 def build_ros_graph(args, robot_prim, lidar_path):
     """/cmd_vel 購読 -> 差動駆動 -> odom/TF/scan 出版までを 1 つのグラフに組む。"""
     lidar_frame = args.lidar_frame or (
         "lidar_link" if args.lidar == "2d" else "livox_frame"
     )
+    time_type, time_out = _time_source(args.use_sim_time)
     publish_odom_tf = args.publish_odom_tf == "true"
     publish_link_tf = args.publish_link_tf == "true"
 
     nodes = [
         ("OnTick", node_type("core", "OnPlaybackTick")),
         ("Context", node_type("ros2", "ROS2Context")),
-        ("SimTime", node_type("core", "IsaacReadSimulationTime")),
+        ("SimTime", time_type),
 
         # /cmd_vel -> 車輪速度
         ("SubTwist", node_type("ros2", "ROS2SubscribeTwist")),
@@ -671,7 +690,7 @@ def build_ros_graph(args, robot_prim, lidar_path):
         ("Context.outputs:context", "SubTwist.inputs:context"),
         ("Context.outputs:context", "PubOdom.inputs:context"),
 
-        ("SimTime.outputs:simulationTime", "PubOdom.inputs:timeStamp"),
+        (time_out, "PubOdom.inputs:timeStamp"),
 
         # **直結してはいけない。** ROS2SubscribeTwist の出力は double3
         # (vector)、DifferentialController の入力は double。OmniGraph は
@@ -692,7 +711,7 @@ def build_ros_graph(args, robot_prim, lidar_path):
     if publish_link_tf:
         connections += [
             ("Context.outputs:context", "PubTF.inputs:context"),
-            ("SimTime.outputs:simulationTime", "PubTF.inputs:timeStamp"),
+            (time_out, "PubTF.inputs:timeStamp"),
         ]
         if split_tf:
             connections += [
@@ -709,7 +728,7 @@ def build_ros_graph(args, robot_prim, lidar_path):
         connections += [
             ("OnTick.outputs:tick", "PubOdomTF.inputs:execIn"),
             ("Context.outputs:context", "PubOdomTF.inputs:context"),
-            ("SimTime.outputs:simulationTime", "PubOdomTF.inputs:timeStamp"),
+            (time_out, "PubOdomTF.inputs:timeStamp"),
             ("ComputeOdom.outputs:position", "PubOdomTF.inputs:translation"),
             ("ComputeOdom.outputs:orientation", "PubOdomTF.inputs:rotation"),
         ]
@@ -717,7 +736,7 @@ def build_ros_graph(args, robot_prim, lidar_path):
         connections += [
             ("OnTick.outputs:tick", "PubClock.inputs:execIn"),
             ("Context.outputs:context", "PubClock.inputs:context"),
-            ("SimTime.outputs:simulationTime", "PubClock.inputs:timeStamp"),
+            (time_out, "PubClock.inputs:timeStamp"),
         ]
 
     values = [
@@ -831,6 +850,21 @@ def build_lidar_graph(args, lidar_path, lidar_frame):
             og.Controller.Keys.SET_VALUES: values,
         },
     )
+    # RTX の helper は timeStamp 入力を持たず自分で打つ (既定はシム時間)。
+    # _time_source と同じ理由でここも切り替える。**ここだけ漏らすと、
+    # /odom と /tf はウォールクロック、/scan_raw だけシム時間**という
+    # いちばん分かりにくい形になる。
+    if not args.use_sim_time:
+        try:
+            og.Controller.set(
+                og.Controller.attribute(
+                    "/World/ROS2Lidar/PubLidar.inputs:useSystemTime"),
+                True)
+        except Exception as exc:      # noqa: BLE001 - 名前が違う版があり得る
+            print("[isaac_raspicat] warn: lidar helper の useSystemTime を"
+                  f"設定できない ({exc})。/scan_raw だけシム時間で出るので、"
+                  "--use-sim-time (と use_sim_time:=true) で揃えて回すこと")
+
     print(f"[isaac_raspicat] lidar graph -> "
           f"{'/scan_raw (LaserScan)' if is_2d else '/livox/lidar (PointCloud2)'}")
 
@@ -844,11 +878,12 @@ def build_imu_graph(args):
     lidar_bringup.launch.py は /livox/imu -> prepare_mid360_imu.py -> /imu/mid360 ->
     ekf_node と繋いでいるので、実機と同じ経路がそのまま通る。
     """
+    time_type, time_out = _time_source(args.use_sim_time)
     imu_prim = args.robot_prim + "/base_link/imu_sensor"
     nodes = [
         ("OnTick", node_type("core", "OnPlaybackTick")),
         ("Context", node_type("ros2", "ROS2Context")),
-        ("SimTime", node_type("core", "IsaacReadSimulationTime")),
+        ("SimTime", time_type),
         ("ReadIMU", node_type("rtx_sensor", "IsaacReadIMU")),
         ("PubIMU", node_type("ros2", "ROS2PublishImu")),
     ]
@@ -856,7 +891,7 @@ def build_imu_graph(args):
         ("OnTick.outputs:tick", "ReadIMU.inputs:execIn"),
         ("ReadIMU.outputs:execOut", "PubIMU.inputs:execIn"),
         ("Context.outputs:context", "PubIMU.inputs:context"),
-        ("SimTime.outputs:simulationTime", "PubIMU.inputs:timeStamp"),
+        (time_out, "PubIMU.inputs:timeStamp"),
         ("ReadIMU.outputs:linAcc", "PubIMU.inputs:linearAcceleration"),
         ("ReadIMU.outputs:angVel", "PubIMU.inputs:angularVelocity"),
         ("ReadIMU.outputs:orientation", "PubIMU.inputs:orientation"),

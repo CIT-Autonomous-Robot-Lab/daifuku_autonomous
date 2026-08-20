@@ -197,6 +197,25 @@ for i in $(seq 1 30); do
     sleep 1
 done
 
+# **Isaac を立て直さずにケースを回すと、ロボットは前回の走行の終了位置に残る。**
+# それでも下の /initialpose は START_X/Y/YAW (= スポーン姿勢) を撒くので、種と
+# 実際の姿勢が食い違ったまま走り出す。エラーも警告も出ず、症状は
+# 「自己位置が最初からずれている」だけになるので、ローカライザやセンサの不調に
+# 見える (2026-08-20 に踏んで、測定を 1 回無駄にした)。Isaac の odom は
+# スポーン姿勢が原点なので、原点から離れていたら立て直しを促す。
+# run_isaac_case.sh から回すぶんには毎回 Isaac を起動するので当たらない。
+if [ "${ALLOW_STALE_POSE:-0}" != "1" ]; then
+    od=$(timeout 20 ros2 topic echo --once --field pose.pose.position "$expected_odom" 2>/dev/null          | awk '/^x:/{x=$2} /^y:/{y=$2} END{printf "%s %s", x, y}')
+    if [ -n "$od" ] &&        [ "$(awk -v v="$od" 'BEGIN{split(v,a," "); print (sqrt(a[1]*a[1]+a[2]*a[2])>0.3)?1:0}')" = "1" ]; then
+        echo "  !! Isaac の odom が原点から離れている (x y = $od)。" >&2
+        echo "     ロボットが前回の走行位置に残ったままなので、下で撒く /initialpose" >&2
+        echo "     ($START_X, $START_Y, $START_YAW rad) と実際の姿勢が食い違う。" >&2
+        echo "     Isaac を立て直してからやり直すこと (承知の上なら ALLOW_STALE_POSE=1)。" >&2
+        exit 5
+    fi
+    echo "  ok: odom は原点付近 (x y = ${od:-取得できず})"
+fi
+
 # --- リンク間 TF の所有者 ---------------------------------------------------
 #
 # TF ツリーは区間ごとに所有者を 1 つだけにする:

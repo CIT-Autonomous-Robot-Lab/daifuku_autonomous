@@ -58,10 +58,10 @@ GPU の無い開発機 (AMD Radeon 780M) で書いたもの。
 | `src/daifuku_sim/rtf_gate.py` | **実測検証済み**。合成 RTF ログで PASS / FAIL(3) / WARN の分岐を確認 |
 | `pyproject.toml` / `uv.lock` | **実測検証済み**。`uv lock` / `uv sync` / `uv run map-to-usd` / `uv run rtf-gate` の成功を確認 |
 | extra `isaac` (pip 版 Isaac Sim 6.0.1) | **実測検証済み** (2026-08-20)。`uv sync --extra isaac` で 147 パッケージが入り、Kit が起動することを確認 (venv 実測 2.2GB + extscache)。**`all` だけでは起動しない**ことが分かったので `all,extscache` に直した (下の「Isaac Sim 6.0 で変わったところ」) |
-| `src/daifuku_sim/configs/*.json` | **6.0 では使えないことが確定** (2026-08-20 実測)。JSON を読む機構そのものが無くなったので、6.0 では `_BUNDLED_PROFILE` の同梱プロファイルで代用する。**走査諸元は実機と違う**ので、観測数に依存する評価をこの構成で読まないこと。4.x / 5.x 向けの JSON 経路は残してあるが、そちらは**未検証のまま** |
+| `src/daifuku_sim/configs/*.json` | **6.0 では使えないことが確定** (2026-08-20 実測)。JSON を読む機構そのものが無くなったので、6.0 では `_BUNDLED_PROFILE` の同梱プロファイルで代用する。**走査諸元は実機と違う**ので、観測数に依存する評価をこの構成で読まないこと。4.x / 5.x 向けの JSON 経路は残してあるが、そちらは**未検証のまま**。**6.0 の `--lidar-profile` が受け付けるのは登録済みの USD アセット名だけ**で (`Lidar.create` が `get_assets_root_path()` の下から引く)、同梱 JSON を置く場所へ自分の JSON を並べても `Lidar config ... not found` で落ちる。実機に寄せるなら `Lidar.create(usd_path=...)` へ渡す USD を起こす経路になる。**一覧にある実在機種 (`RPLIDAR_S2E` など) へ差し替えるのも駄目** —— あちらはアセットの中に OmniLidar が入れ子で入っているので、`IsaacCreateRenderProduct` が掴めず `Render product ... not attached to RTX Lidar` を出し続けて **`/scan_raw` ごと消える** |
 | `src/daifuku_sim/isaac_raspicat.py` | **実測検証済み** (2026-08-20、6.0.1 / `--lidar 2d` / `--headless`)。world 読み込み → URDF 取り込み → RTX LiDAR → ROS 2 グラフ → `/scan_raw` `/odom` `/tf` の発行、**および `/cmd_vel` を受けて実際に走ること**まで通り（手投げの `linear.x=0.2` で 20 秒 1.8m 前進、`--rtf-report` は `rtf-gate` を PASS）。同日に articulation root と車輪ドライブ damping の 2 件を直した（上の「`/cmd_vel` が届いているのに車輪が回らない失敗が 2 つある」）。**未検証は `--lidar mid360` と `--publish-link-tf isaac` の 2 経路** |
 | `scripts/run_pi4_sim.ps1` / `container/run_case.sh` / `container/fake_robot.py` / `container/probe.py` | **実測検証済み** (2026-08-20、Windows + podman/WSL、amd64)。`LOCALIZATION=vi` で `PROBE_SUMMARY {"result": "SUCCEEDED", "first_plan_s": 6.8, "elapsed_s": 19.2}`、`vi_planner` peak RSS 820MB / cgroup peak 1.08GB (上限 3GB、OOM 0)、throttle 24.1s / 2457 回。プロセス死なし |
-| `scripts/run_isaac_case.sh` / `container/nav_container.sh` | **通しで実行した** (2026-08-20、Windows + WSL の podman。`run_isaac_case.sh` 自体は Linux 向けのままなので、コンテナ側は同じ env を並べて手で叩いた)。Isaac の `/scan_raw` `/odom` `/tf` → nav2 → `/cmd_vel` → Isaac の往復が成立し、ゴールを受理して VI が 10.1 秒で解き、`cmd_vel` 4554 通で機体が走る。**結果は `TIMEOUT`** —— `distance_remaining` 6.02 → 5.43 まで進んだところで 121.8 秒で feedback が止まる（VIOLA が「lost → pose withheld」に入る）。**同梱 LiDAR プロファイルの走査諸元が実機と違う**のが疑わしいが切り分けは未了。`vi_planner` peak RSS 957MB / cgroup peak 1.30GB (上限 3GB、OOM 0)、throttle 939s / 108541 回 |
+| `scripts/run_isaac_case.sh` / `container/nav_container.sh` | **通しで実行した** (2026-08-20、Windows + WSL の podman。`run_isaac_case.sh` 自体は Linux 向けのままなので、コンテナ側は同じ env を並べて手で叩いた)。Isaac の `/scan_raw` `/odom` `/tf` → nav2 → `/cmd_vel` → Isaac の往復が成立する。**`LOCALIZATION=emcl2 OVERRIDES=none` なら自己位置が収束して自走する** —— 種で 0.06m に収まり静止中は 0.10m を保ち、走り出して `distance_remaining` 6.0 → 2.1 まで詰めたところで誤差 1.6m まで開いて機体が止まる (`result: TIMEOUT`、`first_plan_s` 57.1)。**既定の `map_19f` overrides (VIOLA / `localizer: belief`) では一度も収束しない** —— 真値と一致する種を撒いても初回推定が 1.74m ずれ、単調に 5.4m まで離れて `no robot pose for too long` で ABORTED になる。同日にタイムスタンプの実バグを 1 件直した (下の「Isaac のタイムスタンプ」)。`vi_planner` peak RSS 1.02GB / cgroup peak 1.41GB (上限 3GB、OOM 0) |
 | `lidar_bringup.launch.py` / `robot_bringup.launch.py` / `navigation.launch.py` の変更 | 構文チェックのみ。既定値は現行のままで実機の挙動は変えていない |
 
 最初に動かすときは、下の「立ち上げ順序」に従って**段階的に**確認すること。
@@ -252,6 +252,45 @@ win_amd64 の 3 つが lock に入っている。
 `src/daifuku_config/*.json` は `__file__` 基準で解決するので、インストール形態に関係なく
 見つかる。
 
+### Isaac のタイムスタンプ
+
+**Isaac が打つ stamp と nav2 の時計は、`use_sim_time` の両側で合わせること。**
+`isaac_raspicat.py` は `--use-sim-time` を付けたときだけシム時間で刻印し、既定
+(付けない = ハーネスの既定) では `IsaacReadSystemTime` に切り替える。`/clock` を
+出すのも `--use-sim-time` のときだけなので、購読側が合わせられる先もそのときだけ
+シム時間になる。
+
+ここを取り違えると**エラーも警告も出ないまま自己位置だけが壊れる**。2026-08-20 に
+踏んだときの実測は、`/scan_raw` の stamp が 767 秒 (Isaac の起動からの秒) に対して
+コンテナのウォールクロックが 1787197524 で、全メッセージが 56 年前扱い。TF の引きが
+軒並み extrapolation で落ち、`scan_to_scan_filter_chain` が `/scan` を出さなくなり、
+VIOLA が真値から 2.6m ずれたまま経路を引いて機体が壁へ向かった。**`/scan_raw` `/odom`
+`/tf` は全部出続けている**ので、症状はプランナかローカライザの不調に見える。
+
+見分けかたは stamp をウォールクロックと突き合わせるだけ:
+
+```bash
+date +%s
+ros2 topic echo --once --field header /scan_raw     # sec が桁違いに小さければこれ
+```
+
+**RTX LiDAR の helper だけは `timeStamp` 入力を持たず自分で打つ**ので、
+`ROS2RtxLidarHelper.inputs:useSystemTime` を別に立てている。ここだけ漏らすと
+`/odom` と `/tf` はウォールクロック、`/scan_raw` だけシム時間という**いちばん
+分かりにくい形**になる。
+
+### Isaac を立て直さずにケースを回さないこと
+
+`nav_container.sh` は `/initialpose` に `START_X` / `START_Y` / `START_YAW`
+(= Isaac のスポーン姿勢) を撒く。**Isaac を立て直さずに 2 回目を回すと、ロボットは
+前回の走行の終了位置に残っているのに種はスポーン姿勢のまま**なので、自己位置が
+最初からずれた測定になる。エラーは出ない。
+
+Isaac の odom はスポーン姿勢が原点なので、`nav_container.sh` は起動時に odom が
+原点付近にあるかを見て、離れていれば exit 5 で止まる (承知の上なら
+`ALLOW_STALE_POSE=1`)。`run_isaac_case.sh` から回すぶんには毎回 Isaac を起動するので
+当たらない。
+
 ## 必要なもの
 
 - [uv](https://docs.astral.sh/uv/) (ホスト側。すべての Python はこれ経由で動かす)
@@ -305,11 +344,13 @@ $C commit wsbuild daifuku-autonomous:humble-amd64 && $C rm -f wsbuild
 >
 > * 実行ビットが無い → `executable 'system_monitor.py' not found on the
 >   libexec directory` (symlink は在るのに「無い」と言われる)
-> * シェバンが CRLF → 起動して **exit code 127** (`python3` を探しに行く)
+> * シェバンが CRLF → 起動して **exit code 127** (`python3
+` を探しに行く)
 >
 > ```bash
 > LIST=$(git ls-files -s | awk '$1=="100755"{print $4}' | grep '^src/' | sed 's|^src/||')
-> $C exec wsbuild bash -lc "cd /opt/ros_ws/src && for f in $LIST; do >     sed -i 's/$//' \"$f\"; chmod +x \"$f\"; done"
+> $C exec wsbuild bash -lc "cd /opt/ros_ws/src && for f in $LIST; do >     sed -i 's/
+$//' \"$f\"; chmod +x \"$f\"; done"
 > ```
 
 ## 手順
