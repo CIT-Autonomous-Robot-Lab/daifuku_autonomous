@@ -170,8 +170,9 @@ dhcp=false
 #!/bin/sh
 [ "$(wslinfo --networking-mode 2>/dev/null)" = "bridged" ] || exit 0
 ip link set eth0 up
-ip -4 -o addr show dev eth0 | grep -q ' inet ' && exit 0
-ip addr replace 192.168.1.4/24 dev eth0
+ip -4 -o addr show dev eth0 | grep -q ' inet ' || ip addr replace 192.168.1.4/24 dev eth0
+# 既定経路はWindowsホストへ向ける（下の「bridgedのまま外に出る」）
+ip route replace default via 192.168.1.3 dev eth0
 ```
 
 機体側の`fastdds_udp_whitelist.xml`はループバックとロボットLANのロケータだけを広告
@@ -180,14 +181,45 @@ ip addr replace 192.168.1.4/24 dev eth0
 
 注意点が3つあります。
 
-- **bridgedのあいだWSLは外部ネットワークへ出られません**（このセグメントに既定経路が
-  無いため）。aptやgitを使うときは上の3行を外してNATに戻します。
+- **LANケーブルを抜いて持ち歩くときはNATに戻します。** 外部スイッチの上流が消えると
+  bridgedのWSLは無通信になります。逆に挿さっているあいだは、次節のとおりホストが
+  中継するので戻す必要はありません。
 - **`.wslconfig`は全ディストロ共通**です。適用には`wsl --shutdown`が必要で、
   `wsl --terminate <distro>`ではVMが動き続けるため`networkingMode`は変わりません
   （`[boot] command`の再実行には使えます）。
 - **`.wslconfig`はVMが起動するたびに読まれます。** アイドルタイムアウトや最後の
   ディストロの終了でVMが落ちれば、`wsl --shutdown`を明示しなくても次の起動で反映
   されます。編集した時点で意図しないタイミングの切り替わりが起こり得ます。
+
+### bridgedのまま外に出る
+
+このセグメントには本物のゲートウェイが無いので、素のbridgedではWSLから外部ネット
+ワークへ出られません（aptやgitのたびにNATへ戻す、という運用になります）。**Windows
+ホストをこのセグメントのゲートウェイに仕立てると、戻さずに済みます。** 管理者権限の
+PowerShellで3つ、いずれも再起動後も残ります。
+
+```powershell
+Set-NetIPInterface -InterfaceAlias 'vEthernet (RasPiCat External)' -AddressFamily IPv4 -Forwarding Enabled
+Set-NetIPInterface -InterfaceAlias 'Wi-Fi' -AddressFamily IPv4 -Forwarding Enabled
+New-NetNat -Name RobotLanNAT -InternalIPInterfaceAddressPrefix 192.168.1.0/24
+```
+
+`Wi-Fi`は外向きのインタフェース名に読み替えます。WSL側は上のスクリプトが既定経路を
+`192.168.1.3`へ向けます。ロボットLAN内の通信はNATを通らないので、DDSには影響しません。
+
+**DNSは別に塞ぐ必要があります。** bridgedではWSLが`/mnt/wsl/resolv.conf`を生成しない
+ため`/etc/resolv.conf`がリンク切れのままになり、**`ping 8.8.8.8`は通るのに名前解決だけが
+落ちます**（`curl: (6) Could not resolve host`）。`/etc/wsl.conf`に
+`[network] generateResolvConf=false`を足し、`/etc/resolv.conf`を実ファイルで置きます。
+ホストのDNSを写すとWi-Fiを移ったときに古いまま残るので、公開リゾルバを書いておくのが
+確実です。**この2つはディストロごと**です（eth0と既定経路はVM共通なので、他の
+ディストロは経路だけ通って名前解決だけが落ちます）。企業ネットワーク越しだと
+外向きの53番が塞がれていることがあり、そのときも同じ症状になります。
+
+```
+nameserver 1.1.1.1
+nameserver 8.8.8.8
+```
 
 つながったら、RVizは`tools/rviz.sh`（引数なしで`navigation.rviz`、`mapping`で地図作成用）
 で立てます。機体側のスタックはPiのDockerが持っているので、WSLで建てるのはRVizの
