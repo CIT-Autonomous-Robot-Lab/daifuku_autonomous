@@ -45,8 +45,11 @@ nav2 側の構成・制約・キャリブレーションはそのまま引き継
 ## 動作確認の状態
 
 **どこまで実測で確かめたかを明示しておく**。2026-08-20 に RTX 4060 Ti 16GB /
-Windows 11 の機体で pip 版 (6.0.1) を初めて実際に動かし、Isaac 単体で
-`/scan_raw` を出すところまで通した (nav2 と繋いだ通しはまだ)。それ以前の記述は
+Windows 11 の機体で pip 版 (6.0.1) を初めて実際に動かし、**Isaac と nav2 を DDS で
+繋いだ通しまで到達した**（`.wslconfig` の `networkingMode=mirrored` と
+`container/make_fastdds_mirrored.sh` が要る。下の「Isaac と nav2 を繋ぐ」）。
+**ただしゴールには届いていない** —— 同梱 LiDAR プロファイルの走査諸元が実機と
+違うため、VIOLA の自己位置が 2 分ほどで見失う（下の表）。それ以前の記述は
 GPU の無い開発機 (AMD Radeon 780M) で書いたもの。
 
 | ファイル | 状態 |
@@ -56,9 +59,9 @@ GPU の無い開発機 (AMD Radeon 780M) で書いたもの。
 | `pyproject.toml` / `uv.lock` | **実測検証済み**。`uv lock` / `uv sync` / `uv run map-to-usd` / `uv run rtf-gate` の成功を確認 |
 | extra `isaac` (pip 版 Isaac Sim 6.0.1) | **実測検証済み** (2026-08-20)。`uv sync --extra isaac` で 147 パッケージが入り、Kit が起動することを確認 (venv 実測 2.2GB + extscache)。**`all` だけでは起動しない**ことが分かったので `all,extscache` に直した (下の「Isaac Sim 6.0 で変わったところ」) |
 | `src/daifuku_sim/configs/*.json` | **6.0 では使えないことが確定** (2026-08-20 実測)。JSON を読む機構そのものが無くなったので、6.0 では `_BUNDLED_PROFILE` の同梱プロファイルで代用する。**走査諸元は実機と違う**ので、観測数に依存する評価をこの構成で読まないこと。4.x / 5.x 向けの JSON 経路は残してあるが、そちらは**未検証のまま** |
-| `src/daifuku_sim/isaac_raspicat.py` | **実測検証済み** (2026-08-20、6.0.1 / `--lidar 2d` / `--headless`)。world 読み込み → URDF 取り込み → RTX LiDAR → ROS 2 グラフ → `/scan_raw` の発行まで通り、`--rtf-report` の出力が `rtf-gate` を PASS する。**未検証は `--lidar mid360` と `--publish-link-tf isaac` の 2 経路**、および ROS 2 側で実際にトピックを受けるところ |
+| `src/daifuku_sim/isaac_raspicat.py` | **実測検証済み** (2026-08-20、6.0.1 / `--lidar 2d` / `--headless`)。world 読み込み → URDF 取り込み → RTX LiDAR → ROS 2 グラフ → `/scan_raw` `/odom` `/tf` の発行、**および `/cmd_vel` を受けて実際に走ること**まで通り（手投げの `linear.x=0.2` で 20 秒 1.8m 前進、`--rtf-report` は `rtf-gate` を PASS）。同日に articulation root と車輪ドライブ damping の 2 件を直した（上の「`/cmd_vel` が届いているのに車輪が回らない失敗が 2 つある」）。**未検証は `--lidar mid360` と `--publish-link-tf isaac` の 2 経路** |
 | `scripts/run_pi4_sim.ps1` / `container/run_case.sh` / `container/fake_robot.py` / `container/probe.py` | **実測検証済み** (2026-08-20、Windows + podman/WSL、amd64)。`LOCALIZATION=vi` で `PROBE_SUMMARY {"result": "SUCCEEDED", "first_plan_s": 6.8, "elapsed_s": 19.2}`、`vi_planner` peak RSS 820MB / cgroup peak 1.08GB (上限 3GB、OOM 0)、throttle 24.1s / 2457 回。プロセス死なし |
-| `scripts/run_isaac_case.sh` / `container/nav_container.sh` | 構文チェックのみ。**未実行**。Isaac 側 (Windows) と nav2 側 (WSL の podman) が別のネットワーク名前空間に居るので、この機体では `--network host` が噛み合わず DDS が通らない。README 冒頭の「同じマシンに置くこと」は Linux ホスト前提 |
+| `scripts/run_isaac_case.sh` / `container/nav_container.sh` | **通しで実行した** (2026-08-20、Windows + WSL の podman。`run_isaac_case.sh` 自体は Linux 向けのままなので、コンテナ側は同じ env を並べて手で叩いた)。Isaac の `/scan_raw` `/odom` `/tf` → nav2 → `/cmd_vel` → Isaac の往復が成立し、ゴールを受理して VI が 10.1 秒で解き、`cmd_vel` 4554 通で機体が走る。**結果は `TIMEOUT`** —— `distance_remaining` 6.02 → 5.43 まで進んだところで 121.8 秒で feedback が止まる（VIOLA が「lost → pose withheld」に入る）。**同梱 LiDAR プロファイルの走査諸元が実機と違う**のが疑わしいが切り分けは未了。`vi_planner` peak RSS 957MB / cgroup peak 1.30GB (上限 3GB、OOM 0)、throttle 939s / 108541 回 |
 | `lidar_bringup.launch.py` / `robot_bringup.launch.py` / `navigation.launch.py` の変更 | 構文チェックのみ。既定値は現行のままで実機の挙動は変えていない |
 
 最初に動かすときは、下の「立ち上げ順序」に従って**段階的に**確認すること。
@@ -220,6 +223,21 @@ win_amd64 の 3 つが lock に入っている。
 > `translations` は**ローカル系**という混在。原点に置いたままでも 2m の壁を
 > 撃つ限りもっともらしいスキャンが返るので、**帯だけがずれても気づけない**。
 
+> **`/cmd_vel` が届いているのに車輪が回らない失敗が 2 つある。** どちらも
+> エラーも警告も出ず、`/scan_raw` も `/odom` も `/tf` も正常に出続けるので、
+> 症状は「nav2 がゴールに近づかない」だけになり、原因がプランナや
+> ローカライザに見える (2026-08-20 に両方踏んだ)。
+> **(1) `IsaacArticulationController` に渡すのは articulation root の prim。**
+> 6.0 の URDF Importer は root を `<inertial>` を持つ最初のリンク
+> (`<robot_prim>/Geometry/base_footprint/base_link`) に置くので、`--robot-prim` の
+> Xform を渡すと掴めない。`articulation_root()` が探して渡す。
+> **(2) 車輪ジョイントの角度ドライブは damping を入れないと力を出さない。**
+> URDF に `<dynamics damping=...>` が無いと Importer は damping=0 / stiffness=0 に
+> するので、速度目標を与えても 1 N も出ない。`set_wheel_drives()` が
+> `--wheel-drive-damping` (既定 1e4) を入れる。stiffness は 0 のまま
+> (0 でないと位置追従になって車輪が原点へ戻ろうとする)。キャスタは触らない。
+> 切り分けは手で `/cmd_vel` を投げて `/odom` の `position.x` が動くかを見るのが早い。
+
 6 番は `PUBLISH_LINK_TF=isaac` のときしか通らない (既定は `rsp`)。
 起動時に `[isaac_raspicat] rtx lidar api -> ...` と
 `[isaac_raspicat] link TF: ...` をログに出すので、**どちらの経路を選んだかは
@@ -361,6 +379,15 @@ xacro $(ros2 pkg prefix raspicat_description)/share/raspicat_description/urdf/ra
 `isaac_raspicat.py` に `--urdf /tmp/raspicat_plain.urdf` を渡せばその場で取り込む。
 毎回変換したくなければ Isaac の URDF Importer で一度 USD にして `--robot` に渡す。
 
+**`<collision>` と `<inertial>` を落とした URDF を渡さないこと。** 手で書き写した
+リンク定義や、visual だけを抜いたものを渡すと、**ロボットは床をすり抜けて落ち続ける**。
+Isaac は起動もするしトピックも全部出るので（`/scan_raw` も `/odom` も `/tf` も
+出続ける）、症状は「nav2 がゴールに近づかない」だけになり、原因が
+プランナやローカライザに見える。見分けかたは `/odom` の `position.z` —
+落ちていれば秒単位で大きな負の値になる（2026-08-20 に踏んだときは
+`z = -2027133`）。`xacro` を通したものは 5 リンクぶんの `<collision>` と
+`<inertial>` を持つ（`grep -c '<collision'` が 5）。
+
 ### 3. 立ち上げ順序 (最初はここを段階的に)
 
 いきなり `run_isaac_case.sh` を叩かず、まず Isaac 単体を GUI 付きで上げて
@@ -427,7 +454,7 @@ NO_LIMITS=1 CONTAINER=isaacsim_full bash simulator/scripts/run_isaac_case.sh nol
 | `PLANNER` | `vi` | `vi` / `navfn` |
 | `LOCAL_PLANNER` | `auto` | `auto` / `nav2` / `vi` |
 | `NAV2` | `auto` | `auto` / `true` / `false`。**ここだけ launch の既定（`false`）と違う** — 下記 |
-| `LOCALIZATION` | `emcl2` | `emcl2` / `amcl` |
+| `LOCALIZATION` | `vi` | `vi` / `emcl2` / `amcl`。**launch の既定 (`emcl2`) と違う** — 既定の `map_19f` は overrides が `vi_planner` の `localizer` を `belief` にしているので、`emcl2` だと推定器が 2 つになって起動時に止まる。`map_tsudanuma` では逆に `emcl2` へ戻すこと |
 | `QUOTA` / `PERIOD` | `6000` / `10000` | cgroup の cpu.max (0.6 コア) |
 | `MEMORY` | `3g` | Pi4 4GB から OS + コンテナ外ノード分を引いた値 |
 | `USE_SIM_TIME` | `false` | 下記「RTF」を読むこと |
@@ -445,6 +472,82 @@ NO_LIMITS=1 CONTAINER=isaacsim_full bash simulator/scripts/run_isaac_case.sh nol
 してある。**したがって `PLANNER=vi` のケースは BT 抜きで測ることになる** — `bt_navigator`
 込みで測りたいとき、および `docs/pi4_sim.md` の過去の記録と条件をそろえたいときは
 `NAV2=true` を明示すること。
+
+### Isaac と nav2 を繋ぐ (Windows + WSL)
+
+**このハーネスは本来 Linux ホスト前提**で、Isaac も nav2 コンテナも同じカーネルの
+上に居ることを当てにしている（`--network host --ipc host` で DDS がそのまま通る）。
+Windows で回すと Isaac は Windows のプロセス、コンテナは WSL2 の VM の中なので、
+そのままでは**エラーも出ないまま一度もトピックが見えない**。以下は 2026-08-20 に
+Windows 11 + podman machine (WSL2) で通したときの手順。
+
+**1. `%USERPROFILE%\.wslconfig` でネットワーク名前空間を共有する。**
+
+```ini
+[wsl2]
+networkingMode=mirrored
+firewall=false          ; DDS のディスカバリが Hyper-V ファイアウォールに黙って落とされる
+dnsTunneling=true
+
+[experimental]
+hostAddressLoopback=true ; Linux -> Windows の 127.0.0.1
+```
+
+（実測で通したのはこの 4 つを入れた状態。`firewall` と `hostAddressLoopback` の
+どちらが効いているかまでは切り分けていない。）
+
+`wsl --shutdown` してから `podman machine start`。効いていれば、コンテナの中から
+Windows 側の NIC（Tailscale や LAN のアドレス）がそのまま見える。
+
+罠が 1 つ。**`podman machine start` が `machine is not listening on ssh port` で
+落ちることがある。** mirrored では Windows と Linux でポート空間が共有されるので、
+前回の `win-sshproxy.exe` が握ったままだと machine 内の sshd が
+`Bind to port <n> failed: Address already in use` で上がれない。残っている
+`win-sshproxy.exe` を落としてから start し直す。
+
+**2. Fast DDS のプロファイルを両側に噛ませる。** mirrored にしただけでは繋がらない。
+
+```bash
+bash simulator/container/make_fastdds_mirrored.sh 91 > /tmp/fastdds_mirrored.xml
+export FASTRTPS_DEFAULT_PROFILES_FILE=/tmp/fastdds_mirrored.xml   # Isaac 側
+```
+
+`run_isaac_case.sh` はこの変数が立っていれば**同じファイルをコンテナへも配って**
+nav2 側にも渡す（立っていなければ何もしない = Linux ホストでは従来どおり）。
+理由 3 つは生成器の冒頭にある。要点だけ:
+
+* **SHM を入れると discovery が黙って止まる。** Windows 側の Isaac は DDS の
+  ポートを 1 つも開かないまま上がり、コンテナ側は同じコンテナ内の 2 ノードすら
+  見つけられない。
+* **マルチキャストが一度も届かない。** ユニキャストのピアをポートまで書いて
+  並べる（ポートを書かない locator は participant 0〜4 にしか広がらず、nav2 には
+  足りない）。ポートがドメイン依存なので静的な XML にできない。
+* **UDP の `maxMessageSize` を 1400 に絞る。** 既定のままだと `LaserScan` が IP
+  フラグメントになって Windows → WSL の境界で全部落ちる。`/odom` や `/tf` は
+  70Hz で流れるので、**「繋がっているのに `/scan_raw` だけ来ない」**という形で
+  失敗する。
+
+**3. 測定値としての限界。** SHM を落とした結果、**コンテナ内のノード同士も UDP に
+なる**ので、pi4_sim ハーネス（`container/fastdds_local.xml`、SHM 併用）とは通信
+経路が違う。Pi4 の再現性を見るのが目的ならあちらを使うこと。ここで測れるのは
+「Isaac の環境と繋いだときに nav2 が何をするか」であって、DDS の経路まで含めた
+実機再現ではない。
+
+**4. `ros2` のデーモンを立てておくこと**（`nav_container.sh` / `run_case.sh` は
+やる）。ros2cli は毎回 127.0.0.1 のデーモンへ繋ぎに行き、居なければ普通は
+すぐ諦めるが、mirrored だと**握られたまま 2 分待つ**。`timeout 5 ros2 topic list`
+のような呼び出しが全部空を返し、Isaac が正しく喋っていても「トピックが見えない」
+で止まる。
+
+**pi4_sim ハーネス (`run_pi4_sim.ps1`) はこの設定に巻き込まれない。** あちらの
+コンテナは `--network host` を使わず自前のネットワーク名前空間に居るので、
+マルチキャストも SHM もそのまま通る（`.wslconfig` を mirrored にした状態で
+`SUCCEEDED` / 19.2 秒を再確認した）。
+
+なお `run_isaac_case.sh` 自体は Linux 向けのまま。Git Bash から叩くと MSYS が
+`/opt/...` を `C:/Program Files/Git/opt/...` に化かすので（`--odom-topic /odom` が
+`/C:/Program Files/Git/odom` になる）、Windows では `MSYS_NO_PATHCONV=1` を置いて
+手で並べるか、WSL 側の shell から回すこと。
 
 ## RTF — このハーネスの成立条件
 
@@ -636,5 +739,6 @@ free の地図で測った値で、しきい値を直すと navfn の問題規�
 | `container/fake_robot.py` | `python3` (コンテナ内) | 差動二輪 + 2D LiDAR の疑似ロボット (地図をレイキャスト) |
 | `container/probe.py` | `python3` (コンテナ内) | ゴール投入と `/plan` `/cmd_vel` の計数、RSS / cgroup メモリのサンプリング。**両ハーネスで共有** |
 | `container/fastdds_local.xml` | — | 実機 DDS プロファイルのローカル版 (SHM + ループバック UDP) |
+| `container/make_fastdds_mirrored.sh` | `bash` (ホスト) | Windows + WSL (`networkingMode=mirrored`) で Isaac とコンテナを繋ぐ DDS プロファイルを吐く。**両側に同じものを渡す**。上の「Isaac と nav2 を繋ぐ」 |
 | `tests/verify_usda.py` | `uv run python tests/...` | 生成 USD を地図グリッドに焼き戻して一致を検算 (主に y 反転の検出) |
 | `tests/verify_map_thresholds.py` | `uv run python tests/...` | 地図の `free_thresh` が未観測画素 205 を free に落としていないかを検算。`map_saver_cli` の既定 0.25 だと落ちる |

@@ -82,6 +82,12 @@ cleanup_ros() {
 }
 cleanup_ros
 ros2 daemon stop >/dev/null 2>&1
+# **止めたら必ず立て直す。** ros2cli は毎回 127.0.0.1 のデーモンへ繋ぎに行き、
+# 居なければ ECONNREFUSED ですぐ諦める…… のは NAT の話。.wslconfig が
+# networkingMode=mirrored だと Linux の 127.0.0.1 は Windows 側にも向くので、
+# 繋ぎ先が居ないと**握られたまま 2 分待つ**。下の `timeout 5 ros2 topic list` は
+# 全部空を返し、Isaac が正しく喋っていても「トピックが見えない」で exit 4 になる。
+ros2 daemon start >/dev/null 2>&1
 
 SHARE=/opt/ros_ws/install/share/daifuku_stack
 # overrides は daifuku_config の share。**maps/ を持つ daifuku_stack とは置き場が違う**

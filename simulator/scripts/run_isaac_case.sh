@@ -228,9 +228,12 @@ if ! $ENGINE ps -a --format '{{.Names}}' | grep -qx "$CONTAINER"; then
     # --network host / --ipc host は Isaac (ホスト側プロセス) と DDS で繋ぐため。
     # ipc を共有しないと Fast DDS の共有メモリトランスポートが通らず、
     # ディスカバリだけ成功して**データが流れない**という分かりにくい形で失敗する。
+    # **--shm-size は付けないこと。** podman 6 は --ipc host と併用すると
+    # `cannot set shmsize when running in the {host } IPC Namespace` で起動を拒む
+    # (ipc を共有した時点で /dev/shm はホストのものなので、そもそも意味がない)。
     $ENGINE run -d --name "$CONTAINER" \
         "${limits[@]}" \
-        --network host --ipc host --shm-size 512m \
+        --network host --ipc host \
         -e ROS_DOMAIN_ID="$DOMAIN_ID" \
         -e ROS_LOCALHOST_ONLY=0 \
         -e RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
@@ -261,7 +264,20 @@ $ENGINE exec "$CONTAINER" bash -lc \
     'for f in /opt/sim/*.py /opt/sim/*.sh; do [ -e "$f" ] && sed -i "s/\r$//" "$f"; done
      chmod +x /opt/sim/*.sh'
 
+# 呼び出し側が Fast DDS のプロファイルを指しているなら、**同じものを**コンテナへも
+# 配って両側で使う。Windows + WSL (networkingMode=mirrored) で回すときは
+# container/fastdds_mirrored.xml がこれに当たり、片側だけに掛けても繋がらない。
+# Linux ホストで同一マシンに置く分には不要 (未設定なら何もしない)。
+dds_env=()
+if [ -n "$FASTRTPS_DEFAULT_PROFILES_FILE" ]; then
+    $ENGINE exec "$CONTAINER" bash -lc "mkdir -p /etc/fastdds"
+    $ENGINE cp "$FASTRTPS_DEFAULT_PROFILES_FILE" "$CONTAINER:/etc/fastdds/profiles.xml"
+    dds_env=(-e FASTRTPS_DEFAULT_PROFILES_FILE=/etc/fastdds/profiles.xml)
+    echo "  dds profile: $FASTRTPS_DEFAULT_PROFILES_FILE -> /etc/fastdds/profiles.xml"
+fi
+
 $ENGINE exec \
+    "${dds_env[@]}" \
     -e CASE="$CASE" \
     -e LIDAR="$LIDAR" \
     -e USE_SIM_TIME="$USE_SIM_TIME" \
@@ -282,6 +298,7 @@ $ENGINE exec \
     -e URDF="${CONTAINER_URDF:-/tmp/raspicat_plain.urdf}" \
     -e GOAL_X="${GOAL_X:-4.28}" -e GOAL_Y="${GOAL_Y:--2.92}" \
     -e GOAL_YAW_DEG="${GOAL_YAW_DEG:--24}" \
+    -e START_X="$START_X" -e START_Y="$START_Y" -e START_YAW="$START_YAW" \
     -e SETTLE="${SETTLE:-45}" -e TIMEOUT="${TIMEOUT:-300}" \
     "$CONTAINER" bash /opt/sim/nav_container.sh 2>&1 | tee "$RUN/nav_side.log"
 nav_rc=${PIPESTATUS[0]}

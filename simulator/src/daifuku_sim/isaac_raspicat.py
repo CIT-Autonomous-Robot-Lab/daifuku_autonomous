@@ -155,6 +155,9 @@ def parse_args():
                          "(既定は raspicat_description の wheel_tread)")
     ap.add_argument("--left-wheel-joint", default="left_wheel_joint")
     ap.add_argument("--right-wheel-joint", default="right_wheel_joint")
+    ap.add_argument("--wheel-drive-damping", type=float, default=1.0e4,
+                    help="車輪ジョイントの角度ドライブの damping。"
+                         "0 だと速度指令が力を生まない (下の set_wheel_drives)")
     ap.add_argument("--max-linear", type=float, default=0.5, help="[m/s]")
     ap.add_argument("--max-angular", type=float, default=1.5, help="[rad/s]")
 
@@ -195,7 +198,7 @@ import omni.graph.core as og  # noqa: E402
 import omni.usd  # noqa: E402
 from isaacsim.core.api import SimulationContext  # noqa: E402
 from isaacsim.core.utils.extensions import enable_extension  # noqa: E402
-from pxr import Gf, UsdGeom  # noqa: E402
+from pxr import Gf, Usd, UsdGeom, UsdPhysics  # noqa: E402
 
 
 # 拡張名の解決
@@ -395,7 +398,58 @@ def add_robot(stage, args):
     xform.ClearXformOpOrder()
     xform.AddTranslateOp().Set(Gf.Vec3d(args.x, args.y, args.z))
     xform.AddRotateXYZOp().Set(Gf.Vec3d(0.0, 0.0, math.degrees(args.yaw)))
+
+    set_wheel_drives(stage, prim_path,
+                     (args.left_wheel_joint, args.right_wheel_joint),
+                     args.wheel_drive_damping)
     return prim_path
+
+
+def articulation_root(stage, robot_prim):
+    """`IsaacArticulationController` に渡す prim を探す。
+
+    渡すのは **articulation root を持つ prim** であって、`--robot-prim` の Xform では
+    ない。6.0 の URDF Importer は root を `<inertial>` を持つ最初のリンク
+    (raspicat なら `<robot_prim>/Geometry/base_footprint/base_link`) に置くので、
+    Xform を渡すと**掴めない**。掴めなくても**エラーも警告も出ず、ただ車輪が
+    回らない** —— `/cmd_vel` は届き、`/odom` も `/tf` も出続けるので、
+    症状は「nav2 がゴールに近づかない」だけになる (2026-08-20 に踏んだ)。
+    """
+    prim = stage.GetPrimAtPath(robot_prim)
+    for p in Usd.PrimRange(prim):
+        if "PhysicsArticulationRootAPI" in p.GetAppliedSchemas():
+            return str(p.GetPath())
+    print(f"[isaac_raspicat] warn: articulation root が見つからない ({robot_prim} 以下)。"
+          " そのまま渡すが、車輪は回らない見込み")
+    return robot_prim
+
+
+def set_wheel_drives(stage, robot_prim, joint_names, damping):
+    """車輪ジョイントの角度ドライブを速度追従にする。
+
+    URDF に `<dynamics damping=...>` が無いと Importer は damping=0 / stiffness=0 で
+    入れる。この状態では速度目標をいくら与えても**力が 1 N も出ない**ので、
+    上の articulation root と同じく「届いているのに動かない」になる。
+    stiffness は 0 のまま (0 でないと位置追従になり、車輪が原点へ戻ろうとする)。
+    キャスタは触らない —— あちらは damping 0 = 自由回転が正しい。
+    """
+    hit = []
+    for p in Usd.PrimRange(stage.GetPrimAtPath(robot_prim)):
+        if p.GetName() not in joint_names:
+            continue
+        drive = UsdPhysics.DriveAPI.Get(p, "angular")
+        if not drive:
+            drive = UsdPhysics.DriveAPI.Apply(p, "angular")
+        drive.CreateTypeAttr().Set("force")
+        drive.CreateStiffnessAttr().Set(0.0)
+        drive.CreateDampingAttr().Set(damping)
+        hit.append(p.GetName())
+    missing = [j for j in joint_names if j not in hit]
+    if missing:
+        raise SystemExit(
+            f"車輪ジョイントが見つからない: {missing} ({robot_prim} 以下)。"
+            " --left-wheel-joint / --right-wheel-joint を URDF に合わせること")
+    print(f"[isaac_raspicat] wheel drives: {hit} damping={damping}")
 
 
 def add_rtx_lidar(stage, args, robot_prim):
@@ -676,7 +730,9 @@ def build_ros_graph(args, robot_prim, lidar_path):
         ("DiffDrive.inputs:maxLinearSpeed", args.max_linear),
         ("DiffDrive.inputs:maxAngularSpeed", args.max_angular),
 
-        ("Articulation.inputs:targetPrim", [robot_prim]),
+        # **Xform ではなく articulation root を渡すこと** (articulation_root の説明)。
+        ("Articulation.inputs:targetPrim",
+         [articulation_root(omni.usd.get_context().get_stage(), robot_prim)]),
         ("Articulation.inputs:jointNames",
          [args.left_wheel_joint, args.right_wheel_joint]),
 

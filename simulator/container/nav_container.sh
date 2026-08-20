@@ -72,6 +72,12 @@ cleanup_ros() {
 }
 cleanup_ros
 ros2 daemon stop >/dev/null 2>&1
+# **止めたら必ず立て直す。** ros2cli は毎回 127.0.0.1 のデーモンへ繋ぎに行き、
+# 居なければ ECONNREFUSED ですぐ諦める…… のは NAT の話。.wslconfig が
+# networkingMode=mirrored だと Linux の 127.0.0.1 は Windows 側にも向くので、
+# 繋ぎ先が居ないと**握られたまま 2 分待つ**。下の `timeout 5 ros2 topic list` は
+# 全部空を返し、Isaac が正しく喋っていても「トピックが見えない」で exit 4 になる。
+ros2 daemon start >/dev/null 2>&1
 
 SHARE=/opt/ros_ws/install/share/daifuku_stack
 # overrides は daifuku_config の share。**maps/ を持つ daifuku_stack とは置き場が違う**
@@ -317,6 +323,25 @@ NAV_PID=$!
     sleep 1
   done ) >"$RUN/load.log" 2>&1 &
 MON_PID=$!
+
+# **自己位置の種を撒く。** Isaac はロボットを既知の姿勢
+# (run_isaac_case.sh の START_X / START_Y / START_YAW) にスポーンさせるので、
+# 同じ姿勢を /initialpose へ流す。localization:=vi (VIOLA) は種が無いと
+# 地図全域からの大域初期化になり、**収まらないまま「pose withheld」で
+# 黙る** —— そのとき nav2 のフィードバックは distance_remaining が
+# 初期値のまま動かず、機体だけがふらつくので、症状はプランナの不調に見える
+# (2026-08-20 に踏んだ)。emcl2 でも同じトピックで効く。
+#
+# 購読側が上がるまで待てないので、15 秒後から 1Hz x 5 回まく。
+if [ -n "$START_X" ] || [ -n "$START_Y" ] || [ -n "$START_YAW" ]; then
+    ( sleep 15
+      read -r qz qw <<EOF
+$(python3 -c "import math,sys; y=float(sys.argv[1]); print(math.sin(y/2), math.cos(y/2))" "${START_YAW:-0}")
+EOF
+      ros2 topic pub -t 5 -r 1 /initialpose geometry_msgs/PoseWithCovarianceStamped         "{header: {frame_id: map}, pose: {pose: {position: {x: ${START_X:-0}, y: ${START_Y:-0}, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: $qz, w: $qw}}}}"
+    ) >"$RUN/initialpose.log" 2>&1 &
+    echo "  initialpose seed: (${START_X:-0}, ${START_Y:-0}, ${START_YAW:-0} rad) -> /initialpose"
+fi
 
 # probe.py は 2 つのハーネスで共有する (ゴール投入と /plan /cmd_vel の計数)。
 # 配り先の /opt/sim は run_isaac_case.sh / run_pi4_sim.ps1 の両方で共通。
