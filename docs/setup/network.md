@@ -92,9 +92,9 @@ firewall=true
 
 | 機器 | 固定IP |
 |---|---|
-| Windows / Linuxホスト | `192.168.1.3/24` |
+| Windows / Linuxホスト（このセグメントのゲートウェイ） | `192.168.1.1/24` |
 | Podman Hyper-V VM | `192.168.1.2/24` |
-| WSL2（bridged、[下記](#wsl2から直接つなぐ)） | `192.168.1.4/24` |
+| WSL2（bridged、[下記](#wsl2から直接つなぐ)） | `192.168.1.3/24` |
 | Raspberry Pi Cat | `192.168.1.50/24` |
 | Livox Mid-360 | `192.168.1.108/24` |
 
@@ -109,7 +109,7 @@ bash docker/dev/tools/linux/up.sh
 ```
 
 Linux側はNetworkManagerプロファイル`raspicat-docker-dev`を作り、
-`192.168.1.3/24`を設定します。終了後に戻す場合:
+`192.168.1.1/24`を設定します。終了後に戻す場合:
 
 ```bash
 bash docker/dev/tools/linux/network.sh down "$RASPICAT_ETHERNET_IF"
@@ -124,7 +124,7 @@ Windows PowerShell:
 ```
 
 Windows用スクリプトは既存のICS共有を解除し、旧`OpenDHCPServer`サービスがあれば
-停止・無効化して、ホストへ`192.168.1.3/24`を設定します。
+停止・無効化して、ホストへ`192.168.1.1/24`を設定します。
 固定IPを解除する場合は管理者PowerShellで実行します。
 
 ```powershell
@@ -137,9 +137,10 @@ Windows用スクリプトは既存のICS共有を解除し、旧`OpenDHCPServer`
 ## WSL2から直接つなぐ
 
 WSL2の中でROS 2ノード（RVizなど）を動かして機体のトピックを見る場合、既定のNATでは
-接続できません。WSLの`eth0`は`172.31.x.x`で、Windowsホストが`192.168.1.3/24`を持つため
+接続できません。WSLの`eth0`は`172.31.x.x`で、Windowsホストが`192.168.1.1/24`を持つため
 **pingとsshはSNATで通ります**。しかしDDSの参加者は自分のロケータとして`172.31.x.x`を
-広告するため、ゲートウェイの無いロボットLANからは返せません。`ROS_STATIC_PEERS`や初期
+広告しますが、機体のeth0には既定経路が無いので返せません（ホストの`.1`はWSLと
+Windows側のためのゲートウェイで、機体はそちらを向いていません）。`ROS_STATIC_PEERS`や初期
 ピアを両側に書いても解決しません。**エラーは出ず、トピックだけが見えない**形になります。
 
 [上記](#docker-desktop)のmirrored networkingが使えればそれで解決しますが、ホストに
@@ -170,9 +171,9 @@ dhcp=false
 #!/bin/sh
 [ "$(wslinfo --networking-mode 2>/dev/null)" = "bridged" ] || exit 0
 ip link set eth0 up
-ip -4 -o addr show dev eth0 | grep -q ' inet ' || ip addr replace 192.168.1.4/24 dev eth0
+ip -4 -o addr show dev eth0 | grep -q ' inet ' || ip addr replace 192.168.1.3/24 dev eth0
 # 既定経路はWindowsホストへ向ける（下の「bridgedのまま外に出る」）
-ip route replace default via 192.168.1.3 dev eth0
+ip route replace default via 192.168.1.1 dev eth0
 ```
 
 機体側の`fastdds_udp_whitelist.xml`はループバックとロボットLANのロケータだけを広告
@@ -205,7 +206,7 @@ New-NetNat -Name RobotLanNAT -InternalIPInterfaceAddressPrefix 192.168.1.0/24
 ```
 
 `Wi-Fi`は外向きのインタフェース名に読み替えます。WSL側は上のスクリプトが既定経路を
-`192.168.1.3`へ向けます。ロボットLAN内の通信はNATを通らないので、DDSには影響しません。
+`192.168.1.1`へ向けます。ロボットLAN内の通信はNATを通らないので、DDSには影響しません。
 
 **DNSは別に塞ぐ必要があります。** bridgedではWSLが`/mnt/wsl/resolv.conf`を生成しない
 ため`/etc/resolv.conf`がリンク切れのままになり、**`ping 8.8.8.8`は通るのに名前解決だけが

@@ -92,8 +92,11 @@ python tools\image\create_image.py all --model pi4 --device 2 --ssh-key $HOME\.s
 >
 > **ロボットLANにルータが無いなら`--gateway none`も要ります。**`--wifi-ssid`を足す
 > だけでは直りません。eth0の静的デフォルトルートはwlan0のDHCPルート（メトリック600）
-> より優先されるので、存在しない`.1`宛のまま残ると外へ出られず、`provision.sh`は
+> より優先されるので、届かない`.1`宛のまま残ると外へ出られず、`provision.sh`は
 > 「ネットワークの疎通を待つ」で足踏みしてapt・git・Dockerが全部失敗します。
+> なお`192.168.1.1`は[開発ホストのアドレス](../../docs/setup/network.md#固定ip)で、
+> そちらが上がっていて転送設定済みなら中継してくれますが、Piの初回起動時にPCが
+> つながっている保証は無いので、既定は`none`のままにしておくのが安全です。
 
 ### 3. Piを起動する
 

@@ -45,9 +45,9 @@ WSLから`tools/linux/up.sh`を実行した場合のみ、Windows側の固定IP�
 
 | 機器 | アドレス |
 |---|---|
-| Windows / Linuxホスト | `192.168.1.3/24` |
+| Windows / Linuxホスト（このセグメントのゲートウェイ） | `192.168.1.1/24` |
 | Podman Hyper-V VM | `192.168.1.2/24` |
-| WSL2（bridged。下の「Docker Desktop / WSL2」） | `192.168.1.4/24` |
+| WSL2（bridged。下の「Docker Desktop / WSL2」） | `192.168.1.3/24` |
 | Raspberry Pi Cat | `192.168.1.50/24` |
 | Livox Mid-360 | `192.168.1.108/24` |
 
@@ -94,7 +94,7 @@ bash docker/dev/tools/linux/up.sh
 `linux/up.sh`は次の順序で処理します。
 
 1. `raspicat-docker-dev`というNetworkManagerプロファイルを作成
-2. ホストを`192.168.1.3/24`に設定（DHCP/NATなし）
+2. ホストを`192.168.1.1/24`に設定（DHCP/NATなし）
 3. Dockerイメージをビルドしてコンテナを起動
 
 ```bash
@@ -120,7 +120,7 @@ Windows PowerShellから起動します。`windows/up.ps1`はPodman Hyper-V API�
 ```
 
 管理者権限の確認画面が開き、ICS/DHCP共有を解除してWindows側へ
-`192.168.1.3/24`を設定します。旧環境の`OpenDHCPServer`サービスが存在する場合は、
+`192.168.1.1/24`を設定します。旧環境の`OpenDHCPServer`サービスが存在する場合は、
 ファイルを削除せずサービスを停止・無効化します。Piは常に`192.168.1.50`です。
 
 実機はWindows側から直接確認できます。
