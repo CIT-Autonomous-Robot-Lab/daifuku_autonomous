@@ -77,7 +77,12 @@ bash tools/setup/setup_native.sh              # --jobs 1 / --no-livox / --no-vi
 ビルド時に張られるので、一度 `up`（ネイティブなら `colcon build`）を通してください。
 名前を変えたり移したりしたときは、それに加えて**古い symlink が `install/` に残ります**。
 両方あるように見えて新しいほうしか更新されないので、紛らわしければ `install/` を消して
-からビルドしてください。
+からビルドしてください。**パッケージのディレクトリごと移したときは `build/` も**です
+——`build/<pkg>/CMakeCache.txt` が移す前のソースパスを持ったままなので、`The source
+directory ... does not exist` でそのパッケージが落ち、後ろの依存パッケージごと止まります
+（Docker では build/ が名前付きボリュームに残るので `up` を通し直しても直らない。
+`docker compose run --rm --entrypoint bash workspace-build -c 'rm -rf
+/opt/ros_ws/build/<pkg> /opt/ros_ws/install/share/<pkg>'`）。
 
 `launch` の `Node(executable=...)` で立てる Python は、**git 側で実行ビットを立てて
 おくこと**（`git update-index --chmod=+x <path>`）。`install(PROGRAMS)` は本来
