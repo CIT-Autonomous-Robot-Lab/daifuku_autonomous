@@ -80,6 +80,7 @@ daifuku_stack:
       map_scale: 5                         # 既定 1 (断片は未設定): 内部だけ 0.25m/cell (5650 万状態)
       downsample_policy: "optimistic"      # 既定 conservative (断片は未設定): 保守側だと通路のセル幅が死ぬ
       action_forward_m: [0.5, -0.2, 0.0, 0.5, 0.0, 0.5]  # 断片も同じ値 (6 つとも)。これ以上は velocity_smoother の上限で頭打ち
+      action_rotation_deg: [0.0, 0.0, -40.0, -40.0, 40.0, 40.0]  # 断片 [0.0, 0.0, -30.0, -30.0, 30.0, 30.0] (ノード既定 ±20): 旋回半径 0.72m (0.8m/s 時 1.15m)。±20 は 0.8m/s で WP1 右折を曲がれなかった (2026-08-20)
       goal_margin_radius: 0.5              # 断片 0.3 [m]: ゴールセル数を 7 に保つ (セル比例。scale 5 = 0.25m/cell なので断片のままだと潰れる)
       safety_radius_penalty: 1             # 断片 30: 30 だと貪欲ロールアウトが降下できない
       max_rollout_steps: 100000            # 断片 10000: 広域では遠い start から届かない
