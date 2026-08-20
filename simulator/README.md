@@ -55,7 +55,6 @@ GPU の無い開発機 (AMD Radeon 780M) で書いたもの。
 | `src/daifuku_sim/rtf_gate.py` | **実測検証済み**。合成 RTF ログで PASS / FAIL(3) / WARN の分岐を確認 |
 | `pyproject.toml` / `uv.lock` | **実測検証済み**。`uv lock` / `uv sync` / `uv run map-to-usd` / `uv run rtf-gate` の成功を確認 |
 | extra `isaac` (pip 版 Isaac Sim 6.0.1) | **実測検証済み** (2026-08-20)。`uv sync --extra isaac` で 147 パッケージが入り、Kit が起動することを確認 (venv 実測 2.2GB + extscache)。**`all` だけでは起動しない**ことが分かったので `all,extscache` に直した (下の「Isaac Sim 6.0 で変わったところ」) |
-| `src/daifuku_sim/configs/*.json` | **6.0 では使えないことが確定** (2026-08-20 実測)。JSON を読む機構そのものが無くなったので、6.0 では `_BUNDLED_PROFILE` の同梱プロファイルで代用する。**走査諸元は実機と違う**ので、観測数に依存する評価をこの構成で読まないこと。4.x / 5.x 向けの JSON 経路は残してあるが、そちらは**未検証のまま** |
 | `src/daifuku_sim/isaac_raspicat.py` | **実測検証済み** (2026-08-20、6.0.1 / `--lidar 2d` / `--headless`)。world 読み込み → URDF 取り込み → RTX LiDAR → ROS 2 グラフ → `/scan_raw` の発行まで通り、`--rtf-report` の出力が `rtf-gate` を PASS する。**未検証は `--lidar mid360` と `--publish-link-tf isaac` の 2 経路**、および ROS 2 側で実際にトピックを受けるところ |
 | `scripts/run_pi4_sim.ps1` / `container/run_case.sh` / `container/fake_robot.py` / `container/probe.py` | **実測検証済み** (2026-08-20、Windows + podman/WSL、amd64)。`LOCALIZATION=vi` で `PROBE_SUMMARY {"result": "SUCCEEDED", "first_plan_s": 6.8, "elapsed_s": 19.2}`、`vi_planner` peak RSS 820MB / cgroup peak 1.08GB (上限 3GB、OOM 0)、throttle 24.1s / 2457 回。プロセス死なし |
 | `scripts/run_isaac_case.sh` / `container/nav_container.sh` | 構文チェックのみ。**未実行**。Isaac 側 (Windows) と nav2 側 (WSL の podman) が別のネットワーク名前空間に居るので、この機体では `--network host` が噛み合わず DDS が通らない。README 冒頭の「同じマシンに置くこと」は Linux ホスト前提 |
@@ -203,7 +202,7 @@ win_amd64 の 3 つが lock に入っている。
 | 1 | **`isaacsim[all]` に Kit の拡張本体が入らない。** `isaacsim.exp.base.kit` が要求する `isaacsim.anim.robot.schema` / `isaacsim.replicator.agent.schema` / `omni.metropolis.schema` / `omni.behavior.tree.schema` がどこにも無く、Kit が起動 2 秒で `Failed to resolve extension dependencies` で終わる。experience を替えても全部 `isaacsim.exp.base` を継承するので逃げられない | `pyproject.toml` の extra を `isaacsim[all,extscache]` に。`extscache` の 3 パッケージ (kit / kit-sdk / physics) が `isaacsim/extscache/` の 493 拡張を運ぶ。**kit 単体で 5.5 GiB** |
 | 2 | **pip 版の ROS 2 ブリッジは内蔵 Humble を使う。** 起動前に `ROS_DISTRO` / `RMW_IMPLEMENTATION` と `isaacsim.ros2.core/humble/lib` の探索パスが要り、無いと `ROS2 Bridge startup failed` で**ブリッジだけが死ぬ** (Kit は上がるのでグラフや DDS の問題に見える) | `run_isaac_case.sh` の `pip` 分岐が立てる。手で起動するときは自分で立てること (下の「立ち上げ順序」) |
 | 3 | **URDF importer の C++ インタフェース `_urdf` が廃止。** `ImportConfig()` / `acquire_urdf_interface()` / `import_robot()` が無い | `import_urdf()` が `URDFImporter` / `URDFImporterConfig` を import できたらそちらへ。6.0 は「USD ファイルに落として参照する」形なので、生成先を URDF の隣にしないこと (`package://` の解決が URDF の置き場基準のため) |
-| 4 | **RTX LiDAR がプロファイル JSON を読まなくなった。** `isaacsim.sensors.rtx.LidarRtx` (`config_file_name`) ごと消え、残る `isaacsim.sensors.experimental.rtx.Lidar.create` は `SUPPORTED_LIDAR_CONFIGS` の名前かセンサ資産の USD しか受けない。実体は `get_assets_root_path()` から引かれる。`/app/sensors/nv/lidar/profileBaseFolder` は**参照されない** | `_rtx_lidar_factory()` が「レジストリ名しか使えない API か」を返し、そうなら `_BUNDLED_PROFILE` (2d=`Example_Rotary_2D` / mid360=`Example_Solid_State`) で代用して**走査諸元が実機と違うことを警告する**。`--lidar-config` を明示したときは黙って無視せず止める |
+| 4 | **RTX LiDAR がプロファイル JSON を読まなくなった。** `isaacsim.sensors.rtx.LidarRtx` (`config_file_name`) ごと消え、残る `isaacsim.sensors.experimental.rtx.Lidar.create` は `SUPPORTED_LIDAR_CONFIGS` の名前かセンサ資産の USD しか受けない。実体は `get_assets_root_path()` から引かれる。`/app/sensors/nv/lidar/profileBaseFolder` は**参照されない** | `_BUNDLED_PROFILE` (2d=`Example_Rotary_2D` / mid360=`Example_Solid_State`) を使い、**走査諸元が実機と違うことを警告する**。JSON を渡す経路 (`configs/*.json` と `--lidar-config`) は 2026-08-20 に削除した。別のものを選ぶのは `--lidar-profile` |
 | 5 | **OmniGraph のノード型名の名前空間がノード単位で散った。** `OnPlaybackTick` は `omni.graph.action`、`IsaacCreateRenderProduct` は `isaacsim.core.nodes`、`IsaacReadIMU` は `isaacsim.sensors.physics`。`ROS2*` と残りの `Isaac*` は据え置き | `node_type()` の解決を**グループ単位からノード名ごと**に変え、`og.ObjectLookup.node_type()` で実在を照合してから使う。グループの先頭を決め打ちにすると、そのグループの他のノードが道連れで壊れる |
 | 6 | `ROS2PublishTransformTree` がプリムを自分で解決するのをやめ、`IsaacComputeTransformTree` の出力を受け取る形に | ノードレジストリに `IsaacComputeTransformTree` が在ればグラフを 2 段に組む。**ここだけは未検証** (`PUBLISH_LINK_TF=isaac` の経路) |
 
@@ -389,10 +388,8 @@ ros2 topic hz /odom
 ros2 topic pub -r 5 /cmd_vel geometry_msgs/msg/Twist '{linear: {x: 0.1}}'   # 動くか
 ```
 
-`/scan_raw` が出なければ LiDAR プロファイルの問題が濃厚。**6.0 では
-`configs/*.json` は最初から使われず**、同梱プロファイル
-(2d=`Example_Rotary_2D` / mid360=`Example_Solid_State`) に落ちる。別のものを
-選ぶには:
+`/scan_raw` が出なければ LiDAR プロファイルの問題が濃厚。既定は同梱プロファイル
+(2d=`Example_Rotary_2D` / mid360=`Example_Solid_State`)。別のものを選ぶには:
 
 ```bash
 $ISAACSIM/python.sh simulator/src/daifuku_sim/isaac_raspicat.py ... --lidar-profile Example_Rotary
