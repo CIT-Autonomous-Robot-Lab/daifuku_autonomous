@@ -183,8 +183,12 @@ ip route replace default via 192.168.1.1 dev eth0
 注意点が3つあります。
 
 - **LANケーブルを抜いて持ち歩くときはNATに戻します。** 外部スイッチの上流が消えると
-  bridgedのWSLは無通信になります。逆に挿さっているあいだは、次節のとおりホストが
-  中継するので戻す必要はありません。
+  bridgedのWSLは無通信になり、**症状はDNSの失敗**（`Temporary failure in name
+  resolution`）として出ます。逆に挿さっているあいだは、次節のとおりホストが中継する
+  ので戻す必要はありません。切り替えは`docker/dev/tools/windows/wsl-net.ps1`で、
+  `Bridged` / `Nat` / `Status`（既定）を取ります。`.wslconfig`の3行を出し入れして
+  `wsl --shutdown`まで行うので、**NATのまま機体につなぐとDDSだけが黙って通らなく
+  なる**点だけ注意してください。
 - **`.wslconfig`は全ディストロ共通**です。適用には`wsl --shutdown`が必要で、
   `wsl --terminate <distro>`ではVMが動き続けるため`networkingMode`は変わりません
   （`[boot] command`の再実行には使えます）。
