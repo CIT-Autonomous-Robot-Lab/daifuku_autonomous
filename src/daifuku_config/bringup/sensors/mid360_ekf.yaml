@@ -49,10 +49,16 @@ ekf_filter_node:
     #   x, y, z, roll, pitch, yaw, vx, vy, vz, vroll, vpitch, vyaw, ax, ay, az
     # 既定は全 false (何も取り込まない)。位置・姿勢そのものは取らず、車輪から vx、
     # IMU から vyaw だけを取る = 積分は EKF 側で行い、二重積分を避ける。
+    # **車輪の vyaw を true に戻さないこと** — カウンタは約 55ms 単位でしか進まない
+    # (基板側のラッチ。2026-08-20 に右輪を浮かせて実測) ので、左右の更新が別 tick に
+    # 落ちた瞬間の生の差分は ±700 deg/s の偽旋回になる。2026-08-20 まで true +
+    # covariance 未設定 (= 1e-6 扱い) で IMU を押し潰し、走行中に yaw が数十度流れて
+    # WP1 通過後に左へそれた (rosbags/analysis_20260820)。ドライバ側も twist を
+    # ラッチ間隔で測るよう直したが、yaw レートは IMU 専任のままにする。
     odom0_config: [false, false, false,
                    false, false, false,
                    true,  false, false,
-                   false, false, true,
+                   false, false, false,
                    false, false, false]
     imu0_config:  [false, false, false,
                    false, false, false,

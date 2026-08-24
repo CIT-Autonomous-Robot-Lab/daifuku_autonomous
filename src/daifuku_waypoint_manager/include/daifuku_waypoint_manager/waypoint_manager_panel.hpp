@@ -15,7 +15,6 @@
 #ifndef DAIFUKU_WAYPOINT_MANAGER__WAYPOINT_MANAGER_PANEL_HPP_
 #define DAIFUKU_WAYPOINT_MANAGER__WAYPOINT_MANAGER_PANEL_HPP_
 
-#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -62,7 +61,6 @@ private Q_SLOTS:
   void startFollowing();
   void cancelFollowing();
   void sendCancelBurst();
-  void watchActionServer();
   void selectionChanged();
   void setStatus(const QString & status);
   void handleResult(int result_code, int missed_count);
@@ -76,13 +74,9 @@ private:
   using CancelGoalSrv = action_msgs::srv::CancelGoal;
 
   void buildUi();
-  // 「巡回中」の表示をやめて Start を押せる状態へ戻す。goal_epoch_ を進めるので、
-  // 諦めたゴールのコールバックが後から届いても「巡回中」には戻さない
-  // (戻す道は readoptGoal だけ)。
+  // 「巡回中」の表示をやめて Start を押せる状態へ戻す。ゴールも手放すので、
+  // そのゴールのコールバックは以後届かない。
   void resetGoalState();
-  // 諦めたあとに feedback が届いた = 巡回はまだ続いている。ゴールを持ち直して
-  // 「巡回中」の表示へ戻す。戻せたときだけ true。
-  bool readoptGoal(std::uint64_t epoch, const GoalHandleFollowWaypoints::SharedPtr & goal_handle);
   QString resultText(int result_code, int missed_count) const;
   void refreshList();
   // reset=false のときは DELETEALL を付けない。同じ ns/id は ADD で上書きされるので、
@@ -129,11 +123,10 @@ private:
   // ことと、FollowWaypoints 以外のサーバへも投げられること。
   std::vector<rclcpp::Client<CancelGoalSrv>::SharedPtr> cancel_clients_;
   std::vector<QString> cancel_client_names_;
+  // **ここが最後の shared_ptr。** rclcpp_action のクライアントは goal handle を
+  // weak_ptr で持つので、これを落とすとそのゴールの feedback も結果も来なくなる
+  // (= resetGoalState はコールバックを止める操作でもある)。
   GoalHandleFollowWaypoints::SharedPtr active_goal_;
-  // resetGoalState で手放したゴール。**捨てずに持っておく** — rclcpp_action の
-  // クライアントは goal handle を weak_ptr で持つので、最後の shared_ptr を落とすと
-  // feedback も結果も二度と来なくなり、巡回が続いていてもパネルは知りようがなくなる。
-  GoalHandleFollowWaypoints::SharedPtr abandoned_goal_;
   // ゴールを送ってから goal_response_callback が返るまでの窓。この間 active_goal_ は
   // まだ空なので、waypoint の編集 (refreshList 経由の updateButtons) が Start を
   // 押せる状態に戻してしまい、二重にゴールを送れる。
@@ -144,14 +137,6 @@ private:
   // 「押したのに何も起きない」ではなくサーバが居ないことを出す。
   bool cancel_sent_any_{false};
   QTimer * cancel_timer_{nullptr};
-  // action サーバが居ない状態が続いた tick 数 (lead_timer_ で数える)。
-  int server_gone_ticks_{0};
-  // ゴール 1 回ぶんの世代。諦めた (resetGoalState した) 後に届いたコールバックを
-  // 捨てるために使う。捨てないと、戻したはずの表示が「巡回中」に戻る。
-  std::uint64_t goal_epoch_{0};
-  // 最後に送ったゴールの世代。諦めた後に届いた feedback がそれなのか、それとも
-  // もっと新しい Start に追い越された古いものなのかを readoptGoal が見分ける。
-  std::uint64_t latest_goal_epoch_{0};
 
   // 機体から 1 点目へ引く線。この区間だけ機体に追随して動くので、編集のたびに出す
   // publishMarkers() とは別にタイマで出し直す。lead_drawn_ / lead_origin_ は前回どこに

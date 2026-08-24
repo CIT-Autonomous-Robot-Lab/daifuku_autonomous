@@ -83,8 +83,6 @@ import tempfile
 # 引数は SimulationApp を起動する **前** に解釈する。SimulationApp を作った時点で
 # Kit が sys.argv を触りにいくため、後から argparse すると取りこぼす。
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-
 
 def parse_args():
     ap = argparse.ArgumentParser(description=__doc__,
@@ -101,17 +99,10 @@ def parse_args():
 
     ap.add_argument("--lidar", default="2d", choices=("2d", "mid360"),
                     help="LiDAR 構成 (既定: 2d)")
-    ap.add_argument("--lidar-config",
-                    help="RTX LiDAR のプロファイル JSON。省略時は configs/ の "
-                         "raspicat_2d_lidar.json / livox_mid360.json を使う。"
-                         "**Isaac 6.0 では使えない** (JSON を読む機構が無いので"
-                         "指定すると起動時に止まる)")
     ap.add_argument("--lidar-profile",
                     help="Isaac Sim 同梱のプロファイル名を直接使う "
-                         "(例: Example_Rotary_2D)。--lidar-config より優先する。"
-                         "Isaac 6.0 ではプロファイルはこれしか選べず、省略時は "
-                         "lidar に応じた既定 (2d=Example_Rotary_2D / "
-                         "mid360=Example_Solid_State) に落ちる")
+                         "(例: Example_Rotary_2D)。省略時は lidar に応じた既定 "
+                         "(2d=Example_Rotary_2D / mid360=Example_Solid_State)")
     ap.add_argument("--lidar-prim-path", default="/base_link/lidar_rtx",
                     help="ロボット配下に作る RTX LiDAR のパス (--robot-prim からの相対)")
     ap.add_argument("--lidar-xyz", default="0.144,0.0,0.0289",
@@ -456,61 +447,20 @@ def add_rtx_lidar(stage, args, robot_prim):
     """RTX LiDAR をロボット配下に作る。
 
     プロファイルがセンサの走査パターン (FOV / 分解能 / 回転数 / 到達距離) を決める。
-    どこから取るかは Isaac のバージョンで変わる:
-
-    * 4.x / 5.x — configs/*.json。2D は raspicat_description の Gazebo 設定
-      (min_range 0.1 / max_range 30) に寄せ、mid360 は非回転走査の**近似**
-      (configs/livox_mid360.json のコメント参照)。
-    * 6.0 — **JSON は使えない。** Lidar.create が受け取るのは同梱レジストリの
-      名前 (SUPPORTED_LIDAR_CONFIGS) かセンサ資産の USD だけで、実体は
-      get_assets_root_path() から引かれる。_BUNDLED_PROFILE で代用する。
+    **選べるのは Isaac 同梱レジストリの名前だけ。** Lidar.create が受け取るのは
+    SUPPORTED_LIDAR_CONFIGS の名前かセンサ資産の USD で、実体は
+    get_assets_root_path() から引かれる (JSON を読む機構 =
+    /app/sensors/nv/lidar/profileBaseFolder は参照されない)。実機の諸元に
+    合わせたいならセンサ資産の USD を作る経路になる (未着手)。
     """
-    _, registry_only = _rtx_lidar_factory()
-
-    if args.lidar_profile:
-        # 同梱プロファイルをそのまま使う。configs/*.json のスキーマが手元の
-        # Isaac のバージョンと合わなかった場合の確実な逃げ道。
-        profile = args.lidar_profile
-        print(f"[isaac_raspicat] using bundled lidar profile: {profile}")
-    elif registry_only:
-        if args.lidar_config:
-            raise SystemExit(
-                f"--lidar-config ({args.lidar_config}) はこの Isaac では使えない。"
-                "6.0 の Lidar.create は同梱レジストリの名前 (SUPPORTED_LIDAR_CONFIGS) か "
-                "センサ資産の USD しか受け取らず、JSON のプロファイルを読む機構"
-                " (/app/sensors/nv/lidar/profileBaseFolder) は参照されない。"
-                "--lidar-profile <名前> を使うこと。"
-            )
-        profile = _BUNDLED_PROFILE[args.lidar]
-        print(f"[isaac_raspicat] using bundled lidar profile: {profile}")
+    profile = args.lidar_profile or _BUNDLED_PROFILE[args.lidar]
+    print(f"[isaac_raspicat] using bundled lidar profile: {profile}")
+    if not args.lidar_profile:
         # **黙って落とさない。** 走査諸元が実機と違うことは、スキャンを見ても
         # 「それらしい」ので気づけない。観測数に依存する評価 (emcl2 の重み、
         # コストマップの追従) をこの構成で読むときは、ここを承知しておくこと。
-        print(f"[isaac_raspicat] warn: configs/{args.lidar} の JSON はこの Isaac "
-              "では使えないため、同梱プロファイルで代用している。"
+        print("[isaac_raspicat] warn: 同梱プロファイルで代用している。"
               "**走査諸元 (FOV / 分解能 / 回転数 / 到達距離) は実機と違う。**")
-    else:
-        cfg_path = args.lidar_config or os.path.join(
-            HERE, "configs",
-            "raspicat_2d_lidar.json" if args.lidar == "2d" else "livox_mid360.json",
-        )
-        if not os.path.isfile(cfg_path):
-            raise SystemExit(
-                f"lidar config not found: {cfg_path}\n"
-                "--lidar-profile Example_Rotary のように同梱プロファイル名を"
-                "指定して回避できる。"
-            )
-
-        # Isaac は「プロファイル名」で JSON を探す。configs/ を検索パスに足す。
-        import carb
-        settings = carb.settings.get_settings()
-        key = "/app/sensors/nv/lidar/profileBaseFolder"
-        folders = list(settings.get(key) or [])
-        cfg_dir = os.path.dirname(cfg_path)
-        if cfg_dir not in folders:
-            folders.append(cfg_dir)
-            settings.set(key, folders)
-        profile = os.path.splitext(os.path.basename(cfg_path))[0]
     xyz = [float(v) for v in args.lidar_xyz.split(",")]
     rpy = [float(v) for v in args.lidar_rpy.split(",")]
 
@@ -549,32 +499,26 @@ _LIDAR_ALIASES = {
     "profile":     ("config_file_name", "config"),      # 5.x -> 6.0 で改名
 }
 
-# configs/*.json が使えない Isaac (6.0) での代用。**実機の諸元ではない**。
-# 2D は回転式、mid360 は非回転 (ソリッドステート) というところだけを合わせてある。
-# 実機に合わせたいなら、JSON ではなくセンサ資産の USD を作って
-# Lidar.create(usd_path=...) に渡す経路になる (未着手)。
+# lidar 構成ごとの既定プロファイル。**実機の諸元ではない**。2D は回転式、
+# mid360 は非回転 (ソリッドステート) というところだけを合わせてある。
 _BUNDLED_PROFILE = {"2d": "Example_Rotary_2D", "mid360": "Example_Solid_State"}
 
 _RTX_FACTORY = None
 
 
 def _rtx_lidar_factory():
-    """(factory, registry_only) を返す。
-
-    `registry_only` が真なら、プロファイルは**同梱レジストリの名前**でしか
-    指定できない (6.0)。偽なら JSON のプロファイル名が使える (4.x / 5.x)。
-    """
+    """RTX LiDAR を作る呼び出し可能オブジェクトを返す。"""
     global _RTX_FACTORY
     if _RTX_FACTORY is None:
-        for mod_name, attr, maker, registry_only in (
-            ("isaacsim.sensors.experimental.rtx", "Lidar", "create", True),   # 6.0+
-            ("isaacsim.sensors.rtx", "LidarRtx", None, False),                # 4.x / 5.x
+        for mod_name, attr, maker in (
+            ("isaacsim.sensors.experimental.rtx", "Lidar", "create"),   # 6.0+
+            ("isaacsim.sensors.rtx", "LidarRtx", None),                 # 4.x / 5.x
         ):
             try:
                 cls = getattr(__import__(mod_name, fromlist=[attr]), attr)
             except (ImportError, AttributeError):
                 continue
-            _RTX_FACTORY = (getattr(cls, maker) if maker else cls, registry_only)
+            _RTX_FACTORY = getattr(cls, maker) if maker else cls
             print(f"[isaac_raspicat] rtx lidar api -> {mod_name}.{attr}"
                   + (f".{maker}" if maker else ""))
             break
@@ -589,7 +533,7 @@ def _rtx_lidar_factory():
 def _make_rtx_lidar(lidar_path, profile):
     import inspect
 
-    factory, _ = _rtx_lidar_factory()
+    factory = _rtx_lidar_factory()
     values = {
         "prim_path": lidar_path,
         "profile": profile,

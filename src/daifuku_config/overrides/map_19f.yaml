@@ -63,13 +63,14 @@ daifuku_stack:
       map_scale: 2                         # 既定 1 (断片は未設定): 内部だけ 0.10m/cell (794 万状態)。solve を軽くするため
       downsample_policy: "conservative"    # 既定 同左 (断片は未設定): scale 2 では通路が片側 0.05m しか細らないので保守のまま。楽観が要るのは scale >= 4 から
       action_forward_m: [0.5, -0.2, 0.0, 0.5, 0.0, 0.5]  # 断片も同じ値 (6 つとも)。これ以上は velocity_smoother の上限で頭打ち
+      action_rotation_deg: [0.0, 0.0, -30.0, -30.0, 30.0, 30.0]  # 断片も同じ値 (ノード既定 ±20): 旋回半径 0.95m。±40 で回るのは津田沼だけ (2026-08-20)
       goal_margin_radius: 0.3              # 断片も同じ値 [m]: ゴール圏の半径。ゴールセル数はこれ ÷ 内部解像度なので、scale 2 (0.10m/cell) のこの地図では断片のままで足りる (津田沼は scale 5 で潰れるため 0.5)
       safety_radius_penalty: 30            # 断片も同じ値 [秒/セル]: 19F の通路幅なら 30 でも貪欲ロールアウトが降下できる (津田沼は 1 まで下げている)
       max_rollout_steps: 10000             # 断片も同じ値: 対角 54.1m ÷ 1 手 0.5m ≒ 109 手なので桁で余る (津田沼は 100000)
       cost_drawing_threshold: 100          # 断片 60: 表示専用。色スケール上限 [ステップ数≒秒] ≒50m (1 ステップ 0.5m)
       early_start: true                    # 断片 false: ゴールまで方策が繋がった時点で solve を打ち切る。密なので効く (compact の値バンドの制約が無い)。効いたかはログの cut short / truncated。**未検証**
       waypoint_prefetch: true              # 断片 false: 次の点を走行中に解いておく。点あたり 29 秒の停止が消える代わりに場が 2 本 (密なので 655MB x2 = 1.31GB) + 1 コア。**Pi 4 (4GB) では外すこと**
-      follow_controller: "dwa"             # 既定 greedy (断片は未設定): 場は変えず読み方だけ連続に。**未検証** — 1 手 0.5m の旋回半径 1.43m を外れた指令が出る側
+      follow_controller: "greedy"          # 既定 greedy (断片は未設定): dwa (場は変えず読み方だけ連続に) は 2026-08-20 の左それの切り分けで greedy へ戻した。既定と同値だが切り分けの目印として明示
       # ▲ 2026-08-09 の上流の更新で dwa は margin 帯 (penalty >= 2xPROB_BASE) を踏む
       #   候補を棄却するようになった (dwa_lethal_penalty、既定 2.0 = 有効)。壁際が通れず
       #   経路が出ないなら dwa_lethal_penalty: 0.0 で以前の挙動に戻る (どちらも未検証)。

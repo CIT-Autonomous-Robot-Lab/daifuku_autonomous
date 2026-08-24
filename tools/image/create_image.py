@@ -6,7 +6,7 @@
 ``provision.sh``（同ディレクトリ）が走り、Docker・DDSチューニング・
 rtmouseカーネルモジュール・本リポジトリの取得までを済ませます。
 
-Windows / Linux / macOSで動きます。標準ライブラリのみを使用します。
+Windows / Linuxで動きます。標準ライブラリのみを使用します。
 
   # SDカードの候補を一覧する
   python3 tools/image/create_image.py devices
@@ -50,7 +50,6 @@ import json
 import lzma
 import os
 import platform
-import plistlib
 import re
 import shutil
 import subprocess
@@ -106,7 +105,6 @@ SECTOR = 512
 CHUNK = 4 * 1024 * 1024
 
 IS_WINDOWS = os.name == "nt"
-IS_MACOS = sys.platform == "darwin"
 IS_LINUX = sys.platform.startswith("linux")
 
 
@@ -360,8 +358,6 @@ class Device:
 def list_devices() -> list[Device]:
     if IS_WINDOWS:
         return _list_devices_windows()
-    if IS_MACOS:
-        return _list_devices_macos()
     if IS_LINUX:
         return _list_devices_linux()
     die(f"未対応のプラットフォームです: {sys.platform}")
@@ -438,26 +434,6 @@ def _linux_root_device() -> str | None:
     return parent[0] if parent else source[len("/dev/") :]
 
 
-def _list_devices_macos() -> list[Device]:
-    out = run(["diskutil", "list", "-plist", "physical"], capture=True).stdout
-    data = plistlib.loads(out.encode())
-    devices = []
-    for name in data.get("WholeDisks", []):
-        info_out = run(["diskutil", "info", "-plist", name]).stdout
-        info = plistlib.loads(info_out.encode())
-        devices.append(
-            Device(
-                ident=name,
-                path=f"/dev/{name}",
-                model=info.get("MediaName"),
-                size=info.get("TotalSize"),
-                removable=bool(info.get("Removable") or info.get("RemovableMediaOrExternalDevice")),
-                system=bool(info.get("SystemImage")) or info.get("MountPoint") == "/",
-            )
-        )
-    return devices
-
-
 def resolve_device(spec: str) -> Device:
     devices = list_devices()
     for device in devices:
@@ -524,8 +500,6 @@ def flash(image: Path, device: Device, assume_yes: bool, dry_run: bool) -> None:
 
     if IS_WINDOWS:
         _flash_windows(image, device)
-    elif IS_MACOS:
-        _flash_macos(image, device)
     else:
         _flash_linux(image, device)
     log("書き込み完了")
@@ -534,8 +508,8 @@ def flash(image: Path, device: Device, assume_yes: bool, dry_run: bool) -> None:
 def _write_raw(image: Path, target: str) -> None:
     """イメージをブロックデバイスへ生書きする。
 
-    Windowsの \\\\.\\PhysicalDriveN とmacOSの /dev/rdiskN はセクタ境界でしか
-    書けないので、最終ブロックはゼロ詰めして揃える。
+    Windowsの \\\\.\\PhysicalDriveN はセクタ境界でしか書けないので、
+    最終ブロックはゼロ詰めして揃える。
     """
     total = image.stat().st_size
     progress = Progress("書き込み", total)
@@ -661,15 +635,6 @@ def _flash_linux(image: Path, device: Device) -> None:
     time.sleep(2)
 
 
-def _flash_macos(image: Path, device: Device) -> None:
-    log(f"アンマウント: {device.path}")
-    run(["diskutil", "unmountDisk", device.path])
-    raw = device.path.replace("/dev/disk", "/dev/rdisk")
-    _write_raw(image, raw)
-    run(["diskutil", "mountDisk", device.path], check=False)
-    time.sleep(2)
-
-
 # configure: ブートパーティションへの設定注入
 
 
@@ -708,11 +673,6 @@ def _boot_dir_candidates():
     if IS_WINDOWS:
         for letter in "DEFGHIJKLMNOPQRSTUVWXYZ":
             yield Path(f"{letter}:\\")
-        return
-    if IS_MACOS:
-        volumes = Path("/Volumes")
-        if volumes.is_dir():
-            yield from volumes.iterdir()
         return
     for root in (Path("/media"), Path("/run/media"), Path("/mnt")):
         if not root.is_dir():
@@ -1370,8 +1330,6 @@ def main(argv=None) -> int:
     finally:
         if unmount_after:
             run(["umount", str(boot_dir)], check=False)
-        if IS_MACOS:
-            run(["diskutil", "eject", device.path], check=False)
 
     print()
     log("SDカードの準備ができました")

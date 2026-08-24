@@ -33,10 +33,8 @@ usage() {
   control.sh teleop keyboard キーボードで操作する（Ctrl-Cで終了）
   control.sh teleop joystick ジョイスティックで操作する（Ctrl-Cで終了）
   control.sh status         コンテナ、ROSノード、モーターサービスを確認する
-  control.sh nodes          ROSノード一覧を表示する
-  control.sh topics         ROSトピック一覧を表示する
-  control.sh services       ROSサービス一覧を表示する
   control.sh ros ARGS...    任意の ros2 コマンドを実行する
+                            （一覧は control.sh ros node list / topic list / service list）
   control.sh logs [ARGS...] コンテナのログを表示する（例: logs -f）
   control.sh help           このヘルプを表示する
 
@@ -201,12 +199,6 @@ main() {
       require_no_args "$@"
       init_docker
       show_status
-      ;;
-    nodes|topics|services)
-      require_no_args "$@"
-      init_docker
-      ensure_running
-      run_ros "${command%?}" list
       ;;
     ros)
       (($# > 0)) || die "ros の後に ros2 の引数を指定してください。"

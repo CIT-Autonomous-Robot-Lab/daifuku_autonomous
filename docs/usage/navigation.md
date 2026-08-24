@@ -48,7 +48,7 @@ tmux attach -t nav
 ```bash
 bash tools/control.sh ros topic hz /scan
 bash tools/control.sh ros topic hz /odom
-bash tools/control.sh nodes
+bash tools/control.sh ros node list
 ```
 
 初期姿勢の設定とゴールの指定はRVizから行います。`docker/raspberrypi/`のイメージには
