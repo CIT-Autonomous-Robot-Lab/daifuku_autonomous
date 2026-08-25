@@ -94,9 +94,20 @@ symlink になるので、効くのは**ソース側の権限**です。Windows 
 
 ## テストと起動
 
-自動テストはありません。`colcon test` で走るのは lint だけです（`raspicat_driver` の
-`test/test_control.py` が唯一の例外でしたが、2026-08-09 に PI 補正ごと消しました）。
-挙動の確認は実機か `simulator/` のハーネスで行います。単体で回せるのは
+`colcon test` で走るのは lint と、**`daifuku_config_manager` の
+`test/test_*_launch.py` 2 つだけ**です（`raspicat_driver` の `test/test_control.py`
+は 2026-08-09 に PI 補正ごと消しました）。後者は launch_testing の統合テストで、
+`config_sentinel` と `site_manager` を本当にプロセスとして立てます。踏むのは 2 つ:
+
+- **実機の上で `colcon test` を回すと、本物の `site_manager` と名前がぶつかる**
+  （ノード名は固定）。テスト側が `ROS_DOMAIN_ID=77` と `ROS_LOCALHOST_ONLY=1` を
+  撒いて避けているので、**その 2 行を消さないこと**。
+- **`daifuku_config_manager` は `daifuku_config` に exec_depend する。**
+  `params` が設定の在処（`config_root` / `overrides_dir` / `site_file`）をあちらの
+  share から引くため。依存だけを並べる環境（`colcon test`）で宣言が抜けていると
+  `PackageNotFoundError` になる。
+
+これ以外の挙動の確認は実機か `simulator/` のハーネスで行います。単体で回せるのは
 `simulator/tests/` の 2 つ（`map-to-usd` の出力検算と、地図の `free_thresh` の検算）
 だけです。
 
