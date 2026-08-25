@@ -187,7 +187,7 @@ override も**通ります**（そして黙って無視されます）。
 `map_19f.yaml` の内蔵推定器 4 つで、あれは密ソルバが要るので津田沼には置けません）。
 
 その launch が読まない設定ファイル宛の節は何も起こしません
-（`mapping.launch.py` に `overrides:=map_19f` を渡しても、`emcl2:` と `vi_planner:` は
+（`mapping.launch.py` に `overrides:=19f` を渡しても、`emcl2:` と `vi_planner:` は
 単に行き先が無いだけで害はありません）。**パッケージが違う節はそもそも読まれません**
 （`lidar_bringup` は `daifuku_stack:` の下を見ません）。
 
@@ -200,8 +200,9 @@ override も**通ります**（そして黙って無視されます）。
 `ros__parameters` も無い）ので、この仕組みに乗りません。`mid360_config:=<パス>` で
 ファイルごと差し替えてください。
 
-`overrides` の既定値は **`src/daifuku_config/site` の 1 行**（既定
-`map_19f`）で、すべての launch が同じものを見ます。さらに `navigation.launch.py` は
+`overrides` の既定値は **`src/daifuku_config/site`**（既定 `19f`）で、すべての launch が
+同じものを見ます。**このファイルは場所の名前 1 語しか持ちません**（説明はここ）。
+書式が無いので、書くのも読むのも 1 行で済みます。さらに `navigation.launch.py` は
 `map` の既定もそこから導きます。場所が変われば LiDAR の帯も EMCL2 の調整も地図も
 一緒に変わるので、**人が動かす値を 1 つにしてある**という趣旨です。
 `overrides` は地図を変えると**置き換え**になります（追加ではありません）。
@@ -224,25 +225,42 @@ site:
 [自律移動](../../docs/usage/navigation.md#地図は2枚)。
 
 `site:` は 1 段目に書ける予約節で、パッケージ名の段には並べません。「その場所そのものに
-付く値」の置き場で、いまは地図だけが入っています。**overrides の名前と地図のファイル名は
-揃っていなくて構いません**（2026-08-07 に「同じ名前の地図を読む」規約をやめました。
-どの地図を読むかがファイルのどこにも書かれておらず、差し替えるには名前ごと揃え直す
-必要があったためです）。
+付く値」の置き場で、いまは地図だけが入っています。**overrides の名前は場所であって、
+地図のファイル名ではありません**（`19f` / `tsudanuma`。地図は `19f/map_19f.yaml`）。
+2026-08-07 に「同じ名前の地図を読む」規約をやめ（どの地図を読むかがファイルのどこにも
+書かれておらず、差し替えるには名前ごと揃え直す必要があったため）、2026-08-25 に名前も
+`map_19f` から `19f` へ改めました（`maps/` のフォルダ名と同じ = 場所）。**役ごとに 2 枚の
+地図を持てる以上、1 つの名前が地図を指せないため**です。
 
-**切り替えは `tools/site.sh <名前>`。** 機体側（LiDAR の帯）を読むのは常駐している
-raspicat サービスで、**起動時にしか読みません**。スクリプトはファイルの書き換えと
-`docker compose restart raspicat` の両方をやります。`overrides:=` を navigation へ
-渡しても効くのは `daifuku_stack:` の部分木だけで、`mapping` から LiDAR の帯を
-変えられないのも同じ理由です（新しい場所で地図を作るときは、SLAM を始める前に
-`tools/site.sh` を通してください）。
+### 場所を切り替える
+
+**書き方は 3 つあり、どれも同じ結果になります**（ファイルが名前 1 語しか持たないため）。
 
 ```bash
-# 場所を切り替える (src/daifuku_config/site を書いて raspicat を立て直す)
-tools/site.sh map_tsudanuma
+# 1. 機体が上がっているとき。site_manager が両方のパッケージについて検査してから書く
+ros2 param set /site_manager site tsudanuma
+
+# 2. 上がっていないとき (開発ホスト)
+echo tsudanuma > src/daifuku_config/site
+
+# 3. 1 と 2 を選び分け、届かなければ raspicat も立て直す便利口
+tools/site.sh tsudanuma
 
 # 自律移動側。map も overrides も src/daifuku_config/site から来るので渡さない
 ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=nav2
 ```
+
+**機体側（LiDAR の帯）を読むのは常駐している raspicat サービスで、起動時にしか
+読みません。** だから素手で書いたときは `docker compose restart raspicat` が要ります
+（1 と 3 はそこまでやる）。1 の経路では site_manager が `/daifuku/site` へ流し、機体の
+launch に居る `config_sentinel` が**機体が止まっているのを確かめてから**自分を終了し、
+compose の `restart: unless-stopped` が新しい設定で上げ直します（走行中に切り替えても
+その場では止まりません）。**上がり直すとき機体は静止させておくこと** — Mid-360 の
+ジャイロの電源投入時バイアスを起動後の静止区間から測るためです。
+
+`overrides:=` を navigation へ渡しても効くのは `daifuku_stack:` の部分木だけで、
+`mapping` から LiDAR の帯を変えられないのも同じ理由です（新しい場所で地図を作るときは、
+SLAM を始める前に場所を切り替えておくこと）。
 
 何も重ねないときは `overrides:=none` です。`ros2 launch` は値が空の
 `overrides:=` を malformed として弾くので、空文字ではなく `none` を使います。
@@ -271,8 +289,8 @@ ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=nav2
 `(+ ...)` が「どの override のどの節を重ねたか」です。
 
 ```
-[INFO] [launch.user]: params: params_file: 8 fragments from .../daifuku_config/stack/nav2 (+ vi_planner.yaml) -> /tmp/params_file_xxxx.yaml (+ overrides:map_19f -> vi_planner)
-[INFO] [launch.user]: params: emcl2_params_file: .../src/daifuku_config/stack/localization/emcl2.yaml -> /tmp/emcl2_params_file_xxxx.yaml (+ overrides:map_19f -> emcl2)
+[INFO] [launch.user]: params: params_file: 8 fragments from .../daifuku_config/stack/nav2 (+ vi_planner.yaml) -> /tmp/params_file_xxxx.yaml (+ overrides:19f -> vi_planner)
+[INFO] [launch.user]: params: emcl2_params_file: .../src/daifuku_config/stack/localization/emcl2.yaml -> /tmp/emcl2_params_file_xxxx.yaml (+ overrides:19f -> emcl2)
 ```
 
 行が出ないファイルは、重なるものが無かったので土台がそのままノードへ渡っています
@@ -590,7 +608,7 @@ fw_var_per_fw + |angle| * fw_var_per_rot)`）。距離 L [m] を直進したと�
 モータ電源 OFF で回転を指令し `/wheel/odom` が動かないこと）、(2) 手で数 m 押して `/odom`
 と `mcl_pose` の差が 0.05 × √L より十分小さいこと、(3) `/particle_cloud` が走行中も
 潰れないこと、(4) ログの `ALPHA: <値> / <閾値>` に `RESET` が混ざらないこと（混ざるなら
-地図と実環境の不整合の側 = `overrides/map_19f.yaml` で、この変更では直らない）、
+地図と実環境の不整合の側 = `overrides/19f.yaml` で、この変更では直らない）、
 (5) `map->odom` の遅延を測り直すこと（`controller_server` の節の値は旧運動モデルでの
 実測なのでそのままでは使えない）。
 
@@ -617,7 +635,7 @@ fw_var_per_fw + |angle| * fw_var_per_rot)`）。距離 L [m] を直進したと�
 踏んでから 0.3 m 先で終わりますが、1.0 m ではそこはもう「空き」ではない = **貫通と
 数えられません**。本当に見失って壁を突き抜けたレイは 1 m 以上先まで届くので**そちらは
 捕まります**。つまり「サブメートルの地図誤差には目をつぶり、大きな食い違いだけ拾う」
-判定へ変わり、`alpha`（非貫通率）が上がるぶん `overrides/map_19f.yaml` の
+判定へ変わり、`alpha`（非貫通率）が上がるぶん `overrides/19f.yaml` の
 `alpha_threshold: 0.2` による膨張リセットは起きにくくなります。
 
 **ただしこれは連続な鈍り方ではなく、通路幅で切り替わる崖です。** 零セルの条件が「どの
@@ -728,7 +746,7 @@ nav2 既定は 20ms。Pi4 の CPU 飽和時（`nr_throttled` が 10 万回級）
 ### `bt_navigator` の `wait_for_service_timeout: 60000`
 
 nav2 既定は 1000ms。`planner:=vi` では `vi_planner` が `/map` を受け取って
-から `compute_path_to_pose` を作るので、地図が大きいほど遅れます。`map_tsudanuma`
+から `compute_path_to_pose` を作るので、地図が大きいほど遅れます。`tsudanuma`
 （23.5MB）では間に合わず、`bt_navigator` が `on_configure` で
 "action server not available" を投げて bringup 全体が止まりました。
 
@@ -758,7 +776,7 @@ p90 と p99 の間へ置くと運用上通る範囲に階調を集中させ遠�
 `window_cost_drawing_threshold` は 2026-08-09 の上流の整理で消えたので、地図側で上限を
 上げるほど窓のほうは階調が潰れます（表示だけの話です）。
 
-### `overrides/map_tsudanuma.yaml` の `safety_radius_penalty: 1`
+### `overrides/tsudanuma.yaml` の `safety_radius_penalty: 1`
 
 単位は「秒/セル」で、`safety_radius`（0.2m）以内のセルを通るときの加算コストです。1 手の
 コストが 1 秒なので、断片の 30 は「近寄るくらいなら 30 手迂回する」という強い忌避に
@@ -771,7 +789,7 @@ p90 と p99 の間へ置くと運用上通る範囲に階調を集中させ遠�
 1.0 にすると同じ地図・同じゴールで単調に降下し、104 姿勢でゴールに到達しました。揺らぎは
 ペナルティにほぼ比例するので、10 秒未満なら 1 手 1 秒の進捗を下回るはずです。
 
-### `map_tsudanuma` で `planner:=vi` を使うときの制約
+### `tsudanuma` で `planner:=vi` を使うときの制約
 
 * `local_planner:=vi`（両アクション）と `local_planner:=nav2`（同じ `vi_planner` を
   `follow: false` で立てて `controller_server` が追従）のどちらも使えます。同じノードなので
@@ -811,7 +829,7 @@ p90 と p99 の間へ置くと運用上通る範囲に階調を集中させ遠�
   止まって solve 完了時の 1 枚だけに、負にすると配信そのものが立ちません。配信の on/off だった
   `publish_value_function` は 2026-08-09 の上流の整理でこのキーに吸収されました）。
 
-### `overrides/map_19f.yaml` の `map_scale: 2`
+### `overrides/19f.yaml` の `map_scale: 2`
 
 `map_scale` は**プランナ内部だけ**の作業解像度です。`/map`・コストマップ・emcl2 は
 0.05 m/cell のままで、粗くなるのは VI が解く格子だけです。
@@ -888,8 +906,8 @@ p90 と p99 の間へ置くと運用上通る範囲に階調を集中させ遠�
 
   | 地図 | プランナ格子 | 窓のセル数 | 1 周の状態数 | 1 周の時間 | 40 ms で掃ける割合 |
   | --- | --- | --- | --- | --- | --- |
-  | `map_19f` | 0.10 m/cell（`map_scale: 2`） | 約 1,657 | 約 99,000 | 約 99 ms | **約 4 割** |
-  | `map_tsudanuma` | 0.25 m/cell（`map_scale: 5`） | 約 265 | 約 16,000 | 約 16 ms | 全部 |
+  | `19f` | 0.10 m/cell（`map_scale: 2`） | 約 1,657 | 約 99,000 | 約 99 ms | **約 4 割** |
+  | `tsudanuma` | 0.25 m/cell（`map_scale: 5`） | 約 265 | 約 16,000 | 約 16 ms | 全部 |
 
   **19F では窓の 6 割が掃かれません。** 効き方は `follow_controller` で変わります。
   **同梱の overrides は 2 地図とも `dwa`** で、あちらの軌道棄却は `penalty` を直に読むので
@@ -900,7 +918,7 @@ p90 と p99 の間へ置くと運用上通る範囲に階調を集中させ遠�
   掃いた結果そのものなので、**判断が丸ごと掃き待ち**になります。そのときは
   `refine_budget_ms` を上げるか窓を縮めてください。**未検証**（上の時間は式に値を入れた
   見積もりで、実機では測っていません）。
-* **`map_tsudanuma` では形が変形しません。** 伸縮の不感帯は 0.3 セル
+* **`tsudanuma` では形が変形しません。** 伸縮の不感帯は 0.3 セル
   （`DEADBAND_CELLS`、プランナ格子のセル）＝ 0.25 m/cell では 0.075 m/tick ですが、
   1 tick の最大変位は `action_forward_m 0.5 ÷ control_frequency 10` = 0.05 m しかなく、
   **一度も超えません**。あの地図の窓は全周 2.5 m の静止カプセルのままです（最低 2 m の
@@ -1021,14 +1039,14 @@ vi_planner: global propagation running for 6.0s (412 tiles done, 27 queued) # 2 
 実測 RSS は 833 MB でした）。**判定は「明示指定が先、上限による自動退避が後」で、
 `compact_sink_dir` が空でなければ上限は一切読まれません。**
 
-**効くのは compact で解いている地図だけです。** `map_19f` は 2026-08-09 に密へ戻したので
-いまこの値は読まれません。残る `map_tsudanuma` は `compact_sink_dir` が空 = RAM 出力なので、
+**効くのは compact で解いている地図だけです。** `19f` は 2026-08-09 に密へ戻したので
+いまこの値は読まれません。残る `tsudanuma` は `compact_sink_dir` が空 = RAM 出力なので、
 **この地図だけがこの値に依存しています** — sink 648 MB はノード既定の 512 MB を超えるので、
 既定のままだと黙って `/tmp/vi_planner_sink`（= SD カード）へ落ちます。ただし条件は
 「648 MB を上回っていること」だけで、**4096 である必要はありません**（2048 でも RAM に載る）。
 下げるときに割ってはいけない線がこの 648 MB です。
 
-**2048 → 4096 へ上げたのは 2026-08-04 で、Pi 5（8 GB）が前提です。** `map_tsudanuma` を
+**2048 → 4096 へ上げたのは 2026-08-04 で、Pi 5（8 GB）が前提です。** `tsudanuma` を
 走らせながらの実測で空きが 5.6 GB あり（`vi_planner` の RSS 931 MB、コンテナのピーク 2.12 GiB、
 `oom_kill` 0）、2048 は締めすぎでした。**swap が無いので余裕は坂ではなく崖**で、上限が線として
 意味を持つのはそのためです。**Pi 4（4 GB）ではこの値は保護になりません** — 止めるべきところで

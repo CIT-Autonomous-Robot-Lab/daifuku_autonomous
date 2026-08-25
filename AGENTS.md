@@ -153,12 +153,19 @@ Docker 越しに叩く形は
   分けるのが前提で、**同じノード名が 2 つの断片にあると起動時にエラーで止まる**。
   キーが重なっていなくても止まるので、1 つのノードの設定を 2 ファイルに割れない。
   断片どうしは深くマージしない（深いマージが効くのは `overrides` を重ねるときだけ）。
-- **場所は 1 つの値で決まる — `src/daifuku_config/site` の 1 行。**
+- **場所は 1 つの値で決まる — `src/daifuku_config/site`。このファイルは場所の名前
+  1 語しか持たない**（2026-08-25 にコメント付きの書式をやめた。「1 つめの空でない
+  非コメント行が値」という規則を読み手・書き手・検査の 6 か所が写していたため。
+  説明は `src/daifuku_config/README.md`）。だから切り替えは
+  `ros2 param set /site_manager site <名前>`（機体が上がっているとき）か
+  `echo <名前> > src/daifuku_config/site`（上がっていないとき）で足り、
+  `tools/site.sh` は**その 2 つを選び分けて `raspicat` を立て直す便利口**でしかない。
   すべての launch が `overrides` の既定をここから取り、`navigation.launch.py` は
   `map` / `map_loc` の既定もそこから導く。**導き方は「同じ名前の地図」ではなく、その
   overrides 自身が書いている `site: map:`**（2026-08-07 に改めた。
-  `nav2_params.declared_maps` / `resolve_map`）。だから overrides の名前と地図の
-  ファイル名は揃っていなくてよい。
+  `nav2_params.declared_maps` / `resolve_map`）。**名前は場所であって地図ではない**
+  （`19f` / `tsudanuma`。`maps/` のフォルダ名と同じ。2026-08-25 に `map_19f` から
+  改めた — 地図は役ごとに 2 枚あるので、1 つの名前では指せない）。
   `map:=` を明示したときに `site: map:` と別のファイルを指していると**起動時に
   エラーで止まる**（別の場所の帯と emcl2 の調整を載せたまま走るのを防ぐため。承知で
   やるなら `overrides:=none` を添える）。**地図が決まらないとき（`overrides:=none`、
@@ -182,10 +189,10 @@ Docker 越しに叩く形は
   `site:` は 1 段目に書ける予約節（`RESERVED_SECTIONS`）で、パッケージ名の段には
   並べない。`overrides` は
   **置き換え**（追加ではない）で、重ねないときは `overrides:=none`（空文字は
-  `ros2 launch` が弾く）。**切り替えは `tools/site.sh <名前>`。** LiDAR の帯を読むのは
+  `ros2 launch` が弾く）。LiDAR の帯を読むのは
   `daifuku_bringup`（= 常駐している raspicat サービス）で**起動時にしか読まない**ので、
-  素手でファイルを直したときは `docker compose restart raspicat` が要る（スクリプトは
-  そこまでやる）。`.env` の `OVERRIDES` は 2026-08-07 に廃止した — 環境変数はコンテナ
+  素手でファイルを直したときは `docker compose restart raspicat` が要る（`tools/site.sh`
+  と `site_manager` 経由はそこまで面倒を見る）。`.env` の `OVERRIDES` は 2026-08-07 に廃止した — 環境変数はコンテナ
   生成時に焼かれるので作り直しが要り、かつ「仕立てるときに 1 度決める」値と混ざって
   忘れやすかった。**環境変数 `OVERRIDES` 自体はファイルより強いまま残してある**が、
   compose はもう渡さない（`simulator/` が 1 回きりの構成を渡す口）。
@@ -242,7 +249,7 @@ Docker 越しに叩く形は
   `publish_tf` は `standalone` / `follow` と同じ launch 専用のキーで、`src/daifuku_config/` に
   書かないこと**（`localizer` は逆に `src/daifuku_config/` にしか無い）。`localization:=vi` では
   `pose_topic` が `initialpose` になり、emcl2 は立たず `map_server` だけが残る。
-  **2026-08-09 から既定の `map_19f` が `localizer: "belief"` を上書きしているので、
+  **2026-08-09 から既定の `19f` が `localizer: "belief"` を上書きしているので、
   この地図では `localization:=vi` のほうが要る** — 引数を足さずに（＝既定の
   `localization:=emcl2` で）立てると上の 1 つめに当たって起動時に止まる。`active_reloc`
   と組なので `solver` も密へ戻してあり（compact = アウトオブコアは単一ゴール専用で、
@@ -365,21 +372,21 @@ Docker 越しに叩く形は
   単発ゴール）では**エラーも警告も出ないまま先読みだけが起きない**。実機ではパネルが
   載らないので `joy_teleop` だけが出どころだが、そちらは **`waypoints_file` が空だと
   巡回そのものを断る**（2026-08-04 に既定の順路を廃止。それまでは津田沼の 73 点に
-  フォールバックしていて、`map_19f` で立てると全点が地図の外に出た）。トピック名は
+  フォールバックしていて、`19f` で立てると全点が地図の外に出た）。トピック名は
   パネルの `kWaypointPathTopic`、`joy_teleop` の publisher、`vi_planner` の
   `waypoint_topic` の 3 か所にあり、1 つだけ変えても同じことになる（パネルだけが
   絶対名なので、`namespace:=` を付けた構成でも噛み合わない）。**`nav2:=false` では
   この穴は無い** — `follow_waypoints` を `vi_planner` 自身が受けるので、順路はゴールと
   同じ経路で入る（トピックはもう 1 つの入口として残る）。**ノード側の宣言と
   `src/daifuku_config/stack/vi_planner.yaml` は `false` で、同梱の overrides で `true` へ
-  上書きしているのは `map_19f` だけ**（津田沼は 2026-08-07 に `true` にしたあと
+  上書きしているのは `19f` だけ**（津田沼は 2026-08-07 に `true` にしたあと
   2026-08-08 に `false` へ戻した。走行中の固まりの切り分けで、消える待ちは 19F が
   29 秒、津田沼が 87 秒）。価値関数が同時に 2 つ生きるので、**密ソルバでは
   メモリが 2 倍要る**。compact でも同梱の 2 地図は sink が RAM なので（2026-08-04 に
   津田沼の `compact_sink_dir` を外した）、そのまま 2 倍が匿名メモリに乗る
   （**19F は 2026-08-09 に密へ戻したので 655MB×2 = 1.31GB**。compact の頃は 95MB×2。
   津田沼は戻せば 648MB×2 = 1.3GB）。**Pi 4 (4GB) では `true` に
-  しないこと。ただし既定の `map_19f` が `true` なので、引数を何も
+  しないこと。ただし既定の `19f` が `true` なので、引数を何も
   足さずに立てると Pi 4 でもこれが効く。** 外すには使う地図の
   `overrides/*.yaml` の `waypoint_prefetch` を消すか `false` と書くしかない（キー 1 つだけ外す launch 引数は無い。
   津田沼は後者で、断片と同値の `false` を切り分けの目印として明示してある。
@@ -390,7 +397,7 @@ Docker 越しに叩く形は
   再発したらまずここを疑う。
 - **`vi_planner` の `early_start` は compact では効かない地図がある。** ゴールまで
   方策が繋がった時点で solve を打ち切る機能だが、compact（断片の solver。2026-08-09 に
-  `map_19f` だけ密へ戻したので、compact なのは津田沼だけ）の確定は
+  `19f` だけ密へ戻したので、compact なのは津田沼だけ）の確定は
   値バンド単位でしか進まず、そのバンド幅は「4 × 1 手の最大移動セル数（`action_forward_m`
   ÷ 解像度）× 最大ペナルティ（`safety_radius_penalty`）」（`couple_margin`）。**地図の値域が
   丸ごと 1 バンドに収まると波 2 つで解き終わって打ち切る隙が無く、エラーも警告も出ないまま
@@ -458,7 +465,7 @@ Docker 越しに叩く形は
   （読むのは常駐している raspicat サービス）。
   `range_max` の既定 70.0 はセンサの測距上限だが、**そこまで使うのは `emcl2` だけ**
   （costmap は `obstacle_max_range: 2.5`、SLAM は `max_laser_range: 10.0` で頭打ち）。
-  **`map_tsudanuma` は 2026-08-08 に `min_elevation_deg` を 5.0 から断片と同じ 0.0 へ
+  **`tsudanuma` は 2026-08-08 に `min_elevation_deg` を 5.0 から断片と同じ 0.0 へ
   戻したので、いまこの地図では仰角フィルタが実質素通し**（0.0 度 = 搭載高の水平面 =
   断片の `min_height: 0.275` と同じ切り方）。帯は全距離で 0.275〜4.00m の高さ帯に
   なっていて、`elevation_filter:=false` にしても**帯は変わらない**。組で決まるのは

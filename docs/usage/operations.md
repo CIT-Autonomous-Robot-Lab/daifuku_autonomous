@@ -153,7 +153,7 @@ TELEOP_LINEAR_SPEED=0.1 bash tools/control.sh teleop keyboard
 | `src/daifuku_config/bringup/`（LiDAR・EKF・ドライバ）と`src/daifuku_config/overrides/`の**値** | 再ビルドは不要だが、読むのは常駐している`raspicat`サービスなので立て直しが要る。**`config_sentinel`が変化に気づいて自分で上がり直します**（機体が止まっていて、その設定でも立つときだけ。`config_watch:=warn`で止められる）。コメントだけの変更には反応しません |
 | `src/daifuku_bringup`配下のlaunchと`src/`のPython | 再ビルドは不要だが、**`config_sentinel`は気づきません**（見張っているのは`src/daifuku_config/`の`*.yaml`だけ）。`docker compose up -d`で自分で立て直す |
 | `src/daifuku_config/overrides/`に**ファイルを新しく足した** | 一度ビルドを通す（`install/`のsymlinkはビルド時にしか張られないので、足しただけでは`overrides:=`の一覧に出てこない）。そのあと`docker compose up -d` |
-| `src/daifuku_config/site`（走らせる場所） | **`tools/site.sh <名前>`**。書き換えと`raspicat`の立て直しを両方やる（下） |
+| `src/daifuku_config/site`（走らせる場所） | `ros2 param set /site_manager site <名前>`、または`echo <名前> > src/daifuku_config/site`。**`tools/site.sh <名前>`**はその選び分けと`raspicat`の立て直しをやる便利口（下） |
 | `src/raspicat_driver`のPython | 何もしない。ただし`setup.py`の`entry_points`を増やしたときはビルドが要る |
 | C++やRustのコード、`CMakeLists.txt`、外部パッケージのソース | `docker compose up`で差分ビルドする |
 | aptの依存、`Dockerfile`、`package.xml`の依存、`docker/`配下のスクリプト | `docker compose build`からやり直す |
@@ -225,13 +225,23 @@ ros2 launch daifuku_stack mapping.launch.py config_watch:=warn
 
 19Fと津田沼のように場所が変わると、**LiDARの帯（仰角と高さ）・`emcl2`と価値反復の調整・
 地図**が3つとも変わります。これは1つの話なので、人が動かす値も1つだけです——
-`src/daifuku_config/site`の1行です。
+`src/daifuku_config/site`で、**このファイルは場所の名前1語しか持ちません**（説明は
+[`src/daifuku_config/README.md`](../../src/daifuku_config/README.md)）。書式が無いので、
+切り替えかたは3つあってどれも同じ結果になります。
 
 ```bash
-tools/site.sh                 # 今の値と、選べる名前
-tools/site.sh map_tsudanuma   # 切り替えて、機体が上がり直すところまで面倒を見る
-tools/site.sh map_19f --file-only    # ファイルを書くだけ（ROSにもDockerにも触らない）
-tools/site.sh map_19f --no-restart   # ファイル経由に落ちたとき、機体は立て直さない
+ros2 param set /site_manager site tsudanuma   # 機体が上がっているとき（検査して書いて流す）
+echo tsudanuma > src/daifuku_config/site      # 上がっていないとき（開発ホスト）
+tools/site.sh tsudanuma                       # 上の2つを選び分け、機体も立て直す
+```
+
+`tools/site.sh`は**必須ではありません**。やるのは経路の選び分けと、ROSへ届かなかった
+ときの`docker compose restart raspicat`だけです。
+
+```bash
+tools/site.sh                    # 今の値と、選べる名前
+tools/site.sh 19f --file-only    # ファイルを書くだけ（ROSにもDockerにも触らない）
+tools/site.sh 19f --no-restart   # ファイル経由に落ちたとき、機体は立て直さない
 ```
 
 `--file-only`は開発ホスト向けで、`--no-restart`が効くのは`site_manager`へ届かず
@@ -243,7 +253,7 @@ tools/site.sh map_19f --no-restart   # ファイル経由に落ちたとき、�
 相対パス。[自律移動](navigation.md#地図は2枚)）ので、
 overridesの名前と地図のファイル名は揃っていなくて構いません。切り替えたあとは
 `navigation`を立て直すだけで、`map:=`も`map_loc:=`も`overrides:=`も渡す必要はありません
-（どれもこの1行から来ます）。**立て直したときは機体を静止させておいてください**——Mid-360の
+（どれもこの1語から来ます）。**立て直したときは機体を静止させておいてください**——Mid-360の
 ジャイロの電源投入時バイアスをそこで測ります。
 
 **機体側は起動時にしかこの値を読みません。** ファイルを直しただけでは、LiDARの帯だけが
@@ -261,7 +271,7 @@ overridesの名前と地図のファイル名は揃っていなくて構いま�
 
 ```bash
 ros2 param get /site_manager site        # 今どこか
-ros2 param set /site_manager site map_19f
+ros2 param set /site_manager site 19f
 ros2 topic echo /daifuku/site            # 流れている値
 ```
 
@@ -275,7 +285,7 @@ ros2 topic echo /daifuku/site            # 流れている値
 `emcl2`のリセット閾値を載せたまま走ることになるためです。承知のうえでやるなら
 `overrides:=none`を添えてください（そのときは`map:=`が要ります）。
 
-**この1行に入っていない場所依存が1つあります**——`joy_teleop`の`waypoints_file`
+**この1語に入っていない場所依存が1つあります**——`joy_teleop`の`waypoints_file`
 （パッド巡回の順路）です。既定は空で、空のあいだはSTART+BACKが巡回を断ります。絶対パスな
 ので場所ごとの`overrides`には書きにくく、いまは手で渡す扱いのままです
 （`src/daifuku_config/bringup/robot/joy_teleop.yaml`）。

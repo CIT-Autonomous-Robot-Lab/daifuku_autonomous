@@ -18,7 +18,7 @@
 
   1. `site` パラメータで場所を受ける。**書く前に検査する** (params.precheck) ので、
      `ros2 param set` は綴り違いや壊れた overrides を**ファイルに残さず**断る
-  2. src/daifuku_config/site を書く (temp + rename。書きかけを誰にも読ませない)
+  2. src/daifuku_config/site を書く (名前 1 語。temp + rename で書きかけを読ませない)
   3. 今の場所を /daifuku/site へ latch して流す
 
 立て直すのは各 launch の config_sentinel で、こちらの出す値と自分が起動時に使った
@@ -29,13 +29,12 @@
 (tools/site.sh も editor も同じ経路に乗る)。
 
   ros2 param get /site_manager site          今どこか
-  ros2 param set /site_manager site map_19f  切り替える (検査して書いて流す)
+  ros2 param set /site_manager site 19f      切り替える (検査して書いて流す)
   ros2 topic echo /daifuku/site              流れている値
 """
 
 import json
 import os
-import tempfile
 
 import rclpy
 from rcl_interfaces.msg import SetParametersResult
@@ -90,11 +89,12 @@ def validate(site):
 
 
 def write_site(path, site):
-    """src/daifuku_config/site の値の行だけを差し替える。**書きかけを読ませない。**
+    """src/daifuku_config/site を書く。**書きかけを読ませない。**
 
-    値の行 = 1 つめの空でない非コメント行 (params.read_site_file と同じ規則)。
-    見出しのコメントはそのまま残す — ここで書式ごと書き直すと、説明文の写しが
-    このファイルと tools/site.sh の 2 か所に散る。
+    ファイルは名前 1 語しか持たないので書式は無い (説明は
+    src/daifuku_config/README.md)。temp + rename にしてあるのは、読み手
+    (params.py の import 時) が truncate の隙に空を読むと、エラーも警告も出ないまま
+    _FALLBACK_SITE の場所で立ち上がるため。
 
     symlink は**先に実体へ解決する**。`--symlink-install` では
     install/share/daifuku_config/site が src/ への symlink なので、そこへ
@@ -102,36 +102,10 @@ def write_site(path, site):
     届かなくなる**。
     """
     real = os.path.realpath(path)
-    try:
-        with open(real, "rb") as f:
-            lines = f.read().decode("utf-8").splitlines()
-    except OSError:
-        lines = []
-
-    out, replaced = [], False
-    for raw in lines:
-        stripped = raw.strip()
-        if not replaced and stripped and not stripped.startswith("#"):
-            out.append(site)
-            replaced = True
-        else:
-            out.append(raw)
-    if not replaced:
-        out.append(site)
-
-    directory = os.path.dirname(real) or "."
-    tmp = tempfile.NamedTemporaryFile(
-        mode="w", dir=directory, prefix=".site.", delete=False, encoding="utf-8",
-    )
-    try:
-        tmp.write("\n".join(out) + "\n")
-        tmp.flush()
-        os.fsync(tmp.fileno())
-        tmp.close()
-        os.replace(tmp.name, real)
-    except BaseException:
-        os.unlink(tmp.name)
-        raise
+    tmp = os.path.join(os.path.dirname(real) or ".", ".site.tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(site + "\n")
+    os.replace(tmp, real)
 
 
 class SiteManager(Node):

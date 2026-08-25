@@ -79,35 +79,32 @@ from launch.events import Shutdown
 
 from . import env_default, value
 
-# 読めなかったときの最後の砦 (同梱の既定の地図)。
-_FALLBACK_SITE = "map_19f"
+# 読めなかったときの最後の砦 (同梱の既定の場所)。
+_FALLBACK_SITE = "19f"
 
 
 def site_file():
-    """今どこで走らせるかを 1 行で持つファイル (daifuku_config の share)。"""
+    """今どこで走らせるかを 1 語だけ持つファイル (daifuku_config の share)。"""
     return os.path.join(get_package_share_directory("daifuku_config"), "site")
 
 
 def read_site_file(path):
-    """site ファイルの 1 行 (1 つめの空でない非コメント行) を読む。
+    """site ファイルの中身 (場所の名前 1 語)。
 
-    書き手 (site_manager、tools/site.sh) と読み手がこの規則を共有する。
+    **ファイルは値そのものしか持たない。** 説明は src/daifuku_config/README.md に
+    あり、こちらに書式は無い — だから書き手 (site_manager、tools/site.sh) は
+    `echo` 1 つで済み、素手で書き換えても同じ経路に乗る。
     読めない・空なら "" を返す — **投げない**。落とすかどうかは呼び元が決める。
     """
     try:
         with open(path, "rb") as f:
-            body = f.read().decode("utf-8")
+            return f.read().decode("utf-8").strip()
     except OSError:
         return ""
-    for raw in body.splitlines():
-        line = raw.strip()
-        if line and not line.startswith("#"):
-            return line
-    return ""
 
 
 def _read_site():
-    """src/daifuku_config/site の 1 行を読む。**読めなくても落とさない。**
+    """src/daifuku_config/site を読む。**読めなくても落とさない。**
 
     ここは params.py の import 時に走るので、投げるとワークスペース中の launch が
     全部立たなくなる。名前そのものの妥当性は後段 (_resolve_layers) が見るので、
@@ -239,7 +236,7 @@ def declare_args():
     return [
         DeclareLaunchArgument(
             "overrides",
-            # 地図を変えるときは overrides:=map_tsudanuma のように**置き換える** —
+            # 地図を変えるときは overrides:=tsudanuma のように**置き換える** —
             # 追加ではないので、19F 用の調整は自動的に外れる。navigation では
             # map:= がこの値に追随する (nav2_params.resolve_map) ので、ここだけ
             # 渡せばよい。既定を変えるのは tools/site.sh。
@@ -329,7 +326,7 @@ def _layer_bodies(context):
 
     for name in [n.strip() for n in value(context, "overrides").split(",") if n.strip()]:
         # ros2 launch は `overrides:=` (値が空) を malformed として弾くので、
-        # 「何も重ねない」を渡す手段として none を受ける。既定が map_19f に
+        # 「何も重ねない」を渡す手段として none を受ける。既定が 19f に
         # なっている以上、明示的に外す口が無いと別の地図で 19F の調整が載る。
         if name.lower() == "none":
             continue

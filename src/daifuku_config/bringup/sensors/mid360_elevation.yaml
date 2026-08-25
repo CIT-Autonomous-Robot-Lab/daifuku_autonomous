@@ -7,7 +7,7 @@
 # (base_footprint で見ると lidar_z + 距離 x tan(min_elevation))。床も天井も遠方では
 # 仰角 0 度へ収束するので、min_elevation より緩い勾配は**どの距離でも入らない**。
 # 高さで切ると勾配は min_height/tan(勾配) の先で必ず入ってくるので、そこが違う。
-# 導出と地図ごとの値は ../README.md と ../overrides/map_tsudanuma.yaml。
+# 導出と地図ごとの値は ../README.md と ../overrides/tsudanuma.yaml。
 #
 # ここの 0.0 度は搭載高 (lidar_z = 0.275m) の水平面そのもので、19F の断片が持つ
 # min_height: 0.275 と**同じ切り方**。既定のままなら 19F の挙動は変わらない。

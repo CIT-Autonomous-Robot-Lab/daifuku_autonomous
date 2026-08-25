@@ -13,7 +13,7 @@
 
 | ファイル | パッケージ | 内容 |
 |---|---|---|
-| `src/daifuku_config/site` | すべて | 走らせる場所を1行で持つ。すべてのlaunchが`overrides`の既定をここから取り、`navigation.launch.py`は`map`の既定もここから導く。**書き換えは`tools/site.sh`** |
+| `src/daifuku_config/site` | すべて | 走らせる場所の名前を**1語だけ**持つ（コメントも書式も無い）。すべてのlaunchが`overrides`の既定をここから取り、`navigation.launch.py`は`map`の既定もここから導く。書き換えは`ros2 param set /site_manager site <名前>`か`echo <名前> >`、または`tools/site.sh` |
 | `src/daifuku_config/overrides/*.yaml` | すべて | 地図・環境ごとの上書き（`overrides:=`で重ねる）。行き先は**パッケージ名とノード名**で決まるので、この表の`MID360_config.json`以外すべてを上書きできる |
 | `src/daifuku_config/stack/nav2/*.yaml`、`src/daifuku_config/stack/vi_planner.yaml` | `stack` | Nav2、価値反復プランナ、コストマップ、速度、ゴール判定（起動時に1つへ合成） |
 | `behavior_trees/*.xml` | `stack` | `planner:=vi`用のビヘイビアツリー（起動時に自動で選択）。**`nav2:=true`のときだけ読まれる**（既定では`bt_navigator`が立たない） |
@@ -46,7 +46,7 @@
 | `map_loc` | 空（`overrides`の`site: map: localization:`から導く） | **自己位置推定**に使う地図YAMLのパス。`/map_loc`で配信し`emcl2`が読む。空で宣言も無ければ`map`と同じ地図に落ちる（こちらだけは落とす。1枚で走らせる従来どおりの形なので）。**2枚を別にできるのは`localization:=emcl2`のときだけ**（[自律移動](navigation.md#地図は2枚)） |
 | `params_dir` | `src/daifuku_config/stack/nav2` | 合成するNav2パラメータ断片のディレクトリ |
 | `params_file` | 空（`params_dir`を合成） | Nav2パラメータを1ファイルで与える。指定すると`params_dir`は無視 |
-| `overrides` | `src/daifuku_config/site`の1行（既定`map_19f`） | `src/daifuku_config/overrides/<名前>.yaml`を重ねる。カンマ区切りで複数可。**置き換え**なので`map_tsudanuma`にすると19F用の調整は外れる。何も重ねないなら`overrides:=none`。行き先は**パッケージ名とノード名**で決まる（下）。**機体側（LiDARの帯）はraspicatサービスが起動時に読むので、切り替えは`tools/site.sh`で**（下） |
+| `overrides` | `src/daifuku_config/site`の1行（既定`19f`） | `src/daifuku_config/overrides/<名前>.yaml`を重ねる。カンマ区切りで複数可。**置き換え**なので`tsudanuma`にすると19F用の調整は外れる。何も重ねないなら`overrides:=none`。行き先は**パッケージ名とノード名**で決まる（下）。**機体側（LiDARの帯）はraspicatサービスが起動時に読むので、切り替えは`tools/site.sh`で**（下） |
 | `extra_params_file` | 空（無効） | `overrides`の後に重ねる任意パスのファイル。カンマ区切りで複数可 |
 | `config_watch` | `shutdown` | 起動後に設定ファイルが書き変わったときどうするか。`shutdown`（既定）は大声で言ったうえで**このlaunchを終了する**（`navigation`は人が立てたものなので、上げ直す人は居ません）。`warn`は言うだけ、`off`は見張り（`config_sentinel`）ごと立てない。[日常操作](operations.md#走らせたまま設定を直したとき) |
 | `emcl2_params_file` | `src/daifuku_config/stack/localization/emcl2.yaml` | EMCL2パラメータ |
@@ -108,7 +108,7 @@ ros2 launch daifuku_stack mapping.launch.py --show-args
 | `use_joint_state_publisher` | `True` | `joint_state_publisher`を起動するか |
 | `lidar` | `mid360` | `mid360` / `2d`（`2d`ではraspicatのURG（`urg_node`）を起動する） |
 | `scan_filter_enabled` | `true` | 角度フィルタを使うか |
-| `elevation_filter` | `true` | 点群を仰角で切るか（`lidar:=mid360`のときだけ効く）。既定の設定`src/daifuku_config/bringup/sensors/mid360_elevation.yaml`は0〜90度＝搭載高の水平面から上で、断片の`min_height: 0.275`と同じ切り方のため既定では挙動が変わらない。狭めるのは`overrides/`の側だが、**同梱の2地図はいまどちらも0度＝実質素通し**（`map_tsudanuma`は2026-08-08に5.0から戻した）。狭めたときだけ**`pointcloud_to_laserscan`の`max_height`と組で決まる**（[LiDAR](../setup/lidar.md#仰角フィルタ勾配のある場所向け)） |
+| `elevation_filter` | `true` | 点群を仰角で切るか（`lidar:=mid360`のときだけ効く）。既定の設定`src/daifuku_config/bringup/sensors/mid360_elevation.yaml`は0〜90度＝搭載高の水平面から上で、断片の`min_height: 0.275`と同じ切り方のため既定では挙動が変わらない。狭めるのは`overrides/`の側だが、**同梱の2地図はいまどちらも0度＝実質素通し**（`tsudanuma`は2026-08-08に5.0から戻した）。狭めたときだけ**`pointcloud_to_laserscan`の`max_height`と組で決まる**（[LiDAR](../setup/lidar.md#仰角フィルタ勾配のある場所向け)） |
 | `use_mid360_imu` | `true`（環境変数`USE_MID360_IMU`） | Mid-360のIMU融合を使うか。`true`ではEKFが`/wheel/odom`と`/imu/mid360`を融合して`/odom`と`odom -> base_footprint`を出し、ドライバは車輪の生値を`/wheel/odom`へ出すだけになる。**この2つは同じlaunchが立てるので片方だけ切り替わる状態は作れない。** 切り替えは`.env`の`USE_MID360_IMU`で。**`lidar:=2d`とは併用できない**（URGにIMUが無いので起動時にエラーで止まる）（[LiDARとオドメトリ](../setup/lidar.md#imuと車輪オドメトリ)） |
 | `publish_lidar_tf` | `true` | センサーTFを配信するか。配信されるのは`lidar:=mid360`のときだけ（URDFは`lidar_link`しか出さず、`livox_frame`は誰も出さない） |
 | `lidar_driver` | `true` | LiDARの実機ドライバ（`mid360`: livox_ros_driver2 + restamp / `2d`: `urg_node`）を起動するか。シミュレータでは`false` |
@@ -143,9 +143,9 @@ PCなど余裕のある環境では`nav2_bringup`が配る値へ戻して構い�
 ## 自己位置推定の暫定設定
 
 EMCL2のリセット関連は、19Fの地図に合わせた**暫定値**です。地図固有の値なので
-`src/daifuku_config/stack/localization/emcl2.yaml`ではなく`src/daifuku_config/overrides/map_19f.yaml`にあります。
+`src/daifuku_config/stack/localization/emcl2.yaml`ではなく`src/daifuku_config/overrides/19f.yaml`にあります。
 
-| パラメータ | `overrides/map_19f.yaml` | 断片側 | EMCL2の既定 |
+| パラメータ | `overrides/19f.yaml` | 断片側 | EMCL2の既定 |
 |---|---|---|---|
 | `alpha_threshold` | `0.2` | `0.5` | `0.5` |
 | `expansion_radius_orientation` | `0.05` | `0.2` | `0.2` |
@@ -159,7 +159,7 @@ overridesから消しても挙動は変わりません。
 有効ビームの28%が地図上の壁を貫通しており、非貫通率（alpha）が0.0〜0.4に張り付く
 状態でした。閾値0.5のままでは膨張リセットとセンサーリセットが毎スキャン発動し、
 推定姿勢がその場で回転してしまいます。根本原因は地図と実環境の不整合にあります。
-地図を取り直したあとは、この3つを`overrides/map_19f.yaml`から削除してください。
+地図を取り直したあとは、この3つを`overrides/19f.yaml`から削除してください。
 
 EMCL2はNav2のノードではないため、合成後の`params_file`ではなく
 `emcl2_params_file`がノードへ直接渡ります。それでも`overrides`が効くのは、
@@ -204,7 +204,7 @@ daifuku_stack:              # 自律移動側
 何がどこへ重なったかは起動ログの`params:`の行に出ます。
 
 ```
-[INFO] [launch.user]: params: emcl2_params_file: .../emcl2.yaml -> /tmp/emcl2_params_file_xxxx.yaml (+ overrides:map_19f -> emcl2)
+[INFO] [launch.user]: params: emcl2_params_file: .../emcl2.yaml -> /tmp/emcl2_params_file_xxxx.yaml (+ overrides:19f -> emcl2)
 ```
 
 書きかたと優先順位の詳細は`src/daifuku_config/README.md`と

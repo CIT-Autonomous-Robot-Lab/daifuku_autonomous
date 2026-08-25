@@ -448,10 +448,9 @@ snmp_counter() { # snmp_counter Ip ReasmFails
                 else       { for (i = 2; i <= NF; i++) if (k[i] == key) print $i } }
   ' /proc/net/snmp 2>/dev/null | head -n 1
 }
-# src/daifuku_config/site の値 (params.read_site_file と同じ規則: 1 つめの空でない非コメント行)
+# src/daifuku_config/site の値 (ファイルは場所の名前 1 語しか持たない)
 site_name() {
-  sed -e 's/[[:space:]]*$//' "${ROOT}/src/daifuku_config/site" 2>/dev/null |
-    grep -v '^[[:space:]]*#' | grep -v '^[[:space:]]*$' | head -n 1
+  tr -d '[:space:]' < "${ROOT}/src/daifuku_config/site" 2>/dev/null
 }
 
 # Pi の機種名。取れないときは空。

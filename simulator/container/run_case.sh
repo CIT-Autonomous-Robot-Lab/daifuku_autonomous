@@ -13,14 +13,14 @@
 #                               NAV2=true を明示する (実機の既定は false)
 #   LOCALIZATION=emcl2|amcl     localization:=
 #   MAP_NAME=19f/map_19f|tsudanuma/map_tsudanuma|...  share/maps/<name>.yaml を使う
-#                               OVERRIDES 未指定なら同名の override を自動で選ぶ
+#                               OVERRIDES 未指定ならフォルダ名 (= 場所) の override を選ぶ
 #   VI_MAP_SCALE=               vi_planner の map_scale (地図をプランナ内部で
 #                               粗くする倍率。津田沼 (5888x4000@0.05m) は 3 で
 #                               1963x1334@0.15m = 1.57 億状態)
 #   VI_COMPACT_SINK_DIR=        compact 経路の確定出力を置くディレクトリ ("" = RAM)
 #   SIM_UNKNOWN_AS_OBSTACLE=1   シム LiDAR が未観測セルも壁として返す
 #   OVERRIDES=                  navigation.launch.py の overrides
-#                               (src/daifuku_config/overrides/<名前>.yaml。例 map_tsudanuma)
+#                               (src/daifuku_config/overrides/<名前>.yaml。例 tsudanuma)
 #   EXTRA_PARAMS=               navigation.launch.py の extra_params_file
 #                               (src/daifuku_config/overrides/ に無い任意パスの上書き)
 #   MAP_FREE_THRESH=            指定すると map.yaml の free_thresh を差し替えた
@@ -48,10 +48,10 @@ source /opt/ros/humble/setup.bash
 PLANNER=${PLANNER:-vi}
 LOCAL_PLANNER=${LOCAL_PLANNER:-auto}
 NAV2=${NAV2:-auto}
-# **既定が emcl2 でないのは、既定の地図 (map_19f) がそれでは立たないため。**
-# src/daifuku_config/overrides/map_19f.yaml が vi_planner の localizer を
+# **既定が emcl2 でないのは、既定の場所 (19f) がそれでは立たないため。**
+# src/daifuku_config/overrides/19f.yaml が vi_planner の localizer を
 # 'belief' (VIOLA) にしているので、localization:=emcl2 だと推定器が 2 つに
-# なり backends.validate_localization が起動時に止める。map_tsudanuma は
+# なり backends.validate_localization が起動時に止める。tsudanuma は
 # 逆に belief を置けない (密ソルバが要り 3.17GB で OOM) ので emcl2 に戻すこと。
 LOCALIZATION=${LOCALIZATION:-vi}
 START_X=${START_X:--1.27}
@@ -187,13 +187,15 @@ EXTRA=""
 [ -f "$RUN/overlay.yaml" ] && EXTRA=$RUN/overlay.yaml
 [ -n "${EXTRA_PARAMS:-}" ] && EXTRA="${EXTRA:+$EXTRA,}${EXTRA_PARAMS}"
 params_arg=()
-# overrides は**必ず明示的に渡す**。launch の既定は map_19f なので、渡さないと
+# overrides は**必ず明示的に渡す**。launch の既定は 19f なので、渡さないと
 # MAP_NAME を変えても 19F 用の調整 (emcl2 のリセット閾値など) が載ったままになる。
-# 地図名 (フォルダを除いたファイル名) と同名の override があればそれを、無ければ
-# none (= 何も重ねない)。
+# 選ぶのは**地図の入っているフォルダ名 (= 場所の名前)** で、同名の override が
+# あればそれを、無ければ none (= 何も重ねない)。**ファイル名のほうではない** —
+# 2026-08-25 に overrides を場所の名前 (19f) にしたので、map_19f では当たらない。
 if [ -z "${OVERRIDES:-}" ]; then
-    if [ -f "$CONFIG_SHARE/overrides/$(basename "$MAP_NAME").yaml" ]; then
-        OVERRIDES=$(basename "$MAP_NAME")
+    SITE_NAME=$(dirname "$MAP_NAME")
+    if [ -f "$CONFIG_SHARE/overrides/$SITE_NAME.yaml" ]; then
+        OVERRIDES=$SITE_NAME
     else
         OVERRIDES=none
     fi

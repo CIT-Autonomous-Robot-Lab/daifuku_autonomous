@@ -28,7 +28,7 @@
 #   USE_SIM_TIME=true|false     use_sim_time:= (既定 false。true にすると
 #                               RTF ゲートが厳格になる。run_isaac_case.sh 参照)
 #   MAP_NAME=19f/map_19f|tsudanuma/map_tsudanuma|...  share/maps/<name>.yaml
-#                               OVERRIDES 未指定なら同名の override を自動で選ぶ
+#                               OVERRIDES 未指定ならフォルダ名 (= 場所) の override を選ぶ
 #   OVERRIDES= / EXTRA_PARAMS=  navigation.launch.py と同じ
 #   GOAL_X/GOAL_Y/GOAL_YAW_DEG  ゴール
 #   SETTLE= / TIMEOUT=          ゴール送信前の待機秒 / 打ち切り秒
@@ -42,10 +42,10 @@ source /opt/ros/humble/setup.bash
 PLANNER=${PLANNER:-vi}
 LOCAL_PLANNER=${LOCAL_PLANNER:-auto}
 NAV2=${NAV2:-auto}
-# **既定が emcl2 でないのは、既定の地図 (map_19f) がそれでは立たないため。**
-# src/daifuku_config/overrides/map_19f.yaml が vi_planner の localizer を
+# **既定が emcl2 でないのは、既定の場所 (19f) がそれでは立たないため。**
+# src/daifuku_config/overrides/19f.yaml が vi_planner の localizer を
 # 'belief' (VIOLA) にしているので、localization:=emcl2 だと推定器が 2 つに
-# なり backends.validate_localization が起動時に止める。map_tsudanuma は
+# なり backends.validate_localization が起動時に止める。tsudanuma は
 # 逆に belief を置けない (密ソルバが要り 3.17GB で OOM) ので emcl2 に戻すこと。
 LOCALIZATION=${LOCALIZATION:-vi}
 LIDAR=${LIDAR:-2d}
@@ -152,13 +152,15 @@ EXTRA=""
 [ -n "${EXTRA_PARAMS:-}" ] && EXTRA="${EXTRA:+$EXTRA,}${EXTRA_PARAMS}"
 
 params_arg=()
-# overrides は**必ず明示的に渡す**。launch の既定は map_19f なので、渡さないと
+# overrides は**必ず明示的に渡す**。launch の既定は 19f なので、渡さないと
 # MAP_NAME を変えても 19F 用の調整 (emcl2 のリセット閾値など) が載ったままになる。
-# 地図名 (フォルダを除いたファイル名) と同名の override があればそれを、無ければ
-# none (= 何も重ねない)。
+# 選ぶのは**地図の入っているフォルダ名 (= 場所の名前)** で、同名の override が
+# あればそれを、無ければ none (= 何も重ねない)。**ファイル名のほうではない** —
+# 2026-08-25 に overrides を場所の名前 (19f) にしたので、map_19f では当たらない。
 if [ -z "${OVERRIDES:-}" ]; then
-    if [ -f "$CONFIG_SHARE/overrides/$(basename "$MAP_NAME").yaml" ]; then
-        OVERRIDES=$(basename "$MAP_NAME")
+    SITE_NAME=$(dirname "$MAP_NAME")
+    if [ -f "$CONFIG_SHARE/overrides/$SITE_NAME.yaml" ]; then
+        OVERRIDES=$SITE_NAME
     else
         OVERRIDES=none
     fi

@@ -205,7 +205,8 @@ def resolve_map(context, *args, **kwargs):
                     f"  地図のほうが正しいなら overrides 側の site: map: {role}: "
                     "を直す\n"
                     "  対にしないと分かっていてやるなら overrides:=none を添える\n"
-                    "場所そのものを変えるのは tools/site.sh です。"
+                    "場所そのものを変えるのは ros2 param set /site_manager site <名前> "
+                    "(または tools/site.sh <名前>) です。"
                 )
             if not os.path.isfile(explicit):
                 raise RuntimeError(

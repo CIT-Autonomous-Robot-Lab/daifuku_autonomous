@@ -318,7 +318,7 @@ RESETのログが毎スキャン出て、推定姿勢が回り続ける場合で
 3. 地図を取り直すまでの暫定処置として、`alpha_threshold`を下げ、
    `expansion_radius_orientation`を狭め、`sensor_reset: false`にしてリセットを抑制する。
    この3つは地図固有の値なので、断片の`src/daifuku_config/stack/localization/emcl2.yaml`ではなく
-   `src/daifuku_config/overrides/map_19f.yaml`に置く（19Fの地図では設定済み）
+   `src/daifuku_config/overrides/19f.yaml`に置く（19Fの地図では設定済み）
 
 現在の設定値と背景は[設定リファレンス](configuration.md#自己位置推定の暫定設定)を
 参照してください。地図を取り直したあとは既定寄りの値へ戻してください。

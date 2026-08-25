@@ -160,8 +160,8 @@ latch して出す。**これは他ノードが読むためのもの**で、い�
 
 `vi_planner` 側はトピック名が `waypoints`。`waypoint_prefetch` は
 `src/daifuku_config/stack/vi_planner.yaml`・ノードの宣言ともに `false` だが、
-**既定の場所である `map_19f` の overrides が `true` へ上書きしている**ので、引数を何も
-足さずに立てれば先読みは入っている（`map_tsudanuma` は 2026-08-07 に `true` にしたあと
+**既定の場所である `19f` の overrides が `true` へ上書きしている**ので、引数を何も
+足さずに立てれば先読みは入っている（`tsudanuma` は 2026-08-07 に `true` にしたあと
 2026-08-08 に `false` へ戻した。走行中の固まりの切り分けで、2026-08-04 に断片で反転した
 ときも同じ症状が出ている）。先読みを試すときにこのパネルが出す順路が要るので、ここを
 直すと `planner:=vi` + `nav2:=true` の挙動が変わる。代償（メモリ 2 倍）は上の yaml 側に
@@ -206,9 +206,9 @@ RViz の Fixed Frame と waypoint の `frame_id` が一致している必要が�
 
 ## 保存済みの waypoint
 
-`daifuku_stack/waypoints/waypoints_tsudanuma v1.0.yaml`（73 点、`map_tsudanuma` 用）と、
+`daifuku_stack/waypoints/waypoints_tsudanuma v1.0.yaml`（73 点、`tsudanuma` 用）と、
 そこから採り直した `v1.1`（73 点）・`v1.2`（69 点）。地図に紐づくデータなので
-`daifuku_stack` 側の `maps/` の隣に置いてある。`map_19f` では座標が地図の外に出るので
+`daifuku_stack` 側の `maps/` の隣に置いてある。`19f` では座標が地図の外に出るので
 使えない。**ファイル名に空白が入っている**ので、`waypoints_file` へシェルから渡すときは
 引用符で囲むこと（囲まないと `-p waypoints_file:=...` が途中で切れ、空扱いになって
 **START+BACK が黙って巡回を断る**）。冒頭の日本語の注記を持つのは `v1.0` だけ。

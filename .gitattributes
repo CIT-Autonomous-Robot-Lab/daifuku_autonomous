@@ -3,7 +3,7 @@ Dockerfile text eol=lf
 *.sh text eol=lf
 *.yaml text eol=lf
 *.yml text eol=lf
-# 走らせる場所を 1 行で持つファイル (tools/site.sh が書き換える)。拡張子が無いので
+# 走らせる場所の名前 1 語だけを持つファイル。拡張子が無いので
 # 名指しで LF にしておく — 中身をそのまま Linux のコンテナが読む。
 src/daifuku_config/site text eol=lf
 *.ps1 text eol=crlf

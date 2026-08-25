@@ -26,7 +26,7 @@ site:
 **2 枚を別にできるのは `localization:=emcl2` のときだけ**（`amcl` と
 `localization:=vi` は起動時に落ちる。[自律移動](../../../../docs/usage/navigation.md#地図は2枚)）。
 VI の `solver` と `map_scale` は、この大きさだと密では載らないので
-`../../../daifuku_config/overrides/map_tsudanuma.yaml` を写して始めるのが早い。
+`../../../daifuku_config/overrides/tsudanuma.yaml` を写して始めるのが早い。
 
 ## 2 枚は何が違うか
 

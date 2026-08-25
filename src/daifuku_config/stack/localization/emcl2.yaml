@@ -29,7 +29,7 @@ emcl2:
     # リセット系の 3 つ (alpha_threshold / expansion_radius_orientation /
     # sensor_reset) は地図と環境の一致度で決まるので、ここは既定のままにして
     # 地図ごとの値は overrides/<地図名>.yaml に置く。19F の値と経緯は
-    # ../overrides/map_19f.yaml を参照。
+    # ../overrides/19f.yaml を参照。
     alpha_threshold: 0.5                # 既定 0.5: 非貫通率がこれ未満で膨張リセットを起こす
     open_space_threshold: 0.05          # 宣言なし: この版の emcl2 は未実装なので効かない
     expansion_radius_position: 0.1      # 既定 0.1 [m]: 膨張リセットで粒子をばらまく位置の幅

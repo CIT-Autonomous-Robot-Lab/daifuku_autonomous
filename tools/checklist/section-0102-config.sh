@@ -29,6 +29,21 @@ check_site_exists() {
 }
 require "src/daifuku_config/site の名前が overrides にある" check_site_exists
 
+# **ファイルは名前 1 語だけ。** 2026-08-25 にコメント付きの書式をやめた。戻すと
+# 「1 つめの空でない非コメント行が値」という規則を読み手 (params.read_site_file、
+# checklist の site_name) と書き手 (site_manager.write_site、tools/site.sh) が
+# また各々写すことになる。書式が無いから echo 1 つで切り替えられる。
+check_site_bare() {
+  local body
+  body="$(cat "${CONFIG}/site")"
+  [[ "${body}" == "${SITE}" ]] || {
+    echo "src/daifuku_config/site に名前以外が入っている (コメント・空行・複数行)"
+    return 1
+  }
+  echo "${SITE} (1 語だけ)"
+}
+item "src/daifuku_config/site が名前 1 語だけを持つ" check_site_bare
+
 # 地図は「同じ名前の地図」ではなく、その overrides 自身の site: map: が決める。
 # 無いと navigation は既定の地図へ落とさずに起動時で止まる (別の場所の地図で
 # 自己位置を推定し始めるほうが危ないため)。2026-08-25 から **役ごとに 2 枚**
@@ -261,7 +276,7 @@ else
   item "rtmouse と自前ドライバが同居していない" check_rtmouse_exclusive
 
   # Pi 4 (4GB) で waypoint_prefetch:=true は価値関数が 2 つ生きる。既定の
-  # map_19f が true なので、引数を何も足さずに立てると踏む。
+  # 19f が true なので、引数を何も足さずに立てると踏む。
   if is_pi4; then
     check_prefetch() {
       local ov="${CONFIG}/overrides/${SITE}.yaml"

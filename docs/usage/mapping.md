@@ -216,9 +216,9 @@ VIの`unknown_as_obstacle`もコストマップの`track_unknown_space`も、未
 0.15にするのは、0.196が205のpとほぼ同値で実装によって空き側へ転びうるためです
 （[`simulator/docs/pi4_sim.md`](../../simulator/docs/pi4_sim.md#free_thresh-を下げるときの注意)）。
 
-`map_19f`は19Fの地図の名前で、`src/daifuku_config/site`の既定値でもあります。別の場所の地図を
-作るときは名前を変えてください。そのとき`src/daifuku_config/overrides/<同じ名前>.yaml`も用意し、
-`tools/site.sh <名前>`で切り替えます。**どの地図を読むかは、そのoverridesの`site:`節に
+`19f`は**場所の名前**（`src/daifuku_config/site`の既定値）で、地図のファイルはその場所の
+`maps/19f/map_19f.yaml`です。別の場所で地図を作るときは`src/daifuku_config/overrides/<場所>.yaml`
+も用意し、`tools/site.sh <場所>`で切り替えます。**どの地図を読むかは、そのoverridesの`site:`節に
 書きます**（`site: map:`の下に`navigation:`と`localization:`の2行。`maps/`からの相対パス。
 [自律移動](navigation.md#地図は2枚)）。overridesの名前と地図の
 ファイル名は揃っていなくて構いませんが、**書き忘れると起動時にエラーで止まります**

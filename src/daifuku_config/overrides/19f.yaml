@@ -1,15 +1,16 @@
-# map_19f.yaml (19F、915x577 @0.05m = 45.8m x 28.9m) 用の上書き。**overrides の既定値**。
+# 19f.yaml — 19F (地図 19f/map_19f.yaml、915x577 @0.05m = 45.8m x 28.9m) 用の上書き。
+# **overrides の既定値** (src/daifuku_config/site)。
 # 「断片」= 重ねる先の設定ファイルの値 (src/daifuku_config/bringup/sensors/{mid360_scan,mid360_elevation}.yaml、
 # src/daifuku_config/stack/nav2/{vi_planner,behaviors}.yaml、src/daifuku_config/stack/localization/emcl2.yaml)。
 # 値の由来・実測・経緯は src/daifuku_config/README.md、仰角フィルタは docs/setup/lidar.md。
 #
-# **map_tsudanuma.yaml とはキーの集合をそろえてある。** 片方にしか要らない値も、もう
+# **tsudanuma.yaml とはキーの集合をそろえてある。** 片方にしか要らない値も、もう
 # 片方へ断片と同じ値で書いて並べる (地図ごとの違いが縦に並んで見えるように)。だから
 # 「断片も同じ値」の行は消しても挙動は変わらない。**例外は下の内蔵推定器 (VIOLA) の
 # 4 つ**で、あれは津田沼には置けない (密ソルバが要り、あちらは密だと 3.17GB で OOM)。
 #
-# **この地図が立つ組み合わせは 1 通りだけ。** 下の localizer: belief があるので
-#   tools/site.sh map_19f   # src/daifuku_config/site (既定)。機体も立て直す
+# **この場所が立つ組み合わせは 1 通りだけ。** 下の localizer: belief があるので
+#   tools/site.sh 19f   # src/daifuku_config/site (既定)。機体も立て直す
 #   ros2 launch daifuku_stack navigation.launch.py localization:=vi
 # 以外 (既定の localization:=emcl2、planner:=navfn、local_planner:=nav2、nav2:=true) は
 # どれも起動時に落ちる。map も overrides も既定なので渡さない。
@@ -30,7 +31,7 @@ site:
 
 daifuku_bringup:
   # ── 仰角フィルタ ──────────────────────────────────────────────────────────
-  # この地図に勾配は無いので断片のまま。上げるときは max_height と組 (map_tsudanuma.yaml)。
+  # この地図に勾配は無いので断片のまま。上げるときは max_height と組 (tsudanuma.yaml)。
   elevation_filter:
     ros__parameters:
       min_elevation_deg: 0.0          # 断片も同じ値: 搭載高の水平面 = 下の min_height 0.275 と同じ切り方。勾配対策は無し

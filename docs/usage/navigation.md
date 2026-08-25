@@ -82,7 +82,7 @@ Mid-360のIMU融合（`use_mid360_imu`）は既定の`true`のまま使ってい
 Mid-360の搭載高さ（接地面から275mm、2026-08-03実測）なので、機体を変えたら実測し
 直してください。`use_rviz`の既定は`false`です。
 
-広域地図`map_tsudanuma`で走らせるときは`tools/site.sh map_tsudanuma`で場所ごと
+広域地図`tsudanuma`で走らせるときは`tools/site.sh tsudanuma`で場所ごと
 切り替えます（[広域地図（map_tsudanuma）で動かす](#広域地図map_tsudanumaで動かす)）。
 
 ## 基本起動
@@ -90,12 +90,12 @@ Mid-360の搭載高さ（接地面から275mm、2026-08-03実測）なので、�
 価値反復グローバル／ローカルプランナとMid-360が既定構成です。RVizは既定では
 起動しません（実機がheadlessのため。PC側から開きます）。
 
-**自己位置推定は場所で決まります。** 既定の`map_19f`は2026-08-09から`vi_planner`内蔵の
+**自己位置推定は場所で決まります。** 既定の`19f`は2026-08-09から`vi_planner`内蔵の
 推定器（VIOLA）なので`localization:=vi`が要り、`localization:=emcl2`のまま立てると
 **起動時に止まります**（[`localization:=vi`](#localizationviプランナ内蔵の推定器)）。
-`map_tsudanuma`は今までどおりEMCL2です。
+`tsudanuma`は今までどおりEMCL2です。
 
-**地図も調整も渡しません。** 走らせる場所は`src/daifuku_config/site`の1行（既定は`map_19f`）で、
+**地図も調整も渡しません。** 走らせる場所は`src/daifuku_config/site`の名前1語（既定は`19f`）で、
 `overrides`はその名前の`src/daifuku_config/overrides/<名前>.yaml`になります。**地図はその
 overrides自身が`site:`節で宣言します。**
 
@@ -107,9 +107,10 @@ site:
 ```
 
 `site:`はパッケージ名の段に並ばない予約節で、「その場所そのものに付く値」の置き場です
-（いまは地図だけ）。**overridesの名前と地図のファイル名は揃っていなくて構いません。**
-地図を差し替えるならこの行を直します。場所の切り替えは`tools/site.sh <名前>`で、
-機体側（LiDARの帯）の立て直しまで含めて1コマンドです
+（いまは地図だけ）。**overridesの名前は場所であって、地図のファイル名ではありません**
+（`19f` / `tsudanuma`。`maps/`のフォルダ名と同じ）。地図を差し替えるならこの行を直します。
+場所の切り替えは`ros2 param set /site_manager site <名前>`か`echo <名前> >`、または機体の
+立て直しまで面倒を見る`tools/site.sh <名前>`です
 （[日常操作](operations.md#走らせる場所を切り替える)）。
 
 ### 地図は2枚
@@ -133,7 +134,7 @@ Nav2の`global_costmap`の`static_layer`——は購読先が`map`固定で、�
 
 **同じ地図で走らせるときも2行とも書きます。** 片方だけ書けるようにすると、書き忘れが
 もう一方の地図で黙って走る形になるためです（起動時にエラーで止まります）。同梱の
-`map_19f`と`map_tsudanuma`は2行とも同じ地図です。
+`19f`と`tsudanuma`は2行とも同じ地図です。
 
 **2枚を別にできるのは`localization:=emcl2`のときだけです。** `amcl`は上流の
 `localization_launch.py`が自前で`map_server`を立てるので2枚目を渡す口がなく、
@@ -142,9 +143,9 @@ Nav2の`global_costmap`の`static_layer`——は購読先が`map`固定で、�
 
 **`localization:=vi`（VIOLA）では`/map_loc`を誰も読みません。** `map_server_loc`は
 立って配信しますが、購読するのは`emcl2`だけで、そちらが立たない構成だからです。
-**既定の`map_19f`がこれ**（`localizer: "belief"`のため`localization:=vi`が要る）なので、
+**既定の`19f`がこれ**（`localizer: "belief"`のため`localization:=vi`が要る）なので、
 既定では`/map_loc`は出ているだけで効いていません。地図を2枚に分ける値打ちがあるのは
-`localization:=emcl2`で走らせる場所（`map_tsudanuma`や`tsudanuma_mugimaru`）です。
+`localization:=emcl2`で走らせる場所（`tsudanuma`や`tsudanuma_mugimaru`）です。
 
 RVizには`Map (navigation)`と`Map (localization)`の2つの表示があります（後者は既定で
 オフ。同じ地図のときは重なるだけなので）。**自己位置がその場で回り出す症状を追うときは
@@ -197,9 +198,9 @@ ros2 launch daifuku_stack navigation.launch.py \
 （`src/daifuku_config/stack/vi_planner.yaml`）の既定は`external`（＝外部の推定を読む）で、
 そのまま`localization:=vi`を渡すと**起動時に止まります**。
 
-**ただし同梱の`map_19f`（既定のoverrides）は2026-08-09から`belief`へ上書きしています。**
+**ただし同梱の`19f`（既定のoverrides）は2026-08-09から`belief`へ上書きしています。**
 つまりこの地図では`localization:=vi`のほうが要り、既定の`localization:=emcl2`のまま
-立てると**起動時に止まります**（下の「逆向きの取り違え」がそれ）。`map_tsudanuma`は
+立てると**起動時に止まります**（下の「逆向きの取り違え」がそれ）。`tsudanuma`は
 この節を持たないので今までどおりemcl2です。**19Fの内蔵推定はまだ実機で確かめていません。**
 
 | 値 | 中身 |
@@ -213,7 +214,7 @@ ros2 launch daifuku_stack navigation.launch.py \
 判別点を出せるのは`adaptive` / `belief` / `viterbi`の3つ（2026-08-09の上流の更新で
 `adaptive`だけではなくなった）ですが、アウトオブコアの解は単一ゴール専用なので、
 `solver: "frontier2d_sparse_compact"`のまま`true`と書くと起動時に止まります。
-**`map_19f`は2026-08-09に`solver`を密（`frontier2d_sparse`）へ戻して
+**`19f`は2026-08-09に`solver`を密（`frontier2d_sparse`）へ戻して
 `active_reloc`を`true`にしてあります**——`map_scale: 2`込みで実測655 MBですが、
 `waypoint_prefetch: true`と重なると場が2本で**1.31 GB**になるので、**Pi 4（4 GB）では
 先読みのほうを外してください**（compactの頃は190 MBで済んでいました）。密へ戻す判断は
@@ -222,7 +223,7 @@ ros2 launch daifuku_stack navigation.launch.py \
 行動を選ぶ）も`true`にしてあります。
 
 ```bash
-# map_19f (既定の overrides) は localizer: "belief" 済み
+# 19f (既定の overrides) は localizer: "belief" 済み
 ros2 launch daifuku_stack navigation.launch.py \
   localization:=vi
 ```
@@ -316,7 +317,7 @@ BTを外すと、VIが損をしていた点が消えます。**毎秒の再計�
 2026-08-04に37%相当へ上げたところ機体が1〜2秒おきに固まったため戻しました。
 実時間は起動ログの`global propagation settled in ...`に出ます。
 
-`map_19f`では`map_scale: 2`でプランナ内部だけを0.10 m/セルに粗くしています（地図、
+`19f`では`map_scale: 2`でプランナ内部だけを0.10 m/セルに粗くしています（地図、
 コストマップ、自己位置推定は0.05 mのままです）。**この地図は2026-08-09に密ソルバ
 （`frontier2d_sparse`）へ戻したので、`map_scale: 2`はいまは必須です**——`active_reloc`が
 アウトオブコアを受け付けないためで、密は状態1つあたり80バイト要り、scale 1では2.53 GBに
@@ -332,7 +333,7 @@ BTを外すと、VIが損をしていた点が消えます。**毎秒の再計�
 0.05 mのまま解くと状態数は14.1億に達し、既定の密ソルバは状態配列だけで79 GBを要求
 するため、起動と同時に落ちます。
 
-`src/daifuku_config/overrides/map_tsudanuma.yaml`を`overrides:=map_tsudanuma`で重ねると、プランナ内部だけが
+`src/daifuku_config/overrides/tsudanuma.yaml`を`overrides:=tsudanuma`で重ねると、プランナ内部だけが
 0.25 m/セル（`map_scale: 5`、1178×800×60＝5650万状態）に粗くなり、状態配列を確保しない
 アウトオブコアソルバ（`frontier2d_sparse_compact`）へ切り替わります。確定した価値関数と方策
 （実測648 MB）はRAMに置かれます。地図サーバ、コストマップ、自己位置推定は0.05 mのままです。
@@ -346,7 +347,7 @@ BTを外すと、VIが損をしていた点が消えます。**毎秒の再計�
 `compact_sink_dir`を戻してください。**
 
 ```bash
-tools/site.sh map_tsudanuma   # 場所を切り替える（機体も立て直す）
+tools/site.sh tsudanuma   # 場所を切り替える（機体も立て直す）
 ros2 launch daifuku_stack navigation.launch.py \
   planner:=vi
 ```
@@ -374,14 +375,14 @@ compactでも同じです（2026-08-20の上流の更新まで、密だけが地
 2026-08-20から同じ行が出ます）。長すぎるようなら`global_sweep_duty`（既定25 %）を上げますが、**上限を決めているのはCPUではなく追従ループと共有するMutex**です
 （[`src/daifuku_config/README.md`](../../src/daifuku_config/README.md)の`global_sweep`の節）。
 
-NavFnとDWBで動かす場合、`map_tsudanuma`の価値反復向け設定は要りません。ただし
+NavFnとDWBで動かす場合、`tsudanuma`の価値反復向け設定は要りません。ただし
 `overrides:=none`はEMCL2の調整も一緒に落とすので、**ふつうは場所を切り替えたまま
 `planner:=navfn`だけを渡してください**（VI向けの節は`vi_planner`宛で、
 それらが立たない構成では宛先が無いだけです）。どうしても何も重ねたくないときは
 `map:=`を自分で渡します——`overrides:=none`は場所を名乗らないので、地図を導けません。
 
 ```bash
-tools/site.sh map_tsudanuma
+tools/site.sh tsudanuma
 ros2 launch daifuku_stack navigation.launch.py \
   planner:=navfn
 ```
@@ -391,7 +392,7 @@ ros2 launch daifuku_stack navigation.launch.py \
 - `map_scale: 5`は単独では効きません。`downsample_policy: optimistic`（ブロック内にfreeが
   1つでもあればfree）、`action_forward_m`、`goal_margin_radius`が
   セットで、1つでも欠けると波がゴール近傍で止まります。値は
-  `src/daifuku_config/overrides/map_tsudanuma.yaml`のコメントにそろえてあります。
+  `src/daifuku_config/overrides/tsudanuma.yaml`のコメントにそろえてあります。
 - 保守的プーリング（障害物優先。`downsample_policy`の既定）だと通路のセル幅が価値反復の
   遷移分布（約2セル幅）を下回り、`map_scale`が4以上で波がゴール近傍から広がりません。
   楽観側は通路を細らせない代わりに、自由セルの境界が壁へ寄ります。
@@ -423,7 +424,7 @@ ros2 launch daifuku_stack navigation.launch.py \
   スキャンマッチングは占有セルの尤度場に依存するため、現状では自己位置推定の
   拠り所がほとんどありません（経路計画とは別の課題です）。
 
-実測値の出どころは`src/daifuku_config/overrides/map_tsudanuma.yaml`のヘッダ（2026-08-01）と
+実測値の出どころは`src/daifuku_config/overrides/tsudanuma.yaml`のヘッダ（2026-08-01）と
 `src/daifuku_config/README.md`です。`simulator/docs/pi4_sim.md`にもPi 4相当での
 走行記録がありますが、そちらは`map_scale: 3`＋保守的プーリングだった頃のものなので、
 所要時間もメモリもここの値とは一致しません。
@@ -459,7 +460,7 @@ RVizを立て直したあと、「Nav2 Goal」の単発ゴール——もこれ�
 [`src/daifuku_waypoint_manager/README.md`](../../src/daifuku_waypoint_manager/README.md)。
 
 `daifuku_stack/waypoints/`に津田沼の順路を版ごとに置いてあります（`v1.0`と`v1.1`が
-73点、`v1.2`が69点）。パネルの「Load YAML」で読みます（`map_19f`では座標が地図の外に
+73点、`v1.2`が69点）。パネルの「Load YAML」で読みます（`19f`では座標が地図の外に
 出るため使えません）。
 
 RVizのFixed Frameとwaypointの`frame_id`が一致している必要があります。ずれていると
@@ -481,8 +482,8 @@ RVizのFixed Frameとwaypointの`frame_id`が一致している必要があり�
 `src/daifuku_config/stack/vi_planner.yaml`の`waypoint_prefetch`を`true`にすると、いまの点へ
 走っているあいだに次の点を別スレッドで解いておき、着いたらsolveを飛ばして受け取ります。
 
-**いま`true`なのは`map_19f`だけです。** 断片（`src/daifuku_config/stack/vi_planner.yaml`）は
-`false`で、それを上書きしているのは`overrides/map_19f.yaml`だけです。津田沼は
+**いま`true`なのは`19f`だけです。** 断片（`src/daifuku_config/stack/vi_planner.yaml`）は
+`false`で、それを上書きしているのは`overrides/19f.yaml`だけです。津田沼は
 2026-08-07に`true`にしたあと、**2026-08-08に`false`へ戻しました**——走行中の固まりの
 容疑者を切り分けるためで、あちらは場が648 MB×2＝1.3 GBになります。2026-08-04にも一度
 **断片**で`true`へ反転して同日の実機で固まりが出たため、容疑者の1つとして戻した経緯が
@@ -507,8 +508,8 @@ vi_planner: path with 412 poses in 0.34s (solved_now=true, iters=0, prefetched)
 655 MB×2＝1.31 GB**です（密にはディスクへ逃がす口がありません）。津田沼は`true`へ
 戻せば648 MB×2＝1.3 GBが匿名メモリとして居座ります。
 solveのCPUも取られます（追従の`try_lock`は邪魔しませんが、10Hzの制御周期がずれ得ます）。
-**Pi 4（4 GB）で走らせるなら`overrides/map_19f.yaml`の`waypoint_prefetch`を`false`へ
-戻してください**——既定の場所が`map_19f`なので、引数を何も足さずに立てるとPi 4でも
+**Pi 4（4 GB）で走らせるなら`overrides/19f.yaml`の`waypoint_prefetch`を`false`へ
+戻してください**——既定の場所が`19f`なので、引数を何も足さずに立てるとPi 4でも
 これが効きます（Pi 5の8 GBを前提にしている点は`compact_ram_limit_mb`と同じ事情です）。
 走行中に固まるようになったときも、まずここを戻して切り分けます。
 **まだ実機でもpi4_simでも通していません。**
@@ -545,10 +546,10 @@ vi_planner: dropped the truncated value function (early_start) after 30 ticks wi
 **走りながら**埋まっていきます（早期走り出しで未確定の場を渡されたときだけは起点が要るので、
 密は地図を丸ごと種に積み、compactは丸ごと修復の待ち行列へ入れます）。
 
-**効かない地図があります。** compact（断片の既定。2026-08-09に`map_19f`を密へ戻したので、
+**効かない地図があります。** compact（断片の既定。2026-08-09に`19f`を密へ戻したので、
 いまcompactなのは津田沼だけです）の確定は値バンド単位でしか進まず、
 バンド幅は`4 × 1手で進む最大セル数 × 最大ペナルティ`です
-（`frontier2d_sparse_compact.rs`の`couple_margin`）。`map_19f`の
+（`frontier2d_sparse_compact.rs`の`couple_margin`）。`19f`の
 0.1 m/セル・`action_forward_m` 0.5 m・`safety_radius_penalty: 30`なら
 4×5×30＝600ステップ、1ステップ0.5 mなので**300 m相当**になります。**これは式に
 値を入れただけで、実測ではありません**（バンド幅の実測は取っていません）。

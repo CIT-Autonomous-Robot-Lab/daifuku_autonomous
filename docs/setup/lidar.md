@@ -77,11 +77,11 @@ costmapから消え、近くはセンサーの垂直FOVから外れて死角に�
 置くと帯が潰れ、`range_max`を伸ばしても**エラーも警告も出ないまま**その手前で何も
 入らなくなります（5度なら70m先の実効下限は6.40m）。
 
-**同梱の2地図はいまどちらも0度なので、この組は効いていません**（`map_tsudanuma`は
+**同梱の2地図はいまどちらも0度なので、この組は効いていません**（`tsudanuma`は
 2026-08-08に5.0から戻しました）。0度は搭載高の水平面そのもの＝断片の
 `min_height: 0.275`と同じ切り方なので、仰角フィルタは実質素通しで、帯は全距離で
 `min_height`〜`max_height`のままです。地図ごとの値と経緯は
-`src/daifuku_config/overrides/map_tsudanuma.yaml`にあります。
+`src/daifuku_config/overrides/tsudanuma.yaml`にあります。
 
 `range_max`の既定はセンサの測距上限に合わせた70m（反射率80%で70m、10%では40m）です。
 ただし実際に70mを使うのは`emcl2`だけで、costmapは`obstacle_max_range: 2.5`、

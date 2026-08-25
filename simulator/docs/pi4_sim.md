@@ -155,7 +155,7 @@ compact 非対応 (追従ループが `states` に書き戻すため) だった�
 だけを sink から起こして回し、狭域 → 広域の伝播 (`global_sweep`) は sink のタイル修復
 になる (2026-08-04)。広域地図は `local_planner:=vi` でも `nav2` でも通る。詳細は
 [`src/daifuku_config/README.md`](../../src/daifuku_config/README.md) の
-「`map_tsudanuma` で `planner:=vi` を使うときの制約」。
+「`tsudanuma` で `planner:=vi` を使うときの制約」。
 
 ### 4. 地図を切り詰めても効かない
 
@@ -452,7 +452,7 @@ start (53.07,-21.62,90°) → goal (44.08,-5.12,0°)、測地距離 25.5m。
 | ケース | 結果 | 備考 |
 |---|---|---|
 | `planner:=navfn local_planner:=nav2` | **SUCCEEDED 61.9s** / リカバリ 0 | 地図は 0.05m のまま。cgroup ピーク 1.5GB |
-| `planner:=vi local_planner:=nav2` + `overrides:=map_tsudanuma` | **SUCCEEDED 110.5s / リカバリ 0** | 初回 solve 41.6s (1670 iters、576 姿勢)。以降のリプランはキャッシュヒットで 0.00s。到達時の自己位置誤差 0.02m。別ランでは solve 25s・112.0s・リカバリ 1 |
+| `planner:=vi local_planner:=nav2` + `overrides:=tsudanuma` | **SUCCEEDED 110.5s / リカバリ 0** | 初回 solve 41.6s (1670 iters、576 姿勢)。以降のリプランはキャッシュヒットで 0.00s。到達時の自己位置誤差 0.02m。別ランでは solve 25s・112.0s・リカバリ 1 |
 
 **メモリ (これが Pi4 での本題)**: `vi_global_planner` のピーク RSS 3.98GB の内訳は
 **anon 2.16GB + file 1.81GB**。file 側は sink の mmap (逼迫時に回収できる
@@ -472,7 +472,7 @@ start (53.07,-21.62,90°) → goal (44.08,-5.12,0°)、測地距離 25.5m。
 
 ```bash
 CASE=tsuda_vi MAP_NAME=tsudanuma/map_tsudanuma PLANNER=vi LOCAL_PLANNER=nav2 \
-OVERRIDES=map_tsudanuma \
+OVERRIDES=tsudanuma \
 START_X=53.07 START_Y=-21.62 START_YAW_DEG=90 \
 GOAL_X=44.08 GOAL_Y=-5.12 GOAL_YAW_DEG=0 SETTLE=120 TIMEOUT=900 \
 bash /opt/sim/run_case.sh
@@ -544,11 +544,11 @@ volatile。23.5MB の地図受信が遅い津田沼では初回の 1 発が捨�
 実際に cgroup を絞って確かめた。条件は他のケースと同じ (4 コア可視 /
 quota 6000・period 10000 = 合計 0.6 コア / メモリ 3GB・スワップ無し)。
 start (53.07,-21.62,90°) → goal (44.08,-5.12,0°)、`planner:=vi local_planner:=nav2`
-`overrides:=map_tsudanuma` (map_scale 3 / compact / sink はコンテナの overlayfs
+`overrides:=tsudanuma` (map_scale 3 / compact / sink はコンテナの overlayfs
 = 実ディスク。`findmnt -no FSTYPE /tmp` が `overlayfs` であることは確認済み)。
 
 > **2026-08-04 以降、この再現には `VI_COMPACT_SINK_DIR` を明示すること。**
-> 当時の `overrides/map_tsudanuma.yaml` は `compact_sink_dir` を持っていたが、Pi 5
+> 当時の `overrides/tsudanuma.yaml` は `compact_sink_dir` を持っていたが、Pi 5
 > (8GB) 前提で外した (RAM 出力になった)。そのまま回すと sink が **匿名メモリ**に
 > なり、3GB の枠では回収できるページキャッシュだった 1.8GB がそのまま常駐に変わる
 > = 上の「C. 本命」の OOM kill を踏む。`run_case.sh` の overlay は
@@ -558,7 +558,7 @@ start (53.07,-21.62,90°) → goal (44.08,-5.12,0°)、`planner:=vi local_planne
 > ```bash
 > VI_COMPACT_SINK_DIR=/tmp/vi_planner_sink \
 > CASE=tsuda_vi MAP_NAME=tsudanuma/map_tsudanuma PLANNER=vi LOCAL_PLANNER=nav2 \
-> OVERRIDES=map_tsudanuma ... bash /opt/sim/run_case.sh
+> OVERRIDES=tsudanuma ... bash /opt/sim/run_case.sh
 > ```
 
 **結論: 解けるし、走破もする。ただし初回 solve に 45 分かかり、メモリは 3GB の

@@ -568,7 +568,8 @@ def generate_launch_description():
                         "vi_planner と global_costmap が読む。**空 (既定) なら "
                         "overrides の site: map: navigation: が指すもの。** 明示"
                         "すると overrides の宣言と同じものかを見る (違えば起動時に"
-                        "エラー)。場所ごと変えるのは tools/site.sh。",
+                        "エラー)。場所ごと変えるのは ros2 param set /site_manager site "
+                        "<名前> か tools/site.sh。",
         ),
         DeclareLaunchArgument(
             "map_loc",

@@ -63,7 +63,7 @@ def _shared_arg_specs():
          "livox_ros_driver2 の設定 (Mid-360 本体とホストの IP)。"),
         # 既定 true でも既定の設定は 0-90 度 = 搭載高の水平面から上、で、これは
         # 19F の断片が持つ min_height: 0.275 と同じ切り方。切る角度を実際に狭めるのは
-        # overrides/ の側 (map_tsudanuma)。
+        # overrides/ の側 (tsudanuma)。
         ("elevation_filter", "true",
          "点群を仰角で切るか (勾配の床を落とす。lidar:=mid360 のときだけ効く)。"),
         ("mid360_elevation_params_file", os.path.join(sensors, "mid360_elevation.yaml"),
