@@ -130,7 +130,7 @@ lint は詰め合わせ（`ament_lint_common`）を使わず、自前 7 パッ�
 
 ```bash
 cd simulator && uv run python tests/verify_usda.py <map.yaml> <world.usda> free
-cd simulator && uv run python tests/verify_map_thresholds.py ../src/daifuku_stack/maps/*.yaml
+cd simulator && uv run python tests/verify_map_thresholds.py ../src/daifuku_stack/maps/*/*.yaml
 ```
 
 ```bash

@@ -341,7 +341,7 @@ Pi には触れていないので、以下は**提案**であって適用済み�
 
    ```bash
    uv run --project simulator downsample-map \
-       src/daifuku_stack/maps/map_19f.yaml /tmp/map_10cm.yaml \
+       src/daifuku_stack/maps/19f/map_19f.yaml /tmp/map_10cm.yaml \
        --scale 2 --free-thresh 0.15
    ```
 
@@ -411,7 +411,7 @@ goal (4.28,-2.92)) だけで、これは観測済み領域内の 120,753 セル�
 
 ## 広域地図 (map_tsudanuma) 対応 (2026-07-29)
 
-`maps/map_tsudanuma.yaml` は 5888x4000 @0.05m (294.4m x 200m)。占有 0.75% /
+`maps/tsudanuma/map_tsudanuma.yaml` は 5888x4000 @0.05m (294.4m x 200m)。占有 0.75% /
 自由 31.1% / **未観測 68.2%**。VI の状態数は 5888*4000*60 = **14.1 億**で、
 `State` 56B/state の密配列だけで 79GB。密ソルバ (`frontier2d_sparse`、ノードの
 既定値) では起動と同時に死ぬ。リポジトリの config は 2026-08-04 に compact を
@@ -471,7 +471,7 @@ start (53.07,-21.62,90°) → goal (44.08,-5.12,0°)、測地距離 25.5m。
 再現コマンド (コンテナ内):
 
 ```bash
-CASE=tsuda_vi MAP_NAME=map_tsudanuma PLANNER=vi LOCAL_PLANNER=nav2 \
+CASE=tsuda_vi MAP_NAME=tsudanuma/map_tsudanuma PLANNER=vi LOCAL_PLANNER=nav2 \
 OVERRIDES=map_tsudanuma \
 START_X=53.07 START_Y=-21.62 START_YAW_DEG=90 \
 GOAL_X=44.08 GOAL_Y=-5.12 GOAL_YAW_DEG=0 SETTLE=120 TIMEOUT=900 \
@@ -557,7 +557,7 @@ start (53.07,-21.62,90°) → goal (44.08,-5.12,0°)、`planner:=vi local_planne
 >
 > ```bash
 > VI_COMPACT_SINK_DIR=/tmp/vi_planner_sink \
-> CASE=tsuda_vi MAP_NAME=map_tsudanuma PLANNER=vi LOCAL_PLANNER=nav2 \
+> CASE=tsuda_vi MAP_NAME=tsudanuma/map_tsudanuma PLANNER=vi LOCAL_PLANNER=nav2 \
 > OVERRIDES=map_tsudanuma ... bash /opt/sim/run_case.sh
 > ```
 

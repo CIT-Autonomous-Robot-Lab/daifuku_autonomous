@@ -32,14 +32,14 @@ Python でしか読めない形式を避けることで、GPU の無い開発機
 
 使い方:
 
-    python3 map_to_usd.py src/daifuku_stack/maps/map_19f.yaml -o worlds/map.usda
+    python3 map_to_usd.py src/daifuku_stack/maps/19f/map_19f.yaml -o worlds/map.usda
     python3 map_to_usd.py .../map.yaml -o w.usda --unknown wall   # 未観測も壁
     python3 map_to_usd.py .../map.yaml -o w.usda --wall-height 1.0    # 壁を低く
 
 大きな地図 (map_tsudanuma: 5888x4000) はプリム数が数万に達してステージの読み込みが
 重い。先に `uv run downsample-map` で粗くしてから渡すこと:
 
-    uv run --project simulator downsample-map maps/map_tsudanuma.yaml /tmp/ts.yaml --scale 4
+    uv run --project simulator downsample-map maps/tsudanuma/map_tsudanuma.yaml /tmp/ts.yaml --scale 4
     uv run --project simulator map-to-usd /tmp/ts.yaml -o worlds/tsudanuma.usda
 """
 

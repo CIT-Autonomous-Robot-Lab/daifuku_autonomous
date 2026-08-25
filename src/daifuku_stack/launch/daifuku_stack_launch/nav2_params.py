@@ -131,7 +131,7 @@ def resolve_map(context, *args, **kwargs):
     if declared and not os.path.isfile(declared):
         raise RuntimeError(
             f"overrides:{site or '?'} の site: map: が指す地図がありません: {declared}\n"
-            "値は daifuku_stack の maps/ からの相対パス (map_19f.yaml のように"
+            "値は daifuku_stack の maps/ からの相対パス (19f/map_19f.yaml のように"
             "拡張子まで書く) か、絶対パスです。"
         )
 
@@ -152,7 +152,7 @@ def resolve_map(context, *args, **kwargs):
             raise RuntimeError(
                 f"Map YAML file does not exist: {explicit}\n"
                 "Pass a real map path, for example: "
-                "map:=$PWD/src/daifuku_stack/maps/map_19f.yaml"
+                "map:=$PWD/src/daifuku_stack/maps/19f/map_19f.yaml"
             )
         return []
 
@@ -163,7 +163,7 @@ def resolve_map(context, *args, **kwargs):
                if site else "overrides:=none なので、場所から地図を導けません。\n")
             + "overrides の 1 段目へ次のように書くか、map:= を明示してください。\n"
               "  site:\n"
-              "    map: map_19f.yaml   # daifuku_stack の maps/ からの相対パス"
+              "    map: 19f/map_19f.yaml   # daifuku_stack の maps/ からの相対パス"
         )
 
     return [

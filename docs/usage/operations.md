@@ -239,7 +239,7 @@ tools/site.sh map_19f --no-restart   # ファイル経由に落ちたとき、�
 機体側の`config_sentinel`なので、こちらからは止められません）。
 
 名前は`src/daifuku_config/overrides/<名前>.yaml`を指します。**地図はそのファイル自身が`site:`節で
-宣言します**（`site: map: <ファイル名>`。`daifuku_stack`の`maps/`からの相対パス）ので、
+宣言します**（`site: map: <フォルダ>/<ファイル名>`。`daifuku_stack`の`maps/`からの相対パス）ので、
 overridesの名前と地図のファイル名は揃っていなくて構いません。切り替えたあとは
 `navigation`を立て直すだけで、`map:=`も`overrides:=`も渡す必要はありません（どちらも
 この1行から来ます）。**立て直したときは機体を静止させておいてください**——Mid-360の

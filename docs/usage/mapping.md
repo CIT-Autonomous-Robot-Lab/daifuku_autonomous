@@ -52,7 +52,7 @@ TELEOP_LINEAR_SPEED=0.1 bash tools/control.sh teleop keyboard
 ```bash
 docker compose exec ros2 \
   /ros_entrypoint.sh ros2 run nav2_map_server map_saver_cli \
-  -f /opt/ros_ws/src/daifuku_stack/maps/map_19f
+  -f /opt/ros_ws/src/daifuku_stack/maps/19f/map_19f
 ```
 
 保存を確認してから片付けます。`kill-session`はセッション内のノードもまとめて止めるため、
@@ -189,7 +189,7 @@ RVizを使える環境では、次を確認しながら走行します。
 
 ```bash
 ros2 run nav2_map_server map_saver_cli \
-  -f src/daifuku_stack/maps/map_19f
+  -f src/daifuku_stack/maps/19f/map_19f
 ```
 
 軽量Docker環境:
@@ -197,15 +197,15 @@ ros2 run nav2_map_server map_saver_cli \
 ```bash
 docker compose exec ros2 \
   /ros_entrypoint.sh ros2 run nav2_map_server map_saver_cli \
-  -f /opt/ros_ws/src/daifuku_stack/maps/map_19f
+  -f /opt/ros_ws/src/daifuku_stack/maps/19f/map_19f
 ```
 
 **`src/`側へ書いてください。** `src/daifuku_stack`はコンテナへマウントされているので、
 次のファイルがそのままホスト側に残ります（`install/`側の`maps/`はビルド時に張った
 symlinkなので、そちらへ書くとホストに残るかどうかがsymlinkの張り方に依存します）。
 
-- `src/daifuku_stack/maps/map_19f.yaml`
-- `src/daifuku_stack/maps/map_19f.pgm`
+- `src/daifuku_stack/maps/19f/map_19f.yaml`
+- `src/daifuku_stack/maps/19f/map_19f.pgm`
 
 **保存したら`free_thresh`を`0.15`へ直してください。** `map_saver_cli`が書く既定は
 `0.25`ですが、同じ`map_saver_cli`が未観測に使う画素205はp=(255-205)/255=0.196なので、
@@ -219,7 +219,7 @@ VIの`unknown_as_obstacle`もコストマップの`track_unknown_space`も、未
 `map_19f`は19Fの地図の名前で、`src/daifuku_config/site`の既定値でもあります。別の場所の地図を
 作るときは名前を変えてください。そのとき`src/daifuku_config/overrides/<同じ名前>.yaml`も用意し、
 `tools/site.sh <名前>`で切り替えます。**どの地図を読むかは、そのoverridesの`site:`節に
-書きます**（`site: map: <ファイル名>`。`maps/`からの相対パス）。overridesの名前と地図の
+書きます**（`site: map: <フォルダ>/<ファイル名>`。`maps/`からの相対パス）。overridesの名前と地図の
 ファイル名は揃っていなくて構いませんが、**書き忘れると起動時にエラーで止まります**
 （既定の地図へは落としません）。
 

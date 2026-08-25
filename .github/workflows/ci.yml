@@ -157,6 +157,6 @@ jobs:
       - run: uv sync --frozen
       - name: map_19f を USD にして焼き戻す
         run: |
-          uv run map-to-usd ../src/daifuku_stack/maps/map_19f.yaml -o "$RUNNER_TEMP/world.usda"
+          uv run map-to-usd ../src/daifuku_stack/maps/19f/map_19f.yaml -o "$RUNNER_TEMP/world.usda"
           uv run python tests/verify_usda.py \
-            ../src/daifuku_stack/maps/map_19f.yaml "$RUNNER_TEMP/world.usda" free
+            ../src/daifuku_stack/maps/19f/map_19f.yaml "$RUNNER_TEMP/world.usda" free

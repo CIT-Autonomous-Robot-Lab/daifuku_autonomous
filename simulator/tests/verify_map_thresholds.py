@@ -9,7 +9,7 @@
 (`simulator/docs/pi4_sim.md` の「1.」)。地図を取り直すたびに戻るので検算する。
 
     cd simulator
-    uv run python tests/verify_map_thresholds.py ../src/daifuku_stack/maps/*.yaml
+    uv run python tests/verify_map_thresholds.py ../src/daifuku_stack/maps/*/*.yaml
 
 終了コード: 0 = 全部 OK、1 = どれかで未観測が free に化けている。
 """

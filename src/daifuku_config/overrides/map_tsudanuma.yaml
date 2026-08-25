@@ -26,7 +26,7 @@
 # ── その場所そのものに付く値 (ノードのパラメータではない) ─────────────────────
 # **どの地図を読むかはここで決まる。** 値は daifuku_stack の maps/ からの相対パス。
 site:
-  map: map_tsudanuma.yaml
+  map: tsudanuma/map_tsudanuma.yaml
 
 daifuku_bringup:
   # ── 仰角フィルタ ──────────────────────────────────────────────────────────

@@ -72,9 +72,9 @@ GPU の無い開発機 (AMD Radeon 780M) で書いたもの。
 > `map_to_usd` の出力を見ても分からない**。上の「実測検証済み」を維持する条件は:
 >
 > ```bash
-> uv run --no-sync map-to-usd ../src/daifuku_stack/maps/map_19f.yaml -o /tmp/w.usda
+> uv run --no-sync map-to-usd ../src/daifuku_stack/maps/19f/map_19f.yaml -o /tmp/w.usda
 > uv run --no-sync python tests/verify_usda.py \
->     ../src/daifuku_stack/maps/map_19f.yaml /tmp/w.usda free    # -> MATCH
+>     ../src/daifuku_stack/maps/19f/map_19f.yaml /tmp/w.usda free    # -> MATCH
 > ```
 
 ## 構成
@@ -129,8 +129,8 @@ uv run map-to-usd --help
 uv run rtf-gate --help
 
 # 生成した world.usda が元の地図と一致しているか検算する
-uv run map-to-usd ../src/daifuku_stack/maps/map_19f.yaml -o /tmp/world.usda
-uv run python tests/verify_usda.py ../src/daifuku_stack/maps/map_19f.yaml /tmp/world.usda free
+uv run map-to-usd ../src/daifuku_stack/maps/19f/map_19f.yaml -o /tmp/world.usda
+uv run python tests/verify_usda.py ../src/daifuku_stack/maps/19f/map_19f.yaml /tmp/world.usda free
 # -> walls parsed: 3373 / missing 0 / extra 0 / MATCH
 ```
 
@@ -364,7 +364,7 @@ Gazebo 版のワールド (`empty.world` / `iscas_museum.world` / `turtlebot3_ho
 
 ```bash
 uv run --project simulator map-to-usd \
-    src/daifuku_stack/maps/map_19f.yaml -o /tmp/world.usda
+    src/daifuku_stack/maps/19f/map_19f.yaml -o /tmp/world.usda
 ```
 
 利点は依存が無いことだけではない。地図とシミュレータ環境が**定義上ずれない**。
@@ -391,7 +391,7 @@ uv run --project simulator map-to-usd \
 
 ```bash
 uv run --project simulator downsample-map \
-    src/daifuku_stack/maps/map_tsudanuma.yaml /tmp/ts4.yaml --scale 4
+    src/daifuku_stack/maps/tsudanuma/map_tsudanuma.yaml /tmp/ts4.yaml --scale 4
 uv run --project simulator map-to-usd /tmp/ts4.yaml -o /tmp/ts4.usda
 # 1472x1000 @0.2m -> 12,011 矩形 / 5.8 MiB
 ```
@@ -493,7 +493,7 @@ NO_LIMITS=1 CONTAINER=isaacsim_full bash simulator/scripts/run_isaac_case.sh nol
 |---|---|---|
 | `ISAAC_RUNTIME` | `binary` | `binary` (`$ISAACSIM/python.sh`) / `pip` (`uv --extra isaac`) |
 | `LIDAR` | `2d` | `2d` / `mid360` |
-| `MAP_NAME` | `map_19f` | `src/daifuku_stack/maps/<name>.yaml`。launch と `nav_container.sh` の既定と揃えてある |
+| `MAP_NAME` | `19f/map_19f` | `src/daifuku_stack/maps/<name>.yaml` (地図ごとのフォルダを含む)。launch と `nav_container.sh` の既定と揃えてある |
 | `PLANNER` | `vi` | `vi` / `navfn` |
 | `LOCAL_PLANNER` | `auto` | `auto` / `nav2` / `vi` |
 | `NAV2` | `auto` | `auto` / `true` / `false`。**ここだけ launch の既定（`false`）と違う** — 下記 |

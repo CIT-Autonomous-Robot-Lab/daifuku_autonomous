@@ -12,7 +12,7 @@
 #                               プランナに追従させる。BT 込みで測りたいときだけ
 #                               NAV2=true を明示する (実機の既定は false)
 #   LOCALIZATION=emcl2|amcl     localization:=
-#   MAP_NAME=map_19f|map_tsudanuma|... share/maps/<name>.yaml を使う (既定 map_19f)。
+#   MAP_NAME=19f/map_19f|tsudanuma/map_tsudanuma|...  share/maps/<name>.yaml を使う
 #                               OVERRIDES 未指定なら同名の override を自動で選ぶ
 #   VI_MAP_SCALE=               vi_planner の map_scale (地図をプランナ内部で
 #                               粗くする倍率。津田沼 (5888x4000@0.05m) は 3 で
@@ -99,7 +99,7 @@ RUN=/tmp/pi4_sim/$CASE
 rm -rf "$RUN"; mkdir -p "$RUN"
 export ROS_LOG_DIR=$RUN/log
 
-MAP_NAME=${MAP_NAME:-map_19f}       # 既定は 19F の地図
+MAP_NAME=${MAP_NAME:-19f/map_19f}   # 既定は 19F の地図。maps/ からの相対パス (地図ごとのフォルダを含む)
 MAP=$SHARE/maps/$MAP_NAME.yaml
 if [ ! -f "$MAP" ]; then
     echo "map not found: $MAP" >&2
@@ -189,10 +189,11 @@ EXTRA=""
 params_arg=()
 # overrides は**必ず明示的に渡す**。launch の既定は map_19f なので、渡さないと
 # MAP_NAME を変えても 19F 用の調整 (emcl2 のリセット閾値など) が載ったままになる。
-# 地図名と同名の override があればそれを、無ければ none (= 何も重ねない)。
+# 地図名 (フォルダを除いたファイル名) と同名の override があればそれを、無ければ
+# none (= 何も重ねない)。
 if [ -z "${OVERRIDES:-}" ]; then
-    if [ -f "$CONFIG_SHARE/overrides/$MAP_NAME.yaml" ]; then
-        OVERRIDES=$MAP_NAME
+    if [ -f "$CONFIG_SHARE/overrides/$(basename "$MAP_NAME").yaml" ]; then
+        OVERRIDES=$(basename "$MAP_NAME")
     else
         OVERRIDES=none
     fi

@@ -22,7 +22,7 @@
 # **どの地図を読むかはここで決まる** (navigation の map:= の既定。nav2_params.resolve_map)。
 # 値は daifuku_stack の maps/ からの相対パス (絶対パスも可)。
 site:
-  map: map_19f.yaml
+  map: 19f/map_19f.yaml
 
 daifuku_bringup:
   # ── 仰角フィルタ ──────────────────────────────────────────────────────────

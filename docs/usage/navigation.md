@@ -101,7 +101,7 @@ overrides自身が`site:`節で宣言します。**
 
 ```yaml
 site:
-  map: map_19f.yaml   # daifuku_stack の maps/ からの相対パス（絶対パスも可）
+  map: 19f/map_19f.yaml   # daifuku_stack の maps/ からの相対パス（絶対パスも可）
 ```
 
 `site:`はパッケージ名の段に並ばない予約節で、「その場所そのものに付く値」の置き場です
@@ -286,7 +286,7 @@ BTを外すと、VIが損をしていた点が消えます。**毎秒の再計�
 
 ## 広域地図（map_tsudanuma）で動かす
 
-`maps/map_tsudanuma.yaml`は5888×4000セル（0.05 m/セル、294.4 m×200 m）の広域地図です。
+`maps/tsudanuma/map_tsudanuma.yaml`は5888×4000セル（0.05 m/セル、294.4 m×200 m）の広域地図です。
 価値反復はゴールごとに`nx × ny × theta_cell_num`の状態空間を扱います。この地図を
 0.05 mのまま解くと状態数は14.1億に達し、既定の密ソルバは状態配列だけで79 GBを要求
 するため、起動と同時に落ちます。

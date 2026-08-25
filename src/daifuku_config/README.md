@@ -210,7 +210,7 @@ override も**通ります**（そして黙って無視されます）。
 
 ```yaml
 site:
-  map: map_19f.yaml   # daifuku_stack の maps/ からの相対パス (絶対パスも可)
+  map: 19f/map_19f.yaml   # daifuku_stack の maps/ からの相対パス (絶対パスも可)
 ```
 
 `site:` は 1 段目に書ける予約節で、パッケージ名の段には並べません。「その場所そのものに
