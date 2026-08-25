@@ -24,7 +24,7 @@ is PTP-synced, restamping at receive time keeps every stamp on the one
 clock the rest of the stack (wheel odometry, TF, Nav2) already uses.
 
 Topics are the relative scan_in / scan_out, remapped by
-lidar_bringup.launch.py -- the same shape as prepare_mid360_imu.py.
+scan_pipeline.launch.py -- the same shape as prepare_mid360_imu.py.
 """
 
 import rclpy

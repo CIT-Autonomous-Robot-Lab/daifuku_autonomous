@@ -109,8 +109,9 @@ site:
 `site:`はパッケージ名の段に並ばない予約節で、「その場所そのものに付く値」の置き場です
 （いまは地図だけ）。**overridesの名前は場所であって、地図のファイル名ではありません**
 （`19f` / `tsudanuma`。`maps/`のフォルダ名と同じ）。地図を差し替えるならこの行を直します。
-場所の切り替えは`ros2 param set /site_manager site <名前>`か`echo <名前> >`、または機体の
-立て直しまで面倒を見る`tools/site.sh <名前>`です
+場所の切り替えは`ros2 param set /site_manager site <名前>`か`echo <名前> >`、または
+その2つを選び分ける`tools/site.sh <名前>`です（**機体は立て直しません**。2026-08-25から
+LiDARの帯もこの launch 側が読みます）
 （[日常操作](operations.md#走らせる場所を切り替える)）。
 
 ### 地図は2枚
@@ -347,7 +348,7 @@ BTを外すと、VIが損をしていた点が消えます。**毎秒の再計�
 `compact_sink_dir`を戻してください。**
 
 ```bash
-tools/site.sh tsudanuma   # 場所を切り替える（機体も立て直す）
+tools/site.sh tsudanuma   # 場所を切り替える
 ros2 launch daifuku_stack navigation.launch.py \
   planner:=vi
 ```

@@ -149,11 +149,11 @@ TELEOP_LINEAR_SPEED=0.1 bash tools/control.sh teleop keyboard
 | 変更したもの | やること |
 |---|---|
 | `src/daifuku_stack`配下のlaunch、behavior_trees、maps、rviz、src | 何もしない。`--symlink-install`なのでノードを再起動するだけで反映される |
-| `src/daifuku_config/stack/`の**値**（`nav2/`・`localization/`・`mapping/`・`lifecycle_bond.yaml`） | 同じく再ビルドは不要。ただし**走らせたまま直すと`config_sentinel`がそのlaunchを終了します**（下） |
-| `src/daifuku_config/bringup/`（LiDAR・EKF・ドライバ）と`src/daifuku_config/overrides/`の**値** | 再ビルドは不要だが、読むのは常駐している`raspicat`サービスなので立て直しが要る。**`config_sentinel`が変化に気づいて自分で上がり直します**（機体が止まっていて、その設定でも立つときだけ。`config_watch:=warn`で止められる）。コメントだけの変更には反応しません |
+| `src/daifuku_config/stack/`の**値**（`nav2/`・`localization/`・`mapping/`・`sensors/`・`lifecycle_bond.yaml`）と`src/daifuku_config/overrides/`の**値** | 同じく再ビルドは不要。ただし**走らせたまま直すと`config_sentinel`がそのlaunchを終了します**（下）。**LiDARの帯（`sensors/`）もこちら側です** — 2026-08-25に`bringup/`から移りました |
+| `src/daifuku_config/bringup/`（EKF・ドライバ・`MID360_config.json`）の**値** | 再ビルドは不要だが、読むのは常駐している`raspicat`サービスなので立て直しが要る。**`config_sentinel`が変化に気づいて自分で上がり直します**（機体が止まっていて、その設定でも立つときだけ。`config_watch:=warn`で止められる）。コメントだけの変更には反応しません |
 | `src/daifuku_bringup`配下のlaunchと`src/`のPython | 再ビルドは不要だが、**`config_sentinel`は気づきません**（見張っているのは`src/daifuku_config/`の`*.yaml`だけ）。`docker compose up -d`で自分で立て直す |
 | `src/daifuku_config/overrides/`に**ファイルを新しく足した** | 一度ビルドを通す（`install/`のsymlinkはビルド時にしか張られないので、足しただけでは`overrides:=`の一覧に出てこない）。そのあと`docker compose up -d` |
-| `src/daifuku_config/site`（走らせる場所） | `ros2 param set /site_manager site <名前>`、または`echo <名前> > src/daifuku_config/site`。**`tools/site.sh <名前>`**はその選び分けと`raspicat`の立て直しをやる便利口（下） |
+| `src/daifuku_config/site`（走らせる場所） | `ros2 param set /site_manager site <名前>`、または`echo <名前> > src/daifuku_config/site`。**`tools/site.sh <名前>`**はその選び分けをやる便利口（下）。反映は`navigation` / `mapping`の立て直しだけで、**機体は触りません** |
 | `src/raspicat_driver`のPython | 何もしない。ただし`setup.py`の`entry_points`を増やしたときはビルドが要る |
 | C++やRustのコード、`CMakeLists.txt`、外部パッケージのソース | `docker compose up`で差分ビルドする |
 | aptの依存、`Dockerfile`、`package.xml`の依存、`docker/`配下のスクリプト | `docker compose build`からやり直す |
@@ -232,34 +232,32 @@ ros2 launch daifuku_stack mapping.launch.py config_watch:=warn
 ```bash
 ros2 param set /site_manager site tsudanuma   # 機体が上がっているとき（検査して書いて流す）
 echo tsudanuma > src/daifuku_config/site      # 上がっていないとき（開発ホスト）
-tools/site.sh tsudanuma                       # 上の2つを選び分け、機体も立て直す
+tools/site.sh tsudanuma                       # 上の2つを選び分ける
 ```
 
-`tools/site.sh`は**必須ではありません**。やるのは経路の選び分けと、ROSへ届かなかった
-ときの`docker compose restart raspicat`だけです。
+`tools/site.sh`は**必須ではありません**。やるのは経路の選び分けだけです
+（2026-08-25まではもう1つ、`docker compose restart raspicat`という仕事がありました。
+LiDARの帯が`daifuku_stack`へ移って機体が場所を知らなくなったので消えました）。
 
 ```bash
 tools/site.sh                    # 今の値と、選べる名前
-tools/site.sh 19f --file-only    # ファイルを書くだけ（ROSにもDockerにも触らない）
-tools/site.sh 19f --no-restart   # ファイル経由に落ちたとき、機体は立て直さない
+tools/site.sh 19f --file-only    # ファイルを書くだけ（ROSに触らない）
 ```
-
-`--file-only`は開発ホスト向けで、`--no-restart`が効くのは`site_manager`へ届かず
-ファイル経由になったときだけです（ROS経由で通った場合、立て直すかどうかを決めるのは
-機体側の`config_sentinel`なので、こちらからは止められません）。
 
 名前は`src/daifuku_config/overrides/<名前>.yaml`を指します。**地図はそのファイル自身が`site:`節で
 宣言します**（`site: map:`の下に`navigation:`と`localization:`の2行。`daifuku_stack`の`maps/`からの
 相対パス。[自律移動](navigation.md#地図は2枚)）ので、
 overridesの名前と地図のファイル名は揃っていなくて構いません。切り替えたあとは
-`navigation`を立て直すだけで、`map:=`も`map_loc:=`も`overrides:=`も渡す必要はありません
-（どれもこの1語から来ます）。**立て直したときは機体を静止させておいてください**——Mid-360の
-ジャイロの電源投入時バイアスをそこで測ります。
+`navigation`（地図を作るなら`mapping`）を立て直すだけで、`map:=`も`map_loc:=`も
+`overrides:=`も渡す必要はありません（どれもこの1語から来ます）。**機体は立て直しません**
+——2026-08-25にLiDARの帯が`/scan`を作る段ごと`daifuku_stack`へ移ってから、機体には
+場所ごとに変わる設定が1つもないためです。
 
-**機体側は起動時にしかこの値を読みません。** ファイルを直しただけでは、LiDARの帯だけが
-前の場所のまま走ることになります。これを塞いでいるのが常駐している2つのノードです。
+**それでも「直したのに立て直し忘れる」穴は残ります。** 走っている`navigation`は
+起動時に読んだ値のままです。これを塞いでいるのが常駐している2つのノードです。
 
-- **`site_manager`**（`robot_bringup`が立てる。機体側に1つだけ）——`src/daifuku_config/site`の
+- **`site_manager`**（`robot_bringup`が立てる。リポジトリ全体で1つだけ。機体に置いて
+  あるのは常駐しているからで、機体自身が場所を使うからではありません）——`src/daifuku_config/site`の
   読み書きと告知。`ros2 param set /site_manager site <名前>`でも切り替えられ、**書く前に
   両パッケージについて検査する**ので、綴り違いや壊れた`overrides`はファイルに残りません。
   素手で直したときのために2秒ごとに読み直し、いまの値を`/daifuku/site`へlatchします
@@ -267,7 +265,9 @@ overridesの名前と地図のファイル名は揃っていなくて構いま�
   書き変わっていないかを見張ります。変化を見つけたらまずログに出し、**追随してよい構成で・
   その設定でも立つことを確かめ・機体が止まっていれば**、自分のlaunchを終了します。機体
   （`raspicat`サービス）は`restart: unless-stopped`で上がり直し、人が立てた`navigation`は
-  そのまま終わります
+  そのまま終わります。**機体側の見張りだけは場所を見ません**（`watch_site=False`）——
+  読む値が無いのに上がり直しては損なだけなので。機体自身の設定（`bringup/`）の書き換えは
+  これまでどおり見ます
 
 ```bash
 ros2 param get /site_manager site        # 今どこか
@@ -278,7 +278,8 @@ ros2 topic echo /daifuku/site            # 流れている値
 `tools/site.sh`は機体が上がっていれば`site_manager`へ渡し、居なければファイルを直接書きます。
 見張りを止めたいときは各launchに`config_watch:=warn`（言うだけ）か`off`（見張りごと
 立てない）を渡します。**走行中は落としません**——上がり直した先で`prepare_mid360_imu`が
-ジャイロのバイアスを測れず（静止区間が要る）、補正なしのまま走り出すためです。
+ジャイロのバイアスを測れず（静止区間が要る）、補正なしのまま走り出すためです
+（機体が上がり直すのは`bringup/`の設定を直したときだけになりました）。
 
 `map:=` / `map_loc:=`を明示することもできますが、`overrides`の`site: map:`と別のファイルを
 指していると**起動時にエラーで止まります**（役ごとに見ます）。地図だけ差し替えて調整を置き忘れると、別の場所の帯と

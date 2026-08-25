@@ -16,7 +16,8 @@
 | `stack/localization/emcl2.yaml` | `navigation.launch.py` | `emcl2_params_file` でノードへ直接 |
 | `stack/lifecycle_bond.yaml` | `navigation.launch.py` | `bond_params_file` を `SetParametersFromFile` でグループ内の全ノードへ注入 |
 | `stack/mapping/slam_toolbox.yaml` | `mapping.launch.py` | `slam_params_file` でノードへ直接 |
-| `bringup/sensors/*.yaml` | `lidar_bringup.launch.py` / `odom_fusion.launch.py` | 各ノードへ直接（`scan_filter_params_file`、`mid360_ekf_params_file` など） |
+| `stack/sensors/*.yaml` | `scan_pipeline.launch.py`（`navigation` / `mapping` が include） | 各ノードへ直接（`scan_filter_params_file`、`mid360_scan_params_file`、`mid360_elevation_params_file`）。**2026-08-25 に `bringup/` から移した** — 場所ごとに変わるのはこの 3 つだけで、常駐している機体がそれを読むために `site` を知る必要があったため |
+| `bringup/sensors/mid360_ekf.yaml` | `odom_fusion.launch.py` | `ekf_filter_node` と `prepare_mid360_imu` へ直接（`mid360_ekf_params_file`） |
 | `bringup/sensors/MID360_config.json` | `lidar_bringup.launch.py` | `livox_ros_driver2` へ直接。**ROS のパラメータファイルではない**ので上書きの対象外 |
 | `bringup/robot/raspicat_driver.yaml` | `robot_bringup.launch.py` | `raspicat_driver` (LifecycleNode) へ直接。`driver:=original` (自前実装 / 標準 / Pi 4・Pi 5) |
 | `bringup/robot/raspicat.yaml` | `robot_bringup.launch.py` | `raspimouse` (LifecycleNode) へ直接。`driver:=raspimouse` (公式実装 / rtmouse 入りの Pi 4 のみ) |
@@ -24,10 +25,13 @@
 | `bringup/robot/joy_teleop.yaml` | `robot_bringup.launch.py` | `joy_node` と `joy_teleop` の**両方**へ直接（1 ファイルに 2 ノード分）。`joy:=true` (既定) のときだけ |
 
 **`bringup/` の値を変えたら `docker compose up -d` が要ります。** navigation を
-立て直しても、常駐している raspicat サービスは読み直しません。
+立て直しても、常駐している raspicat サービスは読み直しません。逆に **`stack/` の値は
+`navigation` / `mapping` を立て直すだけ**で、機体はそのままです（`stack/sensors/` も
+そちら側なので、LiDAR の帯を変えるのに機体を触る必要はありません）。
 
-`lidar_bringup.launch.py` と `odom_fusion.launch.py` は `robot_bringup.launch.py` が
-include します。単独でも立てられます（`simulator/` はそうしています）。
+`lidar_bringup.launch.py` と `odom_fusion.launch.py` は `robot_bringup.launch.py` が、
+`scan_pipeline.launch.py` は `navigation.launch.py` / `mapping.launch.py` が
+include します。どれも単独で立てられます（`simulator/` は `odom_fusion` をそうしています）。
 
 `robot/raspicat.yaml` だけは**上流ファイルの完全なコピー**で、差分ではありません。
 launch_ros はノード自身の `parameters=` をグローバル (`SetParametersFromFile`) より
@@ -68,9 +72,9 @@ resample_interval: 1         # 既定 1: 何回の更新ごとにリサンプル
 | `localization/emcl2.yaml` | `src/emcl2_ros2` の `emcl2_node.cpp` |
 | `mapping/slam_toolbox.yaml` | `slam_toolbox` の `slam_toolbox_common.cpp` / `slam_mapper.cpp` / `laser_utils.cpp` / `ceres_solver.cpp` |
 | `sensors/mid360_ekf.yaml` | `robot_localization` の `ros_filter.cpp` |
-| `sensors/mid360_scan.yaml` | `pointcloud_to_laserscan` の `pointcloud_to_laserscan_node.cpp` |
-| `sensors/mid360_elevation.yaml` | `src/elevation_filter.py` の `declare_parameter` |
-| `sensors/scan_filter.yaml` | `laser_filters` の `sector_filter.h`（既定なし＝全項目必須） |
+| `stack/sensors/mid360_scan.yaml` | `pointcloud_to_laserscan` の `pointcloud_to_laserscan_node.cpp` |
+| `stack/sensors/mid360_elevation.yaml` | `daifuku_stack` の `src/elevation_filter.py` の `declare_parameter` |
+| `stack/sensors/scan_filter.yaml` | `laser_filters` の `sector_filter.h`（既定なし＝全項目必須） |
 | `robot/raspicat.yaml` | 上流 `raspicat_ros` の `raspicat/config/raspicat.param.yaml` |
 | `robot/raspicat_driver.yaml` | `src/raspicat_driver` の `src/raspicat_driver/node.py` |
 | `robot/twist_mux.yaml` | `twist_mux` の `twist_mux.cpp`（既定なし＝書いた値がすべて） |
@@ -172,14 +176,16 @@ override も**通ります**（そして黙って無視されます）。
 `daifuku_stack:` で、**各 launch は自分のパッケージ名の部分木しか読みません**。
 2 段目がノード名で、`emcl2:` の節は `localization/emcl2.yaml` へ、`slam_toolbox:` は
 `mapping/slam_toolbox.yaml` へ、`pointcloud_to_laserscan:` は
-`daifuku_bringup` の `sensors/mid360_scan.yaml` へ、というように、同じノード名を
+`stack/sensors/mid360_scan.yaml` へ、というように、同じノード名を
 宣言している設定ファイルの上に深くマージされます。書きかたと重ね方は 3 つとも
 同じで、`extra_params_file` も同じ規則で配られます。
 
-**1 地図 = 1 ファイル**です。場所が決まれば LiDAR の帯（機体側）も emcl2 の調整
-（自律移動側）も決まる、という 1 つの話なので、パッケージでは割っていません。
-パッケージ名の段は、その 1 ファイルをどちらの launch がどこまで読むかを
-**明示するため**にあります。
+**1 地図 = 1 ファイル**です。場所が決まれば LiDAR の帯も emcl2 の調整も決まる、
+という 1 つの話なので、パッケージでは割っていません。パッケージ名の段は、その
+1 ファイルをどちらの launch がどこまで読むかを**明示するため**にあります。
+**同梱の 3 つはいまどれも `daifuku_stack:` しか持ちません** — 2026-08-25 に帯と
+仰角が `/scan` を作る段ごと `daifuku_stack` へ移ったので、機体側の部分木は
+空になりました（機体は場所を知りません）。
 
 **3 つの overrides はキーの集合をそろえてあります。** 1 つにしか要らない値も、ほかへ
 断片と同じ値で書いて並べます（地図ごとの違いが縦に並んで見えるように）。
@@ -243,24 +249,24 @@ ros2 param set /site_manager site tsudanuma
 # 2. 上がっていないとき (開発ホスト)
 echo tsudanuma > src/daifuku_config/site
 
-# 3. 1 と 2 を選び分け、届かなければ raspicat も立て直す便利口
+# 3. 1 と 2 を選び分ける便利口
 tools/site.sh tsudanuma
 
 # 自律移動側。map も overrides も src/daifuku_config/site から来るので渡さない
 ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=nav2
 ```
 
-**機体側（LiDAR の帯）を読むのは常駐している raspicat サービスで、起動時にしか
-読みません。** だから素手で書いたときは `docker compose restart raspicat` が要ります
-（1 と 3 はそこまでやる）。1 の経路では site_manager が `/daifuku/site` へ流し、機体の
-launch に居る `config_sentinel` が**機体が止まっているのを確かめてから**自分を終了し、
-compose の `restart: unless-stopped` が新しい設定で上げ直します（走行中に切り替えても
-その場では止まりません）。**上がり直すとき機体は静止させておくこと** — Mid-360 の
-ジャイロの電源投入時バイアスを起動後の静止区間から測るためです。
+**どの経路でも機体（raspicat サービス）は立て直しません。** 2026-08-25 に LiDAR の帯と
+仰角が `daifuku_stack` へ移ってから、機体には場所ごとに変わる設定が 1 つもありません
+（`robot_bringup.launch.py` の見張りも `watch_site=False` で場所を見ません）。
+**反映するには `navigation` / `mapping` を立て直してください** — 帯も仰角も地図も
+emcl2 も VI も、みなそちらが起動時に読みます。走っている `navigation` は
+`config_sentinel` が落とすので、立て直すだけで新しい場所になります。
 
-`overrides:=` を navigation へ渡しても効くのは `daifuku_stack:` の部分木だけで、
-`mapping` から LiDAR の帯を変えられないのも同じ理由です（新しい場所で地図を作るときは、
-SLAM を始める前に場所を切り替えておくこと）。
+`overrides:=` は `mapping` にも同じように効きます（`daifuku_stack:` の部分木ぜんぶ、
+つまり `slam_toolbox` も LiDAR の帯も）。**2026-08-25 より前は帯が機体側だったので、
+新しい場所で地図を作るには SLAM を始める前に場所を切り替えて機体を立て直す必要が
+ありました。**
 
 何も重ねないときは `overrides:=none` です。`ros2 launch` は値が空の
 `overrides:=` を malformed として弾くので、空文字ではなく `none` を使います。
@@ -304,12 +310,11 @@ SLAM を始める前に場所を切り替えておくこと）。
 必要です。
 
 ```yaml
-daifuku_bringup:            # 機体側。変えたら docker compose up -d
-  elevation_filter:         # -> daifuku_bringup の sensors/mid360_elevation.yaml
+daifuku_stack:              # 自律移動側。変えたら navigation / mapping を立て直す
+  elevation_filter:         # -> stack/sensors/mid360_elevation.yaml
     ros__parameters:
       min_elevation_deg: 5.0
 
-daifuku_stack:              # 自律移動側
   vi_planner:               # -> stack/vi_planner.yaml (params_file の合成結果)
     ros__parameters:
       safety_radius_penalty: 1

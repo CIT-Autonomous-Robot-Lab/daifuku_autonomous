@@ -14,9 +14,7 @@ install(DIRECTORY launch src
 )
 
 install(PROGRAMS
-  src/elevation_filter.py
   src/prepare_mid360_imu.py
-  src/restamp_scan.py
   # joy_buttons.py は実行するものではないが、joy_teleop.py が隣から import する
   # ので同じ lib/ へ入れる (share/ 側にも上の install(DIRECTORY) で入る)。
   src/joy_buttons.py

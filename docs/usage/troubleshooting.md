@@ -276,8 +276,9 @@ ros2 param get /lifecycle_manager_localization bond_timeout
 ずれている旨のログが、起動から数分後に出る場合です。Mid-360がPTP同期していないため、
 デバイス内蔵時計がPiのシステム時計に対して毎分数秒ずれていくことが原因です。
 
-`lidar:=mid360`では`src/restamp_scan.py`が受信時刻でスタンプを打ち直します。
-中継が動いているか確認してください。
+`lidar:=mid360`では`daifuku_stack`の`src/restamp_scan.py`が受信時刻でスタンプを
+打ち直します（**`navigation` / `mapping` が立てる段**。2026-08-25に機体側から
+移りました）。中継が動いているか確認してください。
 
 ```bash
 ros2 node list | grep restamp_scan
@@ -286,13 +287,13 @@ ros2 topic hz /scan_raw
 ```
 
 `/scan_mid360_prestamp`だけが流れて`/scan_raw`が止まっている場合は、中継ノードが
-起動していません。中継は他のノードと同じ`Node`（`lib/daifuku_bringup/restamp_scan.py`）
+起動していません。中継は他のノードと同じ`Node`（`lib/daifuku_stack/restamp_scan.py`）
 なので、実行ファイルが無ければ**launchごとエラーで止まります**。黙って`/scan_raw`だけが
 欠けることは無いので、まず`ros2 launch`のログを見てください。それでも見当たらなければ
 置き場を確認します。
 
 ```bash
-ls $(ros2 pkg prefix daifuku_bringup)/lib/daifuku_bringup/
+ls $(ros2 pkg prefix daifuku_stack)/lib/daifuku_stack/
 ```
 
 見つからなければ、`restamp_scan.py`を`install(PROGRAMS)`へ足す前の`install/`が

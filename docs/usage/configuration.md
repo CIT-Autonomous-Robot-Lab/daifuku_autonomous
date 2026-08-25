@@ -27,11 +27,11 @@
 | `src/daifuku_config/bringup/robot/raspicat_driver.yaml` | `bringup` | 自前実装（`driver:=original`）のパラメータ。上に加えてGPIO・PWM・I2Cの配線 |
 | `src/daifuku_config/bringup/robot/twist_mux.yaml` | `bringup` | 速度指令の仲裁（購読トピックと優先度）。`twist_mux:=true`（既定）のときだけ |
 | `src/daifuku_config/bringup/robot/joy_teleop.yaml` | `bringup` | ゲームパッド。`joy_node`と`joy_teleop`の2ノード分が1ファイルに入る。`joy:=true`（既定）のときだけ |
-| `src/daifuku_config/bringup/sensors/scan_filter.yaml` | `bringup` | LiDARの角度フィルタ |
 | `src/daifuku_config/bringup/sensors/MID360_config.json` | `bringup` | Mid-360とホストのIP |
-| `src/daifuku_config/bringup/sensors/mid360_scan.yaml` | `bringup` | 3D点群から2D LaserScanへの変換 |
-| `src/daifuku_config/bringup/sensors/mid360_elevation.yaml` | `bringup` | 3D点群の仰角フィルタ（勾配のある床を落とす） |
 | `src/daifuku_config/bringup/sensors/mid360_ekf.yaml` | `bringup` | Mid-360 IMUと車輪オドメトリの融合 |
+| `src/daifuku_config/stack/sensors/scan_filter.yaml` | `stack` | LiDARの角度フィルタ |
+| `src/daifuku_config/stack/sensors/mid360_scan.yaml` | `stack` | 3D点群から2D LaserScanへの変換 |
+| `src/daifuku_config/stack/sensors/mid360_elevation.yaml` | `stack` | 3D点群の仰角フィルタ（勾配のある床を落とす） |
 
 `config/`の分け方と合成順序、それぞれの値の由来は
 `src/daifuku_config/README.md`に（3パッケージ分まとめて）あります。
@@ -46,7 +46,7 @@
 | `map_loc` | 空（`overrides`の`site: map: localization:`から導く） | **自己位置推定**に使う地図YAMLのパス。`/map_loc`で配信し`emcl2`が読む。空で宣言も無ければ`map`と同じ地図に落ちる（こちらだけは落とす。1枚で走らせる従来どおりの形なので）。**2枚を別にできるのは`localization:=emcl2`のときだけ**（[自律移動](navigation.md#地図は2枚)） |
 | `params_dir` | `src/daifuku_config/stack/nav2` | 合成するNav2パラメータ断片のディレクトリ |
 | `params_file` | 空（`params_dir`を合成） | Nav2パラメータを1ファイルで与える。指定すると`params_dir`は無視 |
-| `overrides` | `src/daifuku_config/site`の1行（既定`19f`） | `src/daifuku_config/overrides/<名前>.yaml`を重ねる。カンマ区切りで複数可。**置き換え**なので`tsudanuma`にすると19F用の調整は外れる。何も重ねないなら`overrides:=none`。行き先は**パッケージ名とノード名**で決まる（下）。**機体側（LiDARの帯）はraspicatサービスが起動時に読むので、切り替えは`tools/site.sh`で**（下） |
+| `overrides` | `src/daifuku_config/site`の1行（既定`19f`） | `src/daifuku_config/overrides/<名前>.yaml`を重ねる。カンマ区切りで複数可。**置き換え**なので`tsudanuma`にすると19F用の調整は外れる。何も重ねないなら`overrides:=none`。行き先は**パッケージ名とノード名**で決まる（下）。**同梱の3つはどれも`daifuku_stack:`しか持たないので、この launch を立て直せば全部反映される**（2026-08-25にLiDARの帯も`daifuku_stack`へ移った） |
 | `extra_params_file` | 空（無効） | `overrides`の後に重ねる任意パスのファイル。カンマ区切りで複数可 |
 | `config_watch` | `shutdown` | 起動後に設定ファイルが書き変わったときどうするか。`shutdown`（既定）は大声で言ったうえで**このlaunchを終了する**（`navigation`は人が立てたものなので、上げ直す人は居ません）。`warn`は言うだけ、`off`は見張り（`config_sentinel`）ごと立てない。[日常操作](operations.md#走らせたまま設定を直したとき) |
 | `emcl2_params_file` | `src/daifuku_config/stack/localization/emcl2.yaml` | EMCL2パラメータ |
@@ -73,10 +73,14 @@ ros2 launch daifuku_stack navigation.launch.py --show-args
 ## mapping.launch.py
 
 引数は`slam_params_file`、`rviz_config`、`use_sim_time`、`use_rviz`、`namespace`、
-`overrides`、`extra_params_file`、`config_watch`だけです。**LiDARの引数はありません**
-（センサーは`robot_bringup.launch.py`が立てます）。そのため、**新しい場所で地図を作る
-ときは`tools/site.sh <名前>`で切り替えてから**SLAMを始めてください。
-この launch へ`overrides:=`を渡しても効くのは`daifuku_stack:`の部分木だけです。
+`overrides`、`extra_params_file`、`config_watch`に加えて、**`/scan`を作る段の引数**
+（`lidar`、`lidar_driver`、`elevation_filter`、`scan_filter_enabled`、各設定ファイル）
+です。センサーの**ドライバ**は`robot_bringup.launch.py`が立てますが、点群を`/scan`に
+変える段（`scan_pipeline.launch.py`）はこの launch が include します。
+だから**`overrides:=<場所>`を渡せばLiDARの帯もその場所のものになります**
+（2026-08-25より前は機体側だったので、`tools/site.sh`で切り替えて機体を立て直す
+必要がありました）。`lidar:=`と`lidar_driver:=`は**機体側と揃えること**（既定は
+どちらも環境変数`LIDAR` / `LIDAR_DRIVER`から来るので、`.env`に1行書けば揃います）。
 
 `config_watch`の既定は`shutdown`で、**SLAM中に`daifuku_stack`の`config/`を直すと
 このlaunchごと終了します**。上げ直す人は居ないので、そこまで作った地図は消えます
@@ -89,7 +93,8 @@ ros2 launch daifuku_stack mapping.launch.py --show-args
 ## robot_bringup.launch.py
 
 **機体を丸ごと起動します**——本体ドライバ、URDF、`twist_mux`、ゲームパッド、
-**LiDAR**（`lidar_bringup.launch.py`）、**EKF**（`odom_fusion.launch.py`）。
+**LiDARドライバ**（`lidar_bringup.launch.py`）、**EKF**（`odom_fusion.launch.py`）。
+点群を`/scan`に変える段は`navigation` / `mapping`側です（2026-08-25から）。
 `docker/raspberrypi/`環境では`raspicat`サービスがこれを立てるため、通常は直接
 叩きません。**値を変えたら`docker compose up -d`が要ります。**
 
@@ -106,12 +111,12 @@ ros2 launch daifuku_stack mapping.launch.py --show-args
 | `joy_teleop_params_file` | 空（`src/daifuku_config/bringup/robot/joy_teleop.yaml`） | ゲームパッドのパラメータファイル。`joy_node`と`joy_teleop`の両方に渡る |
 | `urdf_lidar_frame` | `lidar_link` | URDFへ渡す2D LiDARのリンク名。**`lidar_bringup`の`lidar_frame`（Mid-360の`livox_frame`）とは別物** |
 | `use_joint_state_publisher` | `True` | `joint_state_publisher`を起動するか |
-| `lidar` | `mid360` | `mid360` / `2d`（`2d`ではraspicatのURG（`urg_node`）を起動する） |
-| `scan_filter_enabled` | `true` | 角度フィルタを使うか |
-| `elevation_filter` | `true` | 点群を仰角で切るか（`lidar:=mid360`のときだけ効く）。既定の設定`src/daifuku_config/bringup/sensors/mid360_elevation.yaml`は0〜90度＝搭載高の水平面から上で、断片の`min_height: 0.275`と同じ切り方のため既定では挙動が変わらない。狭めるのは`overrides/`の側だが、**同梱の3地図はいまどれも0度＝実質素通し**（`tsudanuma`は2026-08-08に5.0から戻し、`tsudanuma_mugimaru`はそれを写した）。狭めたときだけ**`pointcloud_to_laserscan`の`max_height`と組で決まる**（[LiDAR](../setup/lidar.md#仰角フィルタ勾配のある場所向け)） |
+| `lidar` | `mid360`（環境変数`LIDAR`） | `mid360` / `2d`（`2d`ではraspicatのURG（`urg_node`）を起動する）。**`navigation` / `mapping` にも同じ引数があり、揃っていないとエラーも警告も出ないまま`/scan`が空になる**。既定を環境変数から取っているのはそのため |
+| `scan_filter_enabled` | `true` | **`navigation` / `mapping` 側の引数**。角度フィルタを使うか |
+| `elevation_filter` | `true` | **`navigation` / `mapping` 側の引数**（点群を`/scan`に変える段はそちらに居る）。点群を仰角で切るか（`lidar:=mid360`のときだけ効く）。既定の設定`src/daifuku_config/stack/sensors/mid360_elevation.yaml`は0〜90度＝搭載高の水平面から上で、断片の`min_height: 0.275`と同じ切り方のため既定では挙動が変わらない。狭めるのは`overrides/`の側だが、**同梱の3地図はいまどれも0度＝実質素通し**（`tsudanuma`は2026-08-08に5.0から戻し、`tsudanuma_mugimaru`はそれを写した）。狭めたときだけ**`pointcloud_to_laserscan`の`max_height`と組で決まる**（[LiDAR](../setup/lidar.md#仰角フィルタ勾配のある場所向け)） |
 | `use_mid360_imu` | `true`（環境変数`USE_MID360_IMU`） | Mid-360のIMU融合を使うか。`true`ではEKFが`/wheel/odom`と`/imu/mid360`を融合して`/odom`と`odom -> base_footprint`を出し、ドライバは車輪の生値を`/wheel/odom`へ出すだけになる。**この2つは同じlaunchが立てるので片方だけ切り替わる状態は作れない。** 切り替えは`.env`の`USE_MID360_IMU`で。**`lidar:=2d`とは併用できない**（URGにIMUが無いので起動時にエラーで止まる）（[LiDARとオドメトリ](../setup/lidar.md#imuと車輪オドメトリ)） |
 | `publish_lidar_tf` | `true` | センサーTFを配信するか。配信されるのは`lidar:=mid360`のときだけ（URDFは`lidar_link`しか出さず、`livox_frame`は誰も出さない） |
-| `lidar_driver` | `true` | LiDARの実機ドライバ（`mid360`: livox_ros_driver2 + restamp / `2d`: `urg_node`）を起動するか。シミュレータでは`false` |
+| `lidar_driver` | `true`（環境変数`LIDAR_DRIVER`） | LiDARの実機ドライバ（`mid360`: livox_ros_driver2 / `2d`: `urg_node`）を起動するか。シミュレータでは`false`。`lidar`と同じく**両側に渡る**（`false`だと`/scan`を作る段が`restamp_scan`を挟まなくなる） |
 | `urg_interface` | `serial` | `lidar:=2d`のときのURGの接続方式（`serial` / `ethernet`）。`raspicat_bringup`の`config/urg_<方式>.param.yaml`を選ぶ |
 | `urg_params_file` | 空（上記から決める） | URGのパラメータファイルを直接指定する |
 | `wheel_odom_topic` | `/wheel/odom` | EKFへ渡す車輪オドメトリ |
@@ -173,12 +178,11 @@ EMCL2はNav2のノードではないため、合成後の`params_file`ではな�
 LiDARも機体ドライバも、1つのファイルにまとめて書けます（**1地図 = 1ファイル**）。
 
 ```yaml
-daifuku_bringup:            # 機体側。変更後は docker compose up -d
-  elevation_filter:         # -> daifuku_bringup の src/daifuku_config/bringup/sensors/mid360_elevation.yaml
+daifuku_stack:              # 自律移動側。変更後は navigation / mapping を立て直す
+  elevation_filter:         # -> src/daifuku_config/stack/sensors/mid360_elevation.yaml
     ros__parameters:
       min_elevation_deg: 5.0
 
-daifuku_stack:              # 自律移動側
   vi_planner:               # -> src/daifuku_config/stack/vi_planner.yaml（params_fileの合成結果）
     ros__parameters:
       safety_radius_penalty: 1

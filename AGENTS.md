@@ -33,8 +33,8 @@ Raspberry Pi Cat を ROS 2 Humble / Nav2 で自律移動させる colcon ワー�
 
 | パッケージ | 持つもの |
 | --- | --- |
-| `daifuku_bringup` | 機体。駆動ドライバ・URDF・cmd_vel の仲裁・ゲームパッド・**LiDAR**・**EKF**。`docker compose up` で常駐する |
-| `daifuku_stack` | 自律移動。Nav2 / emcl2 / VI の launch、地図、ウェイポイント、RViz |
+| `daifuku_bringup` | 機体。駆動ドライバ・URDF・cmd_vel の仲裁・ゲームパッド・**LiDAR ドライバ**・**EKF**。`docker compose up` で常駐する。**場所を知らない** |
+| `daifuku_stack` | 自律移動。Nav2 / emcl2 / VI の launch、地図、ウェイポイント、RViz。**点群を `/scan` に変える段**（`scan_pipeline.launch.py`）もここ |
 | `daifuku_config_manager` | 設定の合成規則（`params.py`）と、`site_manager` / `config_sentinel`（設定が書き変わったことを見つける役。**どちらも他を import しない**）。**設定の実体は持たない** |
 | `daifuku_config` | 設定の実体だけ。`bringup/` と `stack/` と `overrides/` と `site` |
 
@@ -114,7 +114,7 @@ symlink になるので、効くのは**ソース側の権限**です。Windows 
 **実機で通すぶんは `tools/checklist/` にあります。** `colcon test` からは走りません
 （人に聞く項も機体が動く項もあるため）。使いかたと番号の意味は `checkall.sh` の冒頭に
 あるので**ここには写しません**。段の 01 は静的検査で、このファイルが述べている約束ごと
-（ヘッダの位置・lint の顔ぶれ・見張りの立て方・順路のトピック名）をそのまま突き
+（ヘッダの位置・lint の顔ぶれ・見張りの立て方・LiDAR 構成の既定の出どころ・順路のトピック名）をそのまま突き
 合わせます。**ここを直したら 0103 も直すこと。**
 
 lint は詰め合わせ（`ament_lint_common`）を使わず、自前 7 パッケージが**同じものを
@@ -170,7 +170,8 @@ Docker 越しに叩く形は
   説明は `src/daifuku_config/README.md`）。だから切り替えは
   `ros2 param set /site_manager site <名前>`（機体が上がっているとき）か
   `echo <名前> > src/daifuku_config/site`（上がっていないとき）で足り、
-  `tools/site.sh` は**その 2 つを選び分けて `raspicat` を立て直す便利口**でしかない。
+  `tools/site.sh` は**その 2 つを選び分ける便利口**でしかない（2026-08-25 まではもう
+  1 つ、`raspicat` を立て直す仕事があった。機体が場所を知らなくなったので消えた）。
   すべての launch が `overrides` の既定をここから取り、`navigation.launch.py` は
   `map` / `map_loc` の既定もそこから導く。**導き方は「同じ名前の地図」ではなく、その
   overrides 自身が書いている `site: map:`**（2026-08-07 に改めた。
@@ -200,10 +201,10 @@ Docker 越しに叩く形は
   `site:` は 1 段目に書ける予約節（`RESERVED_SECTIONS`）で、パッケージ名の段には
   並べない。`overrides` は
   **置き換え**（追加ではない）で、重ねないときは `overrides:=none`（空文字は
-  `ros2 launch` が弾く）。LiDAR の帯を読むのは
-  `daifuku_bringup`（= 常駐している raspicat サービス）で**起動時にしか読まない**ので、
-  素手でファイルを直したときは `docker compose restart raspicat` が要る（`tools/site.sh`
-  と `site_manager` 経由はそこまで面倒を見る）。`.env` の `OVERRIDES` は 2026-08-07 に廃止した — 環境変数はコンテナ
+  `ros2 launch` が弾く）。**いま `overrides` の 1 段目に立つのは `daifuku_stack:` だけ**
+  ——LiDAR の帯も仰角も、2026-08-25 に `/scan` を作る段ごと `daifuku_stack` へ移った。
+  だから場所を変えても機体（常駐している raspicat サービス）は立て直さなくてよく、
+  `navigation` / `mapping` を立て直せば足りる。`.env` の `OVERRIDES` は 2026-08-07 に廃止した — 環境変数はコンテナ
   生成時に焼かれるので作り直しが要り、かつ「仕立てるときに 1 度決める」値と混ざって
   忘れやすかった。**環境変数 `OVERRIDES` 自体はファイルより強いまま残してある**が、
   compose はもう渡さない（`simulator/` が 1 回きりの構成を渡す口）。
@@ -221,18 +222,27 @@ Docker 越しに叩く形は
   入っていない**。落とす合図の `SENTINEL_RESTART_CODE` を **0 にしないこと** —
   `OnProcessExit` → `EmitEvent(Shutdown)` が 0 で発火すると、ノードがバグで落ちただけでも
   機体が上がり直し、`restart: unless-stopped` と組んで止まらなくなる。
+  **`robot_bringup` の見張りだけは場所を見ない**（`sentinel_actions(watch_site=False)`）。
+  2026-08-25 に場所ごとに変わる設定が `daifuku_stack` へ移って、機体には 1 つも
+  無くなったため——見たままにすると `tools/site.sh` のたびに読みもしない値のために
+  常駐している機体が上がり直す。機体自身の設定（`bringup/` の下）の書き換えは
+  これまでどおり見る。**`daifuku_bringup:` の部分木を overrides に戻したら
+  `watch_site=False` も外すこと**（そのままだと書き換えても気づかない穴になるので、
+  `sentinel_actions` が起動時に落とす）。
 - **`overrides/*.yaml` の行き先はパッケージ名とノード名で決まる。** 1 段目が
   `daifuku_bringup:` か `daifuku_stack:` で、各 launch は**自分のパッケージ名の
-  部分木しか読まない**。2 段目がノード名で、同じノード名を宣言している設定ファイル
+  部分木しか読まない**（**同梱の 3 つはいまどれも `daifuku_stack:` しか持たない**。
+  2026-08-25 に帯と仰角がそちらへ移ったので、機体側の部分木は空になった）。2 段目がノード名で、同じノード名を宣言している設定ファイル
   （そのパッケージの `src/daifuku_config/` の下のどれか）に重なる。落ちるのは 2 通り:
   **知らないパッケージ名**（`params.py` の `KNOWN_PACKAGES`。誰も読まない部分木に
   なるため）と、**そのパッケージのどの設定ファイルにも無いノード名**。どちらも
   綴り違いが黙って消えるのを防ぐため。ノード名を持たない
   `sensors/MID360_config.json` だけは上書きできない。
-- **`overrides/*.yaml` の実体は `daifuku_config` にある。** 地図ごとの調整は
-  LiDAR の帯（機体側）と emcl2 / VI（自律移動側）にまたがるので、どちらかに置くと
-  他方がそちらへ依存してしまう。1 地図 = 1 ファイルのまま、葉のパッケージに置いて
-  ある。
+- **`overrides/*.yaml` の実体は `daifuku_config` にある。** 地図ごとの調整が
+  LiDAR の帯（当時は機体側）と emcl2 / VI（自律移動側）にまたがっていたので、
+  どちらかに置くと他方がそちらへ依存してしまうため。**2026-08-25 に帯も
+  `daifuku_stack` へ移ってまたがらなくなった**が、置き場は変えていない
+  （`site` と 1 地図 1 ファイルの単位はどちらのパッケージのものでもない）。
 - **VI のノードは `vi_planner` 1 つだけ**（`local_planner` はその立ち方を選ぶ。
   `auto|vi` は両アクション、`nav2` は `follow: false` で広域だけ担わせて追従を
   `controller_server` に渡す）。**2026-08-08 の上流の整理まで後者は
@@ -354,12 +364,13 @@ Docker 越しに叩く形は
   そのとき `workspace-build` は走らない。** デーモンが上げ直すときは `depends_on`
   が効かず、各コンテナが独立に上がるため。`install/` が名前付きボリュームに残るので
   それで動くが、**C++ / Rust を直した分は再起動しても反映されない**（`docker compose
-  up -d` を人手で通すこと）。**LiDAR と EKF も `raspicat` サービスに入ったので、この
-  性質はセンサ側にも及ぶ。**
+  up -d` を人手で通すこと）。**LiDAR ドライバと EKF も `raspicat` サービスに入ったので、
+  この性質はセンサ側にも及ぶ。**
 - **ドライバが `finalized` まで落ちると launch ごと終了する**
-  （`robot_bringup.launch.py` の `register_shutting_down_transition`）。LiDAR と EKF が
-  同じ launch に居るので、**駆動の障害はセンサも道連れにし、`restart: unless-stopped`
-  で全部が上がり直す**。踏むのは Pi 5 で `driver:=raspimouse` を選んだときのような
+  （`robot_bringup.launch.py` の `register_shutting_down_transition`）。LiDAR ドライバと
+  EKF が同じ launch に居るので、**駆動の障害はセンサも道連れにし、
+  `restart: unless-stopped` で全部が上がり直す**（`/scan` を作る段は別の launch なので
+  巻き込まれないが、入力が消えるので出力も止まる）。踏むのは Pi 5 で `driver:=raspimouse` を選んだときのような
   設定の取り違えで、そこは直せば直る。
 - **Mid-360 が LAN に居ないまま boot すると、コンテナは正常に上がったように見える。**
   `ros2 launch` は子ノードが死んでも終了しないので、`/livox/lidar` が来ないまま
@@ -472,8 +483,9 @@ Docker 越しに叩く形は
   下限が距離とともに上がるので、**`max_height` をその下に置くと帯が潰れ、
   `range_max` を伸ばしてもエラーも警告も出ないまま手前で何も入らなくなる**
   （5 度なら 70m 先の実効下限は 6.40m）。地図ごとの角度は `overrides/` 側。
-  設定は `src/daifuku_config/bringup/sensors/` で、**変えたら `docker compose up -d`**
-  （読むのは常駐している raspicat サービス）。
+  設定は `src/daifuku_config/stack/sensors/` で、**変えたら `navigation` /
+  `mapping` を立て直す**（2026-08-25 に `bringup/sensors/` から移した。読むのは
+  `scan_pipeline.launch.py` で、機体ではない）。
   `range_max` の既定 70.0 はセンサの測距上限だが、**そこまで使うのは `emcl2` だけ**
   （costmap は `obstacle_max_range: 2.5`、SLAM は `max_laser_range: 10.0` で頭打ち）。
   **`tsudanuma` は 2026-08-08 に `min_elevation_deg` を 5.0 から断片と同じ 0.0 へ
@@ -482,14 +494,22 @@ Docker 越しに叩く形は
   なっていて、`elevation_filter:=false` にしても**帯は変わらない**。組で決まるのは
   5.0 へ戻したときの話で、そのときは `max_height`（同日に 8.30 → 5.00 → 4.00 と
   下げた）が帯の届く距離をそのまま決める。**未検証**。
-- **センサを立てるのは `robot_bringup.launch.py` だけ。** LiDAR（`/scan`）も EKF
+- **センサの「ドライバ」を立てるのは `robot_bringup.launch.py` だけ。**
+  LiDAR（`/livox/lidar`・`/livox/imu`、`lidar:=2d` なら `/scan_raw`）も EKF
   （`/odom`・`odom→base_footprint`）もそちらが `include` していて、**`docker compose up`
-  で常駐している**。`navigation.launch.py` / `mapping.launch.py` は消費者に徹し、
-  センサの引数を 1 つも持たない。手元で単独に立てるなら先に
-  `ros2 launch daifuku_bringup robot_bringup.launch.py` を通すこと（`/scan` が
-  来ないと emcl2 も costmap も動かない）。`simulator/` は駆動ドライバが要らないので、
-  `nav_container.sh` / `run_case.sh` が `lidar_bringup.launch.py` と
-  `odom_fusion.launch.py` を直接立てている。
+  で常駐している**。手元で単独に立てるなら先に
+  `ros2 launch daifuku_bringup robot_bringup.launch.py` を通すこと。
+  **`/scan` を作る段（`scan_pipeline.launch.py`）だけは `navigation.launch.py` /
+  `mapping.launch.py` が `include` する**（2026-08-25 に機体側から移した。場所ごとに
+  変わる値を持つのがその段だけで、常駐している機体が `site` を読む形になっていたため）。
+  裏返しに **`lidar:=` と `lidar_driver:=` は 2 つの launch にまたがる**ので、
+  既定を環境変数（`LIDAR` / `LIDAR_DRIVER`）から取り、Compose が `.env` の 1 行を
+  `raspicat` と `ros2` の両サービスへ配っている。**食い違うとエラーも警告も出ないまま
+  `/scan` が空になる。** また `navigation` と `mapping` はどちらもこの段を立てるので、
+  **2 つを同時に立てると `/scan` の publisher が 2 つになる**（もともと `map→odom` が
+  衝突するので排他だが、段が増えた）。`simulator/` は駆動ドライバが要らないので、
+  `nav_container.sh` / `run_case.sh` が `odom_fusion.launch.py` を直接立て、
+  `lidar:=` / `lidar_driver:=false` は `navigation.launch.py` へ渡している。
 - **`use_mid360_imu` は 1 つの launch に閉じている。** `robot_bringup.launch.py` が
   ドライバと EKF（`odom_fusion.launch.py`）の両方を立てるので、**片方だけ切り替わる
   状態は作れない**。`true`（既定）では `odom→base_footprint` と `/odom` の所有者が EKF
@@ -565,7 +585,7 @@ Docker 越しに叩く形は
 | `launch/` | [`docs/usage/architecture.md`](docs/usage/architecture.md#launchファイルの構成) |
 | `simulator/`（Isaac 版 / pi4_sim 版） | [`simulator/docs/pi4_sim.md`](simulator/docs/pi4_sim.md) を先に、次に [`simulator/README.md`](simulator/README.md) |
 | `docker/` | [`docker/README.md`](docker/README.md)（実機用と開発用の 2 環境） |
-| `src/daifuku_bringup/`（LiDAR・EKF・駆動の launch） | [`docs/setup/lidar.md`](docs/setup/lidar.md)、次に [`docs/usage/architecture.md`](docs/usage/architecture.md#launchファイルの構成) |
+| `src/daifuku_bringup/`（LiDAR ドライバ・EKF・駆動の launch） | [`docs/setup/lidar.md`](docs/setup/lidar.md)、次に [`docs/usage/architecture.md`](docs/usage/architecture.md#launchファイルの構成) |
 | `src/raspicat_driver/` / `tools/image/udev/` | [`src/raspicat_driver/README.md`](src/raspicat_driver/README.md)、次に [`docs/setup/raspberry-pi-4.md`](docs/setup/raspberry-pi-4.md) と [`raspberry-pi-5.md`](docs/setup/raspberry-pi-5.md)（未検証の項目付き） |
 | `src/daifuku_rqt/` | [`src/daifuku_rqt/README.md`](src/daifuku_rqt/README.md)、次に [`docs/usage/control-panel.md`](docs/usage/control-panel.md) |
 | `src/daifuku_waypoint_manager/` / `daifuku_stack/waypoints/` | [`src/daifuku_waypoint_manager/README.md`](src/daifuku_waypoint_manager/README.md) |

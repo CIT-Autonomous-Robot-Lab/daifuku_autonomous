@@ -39,7 +39,7 @@ pointcloud_to_laserscan). This holds only while lidar_roll and lidar_pitch
 are 0; tilt the sensor and the band tilts with it.
 
 Topics are the relative cloud_in / cloud_out, remapped by
-lidar_bringup.launch.py -- the same shape as restamp_scan.py.
+scan_pipeline.launch.py -- the same shape as restamp_scan.py.
 """
 
 import array
@@ -60,7 +60,7 @@ class ElevationFilter(Node):
     def __init__(self):
         super().__init__("elevation_filter")
         # Declared wide open so this node is a pass-through until a
-        # parameter file narrows it. src/daifuku_config/bringup/sensors/mid360_elevation.yaml
+        # parameter file narrows it. src/daifuku_config/stack/sensors/mid360_elevation.yaml
         # holds the real values.
         min_deg = self.declare_parameter("min_elevation_deg", -90.0).value
         max_deg = self.declare_parameter("max_elevation_deg", 90.0).value

@@ -112,8 +112,14 @@ services:
       # (unreachable locators made discovery flap under load).
       FASTRTPS_DEFAULT_PROFILES_FILE: /etc/fastdds/udp_whitelist.xml
       # **USE_MID360_IMU はここには要らない。** 立てるのは raspicat 側の
-      # robot_bringup.launch.py だけで、navigation / mapping はセンサも EKF も
-      # 立てない (消費するだけ)。
+      # robot_bringup.launch.py だけで、navigation / mapping は EKF を立てない。
+      #
+      # **LIDAR / LIDAR_DRIVER は両サービスに要る。** 2026-08-25 から /scan を
+      # 作る段 (scan_pipeline.launch.py) は navigation / mapping の側に居るので、
+      # 「どの LiDAR か」を機体側とこちら側の 2 つの launch が知る。**食い違うと
+      # エラーも警告も出ないまま /scan が空になる**ので、.env の 1 行を両方へ配る。
+      LIDAR: ${LIDAR:-mid360}
+      LIDAR_DRIVER: ${LIDAR_DRIVER:-true}
       #
       # **場所 (overrides と map) もここには要らない。** どちらの launch も
       # src/daifuku_config/site を既定として読む。src/ をマウントしているので
@@ -137,15 +143,20 @@ services:
     device_cgroup_rules:
       - "c 13:* r"
 
-  # 機体まるごと。**駆動ドライバ + robot_state_publisher + LiDAR + EKF。**
+  # 機体まるごと。**駆動ドライバ + robot_state_publisher + LiDAR ドライバ + EKF。**
   # 従来はホストの ~/raspicat2 ワークスペースから直接起動していたものを、
   # ナビゲーションと同じイメージ・同じ compose に取り込んだもの。
   #
   # ナビゲーションとは別サービスにしてある。ros2 サービスだけを
   # `docker compose restart ros2` で入れ替えても機体側は生き続けるため、
-  # odom の累積が落ちない/取り違える事故が起きにくい。**LiDAR と EKF をこちらに
-  # 置いてあるのも同じ理由**で、navigation を立て直すたびに /odom が原点へ飛んだり
-  # LiDAR の初期化を待たされたりしなくなる。
+  # odom の累積が落ちない/取り違える事故が起きにくい。**LiDAR ドライバと EKF を
+  # こちらに置いてあるのも同じ理由**で、navigation を立て直すたびに /odom が原点へ
+  # 飛んだり LiDAR の初期化を待たされたりしなくなる。
+  #
+  # **点群を /scan に変える段はこちらには居ない** (2026-08-25 に navigation /
+  # mapping 側へ出した)。場所ごとに変わる値を持つのはあの段だけで、そのせいで
+  # 常駐しているこちらが src/daifuku_config/site を読む形になっていた。おかげで
+  # **地図を変えても raspicat の立て直しは要らない**。
   #
   # 裏返しとして、**ドライバが finalized まで落ちると launch ごと終了し、LiDAR も
   # 一緒に上がり直す** (robot_bringup.launch.py の register_shutting_down_transition)。

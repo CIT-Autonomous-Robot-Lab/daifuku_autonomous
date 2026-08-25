@@ -29,4 +29,5 @@ daifuku_config_manager にあり、機体側 (daifuku_bringup) と共有して�
   backends.py     localization / planner バックエンドの選択と検証
   nav2_params.py  src/daifuku_config/stack/nav2/*.yaml + vi_planner.yaml の合成と、
                   overrides からの map:= の決定
+  scan.py         点群 (または生スキャン) を /scan に変える段の引数と include
 """

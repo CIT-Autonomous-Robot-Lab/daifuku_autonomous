@@ -14,6 +14,10 @@ install(DIRECTORY behavior_trees launch maps rviz src waypoints
 )
 
 install(PROGRAMS
+  # /scan を作る段の 2 つ (scan_pipeline.launch.py が立てる)。2026-08-25 に
+  # daifuku_bringup から移した。
+  src/elevation_filter.py
+  src/restamp_scan.py
   src/system_monitor.py
   DESTINATION lib/${PROJECT_NAME}
 )

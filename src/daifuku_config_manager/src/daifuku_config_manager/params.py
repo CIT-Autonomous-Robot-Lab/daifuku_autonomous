@@ -655,18 +655,25 @@ def declare_watch_arg():
 
 
 def sentinel_actions(context, *args, package, config_root, action=None,
-                     node_name=None, **kwargs):
+                     node_name=None, watch_site=True, **kwargs):
     """設定の書き換えを見張るノードと、その終了を launch の停止に繋ぐ handler。
 
     **top-level の launch だけが呼ぶこと。** include される側 (lidar_bringup /
-    odom_fusion) でも呼ぶと、1 つの launch 木に見張りが 3 つ立って、それぞれが
-    勝手に launch を落としにかかる。
+    odom_fusion / scan_pipeline) でも呼ぶと、1 つの launch 木に見張りが 3 つ立って、
+    それぞれが勝手に launch を落としにかかる。
 
     Args:
         package: この launch のパッケージ名 (overrides のどの部分木を見るか)。
         config_root: このパッケージの src/daifuku_config/ (指紋を取る範囲)。
         action: shutdown / warn / off。省略すると launch 引数 config_watch。
         node_name: 既定は config_sentinel_<パッケージ名から daifuku_ を除いたもの>。
+        watch_site: 場所 (overrides と /daifuku/site) も見るか。**False にできるのは
+            そのパッケージが overrides の部分木を 1 つも持たないときだけ**で、
+            持っているのに False だと**書き換えても気づかない穴になる**ので、
+            下で確かめて落とす。機体 (daifuku_bringup) が False なのは、
+            2026-08-25 に場所ごとに変わる値 (/scan の帯と仰角) が daifuku_stack へ
+            移って、**機体は場所を知らなくなった**ため — 見たままにすると、
+            読みもしない値のために常駐している機体が上がり直す。
 
     Returns:
         action の並び (OpaqueFunction からそのまま返せる)。
@@ -685,6 +692,18 @@ def sentinel_actions(context, *args, package, config_root, action=None,
         )
 
     site = site_name(context)
+    if not watch_site:
+        # 「持っていないから見ない」を、持ち始めた瞬間に気づけるようにする。
+        # ファイルが無いときは黙って通す — 綴り違いは compose が先に落とす。
+        path = overrides_path(site) if is_site(site) else ""
+        if path and os.path.isfile(path) and (load(path).get(package) or {}):
+            raise RuntimeError(
+                f"overrides:{site} に {package}: の部分木がありますが、この launch の "
+                "見張りは場所を見ない設定 (watch_site=False) です。\n"
+                "書き換えても気づかないので、部分木を消すか watch_site を外して"
+                "ください。"
+            )
+        site = ""
     name = node_name or f"config_sentinel_{package.replace('daifuku_', '')}"
     try:
         digest = config_digest(site, package, config_root)

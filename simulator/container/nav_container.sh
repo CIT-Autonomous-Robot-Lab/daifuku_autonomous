@@ -293,20 +293,12 @@ fi
 # 同じ理由)。robot_bringup.launch.py そのものを使わないのは、駆動ドライバ
 # (実機の GPIO を掴む) まで立てようとしてしまうため。
 #
-# lidar_driver:=false が要点。実機ドライバ (livox_ros_driver2 / urg_node) と
-# restamp_scan.py を起動せず、Isaac が出す /livox/lidar と /livox/imu (または
-# /scan_raw) をそのまま使う。
+# **LiDAR ドライバは立てない。** Isaac が /livox/lidar と /livox/imu (または
+# /scan_raw) を直接出すので、実機ドライバ (livox_ros_driver2 / urg_node) は要らず、
+# 取り付け位置の静的 TF も上の robot_state_publisher が出している。
+# 点群を /scan に変える段は 2026-08-25 から navigation.launch.py が持つので、
+# lidar:= と lidar_driver:=false は下の navigation へ渡す。
 #
-# publish_lidar_tf:=false も必須。launch の既定は true (実機の URDF は
-# livox_frame を出さないため) だが、こちらは上で robot_state_publisher が
-# base_footprint -> $lidar_frame を出しており、二重配信になる。
-ros2 launch daifuku_bringup lidar_bringup.launch.py \
-    lidar:="$LIDAR" lidar_driver:=false publish_lidar_tf:=false \
-    use_sim_time:="$USE_SIM_TIME" "${params_arg[@]}" \
-    >"$RUN/lidar.log" 2>&1 &
-LIDAR_PID=$!
-echo "  lidar_bringup pid=$LIDAR_PID"
-
 # use_mid360_imu:=true は lidar:=mid360 では必須。Isaac は上の ODOM_TOPIC=/wheel/odom
 # と PUBLISH_ODOM_TF=false で EKF に譲る側に回っているので、これが立たないと
 # odom -> base_footprint を誰も出さない。launch の既定も true だが、そちらは環境変数
@@ -322,13 +314,14 @@ if [ "$LIDAR" = "mid360" ]; then
     echo "  odom_fusion pid=$ODOM_PID"
 fi
 
-# navigation は /scan と /odom の消費者に徹する (センサ関係の引数はもう無い)。
+# navigation は /odom の消費者に徹し、**/scan は自分で作る**
+# (scan_pipeline.launch.py。lidar_driver:=false なので restamp は挟まない)。
 #
 # config_watch:=off で設定の見張り (config_sentinel) を立てない。ここは 1 回きりの
 # 構成を OVERRIDES で渡すので追随の対象外だし (params.follows_site)、告知する
 # site_manager も居ない。DDS の参加者も 1 つ増やさずに済む。**params_arg に
 # 混ぜないこと** — この引数を宣言しているのは navigation だけで、上の
-# lidar_bringup / odom_fusion にも渡ってしまう。
+# odom_fusion にも渡ってしまう。
 #
 # 地図は 2 枚 (navigation -> /map、localization -> /map_loc) だが、ハーネスが指すのは
 # MAP_NAME の 1 枚だけなので両方へ同じものを渡す。**map_loc:= を落とすと
@@ -337,6 +330,7 @@ ros2 launch daifuku_stack navigation.launch.py \
     use_rviz:=false \
     use_sim_time:="$USE_SIM_TIME" \
     config_watch:=off \
+    lidar:="$LIDAR" lidar_driver:=false \
     map:="$MAP" map_loc:="$MAP" "${params_arg[@]}" \
     planner:="$PLANNER" local_planner:="$LOCAL_PLANNER" nav2:="$NAV2" \
     localization:="$LOCALIZATION" >"$RUN/nav.log" 2>&1 &
@@ -376,7 +370,7 @@ python3 /opt/sim/probe.py \
     --settle "$SETTLE" --timeout "$TIMEOUT" 2>&1 | tee "$RUN/probe.log"
 rc=${PIPESTATUS[0]}
 
-kill $MON_PID $NAV_PID $ODOM_PID $LIDAR_PID $RSP_PID 2>/dev/null
+kill $MON_PID $NAV_PID $ODOM_PID $RSP_PID 2>/dev/null
 sleep 3
 cleanup_ros
 
@@ -389,7 +383,7 @@ grep -h -E 'connected with bond|Managed nodes are active|Aborting bringup|Failed
 
 echo "=== KILLED (OOM 等でプロセスが落ちていないか) ==="
 grep -h -i -E 'error|killed|terminated|exited with|abort' \
-    "$RUN"/nav.log "$RUN"/lidar.log "$RUN"/odom_fusion.log 2>/dev/null | tail -25
+    "$RUN"/nav.log "$RUN"/odom_fusion.log 2>/dev/null | tail -25
 echo "=== peak mem: $(sort -t= -k3 -n "$RUN/load.log" 2>/dev/null | tail -1)"
 echo "=== CASE=$CASE done rc=$rc, logs in $RUN"
 exit $rc

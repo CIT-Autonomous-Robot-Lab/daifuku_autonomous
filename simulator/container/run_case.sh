@@ -233,21 +233,17 @@ python3 "$(dirname "$0")/fake_robot.py" --ros-args \
 SIM_PID=$!
 sleep 3
 
-# 角度フィルタ (/scan_raw -> /scan)。**実機ではこれも robot_bringup.launch.py が
-# 立てる**ので、navigation.launch.py からは出ていった。
-# lidar_driver:=false: /scan_raw は fake_robot.py が出すので、lidar:=2d の
-# 実機ドライバ (urg_node) は立てない。
-# odom_fusion は立てない (2D LiDAR に IMU は無く、odom -> base_footprint は
+# 角度フィルタ (/scan_raw -> /scan) は navigation.launch.py が立てる
+# (2026-08-25 に scan_pipeline.launch.py として機体側から出てきた段)。下で
+# lidar:=2d lidar_driver:=false を渡しているのがそれで、/scan_raw は
+# fake_robot.py が出すので実機ドライバ (urg_node) は立たない。
+# odom_fusion も立てない (2D LiDAR に IMU は無く、odom -> base_footprint は
 # fake_robot.py が出す)。
-ros2 launch daifuku_bringup lidar_bringup.launch.py \
-    lidar:=2d lidar_driver:=false "${params_arg[@]}" \
-    >"$RUN/lidar.log" 2>&1 &
-LIDAR_PID=$!
 
 # config_watch:=off で設定の見張り (config_sentinel) を立てない。ここは 1 回きりの
 # 構成を OVERRIDES で渡すので追随の対象外だし (params.follows_site)、告知する
 # site_manager も居ない。**params_arg に混ぜないこと** — この引数を宣言している
-# のは navigation だけで、上の lidar_bringup にも渡ってしまう。
+# のは navigation だけ。
 #
 # 地図は 2 枚 (navigation -> /map、localization -> /map_loc) だが、ハーネスが指すのは
 # MAP_NAME の 1 枚だけなので両方へ同じものを渡す。**map_loc:= を落とすと
@@ -255,6 +251,7 @@ LIDAR_PID=$!
 ros2 launch daifuku_stack navigation.launch.py \
     use_rviz:=false \
     config_watch:=off \
+    lidar:=2d lidar_driver:=false \
     map:="$MAP" map_loc:="$MAP" "${params_arg[@]}" \
     planner:="$PLANNER" local_planner:="$LOCAL_PLANNER" nav2:="$NAV2" \
     localization:="$LOCALIZATION" >"$RUN/nav.log" 2>&1 &
@@ -274,7 +271,7 @@ python3 "$(dirname "$0")/probe.py" \
     --settle "$SETTLE" --timeout "$TIMEOUT" 2>&1 | tee "$RUN/probe.log"
 rc=${PIPESTATUS[0]}
 
-kill $MON_PID $NAV_PID $LIDAR_PID $SIM_PID 2>/dev/null
+kill $MON_PID $NAV_PID $SIM_PID 2>/dev/null
 sleep 3
 cleanup_ros
 
@@ -288,7 +285,7 @@ grep -h -E 'connected with bond|Managed nodes are active|Aborting bringup|Failed
 echo "=== KILLED (OOM 等でプロセスが落ちていないか) ==="
 dmesg 2>/dev/null | tail -20 | grep -i -E 'oom|killed' || echo "(dmesg unavailable in container)"
 grep -h -i -E 'error|killed|terminated|exited with|abort' \
-    "$RUN"/nav.log "$RUN"/lidar.log 2>/dev/null | tail -25
+    "$RUN"/nav.log 2>/dev/null | tail -25
 echo "=== peak mem: $(sort -t= -k3 -n "$RUN/load.log" 2>/dev/null | tail -1)"
 echo "=== CASE=$CASE done rc=$rc, logs in $RUN"
 exit $rc

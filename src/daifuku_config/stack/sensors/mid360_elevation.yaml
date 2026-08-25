@@ -1,6 +1,6 @@
 # Mid-360 の 3D 点群 (/livox/lidar) を仰角で切る (elevation_filter:=true、既定)。
 # 「既定」= src/elevation_filter.py の declare_parameter。
-# lidar_bringup.launch.py がノードへ直接渡す。pointcloud_to_laserscan の**手前**に
+# scan_pipeline.launch.py がノードへ直接渡す。pointcloud_to_laserscan の**手前**に
 # 入り、切った残りを /livox/lidar_elevation へ出す。
 #
 # mid360_scan.yaml の min_height と違い、これは**距離に比例する下限**になる

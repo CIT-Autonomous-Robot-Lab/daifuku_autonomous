@@ -13,11 +13,15 @@
 
 # 保存済みの地図で自律移動する。
 #
-# **センサは立てない。** LiDAR (/scan) も EKF (/odom, odom -> base_footprint) も
-# robot_bringup.launch.py の受け持ちで、そちらは docker compose up で常駐している。
-# ここはその消費者に徹する。手元で単独に立てるときは先に
-# `ros2 launch daifuku_bringup robot_bringup.launch.py` を通しておくこと
-# (/scan が来ないと emcl2 も costmap も動かない)。
+# **センサのドライバは立てない。** LiDAR の生データ (/livox/lidar か /scan_raw) も
+# EKF (/odom, odom -> base_footprint) も robot_bringup.launch.py の受け持ちで、
+# そちらは docker compose up で常駐している。手元で単独に立てるときは先に
+# `ros2 launch daifuku_bringup robot_bringup.launch.py` を通しておくこと。
+#
+# **/scan を作る段だけはこちらが持つ** (scan_pipeline.launch.py を include する)。
+# 帯と仰角は場所ごとに変わる値で、それを持つのがこの段だけだったため。機体側に
+# 置いていた 2026-08-25 までは、常駐している機体が src/daifuku_config/site を読む
+# ことになっていて、地図を変えるたびに `docker compose restart raspicat` が要った。
 #
 # 選べる組み合わせは 4 通り (localization x planner)。どれを選んでも RViz
 # (use_rviz:=true のとき) は共通で、違うのはその下のスタックだけ。
@@ -76,7 +80,7 @@ if _LAUNCH_DIR not in sys.path:
     sys.path.insert(0, _LAUNCH_DIR)
 
 from daifuku_config_manager import params  # noqa: E402
-from daifuku_stack_launch import backends, nav2_params  # noqa: E402
+from daifuku_stack_launch import backends, nav2_params, scan  # noqa: E402
 
 
 def generate_launch_description():
@@ -687,6 +691,10 @@ def generate_launch_description():
         SetEnvironmentVariable("RCUTILS_LOGGING_BUFFERED_STREAM", "1"),
 
         *declare_args,
+        # 点群 (または生スキャン) を /scan に変える段の引数。実体は
+        # scan_pipeline.launch.py で、この launch が include する
+        # (daifuku_stack_launch/scan.py)。
+        *scan.declare_args(),
 
         # このスタックが読む設定ファイルへ overrides を重ね、差し替える。以降の
         # 参照 (RewrittenYaml / 各 include / 下の検証) はこの合成結果を見る。
@@ -730,6 +738,11 @@ def generate_launch_description():
                 "effective_local_planner": effective_local_planner,
             },
         ),
+
+        # /scan を作る。**機体側 (robot_bringup) が出すのはセンサそのままの点群まで**
+        # で、帯と仰角は場所で変わるのでこちら側に居る。mapping.launch.py も同じ段を
+        # 立てるので、**2 つを同時に立てないこと** (/scan の publisher が 2 つになる)。
+        scan.include_scan_pipeline(pkg_share),
 
         amcl_navfn_stack,
         amcl_vi_stack,

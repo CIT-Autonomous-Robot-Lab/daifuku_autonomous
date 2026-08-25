@@ -1,6 +1,6 @@
 # tsudanuma_mugimaru.yaml — 津田沼 (mugimaru_bringup 由来の地図、2500x1581 @0.1m
 # = 250.0m x 158.1m) 用の上書き。
-# 「断片」= 重ねる先の設定ファイルの値 (src/daifuku_config/bringup/sensors/{mid360_scan,mid360_elevation}.yaml、
+# 「断片」= 重ねる先の設定ファイルの値 (src/daifuku_config/stack/sensors/{mid360_scan,mid360_elevation}.yaml、
 # src/daifuku_config/stack/nav2/{vi_planner,behaviors}.yaml、src/daifuku_config/stack/localization/emcl2.yaml)。
 # 地図そのものの素性は src/daifuku_stack/maps/tsudanuma_mugimaru/README.md。
 #
@@ -42,7 +42,7 @@ site:
     navigation:   tsudanuma_mugimaru/navigation/tsudanuma-challenge_nav.yaml    # 経路計画 (/map)。手描きの壁 +853m2
     localization: tsudanuma_mugimaru/localization/tsudanuma-challenge_loc.yaml  # 自己位置推定 (/map_loc)。実測のまま
 
-daifuku_bringup:
+daifuku_stack:
   # ── 仰角フィルタ ──────────────────────────────────────────────────────────
   # 場所は tsudanuma.yaml と同じなので、あちらと同じ切り方にしてある (勾配対策は無し)。
   # 戻すなら 5.0 から。そのときは下の max_height と対で見ること。
@@ -60,7 +60,6 @@ daifuku_bringup:
       max_height: 4.00                # 断片 0.50: 樹冠・庇・看板を落とす (tsudanuma.yaml と同じ)。仰角 0.0 なので下限 0.275m と全距離で対
       range_max: 70.0                 # 断片も同じ値: センサの測距上限 (反射率 80% で 70m)
 
-daifuku_stack:
   # ── emcl2 ────────────────────────────────────────────────────────────────
   # **emcl2 が読むのは localization の地図** (/map_loc)。手描きの壁 853m2 はそちらには
   # 無いので、19F のような「地図に有って現実に無い壁」の貫通は起きにくいはず。それでも

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""LiDAR 構成の共通部品。
+"""LiDAR ドライバの共通部品。
 
 lidar_bringup.launch.py と、それを include する robot_bringup.launch.py が同じ
 引数を宣言する。以前は 3 つの launch (navigation / mapping / lidar_bringup) に
@@ -22,6 +22,13 @@ lidar_bringup.launch.py と、それを include する robot_bringup.launch.py �
 
 lidar_bringup.launch.py だけが使う引数 (scan_raw_topic / lidar_frame など、
 親が触らないもの) は向こうに置いたままにしてある。
+
+**ここが持つのはセンサを回す分だけ** (ドライバと、その取り付け位置の静的 TF)。
+点群を /scan に変える段は 2026-08-25 に daifuku_stack へ出た
+(launch/scan_pipeline.launch.py。経緯は向こうの daifuku_stack_launch/scan.py)。
+そちらだけが場所ごとに変わる値を持っていたので、機体は場所を知らなくてよくなった。
+裏返しに **lidar:= と lidar_driver:= は 2 つの launch にまたがる**ので、既定を
+環境変数 (LIDAR / LIDAR_DRIVER) から取って Compose に配らせている。
 """
 
 import os
@@ -38,36 +45,27 @@ from launch.actions import (
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 
-from daifuku_config_manager import is_true, params, value
+from daifuku_config_manager import env_default, is_true, params, value
 
 
 def _shared_arg_specs():
     """(名前, 既定値, 説明) の並び。説明が None の引数は説明を付けない。"""
     sensors = os.path.join(params.config_root("daifuku_bringup"), "sensors")
     return [
-        ("lidar", "mid360",
+        # **daifuku_stack の scan_pipeline.launch.py と同じ値にすること。**
+        # 食い違うとエラーも警告も出ないまま /scan が空になるので、既定は
+        # 両方とも環境変数から取る (Compose が .env の 1 行を両サービスへ配る)。
+        ("lidar", env_default("LIDAR", "mid360"),
          "LiDAR backend: mid360 (既定。本機の構成) または "
-         "2d (raspicat の URG を起動する)。"),
-        ("lidar_driver", "true",
-         "LiDAR の実機ドライバ (mid360: livox_ros_driver2 + restamp_scan.py / "
-         "2d: urg_node) を起動するか。false にすると /livox/lidar と /livox/imu "
-         "(mid360) あるいは /scan_raw (2d) を外部 (シミュレータやバッグ) が出す "
-         "前提になる。"),
-
-        ("scan_filter_enabled", "true",
-         "コネクタのある後方を落とす角度フィルタ (laser_filters) を通すか。"),
-        ("scan_filter_params_file", os.path.join(sensors, "scan_filter.yaml"),
-         "角度フィルタの設定ファイル。"),
+         "2d (raspicat の URG を起動する)。既定は環境変数 LIDAR。"),
+        ("lidar_driver", env_default("LIDAR_DRIVER", "true"),
+         "LiDAR の実機ドライバ (mid360: livox_ros_driver2 / 2d: urg_node) を "
+         "起動するか。false にすると /livox/lidar と /livox/imu (mid360) あるいは "
+         "/scan_raw (2d) を外部 (シミュレータやバッグ) が出す前提になる。"
+         "既定は環境変数 LIDAR_DRIVER。"),
 
         ("mid360_config", os.path.join(sensors, "MID360_config.json"),
          "livox_ros_driver2 の設定 (Mid-360 本体とホストの IP)。"),
-        # 既定 true でも既定の設定は 0-90 度 = 搭載高の水平面から上、で、これは
-        # 19F の断片が持つ min_height: 0.275 と同じ切り方。切る角度を実際に狭めるのは
-        # overrides/ の側 (tsudanuma)。
-        ("elevation_filter", "true",
-         "点群を仰角で切るか (勾配の床を落とす。lidar:=mid360 のときだけ効く)。"),
-        ("mid360_elevation_params_file", os.path.join(sensors, "mid360_elevation.yaml"),
-         "仰角フィルタの設定 (点群を pointcloud_to_laserscan へ渡す前に切る)。"),
 
         # 既定 true は mid360 構成の都合。URDF は base_footprint -> lidar_link
         # (2D LiDAR のフレーム) しか配信しておらず、Mid-360 の livox_frame は
@@ -97,7 +95,7 @@ def _shared_arg_specs():
 
 
 def declare_shared_args():
-    """LiDAR 構成の共通引数を宣言する。3 つの launch ファイルが同じものを使う。"""
+    """LiDAR ドライバの共通引数を宣言する。2 つの launch ファイルが同じものを使う。"""
     declarations = []
     for name, default, description in _shared_arg_specs():
         kwargs = {"default_value": default}
@@ -115,9 +113,8 @@ def include_lidar_bringup(pkg_share):
     (親も子もそれぞれの意味で宣言している) ので明示的に足す。
 
     overrides / extra_params_file も素通しする。親と同じ overrides で、子が読む
-    設定ファイル (scan_filter / mid360_scan / mid360_elevation / urg) も上書き
-    できるようにするため。表に入れずここで足しているのは、親が
-    params.declare_args で先に宣言しているから (二重宣言になる)。
+    設定ファイル (urg) も上書きできるようにするため。表に入れずここで足して
+    いるのは、親が params.declare_args で先に宣言しているから (二重宣言になる)。
     """
     names = [name for name, _, _ in _shared_arg_specs()]
     names += ["use_sim_time", "overrides", "extra_params_file"]
@@ -182,25 +179,15 @@ def validate(context, *args, **kwargs):
     actions = []
     files = []
 
-    if is_true(context, "scan_filter_enabled"):
-        files.append(("scan_filter_params_file", value(context, "scan_filter_params_file")))
-
     if selected == "2d" and driver:
         path, extra_actions = _resolve_urg_params(context)
         actions += extra_actions
         files.append(("urg_params_file", path))
 
-    if selected == "mid360":
-        files.append(("mid360_scan_params_file", value(context, "mid360_scan_params_file")))
-        # MID360_config.json は livox_ros_driver2 のためだけのもの。
-        # lidar_driver:=false (シム) では driver を立てないので要求しない。
-        if driver:
-            files.append(("mid360_config", value(context, "mid360_config")))
-        if is_true(context, "elevation_filter"):
-            files.append((
-                "mid360_elevation_params_file",
-                value(context, "mid360_elevation_params_file"),
-            ))
+    # MID360_config.json は livox_ros_driver2 のためだけのもの。
+    # lidar_driver:=false (シム) では driver を立てないので要求しない。
+    if selected == "mid360" and driver:
+        files.append(("mid360_config", value(context, "mid360_config")))
 
     for label, path in files:
         if not os.path.isfile(path):

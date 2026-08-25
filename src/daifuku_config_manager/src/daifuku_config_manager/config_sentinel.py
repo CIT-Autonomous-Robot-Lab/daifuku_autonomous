@@ -107,7 +107,12 @@ class ConfigSentinel(Node):
         if not self._package or not self._config_root:
             raise RuntimeError("package と config_root は必須です")
 
-        self.create_subscription(String, SITE_TOPIC, self._on_site, LATCHED)
+        # **site が空なら場所は見ない。** 名乗っていない (overrides:=none) か、
+        # そもそも場所ごとに変わる設定を持たない launch (2026-08-25 以降の機体) の
+        # どちらかで、どちらも「/daifuku/site に別の名前が流れた」は自分には
+        # 関係がない。購読したままだと、機体が読みもしない値のために上がり直す。
+        if self._site:
+            self.create_subscription(String, SITE_TOPIC, self._on_site, LATCHED)
         self.create_subscription(Odometry, odom_topic, self._on_odom, 10)
         self.create_timer(self._period, self._poll)
 
@@ -202,7 +207,7 @@ class ConfigSentinel(Node):
         if self.exit_requested:
             return
 
-        if (not self._announced and not self._no_manager_said
+        if (self._site and not self._announced and not self._no_manager_said
                 and time.monotonic() - self._started > 60.0):
             self._no_manager_said = True
             self.get_logger().warning(

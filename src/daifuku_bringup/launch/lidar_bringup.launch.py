@@ -12,17 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# LiDAR まわりの起動。navigation / mapping の両方から include される。
+# LiDAR ドライバの起動。robot_bringup.launch.py が include する。
 #
-# どちらの構成でも入力を /scan_raw へ集約し、角度フィルタを通した /scan を
-# SLAM と Nav2 に渡す。
+# **生データを出すところまで。** どちらの構成でもここが出すのはセンサそのままの
+# 点群 (mid360) か生スキャン (2d) で、それを /scan に変える段は
+# daifuku_stack の scan_pipeline.launch.py に居る (2026-08-25 に出した。
+# 場所ごとに変わる値を持つのはあちらだけなので、docker compose で常駐するこちらが
+# src/daifuku_config/site を読まなくて済むようにした)。
 #
-#   lidar:=2d      urg_node -> /scan_raw -> 角度フィルタ -> /scan
-#   lidar:=mid360  livox_ros_driver2 -> /livox/lidar -> elevation_filter.py
-#                  -> /livox/lidar_elevation -> pointcloud_to_laserscan
-#                  -> /scan_mid360_prestamp -> restamp_scan.py
-#                  -> /scan_raw -> 角度フィルタ -> /scan
-#                  (elevation_filter:=false なら /livox/lidar が直接 2 段目へ入る)
+#   lidar:=2d      urg_node -> /scan_raw
+#   lidar:=mid360  livox_ros_driver2 -> /livox/lidar, /livox/imu
+#
+# **lidar:= と lidar_driver:= はあちらと揃えること。** 食い違うと /scan が空に
+# なるだけでエラーも警告も出ない。既定は環境変数 (LIDAR / LIDAR_DRIVER) から取り、
+# Compose が .env の 1 行を raspicat と ros2 の両サービスへ配る。
 #
 # **IMU 経路 (prepare_mid360_imu.py -> ekf_node) はここには無い。**
 # odom_fusion.launch.py が持ち、robot_bringup.launch.py が include する。入力の
@@ -37,7 +40,7 @@ from launch.actions import (
     DeclareLaunchArgument,
     OpaqueFunction,
 )
-from launch.conditions import IfCondition, UnlessCondition
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
@@ -53,19 +56,12 @@ from daifuku_bringup_launch import lidar as lidar_common  # noqa: E402
 
 def generate_launch_description():
     config_root = params.config_root("daifuku_bringup")
-    sensors_dir = os.path.join(config_root, "sensors")
 
     lidar = LaunchConfiguration("lidar")
     lidar_driver = LaunchConfiguration("lidar_driver")
     use_sim_time = LaunchConfiguration("use_sim_time")
     scan_raw_topic = LaunchConfiguration("scan_raw_topic")
-    scan_topic = LaunchConfiguration("scan_topic")
-    scan_filter_enabled = LaunchConfiguration("scan_filter_enabled")
-    scan_filter_params_file = LaunchConfiguration("scan_filter_params_file")
     mid360_config = LaunchConfiguration("mid360_config")
-    mid360_scan_params_file = LaunchConfiguration("mid360_scan_params_file")
-    mid360_elevation_params_file = LaunchConfiguration("mid360_elevation_params_file")
-    elevation_filter = LaunchConfiguration("elevation_filter")
     publish_lidar_tf = LaunchConfiguration("publish_lidar_tf")
     lidar_frame = LaunchConfiguration("lidar_frame")
     base_frame = LaunchConfiguration("base_frame")
@@ -76,14 +72,8 @@ def generate_launch_description():
     # lidar_driver:=false は「LiDAR の生データを外部が出す」構成。
     # シミュレータ (simulator) は /livox/lidar を PointCloud2 で直接出すので
     # livox_ros_driver2 を立てない。実機の driver は xfer_format:=0 = PointCloud2 な
-    # ので、ドライバの出力とシムの出力は同型で、下流 (pointcloud_to_laserscan 以降)
-    # は一切変わらない。
-    #
-    # restamp_scan.py も同時に外す。あれは MID360 の**デバイス時計が PTP 同期されず
-    # 毎分数秒ドリフトする**ことへの対処であって、シムには存在しない問題である。
-    # とくに use_sim_time:=true では「受信時刻で押し直す」動作がシム時間と噛み合わず
-    # 積極的に有害になる。
-    is_mid360 = PythonExpression(["'", lidar, "' == 'mid360'"])
+    # ので、ドライバの出力とシムの出力は同型で、下流 (scan_pipeline.launch.py) は
+    # 一切変わらない。
     use_livox_driver = PythonExpression([
         "'", lidar, "' == 'mid360' and '", lidar_driver, "'.lower() == 'true'",
     ])
@@ -92,10 +82,6 @@ def generate_launch_description():
     use_urg_driver = PythonExpression([
         "'", lidar, "' == '2d' and '", lidar_driver, "'.lower() == 'true'",
     ])
-    use_elevation_filter = PythonExpression([
-        "'", lidar, "' == 'mid360' and '", elevation_filter,
-        "'.lower() == 'true'",
-    ])
     publish_mid360_tf = PythonExpression([
         "'", lidar, "' == 'mid360' and '", publish_lidar_tf,
         "'.lower() == 'true'",
@@ -103,26 +89,18 @@ def generate_launch_description():
 
     # 起動引数
     #
-    # navigation / mapping と共有するものは daifuku_bringup_launch.lidar が持つ。
-    # ここで宣言するのは、親が素通ししない (このファイルの中だけで完結する) 分。
+    # robot_bringup.launch.py と共有するものは daifuku_bringup_launch.lidar が
+    # 持つ。ここで宣言するのは、親が素通ししない (このファイルの中だけで完結する) 分。
     declare_args = lidar_common.declare_shared_args() + [
-        # 親 (navigation / mapping) から素通しされる。単独起動でも同じ既定。
+        # 親 (robot_bringup) から素通しされる。単独起動でも同じ既定。
         *params.declare_args(),
         DeclareLaunchArgument("use_sim_time", default_value="false"),
         DeclareLaunchArgument(
             "scan_raw_topic",
             default_value="/scan_raw",
-            description="どちらの LiDAR でも生スキャンを集約するトピック。",
-        ),
-        DeclareLaunchArgument(
-            "scan_topic",
-            default_value="/scan",
-            description="角度フィルタ後のトピック。SLAM と Nav2 の入力。",
-        ),
-        DeclareLaunchArgument(
-            "mid360_scan_params_file",
-            default_value=os.path.join(sensors_dir, "mid360_scan.yaml"),
-            description="pointcloud_to_laserscan の設定 (点群からスキャンへの変換)。",
+            description="lidar:=2d で urg_node が出すトピック。"
+                        "**daifuku_stack の scan_pipeline.launch.py の同名の "
+                        "引数と揃えること** (あちらの入口)。",
         ),
         DeclareLaunchArgument("mid360_publish_freq", default_value="10.0"),
         # Mid-360 のフレーム。**robot_bringup.launch.py の urdf_lidar_frame
@@ -186,87 +164,6 @@ def generate_launch_description():
         ],
     )
 
-    # Mid-360: 点群 -> (仰角で切る) -> スキャン -> (打ち直し) -> scan_raw_topic
-    #
-    # 仰角フィルタは pointcloud_to_laserscan の**手前**に入る。あちらが切るのは
-    # 変換したあとの z だけなので、仰角は元の点が持っていた情報として先に使う。
-    elevation_filter_node = Node(
-        condition=IfCondition(use_elevation_filter),
-        package="daifuku_bringup",
-        executable="elevation_filter.py",
-        name="elevation_filter",
-        output="screen",
-        parameters=[
-            mid360_elevation_params_file,
-            {"use_sim_time": use_sim_time},
-        ],
-        remappings=[
-            ("cloud_in", "/livox/lidar"),
-            ("cloud_out", "/livox/lidar_elevation"),
-        ],
-    )
-
-    pointcloud_to_laserscan = Node(
-        condition=IfCondition(is_mid360),
-        package="pointcloud_to_laserscan",
-        executable="pointcloud_to_laserscan_node",
-        name="pointcloud_to_laserscan",
-        output="screen",
-        parameters=[
-            mid360_scan_params_file,
-            {"use_sim_time": use_sim_time, "target_frame": base_frame},
-        ],
-        remappings=[
-            # 仰角フィルタを外したときは点群を直接受ける (relay は挟まない)。
-            ("cloud_in", PythonExpression([
-                "'/livox/lidar_elevation' if '", elevation_filter,
-                "'.lower() == 'true' else '/livox/lidar'",
-            ])),
-            # lidar_driver:=false (シム) にはクロックのドリフトが無いので restamp を
-            # 挟まず、ここから直接 scan_raw_topic に出す (上のファイル冒頭を参照)。
-            ("scan", PythonExpression([
-                "'/scan_mid360_prestamp' if '", lidar_driver,
-                "'.lower() == 'true' else '", scan_raw_topic, "'",
-            ])),
-        ],
-    )
-
-    restamp_scan = Node(
-        condition=IfCondition(use_livox_driver),
-        package="daifuku_bringup",
-        executable="restamp_scan.py",
-        name="restamp_scan",
-        output="screen",
-        parameters=[{"use_sim_time": use_sim_time}],
-        remappings=[
-            ("scan_in", "/scan_mid360_prestamp"),
-            ("scan_out", scan_raw_topic),
-        ],
-    )
-
-    # 角度フィルタ: scan_raw_topic -> scan_topic
-    # 無効にした場合も下流が /scan を見られるよう relay で素通しする。
-    scan_filter = Node(
-        condition=IfCondition(scan_filter_enabled),
-        package="laser_filters",
-        executable="scan_to_scan_filter_chain",
-        name="scan_to_scan_filter_chain",
-        output="screen",
-        parameters=[scan_filter_params_file, {"use_sim_time": use_sim_time}],
-        remappings=[
-            ("scan", scan_raw_topic),
-            ("scan_filtered", scan_topic),
-        ],
-    )
-    scan_relay = Node(
-        condition=UnlessCondition(scan_filter_enabled),
-        package="topic_tools",
-        executable="relay",
-        name="unfiltered_scan_relay",
-        output="screen",
-        arguments=[scan_raw_topic, scan_topic],
-    )
-
     return LaunchDescription([
         *declare_args,
 
@@ -280,22 +177,11 @@ def generate_launch_description():
             kwargs={
                 "package": "daifuku_bringup",
                 "config_root": config_root,
-                "targets": [
-                    "scan_filter_params_file",
-                    "mid360_scan_params_file",
-                    "mid360_elevation_params_file",
-                    "urg_params_file",
-                ],
+                "targets": ["urg_params_file"],
             },
         ),
 
         urg_driver,
         livox_driver,
         mid360_static_tf,
-        elevation_filter_node,
-        pointcloud_to_laserscan,
-        restamp_scan,
-
-        scan_filter,
-        scan_relay,
     ])

@@ -2,22 +2,22 @@
 # 走らせる場所を切り替える。**便利口であって、これでなければ切り替えられないわけではない。**
 #
 #   tools/site.sh                   今の値と、選べる名前を出す
-#   tools/site.sh tsudanuma         切り替える (機体は自分で上がり直す)
-#   tools/site.sh 19f --file-only   ファイルを書くだけ (ROS にも Docker にも触らない)
+#   tools/site.sh tsudanuma         切り替える
+#   tools/site.sh 19f --file-only   ファイルを書くだけ (ROS に触らない)
 #
 # src/daifuku_config/site は名前 1 語しか持たないので、同じことは
 #
 #   ros2 param set /site_manager site tsudanuma   機体が上がっているとき (検査して書いて流す)
 #   echo tsudanuma > src/daifuku_config/site      上がっていないとき (開発ホスト)
 #
-# でもできる。このスクリプトがやるのは**その 2 経路の選び分けと、ROS へ届かなかった
-# ときの `docker compose restart raspicat`** だけ。機体側 (LiDAR の帯) は起動時にしか
-# 読まないので、ファイルを書いただけでは変わらない。
+# でもできる。このスクリプトがやるのは**その 2 経路の選び分け**だけ。ROS 経由なら
+# site_manager が両方のパッケージについて検査してから書き、/daifuku/site へ流す。
 #
-# ROS 経由なら site_manager が両方のパッケージについて検査してから書き、/daifuku/site
-# へ流す。機体の launch に居る config_sentinel がそれを見て、**機体が止まっている
-# ことを確かめてから**自分を終了し、compose の restart: unless-stopped が新しい設定で
-# 上げ直す。だから**走行中に切り替えてもその場では止まらない**。
+# **機体 (raspicat サービス) は立て直さない。** 2026-08-25 に /scan を作る段が
+# daifuku_stack へ移ってから、機体には場所ごとに変わる設定が 1 つも無い
+# (robot_bringup.launch.py の見張りも watch_site=False で場所を見ない)。
+# **反映するには navigation / mapping を立て直すこと** — 帯も仰角も地図も
+# emcl2 も VI も、みなそちらが起動時に読む。
 #
 # 場所と設定の関係は src/daifuku_config/README.md。
 set -euo pipefail
@@ -38,18 +38,16 @@ available() {
 }
 
 usage() {
-    echo "usage: tools/site.sh [<名前>] [--file-only] [--no-restart]" >&2
+    echo "usage: tools/site.sh [<名前>] [--file-only]" >&2
     echo "選べる名前:" >&2
     available | sed 's/^/  /' >&2
 }
 
 NAME=""
 FILE_ONLY=no
-RESTART=yes
 for arg in "$@"; do
     case "$arg" in
         --file-only) FILE_ONLY=yes ;;
-        --no-restart) RESTART=no ;;
         -h|--help) usage; exit 0 ;;
         -*) echo "!! 知らないオプション: $arg" >&2; usage; exit 2 ;;
         *)
@@ -93,14 +91,11 @@ if [ "$FILE_ONLY" = no ] && command -v docker >/dev/null 2>&1 \
     echo "$OUT"
     if printf '%s' "$OUT" | grep -q "successful"; then
         echo "site: $BEFORE -> $NAME"
-        echo "機体は**止まっているのを確かめてから**自分で上がり直します"
-        echo "(config_sentinel。走行中なら止まるまで待つ。ログは docker compose logs -f raspicat)。"
-        echo "**そのとき機体は静止させておくこと** (Mid-360 のジャイロの電源投入時"
-        echo "バイアスを起動後の静止区間から測るため)。"
-        echo "navigation は立て直すだけで追随します (map も overrides も既定で $NAME)。"
+        echo "**機体はそのままです** (場所ごとに変わる設定を持たないため)。"
+        echo "navigation / mapping を立て直すと反映されます (map も overrides も既定で $NAME)。"
         exit 0
     fi
-    echo "!  site_manager へ届きませんでした。ファイルを書いて立て直します。" >&2
+    echo "!  site_manager へ届きませんでした。ファイルを直接書きます。" >&2
 fi
 
 # ── ファイル経由 (開発ホスト、機体が上がっていないとき) ──────────────────────
@@ -112,24 +107,6 @@ mv "$TMP" "$SITE_FILE"
 echo "site: $BEFORE -> $NAME   ($SITE_FILE)"
 
 if [ "$FILE_ONLY" = yes ]; then
-    echo "ROS にも Docker にも触っていません (--file-only)。"
-    exit 0
+    echo "ROS には触っていません (--file-only)。"
 fi
-if ! command -v docker >/dev/null 2>&1; then
-    echo "docker が無いので機体は立て直しません (開発ホスト)。" >&2
-    exit 0
-fi
-if [ -z "$(docker compose ps -q raspicat 2>/dev/null)" ]; then
-    echo "raspicat が起動していないので立て直しません (次の docker compose up で反映されます)。"
-    exit 0
-fi
-if [ "$RESTART" != yes ]; then
-    echo "機体は立て直していません (--no-restart)。次に上がるまで LiDAR の帯は $BEFORE のままです。"
-    exit 0
-fi
-
-echo "=== docker compose restart raspicat"
-docker compose restart raspicat
-echo "機体は $NAME で上がり直しました。**このとき機体は静止させておくこと**"
-echo "(Mid-360 のジャイロの電源投入時バイアスを起動後の静止区間から測るため)。"
-echo "navigation は立て直すだけで追随します (map も overrides も既定で $NAME)。"
+echo "navigation / mapping を立て直すと反映されます (map も overrides も既定で $NAME)。"

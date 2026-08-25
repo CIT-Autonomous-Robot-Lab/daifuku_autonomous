@@ -120,6 +120,27 @@ check_one_site_manager_launch() {
 }
 item "site_manager を立てる launch がちょうど 1 つ" check_one_site_manager_launch
 
+# ── LiDAR 構成の既定 ────────────────────────────────────────────────────────
+# lidar / lidar_driver は 2 つの launch にまたがる (機体側が生データを出し、
+# navigation / mapping 側が /scan にする)。食い違うと**エラーも警告も出ないまま
+# /scan が空になる**ので、どちらも同じ環境変数から既定を取ることで揃えている。
+# 片方を素の文字列に戻すと、.env の 1 行が片側にしか効かなくなる。
+check_lidar_defaults() {
+  local bringup="${ROOT}/src/daifuku_bringup/launch/daifuku_bringup_launch/lidar.py"
+  local stack="${ROOT}/src/daifuku_stack/launch/daifuku_stack_launch/scan.py"
+  local key bad=()
+  for key in LIDAR LIDAR_DRIVER; do
+    grep -q "env_default(\"${key}\"" "${bringup}" || bad+=("lidar.py:${key}")
+    grep -q "env_default(\"${key}\"" "${stack}" || bad+=("scan.py:${key}")
+  done
+  ((${#bad[@]} == 0)) || {
+    echo "環境変数から既定を取っていない: ${bad[*]}"
+    return 1
+  }
+  echo "lidar.py / scan.py とも LIDAR と LIDAR_DRIVER から取っている"
+}
+item "lidar / lidar_driver の既定が 2 つの launch で同じ出どころ" check_lidar_defaults
+
 # ── 順路のトピック名 ────────────────────────────────────────────────────────
 # パネル (絶対名) と joy_teleop (相対名) と vi_planner の waypoint_topic の 3 か所に
 # あり、1 つだけ変えると**エラーも警告も出ないまま先読みだけが起きなくなる**。

@@ -17,7 +17,6 @@
   <exec_depend>geometry_msgs</exec_depend>
   <!-- joy:=true (既定) で立てるゲームパッドのドライバ。src/joy_teleop.py が /joy を購読する。 -->
   <exec_depend>joy</exec_depend>
-  <exec_depend>laser_filters</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <!-- robot_bringup.launch.py が Transition を import する。 -->
@@ -27,7 +26,6 @@
        メッセージ定義だけで、Nav2 の実行系には依存しない。 -->
   <exec_depend>nav2_msgs</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
-  <exec_depend>pointcloud_to_laserscan</exec_depend>
   <!-- src/joy_teleop.py がウェイポイントの YAML を読む。 -->
   <exec_depend>python3-yaml</exec_depend>
   <!-- driver:=original で立てる自前ドライバ。 -->
@@ -39,6 +37,7 @@
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
+  <!-- odom_fusion.launch.py の imu_throttle (Mid-360 の 200Hz を Python の手前で間引く)。 -->
   <exec_depend>topic_tools</exec_depend>
   <!-- twist_mux:=true (既定) で立てる cmd_vel の仲裁。 -->
   <exec_depend>twist_mux</exec_depend>

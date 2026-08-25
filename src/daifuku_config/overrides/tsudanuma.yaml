@@ -1,6 +1,6 @@
 # tsudanuma.yaml — 津田沼 (地図 tsudanuma/map_tsudanuma.yaml、5888x4000 @0.05m
 # = 294.4m x 200m) 用の上書き。
-# 「断片」= 重ねる先の設定ファイルの値 (src/daifuku_config/bringup/sensors/{mid360_scan,mid360_elevation}.yaml、
+# 「断片」= 重ねる先の設定ファイルの値 (src/daifuku_config/stack/sensors/{mid360_scan,mid360_elevation}.yaml、
 # src/daifuku_config/stack/nav2/{vi_planner,behaviors}.yaml、src/daifuku_config/stack/localization/emcl2.yaml)。
 # 値の由来・実測 (2026-08-01 の bench と solve 87 秒)・既知の制約は src/daifuku_config/README.md、
 # 仰角フィルタは docs/setup/lidar.md。
@@ -9,9 +9,10 @@
 #   ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=vi
 #   # map も overrides も src/daifuku_config/site から来るので渡さない
 #
-# **1 段目はパッケージ名。** 各 launch は自分の名前の部分木しか読まない。機体側
-# (daifuku_bringup:) は docker compose up で常駐しているので、変えたら
-# `docker compose restart raspicat` が要る (tools/site.sh がやる)。
+# **1 段目はパッケージ名。** 各 launch は自分の名前の部分木しか読まない。いまここに
+# 並ぶのは daifuku_stack: だけで、**機体 (daifuku_bringup) は場所を知らない**
+# (2026-08-25 に /scan を作る段ごと daifuku_stack へ移した)。だから地図を変えても
+# `docker compose restart raspicat` は要らず、navigation / mapping を立て直すだけでよい。
 #
 # **この地図は密ソルバでは解けない** (0.05m のまま 14.1 億状態 = 79GB、scale 5 の密でも
 # 3.17GB で OOM)。プランナ内部だけ粗くし (map_scale)、compact で解くことで通す。確定出力
@@ -33,7 +34,7 @@ site:
     navigation:   tsudanuma/map_tsudanuma.yaml   # 経路計画 (/map)
     localization: tsudanuma/map_tsudanuma.yaml   # 自己位置推定 (/map_loc)
 
-daifuku_bringup:
+daifuku_stack:
   # ── 仰角フィルタ ──────────────────────────────────────────────────────────
   # この地図には勾配があり、床が高さの帯へ入り込んで地図に無い壁として立つ。仰角で切れば
   # 下限が距離に比例して上がるので min_elevation_deg より緩い勾配はどの距離でも入らない
@@ -57,7 +58,6 @@ daifuku_bringup:
       max_height: 4.00                # 断片 0.50: 高さ 4.0m を超えるものはどの距離でも入らない。仰角 0.0 なので下限 0.275m と全距離で対
       range_max: 70.0                 # 断片も同じ値: センサの測距上限 (反射率 80% で 70m)。仰角を 0.0 へ戻したのでこれが実効
 
-daifuku_stack:
   # ── emcl2 ────────────────────────────────────────────────────────────────
   # この地図は 68.2% が未観測で占有セルが 0.4% しかなく、19F と同じ alpha 崩壊が起きる
   # 余地があるため値は map_19f.yaml から写してある。判定は `alpha_ < alpha_threshold_`

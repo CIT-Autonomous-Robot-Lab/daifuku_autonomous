@@ -61,7 +61,7 @@ GPU の無い開発機 (AMD Radeon 780M) で書いたもの。
 | `src/daifuku_sim/isaac_raspicat.py` | **実測検証済み** (2026-08-20、6.0.1 / `--lidar 2d` / `--headless`)。world 読み込み → URDF 取り込み → RTX LiDAR → ROS 2 グラフ → `/scan_raw` `/odom` `/tf` の発行、**および `/cmd_vel` を受けて実際に走ること**まで通り（手投げの `linear.x=0.2` で 20 秒 1.8m 前進、`--rtf-report` は `rtf-gate` を PASS）。同日に articulation root と車輪ドライブ damping の 2 件を直した（上の「`/cmd_vel` が届いているのに車輪が回らない失敗が 2 つある」）。**未検証は `--lidar mid360` と `--publish-link-tf isaac` の 2 経路** |
 | `scripts/run_pi4_sim.ps1` / `container/run_case.sh` / `container/fake_robot.py` / `container/probe.py` | **実測検証済み** (2026-08-20、Windows + podman/WSL、amd64)。`LOCALIZATION=vi` で `PROBE_SUMMARY {"result": "SUCCEEDED", "first_plan_s": 6.8, "elapsed_s": 19.2}`、`vi_planner` peak RSS 820MB / cgroup peak 1.08GB (上限 3GB、OOM 0)、throttle 24.1s / 2457 回。プロセス死なし |
 | `scripts/run_isaac_case.sh` / `container/nav_container.sh` | **通しで実行した** (2026-08-20、Windows + WSL の podman。`run_isaac_case.sh` 自体は Linux 向けのままなので、コンテナ側は同じ env を並べて手で叩いた)。Isaac の `/scan_raw` `/odom` `/tf` → nav2 → `/cmd_vel` → Isaac の往復が成立する。**`LOCALIZATION=emcl2 OVERRIDES=none` なら自己位置が収束して自走する** —— 種で 0.06m に収まり静止中は 0.10m を保ち、走り出して `distance_remaining` 6.0 → 2.1 まで詰めたところで誤差 1.6m まで開いて機体が止まる (`result: TIMEOUT`、`first_plan_s` 57.1)。**既定の `map_19f` overrides (VIOLA / `localizer: belief`) では一度も収束しない** —— 真値と一致する種を撒いても初回推定が 1.74m ずれ、単調に 5.4m まで離れて `no robot pose for too long` で ABORTED になる。同日にタイムスタンプの実バグを 1 件直した (下の「Isaac のタイムスタンプ」)。`vi_planner` peak RSS 1.02GB / cgroup peak 1.41GB (上限 3GB、OOM 0) |
-| `lidar_bringup.launch.py` / `robot_bringup.launch.py` / `navigation.launch.py` の変更 | 構文チェックのみ。既定値は現行のままで実機の挙動は変えていない |
+| `lidar_bringup.launch.py` / `robot_bringup.launch.py` / `scan_pipeline.launch.py` / `navigation.launch.py` の変更 | 構文チェックのみ。既定値は現行のままで実機の挙動は変えていない |
 
 最初に動かすときは、下の「立ち上げ順序」に従って**段階的に**確認すること。
 
@@ -624,8 +624,10 @@ RTF が足りないときの対処: `RENDER_DT` を大きくする / `HEADLESS=1
 
 実機の挙動を変えないよう、追加した引数の既定値は現行のままにしてある。
 
-- `lidar_bringup.launch.py` / `robot_bringup.launch.py` に **`lidar_driver`** (既定 `true`) を追加
-  (センサーを立てるのは機体側なので、`navigation.launch.py` にこの引数は無い)。
+- `lidar_bringup.launch.py` / `robot_bringup.launch.py` に **`lidar_driver`** (既定 `true`) を追加。
+  **2026-08-25 から `navigation.launch.py` / `mapping.launch.py` / `scan_pipeline.launch.py`
+  にも同じ引数がある** (点群を `/scan` に変える段がそちらへ移ったため)。既定はどちらも
+  環境変数 `LIDAR_DRIVER` から取るので、`.env` に 1 行書けば両側が揃う。
   `false` にすると:
   - `livox_ros_driver2` を起動しない (Isaac が `/livox/lidar` を PointCloud2 で直接出す。
     実機ドライバも `xfer_format: 0` = PointCloud2 なので**同型**で、下流は一切変わらない)
@@ -695,8 +697,9 @@ MID360 構成では `robot_localization` の `ekf_node` が `/wheel/odom` と `/
 `odom → base_footprint` を誰も出さない (逆に Isaac 側にも出させると二重になる) が、
 どちらも **「なんとなく動いて見えるのに自己位置だけ壊れる」** 形で失敗する。
 
-同じ理由で `nav_container.sh` と `run_case.sh` は `lidar_bringup.launch.py` も直接
-立てている (`/scan` の出どころ)。**`navigation.launch.py` はセンサーを 1 つも
+`/scan` の出どころは 2026-08-25 から `navigation.launch.py` 自身なので、ハーネスは
+`lidar:=` と `lidar_driver:=false` をそちらへ渡すだけでよい (`lidar_bringup.launch.py` を
+別に立てる必要は無くなった)。**`navigation.launch.py` はセンサーの「ドライバ」を
 立てない。**
 
 ## 再現できないもの

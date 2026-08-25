@@ -19,6 +19,8 @@
   <exec_depend>diagnostic_updater</exec_depend>
   <exec_depend>dwb_core</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
+  <!-- scan_pipeline.launch.py: 角度フィルタ / 点群 -> スキャン / フィルタ無効時の素通し。 -->
+  <exec_depend>laser_filters</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>nav2_amcl</exec_depend>
@@ -38,12 +40,14 @@
   <exec_depend>nav2_velocity_smoother</exec_depend>
   <exec_depend>nav2_waypoint_follower</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>pointcloud_to_laserscan</exec_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>rviz2</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>slam_toolbox</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>topic_tools</exec_depend>
 
   <!-- ament_lint_common (詰め合わせ) は使わず、走らせるものだけを名指しする。
        外してあるのは pep257 と C++ の書式 lint で、理由は AGENTS.md。 -->

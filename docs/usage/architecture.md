@@ -47,7 +47,7 @@ Mid-360は時刻同期がないためスタンプが実時計からずれてい�
 | パッケージ | 持つもの | 立てかた |
 | --- | --- | --- |
 | `daifuku_bringup` | 駆動ドライバ・URDF・`twist_mux`・ゲームパッド・**LiDAR**・**EKF**。`src/`のPythonノード4本 | `docker compose up`で常駐 |
-| `daifuku_stack` | Nav2 / SLAM Toolbox / EMCL2のlaunch、地図、RViz、`behavior_trees/`、`waypoints/`、`src/system_monitor.py` | 人が`navigation` / `mapping`を立てる |
+| `daifuku_stack` | Nav2 / SLAM Toolbox / EMCL2のlaunch、地図、RViz、`behavior_trees/`、`waypoints/`、`src/system_monitor.py`、**点群を`/scan`に変える段**（`scan_pipeline.launch.py`と`src/elevation_filter.py` / `src/restamp_scan.py`） | 人が`navigation` / `mapping`を立てる |
 | `daifuku_config_manager` | 設定の合成規則（`params.py`）と`src/`のPythonノード2本。**設定の実体は持ちません** | 上2つのlaunchが立てる（自前の入口は無い） |
 | `daifuku_config` | 設定の実体だけ。`bringup/`・`stack/`・`overrides/*.yaml`と、走らせる場所を1行で持つ`src/daifuku_config/site` | ノードを持たない（`src/`の下でもなく、`src/`と並ぶ`src/daifuku_config/`） |
 
@@ -55,7 +55,10 @@ Mid-360は時刻同期がないためスタンプが実時計からずれてい�
 既定をここから取り、`navigation.launch.py`は`map`の既定もここから導きます。**場所が
 変わるとLiDARの帯・EMCL2と価値反復の調整・地図の3つが同時に変わるので、人が動かす値を
 1つにまとめてあります**（切り替えは`tools/site.sh <名前>`。
-[日常操作](operations.md#走らせる場所を切り替える)）。
+[日常操作](operations.md#走らせる場所を切り替える)）。**その3つはどれも
+`daifuku_stack`側が読みます** — 2026-08-25にLiDARの帯が`/scan`を作る段ごと移ったので、
+機体（常駐している`raspicat`サービス）は場所を知りません。切り替えたら
+`navigation` / `mapping`を立て直すだけです。
 
 ### daifuku_config_managerのPythonノード
 
@@ -78,15 +81,21 @@ Mid-360は時刻同期がないためスタンプが実時計からずれてい�
 
 ### daifuku_bringupのPythonノード
 
-2本は`lidar:=mid360`のときだけ立ちます。`restamp_scan.py`がスキャンの
-スタンプを打ち直し（実機ドライバを立てる`lidar_driver:=true`のときのみ。既定は`true`）、
 `prepare_mid360_imu.py`が生のIMUメッセージに共分散を付け、ジャイロのバイアスを引き、
-加速度をgから m/s² へ直してEKFへ渡します（`use_mid360_imu:=true`のときのみ。既定は
-`true`）。`elevation_filter.py`は点群を仰角で切ります（`elevation_filter:=true`が既定）。
-`joy_teleop.py`は`joy:=true`（既定）で`joy_node`と一緒に立ち、`/joy`のボタンの長押しで
-teleopと自律走行を切り替えます（[ゲームパッドで操作する](joystick.md)）。
+加速度をgから m/s² へ直してEKFへ渡します（`lidar:=mid360`かつ`use_mid360_imu:=true`の
+ときのみ。どちらも既定）。`joy_teleop.py`は`joy:=true`（既定）で`joy_node`と一緒に
+立ち、`/joy`のボタンの長押しでteleopと自律走行を切り替えます
+（[ゲームパッドで操作する](joystick.md)）。
+
+**`restamp_scan.py`と`elevation_filter.py`は2026-08-25に`daifuku_stack`へ移りました**
+（`/scan`を作る段ごと）。
 
 ### daifuku_stackのPythonノード
+
+`elevation_filter.py`は点群を仰角で切り（`elevation_filter:=true`が既定）、
+`restamp_scan.py`はスキャンのスタンプを打ち直します（`lidar:=mid360`かつ
+実機ドライバを立てる`lidar_driver:=true`のときのみ。どちらも既定）。2本とも
+`scan_pipeline.launch.py`が立てるので、`navigation`でも`mapping`でも上がります。
 
 `system_monitor.py`は`navigation.launch.py`だけが立てます（`use_system_monitor:=true`が
 既定）。`/proc`を1 Hzで読み、CPUと温度を`/diagnostics`へ出す役で、受け取るのは
@@ -122,13 +131,22 @@ Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。
 | パッケージ | ファイル | 役割 |
 | --- | --- | --- |
 | `daifuku_bringup` | `robot_bringup.launch.py` | **入口。** 機体ドライバとURDF、下2つの`include`。`driver:=original`（標準 / 自前実装 / [Pi 4](../setup/raspberry-pi-4.md)・[Pi 5](../setup/raspberry-pi-5.md)）または`driver:=raspimouse`（公式実装 / rtmouse入りのPi 4のみ。引数そのものの既定値はこちら） |
-| `daifuku_bringup` | `lidar_bringup.launch.py` | LiDARの前処理一式（点群→スキャン→角度フィルタ） |
+| `daifuku_bringup` | `lidar_bringup.launch.py` | LiDARのドライバと取り付け位置の静的TF（出すのは生データまで） |
 | `daifuku_bringup` | `odom_fusion.launch.py` | 車輪オドメトリとMid-360 IMUのEKF融合 |
 | `daifuku_stack` | `navigation.launch.py` | **入口。** 自律移動。地図と自己位置推定、その上のNav2／価値反復スタック |
 | `daifuku_stack` | `mapping.launch.py` | **入口。** 地図作成。SLAM Toolboxとその入力 |
+| `daifuku_stack` | `scan_pipeline.launch.py` | 点群（または生スキャン）→仰角フィルタ→スキャン→打ち直し→角度フィルタ→`/scan`。上2つが`include`する |
 
-下2つは単独でも立てられます。`simulator/`は駆動ドライバが要らないので、
-`robot_bringup`を通さずこの2つを直接立てています。
+入口でない3つは単独でも立てられます。`simulator/`は駆動ドライバが要らないので、
+`robot_bringup`を通さず`odom_fusion`を直接立て、`/scan`を作る段は`navigation`に
+任せています（`lidar_driver:=false`を渡す）。
+
+**`scan_pipeline`が`daifuku_stack`に居るのは2026-08-25から**です。場所ごとに変わる値
+（LiDARの帯と仰角）を持つのはこの段だけで、機体側に置いていたあいだは常駐している
+`raspicat`サービスが`src/daifuku_config/site`を読む必要がありました。移したことで
+機体は場所を知らなくなり、地図を変えても立て直しが要らなくなっています。裏返しに
+**`lidar:=`と`lidar_driver:=`は2つのlaunchにまたがる**ので、既定を環境変数
+（`LIDAR` / `LIDAR_DRIVER`）から取ってCompose に配らせています。
 
 引数の合成やチェックといった補助的な処理は、launchファイル本体から切り出しています。
 
@@ -137,10 +155,14 @@ Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。
 | `params.py` | `daifuku_config_manager` | 設定ファイルへの上書きの合成（土台 → `overrides` → `extra_params_file`）と、`config_sentinel`の起動・停止の配線（`sentinel_actions`）。**すべてのlaunchが使う共有部品** |
 | `backends.py` | `daifuku_stack/launch/daifuku_stack_launch/` | `localization`／`planner`／`local_planner`／`nav2`の解決と起動前チェック |
 | `nav2_params.py` | `daifuku_stack/launch/daifuku_stack_launch/` | `src/daifuku_config/stack/nav2/*.yaml`と`src/daifuku_config/stack/vi_planner.yaml`の合成と、`overrides`からの`map:=`の決定。`params.py`へ`base_resolvers`で渡す |
-| `lidar.py` | `daifuku_bringup/launch/daifuku_bringup_launch/` | LiDAR構成の共通引数と`lidar_bringup`の`include` |
+| `lidar.py` | `daifuku_bringup/launch/daifuku_bringup_launch/` | LiDARドライバの共通引数と`lidar_bringup`の`include` |
+| `scan.py` | `daifuku_stack/launch/daifuku_stack_launch/` | `/scan`を作る段の共通引数と`scan_pipeline`の`include` |
 
-`lidar`や`lidar_z`のようなLiDAR構成の引数は、`robot_bringup`と`lidar_bringup`の
+`lidar`や`lidar_z`のようなLiDARドライバの引数は、`robot_bringup`と`lidar_bringup`の
 2ファイルが同じものを宣言します。既定値の出どころは`lidar.py`の1箇所だけです。
+`/scan`を作る段の引数（`elevation_filter`や`scan_filter_enabled`）も同様に、
+`navigation` / `mapping` / `scan_pipeline`の3ファイルが`scan.py`の1つの表から
+宣言します。
 
 > `robot_bringup`の`urdf_lidar_frame`（URDFの2D LiDARリンク名。既定`lidar_link`）と
 > `lidar_bringup`の`lidar_frame`（Mid-360のフレーム。既定`livox_frame`）は**別物**です。
