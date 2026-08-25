@@ -92,9 +92,9 @@ firewall=true
 
 | 機器 | 固定IP |
 |---|---|
-| Windows / Linuxホスト | `192.168.1.3/24` |
+| Windows / Linuxホスト（このセグメントのゲートウェイ） | `192.168.1.1/24` |
 | Podman Hyper-V VM | `192.168.1.2/24` |
-| WSL2（bridged、[下記](#wsl2から直接つなぐ)） | `192.168.1.4/24` |
+| WSL2（bridged、[下記](#wsl2から直接つなぐ)） | `192.168.1.3/24` |
 | Raspberry Pi Cat | `192.168.1.50/24` |
 | Livox Mid-360 | `192.168.1.108/24` |
 
@@ -109,7 +109,7 @@ bash docker/dev/tools/linux/up.sh
 ```
 
 Linux側はNetworkManagerプロファイル`raspicat-docker-dev`を作り、
-`192.168.1.3/24`を設定します。終了後に戻す場合:
+`192.168.1.1/24`を設定します。終了後に戻す場合:
 
 ```bash
 bash docker/dev/tools/linux/network.sh down "$RASPICAT_ETHERNET_IF"
@@ -124,7 +124,7 @@ Windows PowerShell:
 ```
 
 Windows用スクリプトは既存のICS共有を解除し、旧`OpenDHCPServer`サービスがあれば
-停止・無効化して、ホストへ`192.168.1.3/24`を設定します。
+停止・無効化して、ホストへ`192.168.1.1/24`を設定します。
 固定IPを解除する場合は管理者PowerShellで実行します。
 
 ```powershell
@@ -137,9 +137,10 @@ Windows用スクリプトは既存のICS共有を解除し、旧`OpenDHCPServer`
 ## WSL2から直接つなぐ
 
 WSL2の中でROS 2ノード（RVizなど）を動かして機体のトピックを見る場合、既定のNATでは
-接続できません。WSLの`eth0`は`172.31.x.x`で、Windowsホストが`192.168.1.3/24`を持つため
+接続できません。WSLの`eth0`は`172.31.x.x`で、Windowsホストが`192.168.1.1/24`を持つため
 **pingとsshはSNATで通ります**。しかしDDSの参加者は自分のロケータとして`172.31.x.x`を
-広告するため、ゲートウェイの無いロボットLANからは返せません。`ROS_STATIC_PEERS`や初期
+広告しますが、機体のeth0には既定経路が無いので返せません（ホストの`.1`はWSLと
+Windows側のためのゲートウェイで、機体はそちらを向いていません）。`ROS_STATIC_PEERS`や初期
 ピアを両側に書いても解決しません。**エラーは出ず、トピックだけが見えない**形になります。
 
 [上記](#docker-desktop)のmirrored networkingが使えればそれで解決しますが、ホストに
@@ -170,8 +171,9 @@ dhcp=false
 #!/bin/sh
 [ "$(wslinfo --networking-mode 2>/dev/null)" = "bridged" ] || exit 0
 ip link set eth0 up
-ip -4 -o addr show dev eth0 | grep -q ' inet ' && exit 0
-ip addr replace 192.168.1.4/24 dev eth0
+ip -4 -o addr show dev eth0 | grep -q ' inet ' || ip addr replace 192.168.1.3/24 dev eth0
+# 既定経路はWindowsホストへ向ける（下の「bridgedのまま外に出る」）
+ip route replace default via 192.168.1.1 dev eth0
 ```
 
 機体側の`fastdds_udp_whitelist.xml`はループバックとロボットLANのロケータだけを広告
@@ -180,14 +182,54 @@ ip addr replace 192.168.1.4/24 dev eth0
 
 注意点が3つあります。
 
-- **bridgedのあいだWSLは外部ネットワークへ出られません**（このセグメントに既定経路が
-  無いため）。aptやgitを使うときは上の3行を外してNATに戻します。
+- **LANケーブルを抜いて持ち歩くときはNATに戻します。** 外部スイッチの上流が消えると
+  bridgedのWSLは無通信になり、**症状はDNSの失敗**（`Temporary failure in name
+  resolution`）として出ます。逆に挿さっているあいだは、次節のとおりホストが中継する
+  ので戻す必要はありません。切り替えは`docker/dev/tools/windows/wsl-net.ps1`で、
+  `Bridged` / `Nat` / `Status`（既定）を取ります。`.wslconfig`の3行を出し入れして
+  `wsl --shutdown`まで行うので、**NATのまま機体につなぐとDDSだけが黙って通らなく
+  なる**点だけ注意してください。
 - **`.wslconfig`は全ディストロ共通**です。適用には`wsl --shutdown`が必要で、
   `wsl --terminate <distro>`ではVMが動き続けるため`networkingMode`は変わりません
   （`[boot] command`の再実行には使えます）。
 - **`.wslconfig`はVMが起動するたびに読まれます。** アイドルタイムアウトや最後の
   ディストロの終了でVMが落ちれば、`wsl --shutdown`を明示しなくても次の起動で反映
   されます。編集した時点で意図しないタイミングの切り替わりが起こり得ます。
+
+### bridgedのまま外に出る
+
+このセグメントには本物のゲートウェイが無いので、素のbridgedではWSLから外部ネット
+ワークへ出られません（aptやgitのたびにNATへ戻す、という運用になります）。**Windows
+ホストをこのセグメントのゲートウェイに仕立てると、戻さずに済みます。** 管理者権限の
+PowerShellで3つ、いずれも再起動後も残ります。
+
+```powershell
+Set-NetIPInterface -InterfaceAlias 'vEthernet (RasPiCat External)' -AddressFamily IPv4 -Forwarding Enabled
+Set-NetIPInterface -InterfaceAlias 'Wi-Fi' -AddressFamily IPv4 -Forwarding Enabled
+New-NetNat -Name RobotLanNAT -InternalIPInterfaceAddressPrefix 192.168.1.0/24
+```
+
+`Wi-Fi`は外向きのインタフェース名に読み替えます。WSL側は上のスクリプトが既定経路を
+`192.168.1.1`へ向けます。ロボットLAN内の通信はNATを通らないので、DDSには影響しません。
+
+**DNSは別に塞ぐ必要があります。** bridgedではWSLが`/mnt/wsl/resolv.conf`を生成しない
+ため`/etc/resolv.conf`がリンク切れのままになり、**`ping 8.8.8.8`は通るのに名前解決だけが
+落ちます**（`curl: (6) Could not resolve host`）。`/etc/wsl.conf`に
+`[network] generateResolvConf=false`を足し、`/etc/resolv.conf`を実ファイルで置きます。
+ホストのDNSを写すとWi-Fiを移ったときに古いまま残るので、公開リゾルバを書いておくのが
+確実です。**この2つはディストロごと**です（eth0と既定経路はVM共通なので、他の
+ディストロは経路だけ通って名前解決だけが落ちます）。企業ネットワーク越しだと
+外向きの53番が塞がれていることがあり、そのときも同じ症状になります。
+
+```
+nameserver 1.1.1.1
+nameserver 8.8.8.8
+```
+
+つながったら、RVizは`tools/rviz.sh`（引数なしで`navigation.rviz`、`mapping`で地図作成用）
+で立てます。機体側のスタックはPiのDockerが持っているので、WSLで建てるのはRVizの
+パネルプラグイン（`daifuku_waypoint_manager`）1つだけです——初回だけ2分ほどかかり、
+`~/.cache/daifuku_rviz_ws`に入ります（`ROS_DOMAIN_ID`は未設定なら90）。
 
 ## 接続を確認する
 

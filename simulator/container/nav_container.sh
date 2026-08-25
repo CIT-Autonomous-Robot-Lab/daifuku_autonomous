@@ -27,8 +27,8 @@
 #   LIDAR=2d|mid360             lidar:= (Isaac 側の --lidar と必ず揃えること)
 #   USE_SIM_TIME=true|false     use_sim_time:= (既定 false。true にすると
 #                               RTF ゲートが厳格になる。run_isaac_case.sh 参照)
-#   MAP_NAME=map_19f|map_tsudanuma|... share/maps/<name>.yaml (既定 map_19f)。
-#                               OVERRIDES 未指定なら同名の override を自動で選ぶ
+#   MAP_NAME=19f/map_19f|tsudanuma/map_tsudanuma|...  share/maps/<name>.yaml
+#                               OVERRIDES 未指定ならフォルダ名 (= 場所) の override を選ぶ
 #   OVERRIDES= / EXTRA_PARAMS=  navigation.launch.py と同じ
 #   GOAL_X/GOAL_Y/GOAL_YAW_DEG  ゴール
 #   SETTLE= / TIMEOUT=          ゴール送信前の待機秒 / 打ち切り秒
@@ -42,7 +42,12 @@ source /opt/ros/humble/setup.bash
 PLANNER=${PLANNER:-vi}
 LOCAL_PLANNER=${LOCAL_PLANNER:-auto}
 NAV2=${NAV2:-auto}
-LOCALIZATION=${LOCALIZATION:-emcl2}
+# **既定が emcl2 でないのは、既定の場所 (19f) がそれでは立たないため。**
+# src/daifuku_config/overrides/19f.yaml が vi_planner の localizer を
+# 'belief' (VIOLA) にしているので、localization:=emcl2 だと推定器が 2 つに
+# なり backends.validate_localization が起動時に止める。tsudanuma は
+# 逆に belief を置けない (密ソルバが要り 3.17GB で OOM) ので emcl2 に戻すこと。
+LOCALIZATION=${LOCALIZATION:-vi}
 LIDAR=${LIDAR:-2d}
 USE_SIM_TIME=${USE_SIM_TIME:-false}
 GOAL_X=${GOAL_X:-4.28}
@@ -67,10 +72,16 @@ cleanup_ros() {
 }
 cleanup_ros
 ros2 daemon stop >/dev/null 2>&1
+# **止めたら必ず立て直す。** ros2cli は毎回 127.0.0.1 のデーモンへ繋ぎに行き、
+# 居なければ ECONNREFUSED ですぐ諦める…… のは NAT の話。.wslconfig が
+# networkingMode=mirrored だと Linux の 127.0.0.1 は Windows 側にも向くので、
+# 繋ぎ先が居ないと**握られたまま 2 分待つ**。下の `timeout 5 ros2 topic list` は
+# 全部空を返し、Isaac が正しく喋っていても「トピックが見えない」で exit 4 になる。
+ros2 daemon start >/dev/null 2>&1
 
 SHARE=/opt/ros_ws/install/share/daifuku_stack
 # overrides は daifuku_config の share。**maps/ を持つ daifuku_stack とは置き場が違う**
-# (2026-08-08 まで $SHARE/config/overrides/ を見ていた。設定を configs/ へ出して
+# (2026-08-08 まで $SHARE/config/overrides/ を見ていた。設定を src/daifuku_config/ へ出して
 # daifuku_stack がその段を install しなくなった時点から、**どの地図でも overrides:=none
 # に落ちていたはず** — この修正ともども**未検証**。効かせるには一度ビルドが要る)。
 CONFIG_SHARE=/opt/ros_ws/install/share/daifuku_config
@@ -78,7 +89,7 @@ RUN=/tmp/simulator/$CASE
 rm -rf "$RUN"; mkdir -p "$RUN"
 export ROS_LOG_DIR=$RUN/log
 
-MAP_NAME=${MAP_NAME:-map_19f}       # 既定は 19F の地図
+MAP_NAME=${MAP_NAME:-19f/map_19f}   # 既定は 19F の地図。maps/ からの相対パス (地図ごとのフォルダを含む)
 MAP=$SHARE/maps/$MAP_NAME.yaml
 if [ ! -f "$MAP" ]; then
     echo "map not found: $MAP" >&2
@@ -86,7 +97,7 @@ if [ ! -f "$MAP" ]; then
 fi
 
 # パラメータの上書きは launch と同じ経路 (extra_params_file) に載せる。
-# ここで nav2_params 相当を作り直すと configs/stack/nav2/*.yaml の合成を素通りするので、
+# ここで nav2_params 相当を作り直すと src/daifuku_config/stack/nav2/*.yaml の合成を素通りするので、
 # 環境変数で触るキーだけの overlay を書く (run_case.sh と同じ方式)。
 python3 - "$RUN" <<'PY'
 import os, sys, yaml
@@ -141,12 +152,15 @@ EXTRA=""
 [ -n "${EXTRA_PARAMS:-}" ] && EXTRA="${EXTRA:+$EXTRA,}${EXTRA_PARAMS}"
 
 params_arg=()
-# overrides は**必ず明示的に渡す**。launch の既定は map_19f なので、渡さないと
+# overrides は**必ず明示的に渡す**。launch の既定は 19f なので、渡さないと
 # MAP_NAME を変えても 19F 用の調整 (emcl2 のリセット閾値など) が載ったままになる。
-# 地図名と同名の override があればそれを、無ければ none (= 何も重ねない)。
+# 選ぶのは**地図の入っているフォルダ名 (= 場所の名前)** で、同名の override が
+# あればそれを、無ければ none (= 何も重ねない)。**ファイル名のほうではない** —
+# 2026-08-25 に overrides を場所の名前 (19f) にしたので、map_19f では当たらない。
 if [ -z "${OVERRIDES:-}" ]; then
-    if [ -f "$CONFIG_SHARE/overrides/$MAP_NAME.yaml" ]; then
-        OVERRIDES=$MAP_NAME
+    SITE_NAME=$(dirname "$MAP_NAME")
+    if [ -f "$CONFIG_SHARE/overrides/$SITE_NAME.yaml" ]; then
+        OVERRIDES=$SITE_NAME
     else
         OVERRIDES=none
     fi
@@ -185,6 +199,25 @@ for i in $(seq 1 30); do
     fi
     sleep 1
 done
+
+# **Isaac を立て直さずにケースを回すと、ロボットは前回の走行の終了位置に残る。**
+# それでも下の /initialpose は START_X/Y/YAW (= スポーン姿勢) を撒くので、種と
+# 実際の姿勢が食い違ったまま走り出す。エラーも警告も出ず、症状は
+# 「自己位置が最初からずれている」だけになるので、ローカライザやセンサの不調に
+# 見える (2026-08-20 に踏んで、測定を 1 回無駄にした)。Isaac の odom は
+# スポーン姿勢が原点なので、原点から離れていたら立て直しを促す。
+# run_isaac_case.sh から回すぶんには毎回 Isaac を起動するので当たらない。
+if [ "${ALLOW_STALE_POSE:-0}" != "1" ]; then
+    od=$(timeout 20 ros2 topic echo --once --field pose.pose.position "$expected_odom" 2>/dev/null          | awk '/^x:/{x=$2} /^y:/{y=$2} END{printf "%s %s", x, y}')
+    if [ -n "$od" ] &&        [ "$(awk -v v="$od" 'BEGIN{split(v,a," "); print (sqrt(a[1]*a[1]+a[2]*a[2])>0.3)?1:0}')" = "1" ]; then
+        echo "  !! Isaac の odom が原点から離れている (x y = $od)。" >&2
+        echo "     ロボットが前回の走行位置に残ったままなので、下で撒く /initialpose" >&2
+        echo "     ($START_X, $START_Y, $START_YAW rad) と実際の姿勢が食い違う。" >&2
+        echo "     Isaac を立て直してからやり直すこと (承知の上なら ALLOW_STALE_POSE=1)。" >&2
+        exit 5
+    fi
+    echo "  ok: odom は原点付近 (x y = ${od:-取得できず})"
+fi
 
 # --- リンク間 TF の所有者 ---------------------------------------------------
 #
@@ -296,11 +329,15 @@ fi
 # site_manager も居ない。DDS の参加者も 1 つ増やさずに済む。**params_arg に
 # 混ぜないこと** — この引数を宣言しているのは navigation だけで、上の
 # lidar_bringup / odom_fusion にも渡ってしまう。
+#
+# 地図は 2 枚 (navigation -> /map、localization -> /map_loc) だが、ハーネスが指すのは
+# MAP_NAME の 1 枚だけなので両方へ同じものを渡す。**map_loc:= を落とすと
+# OVERRIDES=none のとき resolve_map が「どの地図を読むか決まりません」で止まる。**
 ros2 launch daifuku_stack navigation.launch.py \
     use_rviz:=false \
     use_sim_time:="$USE_SIM_TIME" \
     config_watch:=off \
-    map:="$MAP" "${params_arg[@]}" \
+    map:="$MAP" map_loc:="$MAP" "${params_arg[@]}" \
     planner:="$PLANNER" local_planner:="$LOCAL_PLANNER" nav2:="$NAV2" \
     localization:="$LOCALIZATION" >"$RUN/nav.log" 2>&1 &
 NAV_PID=$!
@@ -312,6 +349,25 @@ NAV_PID=$!
     sleep 1
   done ) >"$RUN/load.log" 2>&1 &
 MON_PID=$!
+
+# **自己位置の種を撒く。** Isaac はロボットを既知の姿勢
+# (run_isaac_case.sh の START_X / START_Y / START_YAW) にスポーンさせるので、
+# 同じ姿勢を /initialpose へ流す。localization:=vi (VIOLA) は種が無いと
+# 地図全域からの大域初期化になり、**収まらないまま「pose withheld」で
+# 黙る** —— そのとき nav2 のフィードバックは distance_remaining が
+# 初期値のまま動かず、機体だけがふらつくので、症状はプランナの不調に見える
+# (2026-08-20 に踏んだ)。emcl2 でも同じトピックで効く。
+#
+# 購読側が上がるまで待てないので、15 秒後から 1Hz x 5 回まく。
+if [ -n "$START_X" ] || [ -n "$START_Y" ] || [ -n "$START_YAW" ]; then
+    ( sleep 15
+      read -r qz qw <<EOF
+$(python3 -c "import math,sys; y=float(sys.argv[1]); print(math.sin(y/2), math.cos(y/2))" "${START_YAW:-0}")
+EOF
+      ros2 topic pub -t 5 -r 1 /initialpose geometry_msgs/PoseWithCovarianceStamped         "{header: {frame_id: map}, pose: {pose: {position: {x: ${START_X:-0}, y: ${START_Y:-0}, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: $qz, w: $qw}}}}"
+    ) >"$RUN/initialpose.log" 2>&1 &
+    echo "  initialpose seed: (${START_X:-0}, ${START_Y:-0}, ${START_YAW:-0} rad) -> /initialpose"
+fi
 
 # probe.py は 2 つのハーネスで共有する (ゴール投入と /plan /cmd_vel の計数)。
 # 配り先の /opt/sim は run_isaac_case.sh / run_pi4_sim.ps1 の両方で共通。

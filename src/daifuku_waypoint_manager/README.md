@@ -26,8 +26,8 @@ RViz2 上で waypoint を作り、並べ替え・YAML 保存/読込を行い、N
 
 | | 受けるノード | 停止時間 | 取りこぼしの扱い |
 | --- | --- | --- | --- |
-| `nav2:=false`（既定） | `vi_planner` 自身 | `configs/stack/nav2/vi_planner.yaml` の `waypoint_pause_sec`（0.2 s） | 同ファイルの `stop_on_failure: false` |
-| `nav2:=true` | `nav2_waypoint_follower` | `configs/stack/nav2/behaviors.yaml` の `waypoint_pause_duration`（200 ms） | 同ファイルの `stop_on_failure: false` |
+| `nav2:=false`（既定） | `vi_planner` 自身 | `src/daifuku_config/stack/vi_planner.yaml` の `waypoint_pause_sec`（0.2 s） | 同ファイルの `stop_on_failure: false` |
+| `nav2:=true` | `nav2_waypoint_follower` | `src/daifuku_config/stack/nav2/behaviors.yaml` の `waypoint_pause_duration`（200 ms） | 同ファイルの `stop_on_failure: false` |
 
 代償として **nav2 に「通過点をまとめて 1 本の経路にする」最適化はさせない**（1 点
 ずつ止まって次を計画する）。どちらの構成でも `stop_on_failure: false` なので、途中で
@@ -72,7 +72,7 @@ RViz プラグインなので、実機イメージ (`ros:humble-ros-base`) で�
 
 - `joy_teleop` の START+BACK で始まった巡回（パネルは一度もゴールを持たない）
 - RViz を立て直した・パネルを閉じて開いた後
-- サーバが 10 秒見えず、パネルが先に諦めた後（下記）
+- サーバが落ちていて、パネルが「巡回中」の表示から抜けた後（下記）
 - `Nav2 Goal` から出した単発ゴール（`navigate_to_pose` 側）
 
 投げ先が 2 つあるのは `nav2:=true` のためでもある。あちらでは `follow_waypoints` の
@@ -91,29 +91,24 @@ RViz プラグインなので、実機イメージ (`ros:humble-ros-base`) で�
 表示は `follow_waypoints` の**結果が届くまで**続く。ところが結果は**届かないことが
 ある** — サーバ（`nav2:=false` なら `vi_planner` 自身、`nav2:=true` なら
 `nav2_waypoint_follower`）が巡回の途中や直後に落ちる・立て直される、無線が切れる、
-といった場面で、クライアントは待ち続けたまま二度と起こされない。戻す道は 3 つ。
+といった場面で、クライアントは待ち続けたまま二度と起こされない。
 
-1. 巡回中に `follow_waypoints` の action サーバが **10 秒**見えないままなら、結果は
-   もう来ないと見なして自分で戻す（無線のディスカバリが一瞬途切れただけで戻さない
-   ための 10 秒）
-2. 諦めたゴールの結果が後から届いたら、拾い直さずに終わり方だけ出す
+**戻す合図は人が Cancel を押したこと**にしてある。取り消しを投げ切ってどちらの
+キャンセルサービスも見えなかったら、そのゴールの結果はもう来ないので、そこで表示を
+戻す（ステータス行には「サーバが居ないので何も取り消していない」が出る）。
+サービスが見えたときは戻さない — 2 秒は「1 発落ちたから投げ直す」の尺であって、
+サーバが取り消して結果を返すまでの尺ではないので（VI の solve 境界で数十秒、無線が
+詰まっていればさらに乗る）、そこで戻すと**効いた取り消しに対して「結果が来ないので
+諦めた」と出したあとで結果が届く**ことになる。
 
-**取り消しを投げ切った時点では戻さない。** 2 秒は「1 発落ちたから投げ直す」の尺で
-あって、サーバが取り消して結果を返すまでの尺ではない（VI の solve 境界で数十秒、
-無線が詰まっていればさらに乗る）。そこで戻すと、**効いた取り消しに対して「結果が
-来ないので諦めた」と出したあとで結果が届く**ことになる。戻すのは上の 10 秒に任せる。
+**時間では戻さない。** かつては「サーバが 10 秒見えなければ自分で戻す」タイマを
+持っていて、それが誤って戻したときのために「あとから `feedback` が届いたらゴールを
+持ち直す」世代管理（`goal_epoch_` / `abandoned_goal_` / `readoptGoal`）を抱えていた。
+自作自演なので 2026-08-20 に両方消した。表示が「巡回中」のまま残るのは
+**Cancel を押すまで**で、Cancel は常に押せる。
 
-**戻し過ぎても嘘のままにはならない。** 諦めたあとも `feedback` が届いたら
-「巡回はまだ続いている」ということなので、ゴールを持ち直して「巡回中」へ戻す
-（ステータス行に `still running - the panel picked the goal back up`）。そのために
-諦めたゴールの handle は**捨てずに持っておく** — `rclcpp_action` のクライアントは
-goal handle を `weak_ptr` で持つので、最後の `shared_ptr` を落とすと feedback も
-結果も二度と来なくなる。ただし `vi_planner` が feedback を出すのは**点が進んだとき
-だけ**なので、戻るまでに次の点まで掛かる（`nav2_waypoint_follower` は出し続ける）。
-
-**Cancel はゴールを送った直後（受理待ちの窓）にも押せる。** 諦めた後で受理が届いた
-ゴールは、拾い直さずその場で取り消す（放っておくと**画面に出ていない巡回が走り
-出す**）。
+戻した後もゴール自体は走り続けうる（パネルは知らないまま）。だが Cancel は
+ゴールを名指しせずサービスで全ゴールを止めるので、それでも機体は止められる。
 
 ## 選択中の waypoint
 
@@ -164,9 +159,9 @@ latch して出す。**これは他ノードが読むためのもの**で、い�
 そのまま届く（このトピックはもう 1 つの入口として残っているだけ）。
 
 `vi_planner` 側はトピック名が `waypoints`。`waypoint_prefetch` は
-`configs/stack/nav2/vi_planner.yaml`・ノードの宣言ともに `false` だが、
-**既定の場所である `map_19f` の overrides が `true` へ上書きしている**ので、引数を何も
-足さずに立てれば先読みは入っている（`map_tsudanuma` は 2026-08-07 に `true` にしたあと
+`src/daifuku_config/stack/vi_planner.yaml`・ノードの宣言ともに `false` だが、
+**既定の場所である `19f` の overrides が `true` へ上書きしている**ので、引数を何も
+足さずに立てれば先読みは入っている（`tsudanuma` は 2026-08-07 に `true` にしたあと
 2026-08-08 に `false` へ戻した。走行中の固まりの切り分けで、2026-08-04 に断片で反転した
 ときも同じ症状が出ている）。先読みを試すときにこのパネルが出す順路が要るので、ここを
 直すと `planner:=vi` + `nav2:=true` の挙動が変わる。代償（メモリ 2 倍）は上の yaml 側に
@@ -211,9 +206,9 @@ RViz の Fixed Frame と waypoint の `frame_id` が一致している必要が�
 
 ## 保存済みの waypoint
 
-`daifuku_stack/waypoints/waypoints_tsudanuma v1.0.yaml`（73 点、`map_tsudanuma` 用）と、
+`daifuku_stack/waypoints/waypoints_tsudanuma v1.0.yaml`（73 点、`tsudanuma` 用）と、
 そこから採り直した `v1.1`（73 点）・`v1.2`（69 点）。地図に紐づくデータなので
-`daifuku_stack` 側の `maps/` の隣に置いてある。`map_19f` では座標が地図の外に出るので
+`daifuku_stack` 側の `maps/` の隣に置いてある。`19f` では座標が地図の外に出るので
 使えない。**ファイル名に空白が入っている**ので、`waypoints_file` へシェルから渡すときは
 引用符で囲むこと（囲まないと `-p waypoints_file:=...` が途中で切れ、空扱いになって
 **START+BACK が黙って巡回を断る**）。冒頭の日本語の注記を持つのは `v1.0` だけ。

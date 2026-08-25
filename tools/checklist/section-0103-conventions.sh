@@ -109,7 +109,7 @@ check_sentinel_placement() {
 }
 item "config_sentinel を立てるのが top-level launch だけ" check_sentinel_placement
 
-# site_manager は逆に**リポジトリ全体で 1 か所**。2 つ立てると同じ configs/site を
+# site_manager は逆に**リポジトリ全体で 1 か所**。2 つ立てると同じ src/daifuku_config/site を
 # 2 つのノードが書きに行く。
 check_one_site_manager_launch() {
   local hit
@@ -149,5 +149,34 @@ check_waypoint_topic() {
   [[ "${panel#/}" == "${joy#/}" && "${panel#/}" == "${vi#/}" ]]
 }
 item_warn "順路のトピック名が食い違っていない" check_waypoint_topic
+
+# ── RViz のパネル ───────────────────────────────────────────────────────────
+# nav2 の「Navigation 2」パネルは /waypoints へ MarkerArray を、自前の
+# WaypointManagerPanel は同じ名前へ Path を出す。RViz は 1 プロセス = 1 参加者
+# なので後から立ったほうが落ち、**そこで設定の読み込みが止まる** (自前パネルと
+# /waypoints の表示だけが出ないまま上がる)。表示側も同じ衝突を起こすので、/waypoints を見るのは
+# Path でなければならない。
+check_rviz_waypoint_panels() {
+  local cfg="${ROOT}/src/daifuku_stack/rviz/navigation.rviz"
+  [[ -f "${cfg}" ]] || { echo "navigation.rviz が無い"; return 1; }
+  grep -q "Class: daifuku_waypoint_manager/WaypointManagerPanel" "${cfg}" || {
+    echo "WaypointManagerPanel が居ない (この検査の前提が変わった)"
+    return 1
+  }
+  grep -q "Class: nav2_rviz_plugins/Navigation 2" "${cfg}" && {
+    echo "Navigation 2 パネルが同居している (/waypoints の型が衝突する)"
+    return 1
+  }
+  # /waypoints を見る表示の型。直前の Class 行がその表示のもの。
+  local klass
+  klass="$(awk '/Class: rviz_default_plugins\// { c = $0 }
+                /Value: \/waypoints$/ { sub(/.*Class: /, "", c); print c; exit }' "${cfg}")"
+  [[ "${klass}" == "rviz_default_plugins/Path" ]] || {
+    echo "/waypoints の表示が ${klass:-不明} (Path でないと購読側で衝突する)"
+    return 1
+  }
+  echo "パネルは WaypointManagerPanel だけ / 表示は Path"
+}
+item "navigation.rviz の /waypoints が 1 つの型で揃っている" check_rviz_waypoint_panels
 
 finish

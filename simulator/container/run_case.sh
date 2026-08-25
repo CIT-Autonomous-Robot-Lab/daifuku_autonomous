@@ -12,17 +12,17 @@
 #                               プランナに追従させる。BT 込みで測りたいときだけ
 #                               NAV2=true を明示する (実機の既定は false)
 #   LOCALIZATION=emcl2|amcl     localization:=
-#   MAP_NAME=map_19f|map_tsudanuma|... share/maps/<name>.yaml を使う (既定 map_19f)。
-#                               OVERRIDES 未指定なら同名の override を自動で選ぶ
+#   MAP_NAME=19f/map_19f|tsudanuma/map_tsudanuma|...  share/maps/<name>.yaml を使う
+#                               OVERRIDES 未指定ならフォルダ名 (= 場所) の override を選ぶ
 #   VI_MAP_SCALE=               vi_planner の map_scale (地図をプランナ内部で
 #                               粗くする倍率。津田沼 (5888x4000@0.05m) は 3 で
 #                               1963x1334@0.15m = 1.57 億状態)
 #   VI_COMPACT_SINK_DIR=        compact 経路の確定出力を置くディレクトリ ("" = RAM)
 #   SIM_UNKNOWN_AS_OBSTACLE=1   シム LiDAR が未観測セルも壁として返す
 #   OVERRIDES=                  navigation.launch.py の overrides
-#                               (configs/overrides/<名前>.yaml。例 map_tsudanuma)
+#                               (src/daifuku_config/overrides/<名前>.yaml。例 tsudanuma)
 #   EXTRA_PARAMS=               navigation.launch.py の extra_params_file
-#                               (configs/overrides/ に無い任意パスの上書き)
+#                               (src/daifuku_config/overrides/ に無い任意パスの上書き)
 #   MAP_FREE_THRESH=            指定すると map.yaml の free_thresh を差し替えた
 #                               コピーを使う (実機は 0.25 = 未観測 205 が free 扱い)
 #   VI_SOLVER=                  vi_*_planner の solver パラメータ上書き
@@ -48,7 +48,12 @@ source /opt/ros/humble/setup.bash
 PLANNER=${PLANNER:-vi}
 LOCAL_PLANNER=${LOCAL_PLANNER:-auto}
 NAV2=${NAV2:-auto}
-LOCALIZATION=${LOCALIZATION:-emcl2}
+# **既定が emcl2 でないのは、既定の場所 (19f) がそれでは立たないため。**
+# src/daifuku_config/overrides/19f.yaml が vi_planner の localizer を
+# 'belief' (VIOLA) にしているので、localization:=emcl2 だと推定器が 2 つに
+# なり backends.validate_localization が起動時に止める。tsudanuma は
+# 逆に belief を置けない (密ソルバが要り 3.17GB で OOM) ので emcl2 に戻すこと。
+LOCALIZATION=${LOCALIZATION:-vi}
 START_X=${START_X:--1.27}
 START_Y=${START_Y:--0.63}
 START_YAW_DEG=${START_YAW_DEG:-0}
@@ -77,10 +82,16 @@ cleanup_ros() {
 }
 cleanup_ros
 ros2 daemon stop >/dev/null 2>&1
+# **止めたら必ず立て直す。** ros2cli は毎回 127.0.0.1 のデーモンへ繋ぎに行き、
+# 居なければ ECONNREFUSED ですぐ諦める…… のは NAT の話。.wslconfig が
+# networkingMode=mirrored だと Linux の 127.0.0.1 は Windows 側にも向くので、
+# 繋ぎ先が居ないと**握られたまま 2 分待つ**。下の `timeout 5 ros2 topic list` は
+# 全部空を返し、Isaac が正しく喋っていても「トピックが見えない」で exit 4 になる。
+ros2 daemon start >/dev/null 2>&1
 
 SHARE=/opt/ros_ws/install/share/daifuku_stack
 # overrides は daifuku_config の share。**maps/ を持つ daifuku_stack とは置き場が違う**
-# (2026-08-08 まで $SHARE/config/overrides/ を見ていた。設定を configs/ へ出して
+# (2026-08-08 まで $SHARE/config/overrides/ を見ていた。設定を src/daifuku_config/ へ出して
 # daifuku_stack がその段を install しなくなった時点から、**どの地図でも overrides:=none
 # に落ちていたはず** — この修正ともども**未検証**。効かせるには一度ビルドが要る)。
 CONFIG_SHARE=/opt/ros_ws/install/share/daifuku_config
@@ -88,7 +99,7 @@ RUN=/tmp/pi4_sim/$CASE
 rm -rf "$RUN"; mkdir -p "$RUN"
 export ROS_LOG_DIR=$RUN/log
 
-MAP_NAME=${MAP_NAME:-map_19f}       # 既定は 19F の地図
+MAP_NAME=${MAP_NAME:-19f/map_19f}   # 既定は 19F の地図。maps/ からの相対パス (地図ごとのフォルダを含む)
 MAP=$SHARE/maps/$MAP_NAME.yaml
 if [ ! -f "$MAP" ]; then
     echo "map not found: $MAP" >&2
@@ -122,7 +133,7 @@ elif free_thresh:
     print(f"MAP_OVERRIDE {out} free_thresh={free_thresh}")
 
 # パラメータの上書きは launch と同じ経路 (extra_params_file) に載せる。ここで
-# nav2_params 相当を作り直すと configs/stack/nav2/*.yaml の合成を素通りしてしまうので、
+# nav2_params 相当を作り直すと src/daifuku_config/stack/nav2/*.yaml の合成を素通りしてしまうので、
 # 環境変数で触るキーだけの overlay を書く。
 # BT の差し替え (planner:=vi 用) は navigation.launch.py 自身が behavior_trees/ を
 # 指すので、ハーネス側では何もしない。
@@ -176,12 +187,15 @@ EXTRA=""
 [ -f "$RUN/overlay.yaml" ] && EXTRA=$RUN/overlay.yaml
 [ -n "${EXTRA_PARAMS:-}" ] && EXTRA="${EXTRA:+$EXTRA,}${EXTRA_PARAMS}"
 params_arg=()
-# overrides は**必ず明示的に渡す**。launch の既定は map_19f なので、渡さないと
+# overrides は**必ず明示的に渡す**。launch の既定は 19f なので、渡さないと
 # MAP_NAME を変えても 19F 用の調整 (emcl2 のリセット閾値など) が載ったままになる。
-# 地図名と同名の override があればそれを、無ければ none (= 何も重ねない)。
+# 選ぶのは**地図の入っているフォルダ名 (= 場所の名前)** で、同名の override が
+# あればそれを、無ければ none (= 何も重ねない)。**ファイル名のほうではない** —
+# 2026-08-25 に overrides を場所の名前 (19f) にしたので、map_19f では当たらない。
 if [ -z "${OVERRIDES:-}" ]; then
-    if [ -f "$CONFIG_SHARE/overrides/$MAP_NAME.yaml" ]; then
-        OVERRIDES=$MAP_NAME
+    SITE_NAME=$(dirname "$MAP_NAME")
+    if [ -f "$CONFIG_SHARE/overrides/$SITE_NAME.yaml" ]; then
+        OVERRIDES=$SITE_NAME
     else
         OVERRIDES=none
     fi
@@ -234,10 +248,14 @@ LIDAR_PID=$!
 # 構成を OVERRIDES で渡すので追随の対象外だし (params.follows_site)、告知する
 # site_manager も居ない。**params_arg に混ぜないこと** — この引数を宣言している
 # のは navigation だけで、上の lidar_bringup にも渡ってしまう。
+#
+# 地図は 2 枚 (navigation -> /map、localization -> /map_loc) だが、ハーネスが指すのは
+# MAP_NAME の 1 枚だけなので両方へ同じものを渡す。**map_loc:= を落とすと
+# OVERRIDES=none のとき resolve_map が「どの地図を読むか決まりません」で止まる。**
 ros2 launch daifuku_stack navigation.launch.py \
     use_rviz:=false \
     config_watch:=off \
-    map:="$MAP" "${params_arg[@]}" \
+    map:="$MAP" map_loc:="$MAP" "${params_arg[@]}" \
     planner:="$PLANNER" local_planner:="$LOCAL_PLANNER" nav2:="$NAV2" \
     localization:="$LOCALIZATION" >"$RUN/nav.log" 2>&1 &
 NAV_PID=$!

@@ -3,9 +3,9 @@ Dockerfile text eol=lf
 *.sh text eol=lf
 *.yaml text eol=lf
 *.yml text eol=lf
-# 走らせる場所を 1 行で持つファイル (tools/site.sh が書き換える)。拡張子が無いので
+# 走らせる場所の名前 1 語だけを持つファイル。拡張子が無いので
 # 名指しで LF にしておく — 中身をそのまま Linux のコンテナが読む。
-configs/site text eol=lf
+src/daifuku_config/site text eol=lf
 *.ps1 text eol=crlf
 # 地図の pgm は P5 (生バイト)。先頭 8000 バイトに NUL が無い（地図の上端は未観測
 # 205 で埋まる）ので `text=auto` の判定が **テキスト側に転び**、画素値 10/13 が

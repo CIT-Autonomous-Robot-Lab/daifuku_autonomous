@@ -29,15 +29,15 @@ Livox関連ノード、teleopノードを含みます。RVizは含みません�
 | `Dockerfile` | apt依存とツールチェーンだけを持つイメージ。ワークスペースはビルドしない |
 | `fastdds_udp_whitelist.xml` | Fast DDSのトランスポート設定（後述） |
 | `scripts/build-workspace.sh` | `up`のときにコンテナ内で走る`colcon build`（`/usr/local/bin/build-workspace`） |
-| `tools/control.sh` | モーター電源、遠隔操作、状態確認をまとめた操作スクリプト |
-| `tools/shell.sh` | 起動済みコンテナで対話シェルを開く |
 
-`scripts/`はイメージへ入れてコンテナの中で走らせるもの、`tools/`はホスト側から
-叩くものです。
+`scripts/`はイメージへ入れてコンテナの中で走らせるものです。ホスト側から叩く
+`tools/control.sh`と`tools/shell.sh`は**リポジトリルートの[`tools/`](../../tools)**に
+あります（`docker compose`は`.env`をカレントディレクトリから読むので、どのみち
+ルートから叩くもの）。
 
 entrypointとホスト側スクリプトの共通部分は[`docker/common/`](../common)にあります。
 イメージには`docker/common/entrypoint.sh`が`/ros_entrypoint.sh`として入り、
-`tools/`配下は`docker/common/lib/compose.sh`を読み込みます。
+ルートの`tools/`配下は`docker/common/lib/compose.sh`を読み込みます。
 
 ## 起動
 
@@ -145,7 +145,7 @@ Raspberry Pi Catの操作をまとめたスクリプトです。コンテナが�
 起動します。
 
 ```bash
-bash docker/raspberrypi/tools/control.sh help
+bash tools/control.sh help
 ```
 
 | サブコマンド | 動作 |
@@ -182,7 +182,7 @@ bash docker/raspberrypi/tools/control.sh help
 コンテナ内で対話シェルを開きます。ROS 2とワークスペースは読み込み済みです。
 
 ```bash
-bash docker/raspberrypi/tools/shell.sh
+bash tools/shell.sh
 ```
 
 ## Fast DDSの設定

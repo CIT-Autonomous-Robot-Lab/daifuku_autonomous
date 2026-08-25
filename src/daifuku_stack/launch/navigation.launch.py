@@ -42,7 +42,7 @@
 # その navigation を **Nav2 抜き**で組むのが nav2:=false で、これが**既定**。
 # 何が立たなくなるかは AGENTS.md、何が変わるかは docs/usage/architecture.md。
 #
-# パラメータの合成規則は daifuku_config_manager/params.py と configs/README.md、
+# パラメータの合成規則は daifuku_config_manager/params.py と src/daifuku_config/README.md、
 # バックエンドの選択規則は daifuku_stack_launch/backends.py を参照。
 
 import os
@@ -108,7 +108,10 @@ def generate_launch_description():
 
     namespace = LaunchConfiguration("namespace")
     use_namespace = LaunchConfiguration("use_namespace")
+    # **地図は 2 枚**。map:= が経路計画用 (/map)、map_loc:= が自己位置推定用
+    # (/map_loc)。どちらも overrides の site: map: から来る (nav2_params.resolve_map)。
     map_yaml = LaunchConfiguration("map")
+    map_loc_yaml = LaunchConfiguration("map_loc")
     params_file = LaunchConfiguration("params_file")
     emcl2_params_file = LaunchConfiguration("emcl2_params_file")
     bond_params_file = LaunchConfiguration("bond_params_file")
@@ -177,6 +180,11 @@ def generate_launch_description():
     emcl2_remappings = remappings + [
         ("particlecloud", "particle_cloud"),
         ("global_localization", "reinitialize_global_localization"),
+        # **自己位置推定だけが /map_loc を読む。** emcl2 は相対名 "map" を購読する
+        # (emcl2_node.cpp) ので、こちらで振り替えられる。/map のほうは経路計画用の
+        # 地図で、上流の vi 版 navigation_launch.py と global_costmap が決め打ちで
+        # 見にいく先 (どちらもこちらから remap できない)。
+        ("map", "map_loc"),
     ]
 
     configured_map_server_params = ParameterFile(
@@ -215,7 +223,7 @@ def generate_launch_description():
         パラメータが無く through_poses を無効化できないので、木そのものを VI 用
         (behavior_trees/) に差し替える。
 
-        これらのキーは configs/stack/nav2/*.yaml に存在しないので SetParameter (グループ全体への
+        これらのキーは合成される断片のどこにも無いので SetParameter (グループ全体への
         注入) で足りる。逆に params_file に**ある**キーは SetParameter /
         SetParametersFromFile では上書きできない (launch_ros は global params を先に、
         ノード個別の parameters= を後に渡すため、後勝ちでノード側が勝つ)。
@@ -276,6 +284,11 @@ def generate_launch_description():
         map_server と lifecycle_manager は localization:=emcl2 と
         localization:=vi で共通。**emcl2 のノードだけが emcl2 側**で、vi では
         推定そのものを vi_planner が持つ (standalone_navigation を参照)。
+
+        **map_server は 2 つ立つ。** 経路計画用 (`map_server` -> /map) と自己位置
+        推定用 (`map_server_loc` -> /map_loc)。同じ地図を指していても両方立てる —
+        止めるなら「2 枚が同じか」で配線を変えることになり、購読側の remap 先まで
+        条件付きになる。地図 1 枚ぶんの常駐 (津田沼で 23.5MB) で済むほうを取った。
         """
         return [
             Node(
@@ -288,6 +301,25 @@ def generate_launch_description():
                 parameters=[configured_map_server_params],
                 arguments=["--ros-args", "--log-level", log_level],
                 remappings=remappings,
+            ),
+            Node(
+                # 自己位置推定用の 1 枚。**設定ファイルの節を持たない** —
+                # map_server が読むのは use_sim_time と yaml_filename だけで、
+                # 後者は site: map: localization: から来る。断片に
+                # map_server_loc: を足すと RewrittenYaml が yaml_filename を
+                # キー名で振り替えるので、2 つが同じ地図になってしまう。
+                package="nav2_map_server",
+                executable="map_server",
+                name="map_server_loc",
+                output="screen",
+                respawn=use_respawn,
+                respawn_delay=2.0,
+                parameters=[{
+                    "use_sim_time": use_sim_time,
+                    "yaml_filename": map_loc_yaml,
+                }],
+                arguments=["--ros-args", "--log-level", log_level],
+                remappings=remappings + [("map", "map_loc")],
             ),
             Node(
                 condition=IfCondition(use_emcl2),
@@ -305,7 +337,7 @@ def generate_launch_description():
                 remappings=emcl2_remappings,
             ),
             # emcl2 自身はライフサイクルノードではないので、マネージャが見るのは
-            # map_server だけ。
+            # map_server 2 つだけ。
             Node(
                 package="nav2_lifecycle_manager",
                 executable="lifecycle_manager",
@@ -315,7 +347,7 @@ def generate_launch_description():
                 parameters=[
                     {"use_sim_time": use_sim_time},
                     {"autostart": autostart},
-                    {"node_names": ["map_server"]},
+                    {"node_names": ["map_server", "map_server_loc"]},
                 ],
             ),
         ]
@@ -432,6 +464,10 @@ def generate_launch_description():
 
     # スタック
     # amcl + navfn: nav2 標準の bringup がそのまま使える。
+    # **amcl の 2 つは地図が 1 枚**。上流の localization_launch.py が自前で
+    # map_server を立てるので map_loc:= を渡す口が無く、渡しているのは経路計画側の
+    # 地図 (map:=) のほう。site: map: の 2 行が別の地図を指しているときは
+    # nav2_params.resolve_map が起動時に落とすので、ここへは同じ地図しか来ない。
     amcl_navfn_stack = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(bringup_launch),
         condition=IfCondition(use_amcl_navfn),
@@ -528,10 +564,23 @@ def generate_launch_description():
             # 帯と emcl2 の調整を載せたまま走れてしまう。明示したときは overrides の
             # 宣言と同じものを指しているかを見て、違えば起動時に止める。
             default_value="",
-            description="地図の yaml (フルパス)。**空 (既定) なら overrides の "
-                        "site: map: が指すもの。** 明示すると overrides の宣言と"
-                        "同じものかを見る (違えば起動時にエラー)。"
-                        "場所ごと変えるのは tools/site.sh。",
+            description="**経路計画**に使う地図の yaml (フルパス)。/map で配信し、"
+                        "vi_planner と global_costmap が読む。**空 (既定) なら "
+                        "overrides の site: map: navigation: が指すもの。** 明示"
+                        "すると overrides の宣言と同じものかを見る (違えば起動時に"
+                        "エラー)。場所ごと変えるのは ros2 param set /site_manager site "
+                        "<名前> か tools/site.sh。",
+        ),
+        DeclareLaunchArgument(
+            "map_loc",
+            # 決まらないときだけは map:= に落ちる (resolve_map)。**逆向きは無い** —
+            # 経路計画の地図を落とすと、別の場所の地図で走り出しかねない。
+            default_value="",
+            description="**自己位置推定**に使う地図の yaml (フルパス)。/map_loc で"
+                        "配信し、emcl2 が読む。**空 (既定) なら overrides の "
+                        "site: map: localization: が指すもの**で、それも無ければ "
+                        "map:= と同じ地図。2 枚を別にできるのは "
+                        "localization:=emcl2 のときだけ。",
         ),
 
         # --- パラメータの合成 (daifuku_config_manager/params.py) ---
@@ -539,13 +588,16 @@ def generate_launch_description():
             "params_file",
             default_value="",
             description="nav2 パラメータを 1 ファイルで与える (空なら params_dir の "
-                        "断片を合成する)。指定すると params_dir は無視される。",
+                        "断片と src/daifuku_config/stack/vi_planner.yaml を合成する)。"
+                        "指定すると params_dir は無視される。",
         ),
         DeclareLaunchArgument(
             "params_dir",
             default_value=default_params_dir,
             description="合成する nav2 パラメータ断片のディレクトリ。"
-                        "*.yaml をファイル名順に深くマージする (configs/README.md)。",
+                        "*.yaml に src/daifuku_config/stack/vi_planner.yaml (Nav2 のノードでは "
+                        "ないので nav2/ の外に居る) を足し、ファイル名順に深く"
+                        "マージする (src/daifuku_config/README.md)。",
         ),
         *params.declare_args(),
         params.declare_watch_arg(),
@@ -561,7 +613,7 @@ def generate_launch_description():
                         "publishes map->odom and takes pose_topic as a manual seed "
                         "(initialpose), not as a pose input. **Which estimator** is "
                         "config's business — set localizer: in "
-                        "configs/stack/nav2/vi_planner.yaml (or an overrides file) to "
+                        "src/daifuku_config/stack/vi_planner.yaml (or an overrides file) to "
                         "adaptive / grid / belief / viterbi; leaving it external here "
                         "stops the launch. Needs planner:=vi and nav2:=false.",
         ),
@@ -645,7 +697,8 @@ def generate_launch_description():
                 "package": "daifuku_stack",
                 "config_root": config_root,
                 "targets": ["params_file", "emcl2_params_file", "bond_params_file"],
-                # params_file だけは configs/stack/nav2/*.yaml の合成が土台になる。
+                # params_file だけは src/daifuku_config/stack/nav2/*.yaml と
+                # src/daifuku_config/stack/vi_planner.yaml の合成が土台になる。
                 "base_resolvers": {"params_file": nav2_params.fragments_resolver},
             },
         ),

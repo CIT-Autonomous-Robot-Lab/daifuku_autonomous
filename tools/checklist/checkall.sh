@@ -27,7 +27,7 @@
 # 既定は N で、非対話では必ず「いいえ」に倒れる (同意を推測しない)。走ったあとは
 # 期待する挙動を出して [Y/n] を聞き、n なら原因の切り分けへ枝分かれする。
 #
-# **このツールは configs/ の下に一切書かない** (書くと config_sentinel が launch を
+# **このツールは src/daifuku_config/ の下に一切書かない** (書くと config_sentinel が launch を
 # 落とす)。読み方と道具は lib.sh の冒頭。
 
 set -uo pipefail

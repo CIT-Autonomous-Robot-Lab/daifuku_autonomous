@@ -31,7 +31,7 @@
 ボタンと軸の番号が総入れ替えになります。左スティックと十字キーを入れ替えるモードを持つ
 機種もあるので、そちらも切っておいてください。番号が合わないときは**エラーが出ず、ただ
 効きません**。`ros2 topic echo /joy`で押しながら確かめ、
-`configs/bringup/robot/joy_teleop.yaml`の`button_*` / `axis_*`を直します。
+`src/daifuku_config/bringup/robot/joy_teleop.yaml`の`button_*` / `axis_*`を直します。
 
 速度は不感帯（スティックの傾き0.15）を出た**すぐ外側で下限値に飛び**、そこから上限まで
 線形です。下限未満はステップ周波数が低すぎて機体が唸るだけで進まないため、そこへ写しても
@@ -123,7 +123,7 @@ teleopへ移って巡回を**取り消した**ときは鳴りません。取り�
 
 鳴らしているのは本体ドライバで、自前実装（`driver:=original`）も公式実装
 （`driver:=raspimouse`）も同じトピック・同じ型で受けます。**鳴らなくても走行には何の影響も
-ありません。** うるさければ`configs/bringup/robot/joy_teleop.yaml`の`buzzer: false`で止まります。
+ありません。** うるさければ`src/daifuku_config/bringup/robot/joy_teleop.yaml`の`buzzer: false`で止まります。
 
 ## いまのモードはLEDで分かります
 
@@ -152,7 +152,7 @@ teleopへ移って巡回を**取り消した**ときは鳴りません。取り�
 
 音は残してあります。機体が見えない位置にいるときは音のほうが届くからで、LEDは「いまどうか」、
 音は「いま変わった・効かなかった」を受け持ちます。要らなければ
-`configs/bringup/robot/joy_teleop.yaml`の`leds: false`で止まります（`buzzer: false`と同じ形）。
+`src/daifuku_config/bringup/robot/joy_teleop.yaml`の`leds: false`で止まります（`buzzer: false`と同じ形）。
 
 ピンを掴めていなければ**エラーも出ずにただ点きません**。起動ログの
 `peripherals: leds=`で分かります。実機での配線確認は
@@ -234,7 +234,7 @@ STARTとBACKを同時に2秒押すと、`waypoints_file`のYAMLを読んで
 意味を持たないので、既定の1つを忍ばせると別の地図で立てたときに黙って噛み合わないものを
 走らせてしまいます。
 
-**地図と対で選んでください。** `map_19f`で津田沼の経路を投げると全点が地図の外に出ます。
+**地図と対で選んでください。** `19f`で津田沼の経路を投げると全点が地図の外に出ます。
 それでも`stop_on_failure: false`なので、1点ずつ失敗しながら最後まで進みます。外から
 見える形は構成で変わります。
 
@@ -322,5 +322,5 @@ publishしないので、自律走行の邪魔をしません（`start_enabled: 
 ros2 topic hz /joy      # 挿してから数秒待つ。出れば拾えている
 ```
 
-設定値は[`configs/bringup/robot/joy_teleop.yaml`](../../configs/bringup/robot/joy_teleop.yaml)、
+設定値は[`src/daifuku_config/bringup/robot/joy_teleop.yaml`](../../src/daifuku_config/bringup/robot/joy_teleop.yaml)、
 実装は[`src/joy_teleop.py`](../../src/daifuku_bringup/src/joy_teleop.py)にあります。

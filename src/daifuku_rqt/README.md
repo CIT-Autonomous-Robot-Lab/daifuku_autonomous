@@ -41,7 +41,7 @@ rqt                                          # Plugins > Raspicat > Raspicat Con
 
 ## 止まり方（ここが一番重要）
 
-自前実装（`driver:=original`）の `configs/bringup/robot/raspicat_driver.yaml` は
+自前実装（`driver:=original`）の `src/daifuku_config/bringup/robot/raspicat_driver.yaml` は
 `cmd_vel_timeout` が **60 秒**です。つまり「`cmd_vel` が途切れたから止まる」までに
 1 分かかります。公式実装（`driver:=raspimouse`）にはこのキーが**そもそも
 ありません**（`raspicat.yaml` が並べている 14 個で全部）。指令が途切れたときに
@@ -66,7 +66,7 @@ teleop を常用するなら `cmd_vel_timeout` を 1 秒程度へ下げること
 （nav2 のコントローラと `vi_planner`）の出力で、機体の手前には `twist_mux` が入って
 います（`robot_bringup.launch.py` の `twist_mux:=true` が既定）。優先度は**自律 100 /
 teleop 10** なので、**こちらが通るのは自律側が黙っているあいだだけです**。配線は
-[`configs/README.md`](../../configs/README.md#twist_muxyaml-の配線と優先度)。
+[`src/daifuku_config/README.md`](../../src/daifuku_config/README.md#twist_muxyaml-の配線と優先度)。
 
 だから**ゴールが走っている間は teleop グループを無効化**しています。無効化しなくても
 仲裁で負けて機体は動かないのですが、それでは「パネルが壊れた」と見分けが付きません。

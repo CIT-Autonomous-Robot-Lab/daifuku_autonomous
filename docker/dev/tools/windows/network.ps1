@@ -5,7 +5,7 @@ param(
     # Kept for command-line compatibility; static mode does not use an
     # Internet-facing adapter or NAT.
     [string]$InternetAlias = '',
-    [string]$RobotHostAddress = '192.168.1.3',
+    [string]$RobotHostAddress = '192.168.1.1',
     [ValidateRange(1, 32)]
     [int]$RobotPrefixLength = 24
 )

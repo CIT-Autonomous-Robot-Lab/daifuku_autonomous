@@ -164,14 +164,14 @@ docker compose exec ros2 \
 停止していれば自動的に起動します。
 
 ```bash
-bash docker/raspberrypi/tools/shell.sh
+bash tools/shell.sh
 ```
 
-モーター電源、遠隔操作、状態確認は`docker/raspberrypi/tools/control.sh`にまとめています。
+モーター電源、遠隔操作、状態確認は`tools/control.sh`にまとめています。
 
 ```bash
-bash docker/raspberrypi/tools/control.sh status
-bash docker/raspberrypi/tools/control.sh teleop keyboard
+bash tools/control.sh status
+bash tools/control.sh teleop keyboard
 ```
 
 サブコマンドと環境変数の一覧は[日常操作と確認](../usage/operations.md#controlshで操作する)を参照してください。

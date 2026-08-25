@@ -49,7 +49,7 @@ CASE=${1:-${CASE:-baseline}}
 ISAAC_RUNTIME=${ISAAC_RUNTIME:-binary}   # binary = $ISAACSIM/python.sh / pip = uv --extra isaac
 ISAACSIM=${ISAACSIM:-$HOME/isaacsim}
 LIDAR=${LIDAR:-2d}
-MAP_NAME=${MAP_NAME:-map_19f}       # nav_container.sh / launch の既定と揃えること
+MAP_NAME=${MAP_NAME:-19f/map_19f}   # nav_container.sh / launch の既定と揃えること
 UNKNOWN=${UNKNOWN:-free}            # map_to_usd.py の --unknown
 WALL_HEIGHT=${WALL_HEIGHT:-2.0}
 ROBOT_USD=${ROBOT_USD:-}
@@ -143,6 +143,22 @@ case "$ISAAC_RUNTIME" in
             echo "    uv run --no-sync python -c 'import sys; print(sys.version)'" >&2
             exit 2
         fi
+        # **内蔵 ROS 2 を使うので、起動前に環境変数を立てる。** pip 版は
+        # isaacsim.ros2.core/<distro>/lib に Humble 一式を同梱していて、
+        # ROS_DISTRO / RMW_IMPLEMENTATION と共有ライブラリの探索パスが
+        # 揃っていないと `ROS2 Bridge startup failed` で**ブリッジだけが死ぬ**。
+        # Kit 自体は上がりトピックも出ないので、原因がグラフや DDS に見える。
+        # ホストに ROS 2 を source 済みならそちらが優先される (上書きしない)。
+        ros2_lib=$("${UVRUN[@]}" --extra isaac --no-sync python -c             "import isaacsim, os; print(os.path.join(os.path.dirname(isaacsim.__file__), 'exts', 'isaacsim.ros2.core', 'humble', 'lib'))"             2>/dev/null) || ros2_lib=""
+        export ROS_DISTRO=${ROS_DISTRO:-humble}
+        export RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}
+        if [ -n "$ros2_lib" ] && [ -d "$ros2_lib" ]; then
+            export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:+$LD_LIBRARY_PATH:}$ros2_lib"
+            export PATH="$PATH:$ros2_lib"     # Windows (Git Bash) はこちらを見る
+            echo "  ros2 libs: $ros2_lib"
+        else
+            echo "  warn: 内蔵 ROS 2 の lib が見つからない。ホスト側の ROS 2 に頼る。" >&2
+        fi
         ISAAC_CMD=("${UVRUN[@]}" --extra isaac --no-sync python)
         ;;
     *)
@@ -212,9 +228,12 @@ if ! $ENGINE ps -a --format '{{.Names}}' | grep -qx "$CONTAINER"; then
     # --network host / --ipc host は Isaac (ホスト側プロセス) と DDS で繋ぐため。
     # ipc を共有しないと Fast DDS の共有メモリトランスポートが通らず、
     # ディスカバリだけ成功して**データが流れない**という分かりにくい形で失敗する。
+    # **--shm-size は付けないこと。** podman 6 は --ipc host と併用すると
+    # `cannot set shmsize when running in the {host } IPC Namespace` で起動を拒む
+    # (ipc を共有した時点で /dev/shm はホストのものなので、そもそも意味がない)。
     $ENGINE run -d --name "$CONTAINER" \
         "${limits[@]}" \
-        --network host --ipc host --shm-size 512m \
+        --network host --ipc host \
         -e ROS_DOMAIN_ID="$DOMAIN_ID" \
         -e ROS_LOCALHOST_ONLY=0 \
         -e RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
@@ -245,7 +264,20 @@ $ENGINE exec "$CONTAINER" bash -lc \
     'for f in /opt/sim/*.py /opt/sim/*.sh; do [ -e "$f" ] && sed -i "s/\r$//" "$f"; done
      chmod +x /opt/sim/*.sh'
 
+# 呼び出し側が Fast DDS のプロファイルを指しているなら、**同じものを**コンテナへも
+# 配って両側で使う。Windows + WSL (networkingMode=mirrored) で回すときは
+# container/fastdds_mirrored.xml がこれに当たり、片側だけに掛けても繋がらない。
+# Linux ホストで同一マシンに置く分には不要 (未設定なら何もしない)。
+dds_env=()
+if [ -n "$FASTRTPS_DEFAULT_PROFILES_FILE" ]; then
+    $ENGINE exec "$CONTAINER" bash -lc "mkdir -p /etc/fastdds"
+    $ENGINE cp "$FASTRTPS_DEFAULT_PROFILES_FILE" "$CONTAINER:/etc/fastdds/profiles.xml"
+    dds_env=(-e FASTRTPS_DEFAULT_PROFILES_FILE=/etc/fastdds/profiles.xml)
+    echo "  dds profile: $FASTRTPS_DEFAULT_PROFILES_FILE -> /etc/fastdds/profiles.xml"
+fi
+
 $ENGINE exec \
+    "${dds_env[@]}" \
     -e CASE="$CASE" \
     -e LIDAR="$LIDAR" \
     -e USE_SIM_TIME="$USE_SIM_TIME" \
@@ -253,7 +285,7 @@ $ENGINE exec \
     -e PLANNER="${PLANNER:-vi}" \
     -e LOCAL_PLANNER="${LOCAL_PLANNER:-auto}" \
     -e NAV2="${NAV2:-auto}" \
-    -e LOCALIZATION="${LOCALIZATION:-emcl2}" \
+    -e LOCALIZATION="${LOCALIZATION:-vi}" \
     -e OVERRIDES="${OVERRIDES:-}" \
     -e EXTRA_PARAMS="${EXTRA_PARAMS:-}" \
     -e VI_SOLVER="${VI_SOLVER:-}" \
@@ -266,6 +298,7 @@ $ENGINE exec \
     -e URDF="${CONTAINER_URDF:-/tmp/raspicat_plain.urdf}" \
     -e GOAL_X="${GOAL_X:-4.28}" -e GOAL_Y="${GOAL_Y:--2.92}" \
     -e GOAL_YAW_DEG="${GOAL_YAW_DEG:--24}" \
+    -e START_X="$START_X" -e START_Y="$START_Y" -e START_YAW="$START_YAW" \
     -e SETTLE="${SETTLE:-45}" -e TIMEOUT="${TIMEOUT:-300}" \
     "$CONTAINER" bash /opt/sim/nav_container.sh 2>&1 | tee "$RUN/nav_side.log"
 nav_rc=${PIPESTATUS[0]}

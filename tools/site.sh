@@ -1,39 +1,30 @@
 #!/usr/bin/env bash
-# 走らせる場所を切り替える。
+# 走らせる場所を切り替える。**便利口であって、これでなければ切り替えられないわけではない。**
 #
-#   tools/site.sh                  今の値と、選べる名前を出す
-#   tools/site.sh map_tsudanuma    切り替える (機体は自分で上がり直す)
-#   tools/site.sh map_19f --file-only   ファイルを書くだけ (ROS にも Docker にも触らない)
+#   tools/site.sh                   今の値と、選べる名前を出す
+#   tools/site.sh tsudanuma         切り替える (機体は自分で上がり直す)
+#   tools/site.sh 19f --file-only   ファイルを書くだけ (ROS にも Docker にも触らない)
 #
-# 場所が決まれば LiDAR の帯 (仰角と高さ) も emcl2 / 価値反復の調整も地図も決まる。
-# その 1 つを configs/site に置いてあり、機体側
-# (docker compose で常駐) も人が立てる navigation も同じ値を見る。
+# src/daifuku_config/site は名前 1 語しか持たないので、同じことは
 #
-# **切り替えの本体は ROS 側にある。** 機体で site_manager ノードが上がっていて、
+#   ros2 param set /site_manager site tsudanuma   機体が上がっているとき (検査して書いて流す)
+#   echo tsudanuma > src/daifuku_config/site      上がっていないとき (開発ホスト)
 #
-#   ros2 param set /site_manager site <名前>
+# でもできる。このスクリプトがやるのは**その 2 経路の選び分けと、ROS へ届かなかった
+# ときの `docker compose restart raspicat`** だけ。機体側 (LiDAR の帯) は起動時にしか
+# 読まないので、ファイルを書いただけでは変わらない。
 #
-# を受けると、両方のパッケージについて「その場所で本当に立つか」を検査してから
-# configs/site を書き、/daifuku/site へ流す。機体の launch に居る config_sentinel が
-# それを見て、**機体が止まっていることを確かめてから**自分を終了し、compose の
-# restart: unless-stopped が新しい設定で上げ直す。このスクリプトは
-# その `ros2 param set` を叩くための薄い口で、**走行中に切り替えても
-# その場では止まらない** (止まってから上がり直す)。
+# ROS 経由なら site_manager が両方のパッケージについて検査してから書き、/daifuku/site
+# へ流す。機体の launch に居る config_sentinel がそれを見て、**機体が止まっている
+# ことを確かめてから**自分を終了し、compose の restart: unless-stopped が新しい設定で
+# 上げ直す。だから**走行中に切り替えてもその場では止まらない**。
 #
-# ROS へ届かないとき (機体が上がっていない、開発ホスト) は、従来どおりファイルを
-# 書いて raspicat を立て直す。**この 2 経路が同じ結果になるように、書き換えるのは
-# どちらも「値の行 1 つ」だけ**にしてある (見出しのコメントは触らない)。
+# 場所と設定の関係は src/daifuku_config/README.md。
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-SITE_FILE=$ROOT/configs/site
-OVERRIDES_DIR=$ROOT/configs/overrides
-
-current() {
-    # params.read_site_file と同じ規則 (1 つめの空でない非コメント行)。
-    sed -e 's/[[:space:]]*$//' "$SITE_FILE" 2>/dev/null \
-        | grep -v '^[[:space:]]*#' | grep -v '^[[:space:]]*$' | head -n 1
-}
+SITE_FILE=$ROOT/src/daifuku_config/site
+OVERRIDES_DIR=$ROOT/src/daifuku_config/overrides
 
 available() {
     # glob で列挙する。find -printf は GNU 拡張で、無い環境では**空の一覧**になり、
@@ -50,19 +41,6 @@ usage() {
     echo "usage: tools/site.sh [<名前>] [--file-only] [--no-restart]" >&2
     echo "選べる名前:" >&2
     available | sed 's/^/  /' >&2
-}
-
-# 値の行だけを差し替える (site_manager の write_site と同じことを sh でやる)。
-write_site() {
-    local name=$1 tmp
-    tmp=$(mktemp "$(dirname "$SITE_FILE")/.site.XXXXXX")
-    awk -v value="$name" '
-        !done && !/^[[:space:]]*#/ && NF { print value; done = 1; next }
-        { print }
-        END { if (!done) print value }
-    ' "$SITE_FILE" > "$tmp"
-    # 同じディレクトリなので mv は rename(2) 1 つ = 書きかけを誰にも読ませない。
-    mv "$tmp" "$SITE_FILE"
 }
 
 NAME=""
@@ -84,8 +62,10 @@ for arg in "$@"; do
     esac
 done
 
+BEFORE=$(cat "$SITE_FILE" 2>/dev/null | tr -d '[:space:]')
+
 if [ -z "$NAME" ]; then
-    echo "site: $(current)   ($SITE_FILE)"
+    echo "site: $BEFORE   ($SITE_FILE)"
     echo "選べる名前:"
     available | sed 's/^/  /'
     exit 0
@@ -100,20 +80,6 @@ if [ ! -f "$OVERRIDES_DIR/$NAME.yaml" ]; then
     usage
     exit 2
 fi
-# 地図は overrides の site: map: が持つ。無いのはエラーにしない (navigation を
-# 立てるときに map:= を明示すれば通る) が、黙って進むと「なぜか地図が決まらない」
-# で悩むので言っておく。
-if ! awk '
-        /^site:[[:space:]]*$/ { in_site = 1; next }
-        /^[^[:space:]#]/      { in_site = 0 }
-        in_site && /^[[:space:]]+map:/ { found = 1 }
-        END { exit !found }
-    ' "$OVERRIDES_DIR/$NAME.yaml"; then
-    echo "!  $NAME.yaml に site: map: がありません。" >&2
-    echo "   navigation は map:= を明示しないと起動時に止まります。" >&2
-fi
-
-BEFORE=$(current)
 
 # ── ROS 経由 (機体が上がっているとき) ────────────────────────────────────────
 # COMPOSE_FILE はリポジトリルートの .env にしか無いので、ここから叩く。
@@ -138,7 +104,11 @@ if [ "$FILE_ONLY" = no ] && command -v docker >/dev/null 2>&1 \
 fi
 
 # ── ファイル経由 (開発ホスト、機体が上がっていないとき) ──────────────────────
-write_site "$NAME"
+# 同じディレクトリへ書いてから mv = rename(2) 1 つ。書きかけを誰にも読ませない
+# (読み手が truncate の隙に空を読むと、黙って既定の場所で立ち上がる)。
+TMP=$(mktemp "$(dirname "$SITE_FILE")/.site.XXXXXX")
+printf '%s\n' "$NAME" > "$TMP"
+mv "$TMP" "$SITE_FILE"
 echo "site: $BEFORE -> $NAME   ($SITE_FILE)"
 
 if [ "$FILE_ONLY" = yes ]; then

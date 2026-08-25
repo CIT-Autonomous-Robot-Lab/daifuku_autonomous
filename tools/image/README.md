@@ -11,7 +11,7 @@
 
 | ファイル | 実行場所 | 用途 |
 |---|---|---|
-| `create_image.py` | 手元のPC（Windows / Linux / macOS） | ベースイメージの取得・検証・書き込みと、ブートパーティションへの設定注入 |
+| `create_image.py` | 手元のPC（Windows / Linux） | ベースイメージの取得・検証・書き込みと、ブートパーティションへの設定注入 |
 | `provision.sh` | Raspberry Pi | 初回起動時のホスト側セットアップ。単体でも実行できる |
 
 `create_image.py`はPython 3.8以上の標準ライブラリだけで動きます。追加のパッケージは
@@ -46,7 +46,7 @@ python3 tools/image/create_image.py devices
 
 ### 2. カードを作る
 
-管理者（Windows）またはroot（Linux / macOS）で実行します。
+管理者（Windows）またはroot（Linux）で実行します。
 
 ```bash
 sudo python3 tools/image/create_image.py all \
@@ -92,8 +92,11 @@ python tools\image\create_image.py all --model pi4 --device 2 --ssh-key $HOME\.s
 >
 > **ロボットLANにルータが無いなら`--gateway none`も要ります。**`--wifi-ssid`を足す
 > だけでは直りません。eth0の静的デフォルトルートはwlan0のDHCPルート（メトリック600）
-> より優先されるので、存在しない`.1`宛のまま残ると外へ出られず、`provision.sh`は
+> より優先されるので、届かない`.1`宛のまま残ると外へ出られず、`provision.sh`は
 > 「ネットワークの疎通を待つ」で足踏みしてapt・git・Dockerが全部失敗します。
+> なお`192.168.1.1`は[開発ホストのアドレス](../../docs/setup/network.md#固定ip)で、
+> そちらが上がっていて転送設定済みなら中継してくれますが、Piの初回起動時にPCが
+> つながっている保証は無いので、既定は`none`のままにしておくのが安全です。
 
 ### 3. Piを起動する
 

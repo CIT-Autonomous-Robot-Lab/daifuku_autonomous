@@ -4,45 +4,66 @@
 # ここが見るのは「起動時にエラーで止まる」ものと「エラーも警告も出ないまま
 # 効かない」ものの 2 種類。launch を立てる前にどちらも分かる。
 #
-# **読むだけ。** configs/ の下に書くと config_sentinel が指紋の変化で launch を
+# **読むだけ。** src/daifuku_config/ の下に書くと config_sentinel が指紋の変化で launch を
 # 落とし、人が立てた navigation / mapping は終わったままになる。
 
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
 section 0102 "設定の整合"
 
-CONFIG="${ROOT}/configs"
+CONFIG="${ROOT}/src/daifuku_config"
 PARAMS_PY="${ROOT}/src/daifuku_config_manager/src/daifuku_config_manager/params.py"
 
-require "configs/ がある" test -d "${CONFIG}"
+require "src/daifuku_config/ がある" test -d "${CONFIG}"
 
-# ── 場所 (configs/site) ──────────────────────────────────────────────────────
+# ── 場所 (src/daifuku_config/site) ──────────────────────────────────────────────────────
 SITE="$(site_name)"
 
 check_site_exists() {
   [[ -n "${SITE}" ]] || {
-    echo "configs/site が空"
+    echo "src/daifuku_config/site が空"
     return 1
   }
   echo "${SITE}"
   test -f "${CONFIG}/overrides/${SITE}.yaml"
 }
-require "configs/site の名前が overrides にある" check_site_exists
+require "src/daifuku_config/site の名前が overrides にある" check_site_exists
+
+# **ファイルは名前 1 語だけ。** 2026-08-25 にコメント付きの書式をやめた。戻すと
+# 「1 つめの空でない非コメント行が値」という規則を読み手 (params.read_site_file、
+# checklist の site_name) と書き手 (site_manager.write_site、tools/site.sh) が
+# また各々写すことになる。書式が無いから echo 1 つで切り替えられる。
+check_site_bare() {
+  local body
+  body="$(cat "${CONFIG}/site")"
+  [[ "${body}" == "${SITE}" ]] || {
+    echo "src/daifuku_config/site に名前以外が入っている (コメント・空行・複数行)"
+    return 1
+  }
+  echo "${SITE} (1 語だけ)"
+}
+item "src/daifuku_config/site が名前 1 語だけを持つ" check_site_bare
 
 # 地図は「同じ名前の地図」ではなく、その overrides 自身の site: map: が決める。
 # 無いと navigation は既定の地図へ落とさずに起動時で止まる (別の場所の地図で
-# 自己位置を推定し始めるほうが危ないため)。
+# 自己位置を推定し始めるほうが危ないため)。2026-08-25 から **役ごとに 2 枚**
+# (navigation: /map、localization: /map_loc)。片方だけだと起動時に落ちる。
 check_site_map() {
-  local ov="${CONFIG}/overrides/${SITE}.yaml" map
-  map="$(sed -n '/^site:/,/^[^ #]/p' "${ov}" | sed -n 's/^[[:space:]]*map:[[:space:]]*//p' | head -n 1)"
-  [[ -n "${map}" ]] || {
-    echo "site: map: が無い → navigation は map:= が必須になる"
-    return 1
-  }
-  echo "${map}"
-  test -f "${ROOT}/src/daifuku_stack/maps/${map}" || test -f "${map}"
+  local ov="${CONFIG}/overrides/${SITE}.yaml" role map bad=0
+  for role in navigation localization; do
+    map="$(sed -n '/^site:/,/^[^ #]/p' "${ov}" \
+           | sed -n "s/^[[:space:]]*${role}:[[:space:]]*//p" |
+           sed 's/[[:space:]]*#.*$//; s/[[:space:]]*$//' | head -n 1)"
+    [[ -n "${map}" ]] || {
+      echo "site: map: ${role}: が無い → navigation が起動時に落ちる"
+      return 1
+    }
+    echo "${role}: ${map}"
+    test -f "${ROOT}/src/daifuku_stack/maps/${map}" || test -f "${map}" || bad=1
+  done
+  return "${bad}"
 }
-item "overrides の site: map: が指す地図が実在する" check_site_map
+item "overrides の site: map: が指す地図 2 枚が実在する" check_site_map
 
 # ── overrides の行き先 ──────────────────────────────────────────────────────
 # 1 段目はパッケージ名か site:。知らない名前は「誰も読まない部分木」になるので
@@ -101,12 +122,14 @@ check_override_nodes() {
 }
 item "overrides の 2 段目のノード名に行き先がある" check_override_nodes
 
-# ── nav2 の断片 ─────────────────────────────────────────────────────────────
-# ファイル名順に 1 つの params_file へ束ねられる。**同じノード名が 2 つの断片に
-# あると起動時にエラーで止まる** (キーが重なっていなくても止まる)。
+# ── params_file の断片 ──────────────────────────────────────────────────────
+# stack/nav2/*.yaml と stack/vi_planner.yaml (Nav2 のノードではないので nav2/ の
+# 外に居るが合成には入る) がファイル名順に 1 つの params_file へ束ねられる。
+# **同じノード名が 2 つの断片にあると起動時にエラーで止まる** (キーが重なって
+# いなくても止まる)。
 check_nav2_dup() {
   local dup
-  dup="$(grep -ho '^[a-zA-Z_][a-zA-Z_0-9]*:' "${CONFIG}"/stack/nav2/*.yaml |
+  dup="$(grep -ho '^[a-zA-Z_][a-zA-Z_0-9]*:'     "${CONFIG}"/stack/nav2/*.yaml "${CONFIG}"/stack/vi_planner.yaml |
     tr -d ':' | sort | uniq -d | tr '\n' ' ')"
   [[ -z "${dup}" ]] || {
     echo "2 つの断片に居る: ${dup}"
@@ -114,7 +137,7 @@ check_nav2_dup() {
   }
   echo "重複なし"
 }
-item "configs/stack/nav2/*.yaml にノード名の重複が無い" check_nav2_dup
+item "params_file の断片にノード名の重複が無い" check_nav2_dup
 
 # standalone を設定に書くと、Nav2 構成で立てたとき navigate_to_pose のサーバが
 # bt_navigator と 2 つになる。**どちらに繋がったかはログにも ros2 action list にも
@@ -128,7 +151,7 @@ item "configs/stack/nav2/*.yaml にノード名の重複が無い" check_nav2_du
 # EKF と駆動ドライバにもあり、あちらは正しく設定で持つもの (odom->base_footprint)。
 #
 # **localizer は逆にここに書く側**。「どの推定器を使うか」を持つのは
-# configs/stack/nav2/vi_planner.yaml だけで、launch が持つのは「内蔵を使うか」
+# src/daifuku_config/stack/vi_planner.yaml だけで、launch が持つのは「内蔵を使うか」
 # (localization:=vi) だけ。噛み合わなければ backends.validate_localization が
 # 起動時に止めるので、この検査の対象には**入れない**。
 check_no_launch_only_keys() {
@@ -148,8 +171,29 @@ check_no_launch_only_keys() {
   }
   echo "書かれていない"
 }
-item "configs/stack と configs/overrides に standalone: / follow: / publish_tf: が無い" \
+item "src/daifuku_config/stack と src/daifuku_config/overrides に standalone: / follow: / publish_tf: が無い" \
   check_no_launch_only_keys
+
+# 自己位置推定側の map_server (map_server_loc) は設定ファイルの節を持たない。
+# 足すと RewrittenYaml が yaml_filename を**キー名で**振り替えるので、2 つの
+# map_server が同じ地図を読む。**エラーも警告も出ないまま地図が 1 枚に戻る。**
+check_no_map_server_loc_section() {
+  local d hit
+  for d in "${CONFIG}/stack" "${CONFIG}/overrides"; do
+    [[ -d "${d}" ]] || {
+      echo "見る先が無い: ${d}"
+      return 1
+    }
+  done
+  hit="$(grep -rln '^[[:space:]]*map_server_loc:' \
+    "${CONFIG}/stack" "${CONFIG}/overrides" 2>/dev/null | tr '\n' ' ')"
+  [[ -z "${hit}" ]] || {
+    echo "map_server_loc: が書かれている (2 つの map_server が同じ地図になる): ${hit}"
+    return 1
+  }
+  echo "書かれていない"
+}
+item "src/daifuku_config/ に map_server_loc: の節が無い" check_no_map_server_loc_section
 
 # ── .env ────────────────────────────────────────────────────────────────────
 ROOT_ENV="${ROOT}/.env"
@@ -232,7 +276,7 @@ else
   item "rtmouse と自前ドライバが同居していない" check_rtmouse_exclusive
 
   # Pi 4 (4GB) で waypoint_prefetch:=true は価値関数が 2 つ生きる。既定の
-  # map_19f が true なので、引数を何も足さずに立てると踏む。
+  # 19f が true なので、引数を何も足さずに立てると踏む。
   if is_pi4; then
     check_prefetch() {
       local ov="${CONFIG}/overrides/${SITE}.yaml"

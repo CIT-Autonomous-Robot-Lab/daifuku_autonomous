@@ -23,11 +23,9 @@ Raspberry Pi Cat を ROS 2 Humble / Nav2 で自律移動させる colcon ワー�
 ## リポジトリの範囲
 
 自前は 7 つです。`src/` の下が `daifuku_bringup` と `daifuku_stack` と
-`daifuku_config_manager` と `raspicat_driver` と `daifuku_rqt` と
-`daifuku_waypoint_manager` で、残りは `daifuku_autonomous.repos` からの
-`vcs import` です。**7 つめの `daifuku_config` だけは `src/` の下ではなく
-`src/` と並ぶ `configs/`**（設定はどのパッケージのものでもないので、`src/` の下に
-置くとどこでも嘘が残る）。
+`daifuku_config` と `daifuku_config_manager` と `raspicat_driver` と
+`daifuku_rqt` と `daifuku_waypoint_manager` で、残りは
+`daifuku_autonomous.repos` からの `vcs import` です。
 
 自前パッケージの役割分担は次のとおりで、**`daifuku_bringup` と `daifuku_stack` は
 互いに依存しません**（どちらも `daifuku_config_manager` と `daifuku_config` にだけ
@@ -38,7 +36,7 @@ Raspberry Pi Cat を ROS 2 Humble / Nav2 で自律移動させる colcon ワー�
 | `daifuku_bringup` | 機体。駆動ドライバ・URDF・cmd_vel の仲裁・ゲームパッド・**LiDAR**・**EKF**。`docker compose up` で常駐する |
 | `daifuku_stack` | 自律移動。Nav2 / emcl2 / VI の launch、地図、ウェイポイント、RViz |
 | `daifuku_config_manager` | 設定の合成規則（`params.py`）と、`site_manager` / `config_sentinel`（設定が書き変わったことを見つける役。**どちらも他を import しない**）。**設定の実体は持たない** |
-| `daifuku_config`（`configs/`） | 設定の実体だけ。`bringup/` と `stack/` と `overrides/` と `site` |
+| `daifuku_config` | 設定の実体だけ。`bringup/` と `stack/` と `overrides/` と `site` |
 
 `vcs import` で入るものを直しても本リポジトリのコミットには入らないので、上流を
 直す必要があれば向こうで作業してください。
@@ -46,7 +44,7 @@ Raspberry Pi Cat を ROS 2 Humble / Nav2 で自律移動させる colcon ワー�
 罠が 2 つあります。`raspicat_ros` / `raspicat_description` / `raspimouse2` は
 `.gitignore` に**書かれていない**ので、Linux・Docker のチェックアウトでは untracked で
 現れます。それでも**コミット対象ではありません**。もう 1 つ、`src/value_iteration3`
-（`vi_planner` の実装）は**独自の `CLAUDE.md` を持つ**ので、中を
+（`vi_planner` の実装）は**独自の `AGENTS.md` を持つ**ので、中を
 触る前にそちらを読むこと。
 
 ## ビルド
@@ -71,7 +69,7 @@ bash tools/setup/setup_native.sh              # --jobs 1 / --no-livox / --no-vi
 | 変えたもの | やること |
 | --- | --- |
 | `daifuku_bringup` / `daifuku_stack` / `daifuku_config_manager` / `raspicat_driver` の Python・launch・地図など | 何もしない。ノード再起動だけで反映される（`--symlink-install` のため）。ただし `raspicat_driver` の `setup.py` に `entry_points` を足したときはビルドが要る |
-| `configs/` の値（`bringup/` `stack/` `overrides/` のどれでも） | 同上（ビルドは要らない）。ただし**走らせたまま直すと `config_sentinel` がその launch を落とす**。機体は `restart: unless-stopped` が上げ直すが、**`navigation` と `mapping` は人が立てたものなので終わったまま**になる（mapping では作りかけの地図が消える）。長丁場は `config_watch:=warn` |
+| `src/daifuku_config/` の値（`bringup/` `stack/` `overrides/` のどれでも） | 同上（ビルドは要らない）。ただし**走らせたまま直すと `config_sentinel` がその launch を落とす**。機体は `restart: unless-stopped` が上げ直すが、**`navigation` と `mapping` は人が立てたものなので終わったまま**になる（mapping では作りかけの地図が消える）。長丁場は `config_watch:=warn` |
 | C++ / Rust のコード、`CMakeLists.txt`、外部パッケージのソース | `docker compose up`（差分ビルド） |
 | apt 依存、`Dockerfile`、`package.xml`、`docker/` 配下のスクリプト | `docker compose build` からやり直す |
 
@@ -79,7 +77,12 @@ bash tools/setup/setup_native.sh              # --jobs 1 / --no-livox / --no-vi
 ビルド時に張られるので、一度 `up`（ネイティブなら `colcon build`）を通してください。
 名前を変えたり移したりしたときは、それに加えて**古い symlink が `install/` に残ります**。
 両方あるように見えて新しいほうしか更新されないので、紛らわしければ `install/` を消して
-からビルドしてください。
+からビルドしてください。**パッケージのディレクトリごと移したときは `build/` も**です
+——`build/<pkg>/CMakeCache.txt` が移す前のソースパスを持ったままなので、`The source
+directory ... does not exist` でそのパッケージが落ち、後ろの依存パッケージごと止まります
+（Docker では build/ が名前付きボリュームに残るので `up` を通し直しても直らない。
+`docker compose run --rm --entrypoint bash workspace-build -c 'rm -rf
+/opt/ros_ws/build/<pkg> /opt/ros_ws/install/share/<pkg>'`）。
 
 `launch` の `Node(executable=...)` で立てる Python は、**git 側で実行ビットを立てて
 おくこと**（`git update-index --chmod=+x <path>`）。`install(PROGRAMS)` は本来
@@ -127,7 +130,7 @@ lint は詰め合わせ（`ament_lint_common`）を使わず、自前 7 パッ�
 
 ```bash
 cd simulator && uv run python tests/verify_usda.py <map.yaml> <world.usda> free
-cd simulator && uv run python tests/verify_map_thresholds.py ../src/daifuku_stack/maps/*.yaml
+cd simulator && uv run python tests/verify_map_thresholds.py ../src/daifuku_stack/maps/*/*.yaml
 ```
 
 ```bash
@@ -143,39 +146,65 @@ Docker 越しに叩く形は
 
 理由と実測は各ドキュメント側にあります。ここは「知らずに壊す」ものだけ。
 
-- `configs/stack/nav2/*.yaml` はファイル名順に 1 つの `params_file` へ束ねられる。ノード単位で
+- `src/daifuku_config/stack/nav2/*.yaml` と `src/daifuku_config/stack/vi_planner.yaml` はファイル名順に 1 つの
+  `params_file` へ束ねられる（`vi_planner` は Nav2 のノードではないので `nav2/` の外に
+  居るが、**合成には入れる** — 上流の `navigation_launch.py` は `params_file` を 1 つしか
+  受け取らず、`overrides` が重なれるノード名もこの合成結果で決まるため）。ノード単位で
   分けるのが前提で、**同じノード名が 2 つの断片にあると起動時にエラーで止まる**。
   キーが重なっていなくても止まるので、1 つのノードの設定を 2 ファイルに割れない。
   断片どうしは深くマージしない（深いマージが効くのは `overrides` を重ねるときだけ）。
-- **場所は 1 つの値で決まる — `configs/site` の 1 行。**
+- **場所は 1 つの値で決まる — `src/daifuku_config/site`。このファイルは場所の名前
+  1 語しか持たない**（2026-08-25 にコメント付きの書式をやめた。「1 つめの空でない
+  非コメント行が値」という規則を読み手・書き手・検査の 6 か所が写していたため。
+  説明は `src/daifuku_config/README.md`）。だから切り替えは
+  `ros2 param set /site_manager site <名前>`（機体が上がっているとき）か
+  `echo <名前> > src/daifuku_config/site`（上がっていないとき）で足り、
+  `tools/site.sh` は**その 2 つを選び分けて `raspicat` を立て直す便利口**でしかない。
   すべての launch が `overrides` の既定をここから取り、`navigation.launch.py` は
-  `map` の既定もそこから導く。**導き方は「同じ名前の地図」ではなく、その overrides
-  自身が書いている `site: map:`**（2026-08-07 に改めた。`nav2_params.declared_map` /
-  `resolve_map`）。だから overrides の名前と地図のファイル名は揃っていなくてよい。
+  `map` / `map_loc` の既定もそこから導く。**導き方は「同じ名前の地図」ではなく、その
+  overrides 自身が書いている `site: map:`**（2026-08-07 に改めた。
+  `nav2_params.declared_maps` / `resolve_map`）。**名前は場所であって地図ではない**
+  （`19f` / `tsudanuma`。`maps/` のフォルダ名と同じ。2026-08-25 に `map_19f` から
+  改めた — 地図は役ごとに 2 枚あるので、1 つの名前では指せない）。
   `map:=` を明示したときに `site: map:` と別のファイルを指していると**起動時に
   エラーで止まる**（別の場所の帯と emcl2 の調整を載せたまま走るのを防ぐため。承知で
   やるなら `overrides:=none` を添える）。**地図が決まらないとき（`overrides:=none`、
   または `site: map:` の無い overrides）は `map:=` が必須で、既定の地図へは落とさずに
   止まる** — 別の場所にいるのに 19F の地図で自己位置を推定し始めるほうが危ないため。
+- **地図は 2 枚で、`site: map:` の下に `navigation:` と `localization:` を並べる**
+  （2026-08-25 に 1 枚から改めた。経路計画には入ってほしくない場所を手で塗り潰した
+  地図を使い、自己位置推定は実測のままの地図を使う、という上流の運用に合わせた）。
+  **`/map` が経路計画で `/map_loc` が自己位置推定**。逆に見えるが、経路計画側の
+  購読者のうち 2 つ——`nav2:=true` のとき上流の vi 版 `navigation_launch.py` が立てる
+  `vi_planner` と、Nav2 の `global_costmap` の `static_layer`——が購読先 `"map"` の
+  決め打ちで**こちらから remap する口が無い**ため、そちらを `/map` に置いて、remap
+  できる `emcl2` を `/map_loc` へ回している。`map_server` は 2 つ立つ（`map_server` と
+  `map_server_loc`）。**同じ地図でも 2 行とも書く**——片方だけ書けるようにすると、
+  書き忘れがもう一方の地図で黙って走る（いまは起動時に落ちる）。**`map_server_loc` は
+  設定ファイルの節を持たない**——`RewrittenYaml` は `yaml_filename` をキー名で振り替える
+  ので、断片に節を足すと 2 つが同じ地図になる。launch が直に渡している。**2 枚を別に
+  できるのは `localization:=emcl2` のときだけ**で、`amcl`（上流の
+  `localization_launch.py` が自前で `map_server` を立てる）と `localization:=vi`
+  （VIOLA。地図の購読が 1 つしかない）は `resolve_map` が起動時に落とす。
   `site:` は 1 段目に書ける予約節（`RESERVED_SECTIONS`）で、パッケージ名の段には
   並べない。`overrides` は
   **置き換え**（追加ではない）で、重ねないときは `overrides:=none`（空文字は
-  `ros2 launch` が弾く）。**切り替えは `tools/site.sh <名前>`。** LiDAR の帯を読むのは
+  `ros2 launch` が弾く）。LiDAR の帯を読むのは
   `daifuku_bringup`（= 常駐している raspicat サービス）で**起動時にしか読まない**ので、
-  素手でファイルを直したときは `docker compose restart raspicat` が要る（スクリプトは
-  そこまでやる）。`.env` の `OVERRIDES` は 2026-08-07 に廃止した — 環境変数はコンテナ
+  素手でファイルを直したときは `docker compose restart raspicat` が要る（`tools/site.sh`
+  と `site_manager` 経由はそこまで面倒を見る）。`.env` の `OVERRIDES` は 2026-08-07 に廃止した — 環境変数はコンテナ
   生成時に焼かれるので作り直しが要り、かつ「仕立てるときに 1 度決める」値と混ざって
   忘れやすかった。**環境変数 `OVERRIDES` 自体はファイルより強いまま残してある**が、
   compose はもう渡さない（`simulator/` が 1 回きりの構成を渡す口）。
 - **`site_manager` を立てるのは `robot_bringup` の 1 か所だけ。** 2 つ立てると同じ
-  `configs/site` を 2 つのノードが書きに行く。機体は常駐しているので、人が navigation を
+  `src/daifuku_config/site` を 2 つのノードが書きに行く。機体は常駐しているので、人が navigation を
   立てていないあいだも `ros2 param set /site_manager site <名前>` が通る。対になる
   `config_sentinel` は逆に**各 top-level launch が 1 つずつ**立てる（`sentinel_actions`
   を `include` される側でも呼ぶと、1 つの launch 木に見張りが 3 つ立ってそれぞれが
   勝手に落としにかかる）。指紋を取るのは `config_root` の下の yaml **全部**だが、
   **リンク切れは飛ばす**（設定を別のパッケージへ移すと `install/` に古い symlink が
   残り、読みにいくと launch ごと落ちる。2026-08-07 の実機で `daifuku_stack` の share に
-  当時の `config/robot/joy_teleop.yaml` が居た。**設定を丸ごと `configs/` へ出した
+  当時の `config/robot/joy_teleop.yaml` が居た。**設定を丸ごと `src/daifuku_config/` へ出した
   ときも同じことが起きる**ので、あの移行のあとは一度 `install/` を作り直すこと）。飛ばしたものは起動時のログに出るので、
   `find <install> -xtype l -delete` で掃除すること — **そのファイルは見張りの対象にも
   入っていない**。落とす合図の `SENTINEL_RESTART_CODE` を **0 にしないこと** —
@@ -184,12 +213,12 @@ Docker 越しに叩く形は
 - **`overrides/*.yaml` の行き先はパッケージ名とノード名で決まる。** 1 段目が
   `daifuku_bringup:` か `daifuku_stack:` で、各 launch は**自分のパッケージ名の
   部分木しか読まない**。2 段目がノード名で、同じノード名を宣言している設定ファイル
-  （そのパッケージの `configs/` の下のどれか）に重なる。落ちるのは 2 通り:
+  （そのパッケージの `src/daifuku_config/` の下のどれか）に重なる。落ちるのは 2 通り:
   **知らないパッケージ名**（`params.py` の `KNOWN_PACKAGES`。誰も読まない部分木に
   なるため）と、**そのパッケージのどの設定ファイルにも無いノード名**。どちらも
   綴り違いが黙って消えるのを防ぐため。ノード名を持たない
   `sensors/MID360_config.json` だけは上書きできない。
-- **`overrides/*.yaml` の実体は `daifuku_config`（リポジトリルートの `configs/`）にある。** 地図ごとの調整は
+- **`overrides/*.yaml` の実体は `daifuku_config` にある。** 地図ごとの調整は
   LiDAR の帯（機体側）と emcl2 / VI（自律移動側）にまたがるので、どちらかに置くと
   他方がそちらへ依存してしまう。1 地図 = 1 ファイルのまま、葉のパッケージに置いて
   ある。
@@ -198,8 +227,8 @@ Docker 越しに叩く形は
   `controller_server` に渡す）。**2026-08-08 の上流の整理まで後者は
   `vi_global_planner` という別パッケージ・別ノードで、両方立てると
   `compute_path_to_pose` にサーバが 2 つ載る、というのがここの罠だった**。消えたので、
-  設定（`configs/stack/nav2/vi_planner.yaml` と `overrides/`）も検査も名前を
-  `vi_planner` に一本化してある。**`follow` を `configs/` に書かないこと。**
+  設定（`src/daifuku_config/stack/vi_planner.yaml` と `overrides/`）も検査も名前を
+  `vi_planner` に一本化してある。**`follow` を `src/daifuku_config/` に書かないこと。**
   `local_planner` を見て渡すのは vi 版 `navigation_launch.py` で、あちらは
   `parameters` の後ろに置くので設定より強い（書いても効かない）。**危ないのは
   `nav2:=false`（既定）のほう** — こちらは `navigation.launch.py` が `vi_planner` を
@@ -217,10 +246,10 @@ Docker 越しに叩く形は
   **誰も `map→odom` を出さないまま起動する**。`localization:=vi` は
   `planner:=vi` と `nav2:=false`（既定）が要る——`nav2:=true` の navigation は上流の
   `navigation_launch.py` 経由で、あちらに `publish_tf` を渡す口が無い。**その
-  `publish_tf` は `standalone` / `follow` と同じ launch 専用のキーで、`configs/` に
-  書かないこと**（`localizer` は逆に `configs/` にしか無い）。`localization:=vi` では
+  `publish_tf` は `standalone` / `follow` と同じ launch 専用のキーで、`src/daifuku_config/` に
+  書かないこと**（`localizer` は逆に `src/daifuku_config/` にしか無い）。`localization:=vi` では
   `pose_topic` が `initialpose` になり、emcl2 は立たず `map_server` だけが残る。
-  **2026-08-09 から既定の `map_19f` が `localizer: "belief"` を上書きしているので、
+  **2026-08-09 から既定の `19f` が `localizer: "belief"` を上書きしているので、
   この地図では `localization:=vi` のほうが要る** — 引数を足さずに（＝既定の
   `localization:=emcl2` で）立てると上の 1 つめに当たって起動時に止まる。`active_reloc`
   と組なので `solver` も密へ戻してあり（compact = アウトオブコアは単一ゴール専用で、
@@ -242,17 +271,17 @@ Docker 越しに叩く形は
   **`lifecycle_manager_navigation` は名前のまま残る**が、管理下は
   `velocity_smoother` 1 つだけになる（`velocity_smoother:=false` にすると
   lifecycle ノードが navigation 側から消える）。アクション型は `nav2_msgs` のままなので
-  RViz も各パネルも配線は変わらない。**`standalone` を `configs/` に書かないこと** —
+  RViz も各パネルも配線は変わらない。**`standalone` を `src/daifuku_config/` に書かないこと** —
   真のまま Nav2 構成で起動すると `navigate_to_pose` のサーバが `bt_navigator` と 2 つに
   なり、クライアントは先に見つけたほうへ繋ぐ（**どちらに繋がったかはログにも
   `ros2 action list` にも出ない**）。渡すのは launch だけ。
-- **`nav2:=false` では `configs/stack/nav2/{bt_navigator,controller_server,costmaps}.yaml`
+- **`nav2:=false` では `src/daifuku_config/stack/nav2/{bt_navigator,controller_server,costmaps}.yaml`
   と `behavior_trees/` が丸ごと読まれず、`behaviors.yaml` も `velocity_smoother` の
   節だけになる**（そのノードだけは `nav2:=false` でも立つ）。合成には入る（ファイル名順に
   束ねる規則はそのまま）が、宛先のノードが立たないので**エラーも警告も出ないまま
   無視される**。`behaviors.yaml` の残り 3 ノード（`smoother_server` /
   `behavior_server` / `waypoint_follower`）がそれで、同名の設定を移した先は
-  `configs/stack/nav2/vi_planner.yaml`（`stop_on_failure` / `waypoint_pause_sec`）。
+  `src/daifuku_config/stack/vi_planner.yaml`（`stop_on_failure` / `waypoint_pause_sec`）。
   あちらを直しても効かない。BT の `RecoveryNode number_of_retries` に当たるものは
   同ファイルの `goal_retry_limit` で、こちらは名前が違う。
 - **`twist_mux:=true`（既定）だと、機体が動くのは `/cmd_vel` ではなく
@@ -281,7 +310,7 @@ Docker 越しに叩く形は
   ノード側も起動時に拒否する）。`config.txt` のオーバレイもこれで変わる
   （[`docs/setup/raspberry-pi-4.md`](docs/setup/raspberry-pi-4.md)）。
 - `use_composition` の既定 `False` は意図的（Pi 4 でディスカバリ不能 + bond 心拍途絶）。
-  `configs/stack/lifecycle_bond.yaml` の `bond_timeout: 60.0` も同じ事情。
+  `src/daifuku_config/stack/lifecycle_bond.yaml` の `bond_timeout: 60.0` も同じ事情。
 - **`daifuku_rqt` と `daifuku_waypoint_manager` は Pi では建てない。** 実機イメージ
   (`ros:humble-ros-base`) に rqt と RViz が無いため。両方の `build-workspace.sh` が
   `--packages-select` で名前を並べているので、Pi 側の一覧に足すと**ビルドが通らなく
@@ -343,32 +372,32 @@ Docker 越しに叩く形は
   単発ゴール）では**エラーも警告も出ないまま先読みだけが起きない**。実機ではパネルが
   載らないので `joy_teleop` だけが出どころだが、そちらは **`waypoints_file` が空だと
   巡回そのものを断る**（2026-08-04 に既定の順路を廃止。それまでは津田沼の 73 点に
-  フォールバックしていて、`map_19f` で立てると全点が地図の外に出た）。トピック名は
+  フォールバックしていて、`19f` で立てると全点が地図の外に出た）。トピック名は
   パネルの `kWaypointPathTopic`、`joy_teleop` の publisher、`vi_planner` の
   `waypoint_topic` の 3 か所にあり、1 つだけ変えても同じことになる（パネルだけが
   絶対名なので、`namespace:=` を付けた構成でも噛み合わない）。**`nav2:=false` では
   この穴は無い** — `follow_waypoints` を `vi_planner` 自身が受けるので、順路はゴールと
   同じ経路で入る（トピックはもう 1 つの入口として残る）。**ノード側の宣言と
-  `configs/stack/nav2/vi_planner.yaml` は `false` で、同梱の overrides で `true` へ
-  上書きしているのは `map_19f` だけ**（津田沼は 2026-08-07 に `true` にしたあと
+  `src/daifuku_config/stack/vi_planner.yaml` は `false` で、同梱の overrides で `true` へ
+  上書きしているのは `19f` だけ**（津田沼は 2026-08-07 に `true` にしたあと
   2026-08-08 に `false` へ戻した。走行中の固まりの切り分けで、消える待ちは 19F が
   29 秒、津田沼が 87 秒）。価値関数が同時に 2 つ生きるので、**密ソルバでは
-  メモリが 2 倍要る**。compact でも同梱の 2 地図は sink が RAM なので（2026-08-04 に
+  メモリが 2 倍要る**。compact でも同梱の 3 地図は sink が RAM なので（2026-08-04 に
   津田沼の `compact_sink_dir` を外した）、そのまま 2 倍が匿名メモリに乗る
   （**19F は 2026-08-09 に密へ戻したので 655MB×2 = 1.31GB**。compact の頃は 95MB×2。
   津田沼は戻せば 648MB×2 = 1.3GB）。**Pi 4 (4GB) では `true` に
-  しないこと。ただし既定の `map_19f` が `true` なので、引数を何も
+  しないこと。ただし既定の `19f` が `true` なので、引数を何も
   足さずに立てると Pi 4 でもこれが効く。** 外すには使う地図の
   `overrides/*.yaml` の `waypoint_prefetch` を消すか `false` と書くしかない（キー 1 つだけ外す launch 引数は無い。
   津田沼は後者で、断片と同値の `false` を切り分けの目印として明示してある。
   `overrides:=none` にすると emcl2 の 2 つの対症療法ごと落ちて、19F では自己位置が
   その場で回り出す（3 つめの `sensor_reset` は 2026-08-09 に断片ごと `false` に
-  なったので、両 overrides から消えた）。2026-08-04 に一度**断片**で `true` へ反転したときは同日の実機で
+  なったので、どの overrides にも無い）。2026-08-04 に一度**断片**で `true` へ反転したときは同日の実機で
   走行中の固まりが出て、容疑者の 1 つとして戻した（切り分けは未了）ので、
   再発したらまずここを疑う。
 - **`vi_planner` の `early_start` は compact では効かない地図がある。** ゴールまで
   方策が繋がった時点で solve を打ち切る機能だが、compact（断片の solver。2026-08-09 に
-  `map_19f` だけ密へ戻したので、compact なのは津田沼だけ）の確定は
+  `19f` だけ密へ戻したので、compact なのは津田沼だけ）の確定は
   値バンド単位でしか進まず、そのバンド幅は「4 × 1 手の最大移動セル数（`action_forward_m`
   ÷ 解像度）× 最大ペナルティ（`safety_radius_penalty`）」（`couple_margin`）。**地図の値域が
   丸ごと 1 バンドに収まると波 2 つで解き終わって打ち切る隙が無く、エラーも警告も出ないまま
@@ -385,7 +414,9 @@ Docker 越しに叩く形は
   残るが、管理下が `velocity_smoother` 1 つなので停止順で固まる相手が居ない。
   代わりに投げ直しは `vi_planner` の `goal_retry_limit` と、その合間の 3 秒（2026-08-09 に
   ノード内の固定値になった。それまでは `goal_retry_settle_sec`）。
-- **RViz の「Navigation 2」パネルの `Reset` を押すと停止順で固まる。** 停止は逆順なので
+- **RViz の「Navigation 2」パネルは `navigation.rviz` から外してある**（下の
+  `/waypoints` の項）。以下は自分で足したときの話。**`Reset` を押すと停止順で
+  固まる。** 停止は逆順なので
   `velocity_smoother` が先に落ち、`waypoint_follower` の停止で（走りっぱなしの
   コールバックを待って）固まり、`behavior_server` だけが active で残る。
   `lifecycle_manager_navigation` は `is_active` にも応答しなくなり、抜けるには launch を
@@ -395,6 +426,19 @@ Docker 越しに叩く形は
   回転だけが止まらない**状態になった。**2026-08-08 に上流（`6e803f7`）が張ったので、
   いまは `spin` も `velocity_smoother` を通る** —— 裏を返すと、
   `velocity_smoother` が落ちているときは以前と違って**回転も効かない**。**未検証**。
+- **`navigation.rviz` に `nav2_rviz_plugins/Navigation 2` パネルを足さないこと。**
+  あちらは `/waypoints` へ `visualization_msgs/MarkerArray` を、
+  `daifuku_waypoint_manager/WaypointManagerPanel` は同じ名前へ
+  `nav_msgs/Path` を出す。RViz は 1 プロセス = 1 参加者なので、後から立った
+  ほうが `create_publisher() called for existing topic name rt/waypoints with
+  incompatible type` で落ち、**そこで設定の読み込みが止まる** —— 自前パネルも
+  `/waypoints` を見る表示も出ないまま、他の表示だけが揃って上がるので、
+  **気づく手掛かりはログの 1 行だけ**（2026-08-19 に WSL の実測）。
+  同じ理由で `/waypoints` を見る表示は
+  `Path` でなければならない（`MarkerArray` にすると購読側で同じ衝突が起きる）。
+  点そのものは `/waypoint_markers` の `Waypoint Manager` が出す。
+  ツールの `Nav2 Goal`（`nav2_rviz_plugins/GoalTool`）はトピックを持たないので
+  そのままでよい。
 - **`navigation.rviz` の `2D Goal Pose` は `/goal_pose` を出さない。**
   `daifuku_waypoint_manager` へ waypoint を渡すため `/waypoint_pose` に付け替えて
   ある。単発ゴールは `Nav2 Goal` (`nav2_rviz_plugins/GoalTool`) のほうを使う。
@@ -417,11 +461,11 @@ Docker 越しに叩く形は
   下限が距離とともに上がるので、**`max_height` をその下に置くと帯が潰れ、
   `range_max` を伸ばしてもエラーも警告も出ないまま手前で何も入らなくなる**
   （5 度なら 70m 先の実効下限は 6.40m）。地図ごとの角度は `overrides/` 側。
-  設定は `configs/bringup/sensors/` で、**変えたら `docker compose up -d`**
+  設定は `src/daifuku_config/bringup/sensors/` で、**変えたら `docker compose up -d`**
   （読むのは常駐している raspicat サービス）。
   `range_max` の既定 70.0 はセンサの測距上限だが、**そこまで使うのは `emcl2` だけ**
   （costmap は `obstacle_max_range: 2.5`、SLAM は `max_laser_range: 10.0` で頭打ち）。
-  **`map_tsudanuma` は 2026-08-08 に `min_elevation_deg` を 5.0 から断片と同じ 0.0 へ
+  **`tsudanuma` は 2026-08-08 に `min_elevation_deg` を 5.0 から断片と同じ 0.0 へ
   戻したので、いまこの地図では仰角フィルタが実質素通し**（0.0 度 = 搭載高の水平面 =
   断片の `min_height: 0.275` と同じ切り方）。帯は全距離で 0.275〜4.00m の高さ帯に
   なっていて、`elevation_filter:=false` にしても**帯は変わらない**。組で決まるのは
@@ -487,16 +531,17 @@ Docker 越しに叩く形は
   `map→odom` だけが 1 度も出ない**（RViz は Fixed Frame が `map` なので全部消える。
   2026-08-07 の実機）。
 
-## 設定ファイル (`configs/**/*.yaml`) のコメント
+## 設定ファイル (`src/daifuku_config/**/*.yaml`) のコメント
 
 - **1 行でまとめる。** キーの右に `# 既定 <ノード既定値>: <説明>` の形で書き、既存の行と
   同じ書式・同じ語彙にそろえる。キーの上に段落を積まない。実測値は 1 行に収まる範囲で
-  入れてよいが、導出や背景は `configs/README.md` / `docs/` / 実装 (例:
+  入れてよいが、導出や背景は `src/daifuku_config/README.md` / `docs/` / 実装 (例:
   `vi_rs/vi_planner/src/core/mod.rs` 冒頭) に置いて参照で済ませる。
 - 「既定」= 各ノードの `main.rs`（`vi_planner` は `src/node/params.rs`）などが持つ
   宣言時の値、`overrides/` での「断片」=
-  重ねる先の設定ファイル（そのノードを宣言している `configs/stack/nav2/*.yaml` や
-  `configs/stack/localization/emcl2.yaml` など）の値。値を変えたら `既定 同左` や
+  重ねる先の設定ファイル（そのノードを宣言している `src/daifuku_config/stack/nav2/*.yaml` や
+  `src/daifuku_config/stack/vi_planner.yaml`、
+  `src/daifuku_config/stack/localization/emcl2.yaml` など）の値。値を変えたら `既定 同左` や
   `# 断片 <値>:`、ファイル冒頭の
   「変えてあるのは○○だけ」といった要約も同じ変更で追随させる。
 
@@ -504,7 +549,7 @@ Docker 越しに叩く形は
 
 | 触るもの | 先に読む |
 | --- | --- |
-| `configs/` の yaml の値 | [`configs/README.md`](configs/README.md)（合成・override の仕組みと、各値の由来。機体側の値もここにまとまっている） |
+| `src/daifuku_config/` の yaml の値 | [`src/daifuku_config/README.md`](src/daifuku_config/README.md)（合成・override の仕組みと、各値の由来。機体側の値もここにまとまっている） |
 | `overrides/` / 設定の合成そのもの | `src/daifuku_config_manager/src/daifuku_config_manager/params.py` の冒頭 |
 | `launch/` | [`docs/usage/architecture.md`](docs/usage/architecture.md#launchファイルの構成) |
 | `simulator/`（Isaac 版 / pi4_sim 版） | [`simulator/docs/pi4_sim.md`](simulator/docs/pi4_sim.md) を先に、次に [`simulator/README.md`](simulator/README.md) |
@@ -513,7 +558,7 @@ Docker 越しに叩く形は
 | `src/raspicat_driver/` / `tools/image/udev/` | [`src/raspicat_driver/README.md`](src/raspicat_driver/README.md)、次に [`docs/setup/raspberry-pi-4.md`](docs/setup/raspberry-pi-4.md) と [`raspberry-pi-5.md`](docs/setup/raspberry-pi-5.md)（未検証の項目付き） |
 | `src/daifuku_rqt/` | [`src/daifuku_rqt/README.md`](src/daifuku_rqt/README.md)、次に [`docs/usage/control-panel.md`](docs/usage/control-panel.md) |
 | `src/daifuku_waypoint_manager/` / `daifuku_stack/waypoints/` | [`src/daifuku_waypoint_manager/README.md`](src/daifuku_waypoint_manager/README.md) |
-| `src/value_iteration3/` | 同ディレクトリの `CLAUDE.md` |
+| `src/value_iteration3/` | 同ディレクトリの `AGENTS.md` |
 | 実機の症状を追う | [`docs/usage/troubleshooting.md`](docs/usage/troubleshooting.md) |
 
 ドキュメントは日本語で書かれています。追記も日本語でそろえてください。

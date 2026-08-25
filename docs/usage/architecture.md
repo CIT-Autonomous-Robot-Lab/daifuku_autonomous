@@ -31,7 +31,7 @@ LiDARの初期化待ちは入らず、EKFが再起動して`/odom`が原点へ�
 中継されます。**自律側のほうが上なので、自律走行中は遠隔操作が通りません**
 （手動へ渡すには先にゴールを取り消す）。**優先度は非常停止ではありません**
 （止めるのはモーター電源）。
-配線と設定は[`configs/README.md`](../../configs/README.md#twist_muxyaml-の配線と優先度)。
+配線と設定は[`src/daifuku_config/README.md`](../../src/daifuku_config/README.md#twist_muxyaml-の配線と優先度)。
 
 Mid-360は時刻同期がないためスタンプが実時計からずれていきます。`restamp_scan.py`が
 `/scan_mid360_prestamp`を受信時刻で打ち直して`/scan_raw`へ流し、以降は2D LiDARと同じ
@@ -49,9 +49,9 @@ Mid-360は時刻同期がないためスタンプが実時計からずれてい�
 | `daifuku_bringup` | 駆動ドライバ・URDF・`twist_mux`・ゲームパッド・**LiDAR**・**EKF**。`src/`のPythonノード4本 | `docker compose up`で常駐 |
 | `daifuku_stack` | Nav2 / SLAM Toolbox / EMCL2のlaunch、地図、RViz、`behavior_trees/`、`waypoints/`、`src/system_monitor.py` | 人が`navigation` / `mapping`を立てる |
 | `daifuku_config_manager` | 設定の合成規則（`params.py`）と`src/`のPythonノード2本。**設定の実体は持ちません** | 上2つのlaunchが立てる（自前の入口は無い） |
-| `daifuku_config` | 設定の実体だけ。`bringup/`・`stack/`・`overrides/*.yaml`と、走らせる場所を1行で持つ`configs/site` | ノードを持たない（`src/`の下でもなく、`src/`と並ぶ`configs/`） |
+| `daifuku_config` | 設定の実体だけ。`bringup/`・`stack/`・`overrides/*.yaml`と、走らせる場所を1行で持つ`src/daifuku_config/site` | ノードを持たない（`src/`の下でもなく、`src/`と並ぶ`src/daifuku_config/`） |
 
-`configs/site`はどのlaunchからも同じものが見えます。すべてのlaunchが`overrides`の
+`src/daifuku_config/site`はどのlaunchからも同じものが見えます。すべてのlaunchが`overrides`の
 既定をここから取り、`navigation.launch.py`は`map`の既定もここから導きます。**場所が
 変わるとLiDARの帯・EMCL2と価値反復の調整・地図の3つが同時に変わるので、人が動かす値を
 1つにまとめてあります**（切り替えは`tools/site.sh <名前>`。
@@ -62,7 +62,7 @@ Mid-360は時刻同期がないためスタンプが実時計からずれてい�
 **葉のパッケージですが、ノードを2本持ちます。** どちらも自分では入口を持たず、
 上2つのlaunchが立てます。
 
-- `site_manager`は`configs/site`の読み書きと告知（`/daifuku/site`）を受け持ちます。
+- `site_manager`は`src/daifuku_config/site`の読み書きと告知（`/daifuku/site`）を受け持ちます。
   **立てるのは`robot_bringup.launch.py`の1か所だけ**です。2つ立てると同じファイルを
   2つのノードが書きに行きます。機体は常駐しているので、navigationを立てていない
   あいだも`ros2 param set /site_manager site <名前>`が通ります
@@ -110,7 +110,7 @@ ROSに見える契約は`driver:=raspimouse`（公式実装）と同じです。
 （`/light_sensors`）だけです。
 
 Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。パラメータは
-`configs/bringup/robot/raspicat_driver.yaml`、実装と機種ごとの前提は
+`src/daifuku_config/bringup/robot/raspicat_driver.yaml`、実装と機種ごとの前提は
 [`src/raspicat_driver/README.md`](../../src/raspicat_driver/README.md)にまとめています。
 
 ## launchファイルの構成
@@ -136,7 +136,7 @@ Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。
 | --- | --- | --- |
 | `params.py` | `daifuku_config_manager` | 設定ファイルへの上書きの合成（土台 → `overrides` → `extra_params_file`）と、`config_sentinel`の起動・停止の配線（`sentinel_actions`）。**すべてのlaunchが使う共有部品** |
 | `backends.py` | `daifuku_stack/launch/daifuku_stack_launch/` | `localization`／`planner`／`local_planner`／`nav2`の解決と起動前チェック |
-| `nav2_params.py` | `daifuku_stack/launch/daifuku_stack_launch/` | `configs/stack/nav2/*.yaml`の合成と、`overrides`からの`map:=`の決定。`params.py`へ`base_resolvers`で渡す |
+| `nav2_params.py` | `daifuku_stack/launch/daifuku_stack_launch/` | `src/daifuku_config/stack/nav2/*.yaml`と`src/daifuku_config/stack/vi_planner.yaml`の合成と、`overrides`からの`map:=`の決定。`params.py`へ`base_resolvers`で渡す |
 | `lidar.py` | `daifuku_bringup/launch/daifuku_bringup_launch/` | LiDAR構成の共通引数と`lidar_bringup`の`include` |
 
 `lidar`や`lidar_z`のようなLiDAR構成の引数は、`robot_bringup`と`lidar_bringup`の
@@ -160,7 +160,7 @@ Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。
   `pose_topic`は`initialpose`＝**手動シード**（RVizの2D Pose Estimate）になる。
   `planner:=vi`と`nav2:=false`（どちらも既定）が要る
 
-**どの推定器を使うかはlaunchではなく`configs/stack/nav2/vi_planner.yaml`の`localizer`**
+**どの推定器を使うかはlaunchではなく`src/daifuku_config/stack/vi_planner.yaml`の`localizer`**
 （`external`／`grid`／`adaptive`／`belief`／`viterbi`）。launch引数が持つのは
 「内蔵を使うか」だけなので、2つが噛み合わなければ起動時に止まります。
 
@@ -171,14 +171,14 @@ Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。
 - `local_planner:=auto`（既定）では`vi_planner`**1ノード**が`planner_server`と
   `controller_server`の両方を置き換え、`compute_path_to_pose`と`follow_path`を提供する
 - 静的地図から(x, y, θ)の価値関数を**ゴールにつき1回だけ**全域で解く。経路はその価値
-  関数をロールアウトして求め、追従では同じ価値関数を±1 mのウィンドウで精密化する
+  関数をロールアウトして求め、追従では同じ価値関数を機体周りのウィンドウ（既定はカプセル、前後2.5 m・横2.0 m）で精密化する
 - ウィンドウへ`/scan`由来のペナルティを加え、貪欲行動を`cmd_vel`として出力する
 - 経路計画と追従は**1本の価値関数を共有する**。追従がウィンドウへ書いたペナルティを
-  全域掃き（`global_sweep`）が広域へ広げるので、避けた障害物が次の
-  `compute_path_to_pose`にも効く。掃きは追従中もバックグラウンドで回り続ける。
-  既定のアウトオブコアソルバでは、共有場は状態配列ではなく確定出力（sink）で、掃きは
-  それをタイル単位で修復する形になる（同じ更新式・同じ不動点）。密ソルバでも同じ
-  ように効く
+  全域伝播（`global_sweep`）が広域へ広げるので、避けた障害物が次の
+  `compute_path_to_pose`にも効く。伝播は追従中もバックグラウンドで回り続け、掃くのは
+  **値が動いたところから遷移の届く範囲だけ**（地図の広さには比例しない）。粒度が密は
+  セル、既定のアウトオブコアソルバでは確定出力（sink）のタイル、という違いだけで、
+  更新式も不動点も同じ
 - 同一ゴールへの再計画ではキャッシュを使う（ロールアウトのみ実行する）
 - `local_planner:=nav2`では同じ`vi_planner`を`follow: false`（広域のみ）で立て、追従は
   Nav2標準`controller_server`が担う。**立つVIのノードはどちらでも1つ**（2026-08-08の
@@ -210,7 +210,7 @@ Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。
 1ノードだけ**になります（`velocity_smoother:=false`にするとマネージャごと消えます）。
 `nav2:=true`で従来の構成に戻せます。
 
-読む設定ファイルも減ります。`configs/stack/nav2/`のうち実際に効くのは
+読む設定ファイルも減ります。`src/daifuku_config/stack/nav2/`のうち実際に効くのは
 `vi_planner.yaml`と`map_server.yaml`、それに`behaviors.yaml`の`velocity_smoother`の
 節だけです。`bt_navigator.yaml`・`controller_server.yaml`・`costmaps.yaml`と
 `behaviors.yaml`の残り3ノード分は**合成には入るが宛先のノードが立たないので黙って
@@ -231,7 +231,11 @@ BTを挟まなくなることで、VIが損をしていた点が4つ消えます
 投げ直しの回数は`goal_retry_limit`（既定3、負で無制限）で、BTの
 `RecoveryNode number_of_retries: 6`の置き換えです。
 
-RVizの「Navigation 2」パネルは**ほぼ空になります**。あれはライフサイクル
+「Navigation 2」パネルは`navigation.rviz`に**入っていません**。あれは`/waypoints`へ
+MarkerArrayを出し、自前の`WaypointManagerPanel`が同じ名前へ出すPathと型が衝突して、
+**自前パネルと`/waypoints`の表示が出ないまま上がる**ためです（他の表示は揃うので、
+手掛かりはログの1行だけ。AGENTS.md）。自分で足しても
+**ほぼ空になります**。あれはライフサイクル
 マネージャを叩くパネルで、`nav2:=false`で管理下にあるのは`velocity_smoother`
 1つだけ（`velocity_smoother:=false`ならマネージャ自体が居ません）。故障ではあり
 ません。ゴールを出すのは同じ「Nav2 Goal」ツールで、経路は`/plan`にそのまま出ます
@@ -259,7 +263,7 @@ Nav2の各ノードは既定でプロセスを分けて起動します（`use_co
 Raspberry Pi 4で1プロセスへ合成すると、DDS参加者あたりのエンドポイント数が大きく
 なりすぎて、新規参加者からディスカバリできなくなります。さらにCPU飢餓でライフ
 サイクルマネージャのbond心拍が途絶え、自動シャットダウンする事象が頻発しました。
-あわせて`configs/stack/lifecycle_bond.yaml`でbondのタイムアウトを60秒へ延長しています。
+あわせて`src/daifuku_config/stack/lifecycle_bond.yaml`でbondのタイムアウトを60秒へ延長しています。
 
 PCなど余裕のある環境では`use_composition:=True`も利用できます。
 

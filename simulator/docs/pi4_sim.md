@@ -154,8 +154,8 @@ compact 非対応 (追従ループが `states` に書き戻すため) だった�
 **2026-08-01 に解消**: `vi_planner` も compact を扱う。追従はロボット近傍のパッチ
 だけを sink から起こして回し、狭域 → 広域の伝播 (`global_sweep`) は sink のタイル修復
 になる (2026-08-04)。広域地図は `local_planner:=vi` でも `nav2` でも通る。詳細は
-[`configs/README.md`](../../configs/README.md) の
-「`map_tsudanuma` で `planner:=vi` を使うときの制約」。
+[`src/daifuku_config/README.md`](../../src/daifuku_config/README.md) の
+「`tsudanuma` で `planner:=vi` を使うときの制約」。
 
 ### 4. 地図を切り詰めても効かない
 
@@ -246,7 +246,7 @@ OOM に至る前の実行では、BT の全アクションが即座に失敗し�
 ```
 
 `bt_navigator` の `default_server_timeout` は **20 ms** (nav2 既定, 当時は
-`configs/stack/nav2/bt_navigator.yaml` 相当にもその値が入っていた)。cgroup の統計で `nr_throttled=31904`,
+`src/daifuku_config/stack/nav2/bt_navigator.yaml` 相当にもその値が入っていた)。cgroup の統計で `nr_throttled=31904`,
 `throttled_usec=546s` という状態では、rclrs のアクションサーバが 20 ms 以内に
 ack を返せずゴールが即失敗する。`default_server_timeout: 500` に上げると
 この段階は通過し、次の OOM まで進んだ。
@@ -328,7 +328,7 @@ calib_navfn2 で planner_server が出した実測値は **11.19 Hz** (navfn 1 �
 ## 実機に反映するときの提案 (実機が復帰してから適用すること)
 
 Pi には触れていないので、以下は**提案**であって適用済みではない。唯一
-`configs/stack/nav2/bt_navigator.yaml` の `default_server_timeout` だけリポジトリに入れた
+`src/daifuku_config/stack/nav2/bt_navigator.yaml` の `default_server_timeout` だけリポジトリに入れた
 (下記)。
 
 ### `planner:=vi` を Pi4 で動かすのに必要な 5 点 (全部必要)
@@ -341,7 +341,7 @@ Pi には触れていないので、以下は**提案**であって適用済み�
 
    ```bash
    uv run --project simulator downsample-map \
-       src/daifuku_stack/maps/map_19f.yaml /tmp/map_10cm.yaml \
+       src/daifuku_stack/maps/19f/map_19f.yaml /tmp/map_10cm.yaml \
        --scale 2 --free-thresh 0.15
    ```
 
@@ -411,7 +411,7 @@ goal (4.28,-2.92)) だけで、これは観測済み領域内の 120,753 セル�
 
 ## 広域地図 (map_tsudanuma) 対応 (2026-07-29)
 
-`maps/map_tsudanuma.yaml` は 5888x4000 @0.05m (294.4m x 200m)。占有 0.75% /
+`maps/tsudanuma/map_tsudanuma.yaml` は 5888x4000 @0.05m (294.4m x 200m)。占有 0.75% /
 自由 31.1% / **未観測 68.2%**。VI の状態数は 5888*4000*60 = **14.1 億**で、
 `State` 56B/state の密配列だけで 79GB。密ソルバ (`frontier2d_sparse`、ノードの
 既定値) では起動と同時に死ぬ。リポジトリの config は 2026-08-04 に compact を
@@ -452,7 +452,7 @@ start (53.07,-21.62,90°) → goal (44.08,-5.12,0°)、測地距離 25.5m。
 | ケース | 結果 | 備考 |
 |---|---|---|
 | `planner:=navfn local_planner:=nav2` | **SUCCEEDED 61.9s** / リカバリ 0 | 地図は 0.05m のまま。cgroup ピーク 1.5GB |
-| `planner:=vi local_planner:=nav2` + `overrides:=map_tsudanuma` | **SUCCEEDED 110.5s / リカバリ 0** | 初回 solve 41.6s (1670 iters、576 姿勢)。以降のリプランはキャッシュヒットで 0.00s。到達時の自己位置誤差 0.02m。別ランでは solve 25s・112.0s・リカバリ 1 |
+| `planner:=vi local_planner:=nav2` + `overrides:=tsudanuma` | **SUCCEEDED 110.5s / リカバリ 0** | 初回 solve 41.6s (1670 iters、576 姿勢)。以降のリプランはキャッシュヒットで 0.00s。到達時の自己位置誤差 0.02m。別ランでは solve 25s・112.0s・リカバリ 1 |
 
 **メモリ (これが Pi4 での本題)**: `vi_global_planner` のピーク RSS 3.98GB の内訳は
 **anon 2.16GB + file 1.81GB**。file 側は sink の mmap (逼迫時に回収できる
@@ -471,8 +471,8 @@ start (53.07,-21.62,90°) → goal (44.08,-5.12,0°)、測地距離 25.5m。
 再現コマンド (コンテナ内):
 
 ```bash
-CASE=tsuda_vi MAP_NAME=map_tsudanuma PLANNER=vi LOCAL_PLANNER=nav2 \
-OVERRIDES=map_tsudanuma \
+CASE=tsuda_vi MAP_NAME=tsudanuma/map_tsudanuma PLANNER=vi LOCAL_PLANNER=nav2 \
+OVERRIDES=tsudanuma \
 START_X=53.07 START_Y=-21.62 START_YAW_DEG=90 \
 GOAL_X=44.08 GOAL_Y=-5.12 GOAL_YAW_DEG=0 SETTLE=120 TIMEOUT=900 \
 bash /opt/sim/run_case.sh
@@ -514,11 +514,12 @@ penalty を 1 にすると同じ地図・同じゴールで V 120→0 と単調�
 launch_ros は global params (SetParameter / SetParametersFromFile) を先に、
 ノード個別の `parameters=[...]` を後に渡す。ROS は後勝ちなので、
 **`params_file` に既にあるキーは上書きできない**。`bond_timeout` が効くのは
-`configs/stack/nav2/*.yaml` のどこにも無いキーだからで、`solver` や `map_scale` は効かない
+合成される断片 (`src/daifuku_config/stack/nav2/*.yaml` + `src/daifuku_config/stack/vi_planner.yaml`) の
+どこにも無いキーだからで、`solver` や `map_scale` は効かない
 (実測: overlay を書いても `map_scale=1` のまま起動した)。
 `navigation.launch.py` は `daifuku_config_manager` の `params.py` の `compose` で YAML の
 段階でマージし、`params_file` 自体を作っている (`overrides:=` / `extra_params_file:=`
-の両方がこの経路)。BT XML の 2 キーは `configs/stack/nav2/*.yaml` に無いので `SetParameter` で
+の両方がこの経路)。BT XML の 2 キーは断片のどこにも無いので `SetParameter` で
 足りる (`planner:=vi` の bringup はこれで通る)。
 
 ### 罠 3: `bt_navigator` の `wait_for_service_timeout` (既定 1000ms)
@@ -528,7 +529,7 @@ launch_ros は global params (SetParameter / SetParametersFromFile) を先に、
 間に合わず、`"compute_path_to_pose" action server not available after waiting for
 1.00s` → `Error loading XML file` → `Failed to bring up all requested nodes` で
 bringup が全滅した (BT の差し替え自体は成功していたのに、その次で落ちる)。
-`configs/stack/nav2/bt_navigator.yaml` で 60000ms にした。起動時にしか効かない待ち。
+`src/daifuku_config/stack/nav2/bt_navigator.yaml` で 60000ms にした。起動時にしか効かない待ち。
 
 ### 罠 4: `/initialpose` の 1 発だけでは取りこぼす
 
@@ -543,11 +544,11 @@ volatile。23.5MB の地図受信が遅い津田沼では初回の 1 発が捨�
 実際に cgroup を絞って確かめた。条件は他のケースと同じ (4 コア可視 /
 quota 6000・period 10000 = 合計 0.6 コア / メモリ 3GB・スワップ無し)。
 start (53.07,-21.62,90°) → goal (44.08,-5.12,0°)、`planner:=vi local_planner:=nav2`
-`overrides:=map_tsudanuma` (map_scale 3 / compact / sink はコンテナの overlayfs
+`overrides:=tsudanuma` (map_scale 3 / compact / sink はコンテナの overlayfs
 = 実ディスク。`findmnt -no FSTYPE /tmp` が `overlayfs` であることは確認済み)。
 
 > **2026-08-04 以降、この再現には `VI_COMPACT_SINK_DIR` を明示すること。**
-> 当時の `overrides/map_tsudanuma.yaml` は `compact_sink_dir` を持っていたが、Pi 5
+> 当時の `overrides/tsudanuma.yaml` は `compact_sink_dir` を持っていたが、Pi 5
 > (8GB) 前提で外した (RAM 出力になった)。そのまま回すと sink が **匿名メモリ**に
 > なり、3GB の枠では回収できるページキャッシュだった 1.8GB がそのまま常駐に変わる
 > = 上の「C. 本命」の OOM kill を踏む。`run_case.sh` の overlay は
@@ -556,8 +557,8 @@ start (53.07,-21.62,90°) → goal (44.08,-5.12,0°)、`planner:=vi local_planne
 >
 > ```bash
 > VI_COMPACT_SINK_DIR=/tmp/vi_planner_sink \
-> CASE=tsuda_vi MAP_NAME=map_tsudanuma PLANNER=vi LOCAL_PLANNER=nav2 \
-> OVERRIDES=map_tsudanuma ... bash /opt/sim/run_case.sh
+> CASE=tsuda_vi MAP_NAME=tsudanuma/map_tsudanuma PLANNER=vi LOCAL_PLANNER=nav2 \
+> OVERRIDES=tsudanuma ... bash /opt/sim/run_case.sh
 > ```
 
 **結論: 解けるし、走破もする。ただし初回 solve に 45 分かかり、メモリは 3GB の

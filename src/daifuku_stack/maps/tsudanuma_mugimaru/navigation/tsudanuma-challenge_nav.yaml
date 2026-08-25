@@ -1,0 +1,6 @@
+image: tsudanuma-challenge_nav3_9.pgm
+resolution: 0.1
+origin: [-68.946, -101.928, 0.0]
+occupied_thresh: 0.5
+free_thresh: 0.2
+negate: 0

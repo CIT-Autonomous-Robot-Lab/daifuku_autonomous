@@ -35,10 +35,10 @@ case "${ACTION}" in
     nmcli connection show "${PROFILE_NAME}" >/dev/null 2>&1 \
       && nmcli connection delete "${PROFILE_NAME}" >/dev/null
     nmcli connection add type ethernet con-name "${PROFILE_NAME}" ifname "${NIC}" \
-      ipv4.method manual ipv4.addresses 192.168.1.3/24 \
+      ipv4.method manual ipv4.addresses 192.168.1.1/24 \
       ipv4.never-default yes ipv4.gateway "" ipv4.dns "" ipv6.method disabled
     nmcli connection up "${PROFILE_NAME}" ifname "${NIC}"
-    echo "Static RasPiCat network is active on ${NIC}; host=192.168.1.3/24, Pi=192.168.1.50."
+    echo "Static RasPiCat network is active on ${NIC}; host=192.168.1.1/24, Pi=192.168.1.50."
     ;;
   down)
     nmcli connection show "${PROFILE_NAME}" >/dev/null 2>&1 \

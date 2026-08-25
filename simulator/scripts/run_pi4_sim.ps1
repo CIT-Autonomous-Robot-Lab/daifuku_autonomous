@@ -118,12 +118,12 @@ foreach ($d in "behavior_trees", "config", "launch", "maps", "rviz", "src") {
 }
 
 # Windows の CRLF がそのまま渡ると bash / python が壊れるので落とす。
-podman @c exec $Container bash -lc @'
-for f in /opt/sim/*.py /opt/sim/*.sh; do
-    [ -e "$f" ] && sed -i "s/\r$//" "$f"
-done
-chmod +x /opt/sim/*.sh
-'@ | Out-Null
+# **1 行で渡すこと。** here-string (@'...'@) はこの .ps1 自身の改行を
+# そのまま bash へ渡すので、Windows チェックアウト (CRLF) では
+# `syntax error near unexpected token $'do\r'` になる —— つまり
+# **CRLF を落とすためのこのコマンド自身が CRLF で落ちる**。
+$strip = 'for f in /opt/sim/*.py /opt/sim/*.sh; do [ -e "$f" ] && sed -i "s/\r$//" "$f"; done; chmod +x /opt/sim/*.sh'
+podman @c exec $Container bash -lc $strip | Out-Null
 
 if ($SetupOnly) { Write-Host "container ready: $Container"; exit 0 }
 

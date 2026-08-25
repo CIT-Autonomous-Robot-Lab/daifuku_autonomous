@@ -64,8 +64,10 @@ Two deliberate differences from raspimouse:
     converts cmd_vel to a frequency.  raspimouse_component.cpp hardcodes 400.0
     on the command side and cannot be corrected by a parameter at all.
   * with the pulse counters live, the published Twist is measured rather than
-    commanded.  mid360_ekf.yaml takes vx and vyaw (and nothing else) from this
-    message, so feeding it the command would close a loop on our own output.
+    commanded.  mid360_ekf.yaml takes vx (and nothing else) from this message,
+    so feeding it the command would close a loop on our own output.  The
+    counter registers only latch about every 55 ms (see COUNTER_STALE_SEC),
+    so the twist is measured across the counter's own updates, not per tick.
 
 An I2C stall cannot wedge the robot the way rtmouse does: the ioctl returns
 ETIMEDOUT to us, the counters are read in their own callback group, and
@@ -112,6 +114,32 @@ SIDE_NAMES = ("left", "right")
 # land before it is treated as noise rather than motion.  Only has to separate
 # real travel from the ~2**16 a bad delta carries, so it is deliberately loose.
 PLAUSIBLE_DELTA_MARGIN = 4.0
+
+# The control board latches the counter registers about every 55 ms however
+# fast they are read (2026-08-20, wheel in the air: reads at 492 Hz advanced
+# only every 54.6-56.9 ms, ~42 counts at a time).  A per-tick delta at odom_hz
+# is therefore a square wave -- zero, zero, three ticks' worth at once -- so
+# velocity is measured across the counter's own updates instead.  The time
+# between two updates can only be a multiple of the latch period, but a 50 Hz
+# read quantises it to 40/60 ms, which alone puts +-35% on the speed -- so the
+# elapsed time is rounded to the nearest multiple of the period (safe while
+# the period error stays under half a period over one stale timeout; measured
+# jitter is ~2% per period against the ~3 periods the timeout spans).
+COUNTER_LATCH_SEC = 0.0548
+
+# A wheel whose counter has not moved for this long counts as stopped (three
+# latch periods; one can pass legitimately between updates at low speed).
+COUNTER_STALE_SEC = 0.18
+
+# Twist covariance for the measured branch.  One count over one latch period
+# quantises a wheel's speed by ~0.01 m/s and the latch timing jitters ~2%;
+# vyaw combines both wheels over the tread.  The unmeasured axes carry a large
+# variance rather than the 0.0 that robot_localization would read as 1e-6
+# ("near perfect") -- that misreading is how the pre-fix wz spikes were able
+# to crush the IMU (2026-08-20).
+TWIST_VARIANCE_VX = 4.0e-4
+TWIST_VARIANCE_VYAW = 2.0e-3
+TWIST_VARIANCE_UNMEASURED = 1.0e6
 
 
 class RaspicatDriver(LifecycleNode):
@@ -477,6 +505,9 @@ class RaspicatDriver(LifecycleNode):
         self._counter_retry_at = 0.0
         self._counter_degraded = False
         self._last_raw = [0, 0]
+        self._wheel_speed = [0.0, 0.0]        # measured wheel speed [m/s]
+        self._wheel_accum = [0.0, 0.0]        # travel since the counter moved [m]
+        self._wheel_moved_at = [None, None]   # when it last moved [s]
         self._target_omega = [0.0, 0.0]       # wheel speed asked for [rad/s]
         # What each clock is already doing, so an unchanged command is not
         # rewritten.  None means "unknown", which forces the next write.
@@ -733,8 +764,9 @@ class RaspicatDriver(LifecycleNode):
             self._pose[2] += delta_theta
             self._pose[0] += advance * math.cos(self._pose[2])
             self._pose[1] += advance * math.sin(self._pose[2])
-            linear = advance / dt
-            angular = delta_theta / dt
+            linear, angular = self._measured_twist(
+                travelled, now.nanoseconds / 1e9
+            )
         else:
             with self._state_lock:
                 linear, angular = self._commanded
@@ -765,6 +797,11 @@ class RaspicatDriver(LifecycleNode):
         message.pose.pose.orientation.w = qw
         message.twist.twist.linear.x = linear
         message.twist.twist.angular.z = angular
+        covariance = message.twist.covariance
+        covariance[0] = TWIST_VARIANCE_VX
+        covariance[35] = TWIST_VARIANCE_VYAW
+        for index in (7, 14, 21, 28):  # vy, vz, vroll, vpitch
+            covariance[index] = TWIST_VARIANCE_UNMEASURED
         self._odom_pub.publish(message)
 
         if not self._publish_tf or self._tf_broadcaster is None:
@@ -778,6 +815,41 @@ class RaspicatDriver(LifecycleNode):
         transform.transform.rotation.z = qz
         transform.transform.rotation.w = qw
         self._tf_broadcaster.sendTransform(transform)
+
+    def _measured_twist(self, travelled, now_sec):
+        """Wheel speeds measured across the counter's own updates.
+
+        The counters advance every ~55 ms however fast they are read (see
+        COUNTER_STALE_SEC), so travelled/dt at odom_hz would be a square wave
+        spiking to several times the true speed -- and, with the two wheels'
+        updates landing in different ticks, a yaw rate of hundreds of degrees
+        per second that never happened (2026-08-20; fused into the EKF this
+        broke localization outdoors).  Instead each wheel's speed is the
+        travel accumulated between two counter updates over the time between
+        them.  The pose keeps integrating per tick -- the lumps are exact.
+        """
+        for side in (LEFT, RIGHT):
+            self._wheel_accum[side] += travelled[side]
+            moved_at = self._wheel_moved_at[side]
+            if travelled[side] != 0.0:
+                if moved_at is not None and now_sec > moved_at:
+                    # The true span is a multiple of the latch period; the
+                    # read tick only quantises it (see COUNTER_LATCH_SEC).
+                    periods = max(
+                        1, round((now_sec - moved_at) / COUNTER_LATCH_SEC)
+                    )
+                    self._wheel_speed[side] = (
+                        self._wheel_accum[side] / (periods * COUNTER_LATCH_SEC)
+                    )
+                self._wheel_moved_at[side] = now_sec
+                self._wheel_accum[side] = 0.0
+            elif moved_at is None or now_sec - moved_at > COUNTER_STALE_SEC:
+                self._wheel_speed[side] = 0.0
+        linear = (self._wheel_speed[LEFT] + self._wheel_speed[RIGHT]) / 2.0
+        angular = (
+            self._wheel_speed[RIGHT] - self._wheel_speed[LEFT]
+        ) / self._wheel_tread
+        return linear, angular
 
     def _read_counters(self, dt):
         """Distance travelled by each wheel since the last call, in metres.

@@ -112,8 +112,8 @@ Pi 4 では `buzzer_pwm_channel` を 0 以上にすると `configure` を拒否�
 
 ## パラメータと前提
 
-パラメータは `configs/bringup/robot/raspicat_driver.yaml`（全キーを既定値の
-まま列挙。値の由来は [`configs/README.md`](../../configs/README.md)）。
+パラメータは `src/daifuku_config/bringup/robot/raspicat_driver.yaml`（全キーを既定値の
+まま列挙。値の由来は [`src/daifuku_config/README.md`](../../src/daifuku_config/README.md)）。
 
 ホスト側に要るものは 2 つです。どちらも `tools/image/` が入れます。
 
@@ -150,7 +150,7 @@ Pi 4 では `buzzer_pwm_channel` を 0 以上にすると `configure` を拒否�
 
 rtmouse は I2C が 1 回タイムアウトするとカーネルの mutex を握ったままになり、
 `/dev/rtcounter_*` を読む者が全員 D 状態で固着してリブートでしか復旧しません
-（`configs/README.md`）。
+（`src/daifuku_config/README.md`）。
 
 ここではユーザ空間の `ioctl` がエラーを返して戻るだけです。カウンタの読み出しは
 専用のコールバックグループで走り、連続 `counter_error_limit` 回失敗すると `cmd_vel`

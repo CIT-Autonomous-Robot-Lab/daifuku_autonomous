@@ -78,11 +78,10 @@ import json
 import math
 import os
 import sys
+import tempfile
 
 # 引数は SimulationApp を起動する **前** に解釈する。SimulationApp を作った時点で
 # Kit が sys.argv を触りにいくため、後から argparse すると取りこぼす。
-
-HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def parse_args():
@@ -100,13 +99,10 @@ def parse_args():
 
     ap.add_argument("--lidar", default="2d", choices=("2d", "mid360"),
                     help="LiDAR 構成 (既定: 2d)")
-    ap.add_argument("--lidar-config",
-                    help="RTX LiDAR のプロファイル JSON。省略時は configs/ の "
-                         "raspicat_2d_lidar.json / livox_mid360.json を使う")
     ap.add_argument("--lidar-profile",
                     help="Isaac Sim 同梱のプロファイル名を直接使う "
-                         "(例: Example_Rotary)。--lidar-config より優先する。"
-                         "configs/*.json のスキーマが手元の Isaac と合わないときの逃げ道")
+                         "(例: Example_Rotary_2D)。省略時は lidar に応じた既定 "
+                         "(2d=Example_Rotary_2D / mid360=Example_Solid_State)")
     ap.add_argument("--lidar-prim-path", default="/base_link/lidar_rtx",
                     help="ロボット配下に作る RTX LiDAR のパス (--robot-prim からの相対)")
     ap.add_argument("--lidar-xyz", default="0.144,0.0,0.0289",
@@ -138,7 +134,7 @@ def parse_args():
     #   地面を蹴るのは URDF が定義した物理の車輪である。両者がずれると sim の
     #   移動量が指令とずれる。既定は raspicat_description の素の URDF の値。
     #
-    #   実機 (configs/bringup/robot/raspicat.yaml) は 2026-08-03 の実測で
+    #   実機 (src/daifuku_config/bringup/robot/raspicat.yaml) は 2026-08-03 の実測で
     #   wheel_diameter 0.2 / wheel_tread 0.35、つまり半径 0.1 / トレッド 0.35 で
     #   あって、この既定とは違う。**sim は寸法的に実機ではない**。合わせたい
     #   なら URDF 側の車輪も直したうえで、この 2 値を 0.1 / 0.35 にすること。
@@ -150,6 +146,9 @@ def parse_args():
                          "(既定は raspicat_description の wheel_tread)")
     ap.add_argument("--left-wheel-joint", default="left_wheel_joint")
     ap.add_argument("--right-wheel-joint", default="right_wheel_joint")
+    ap.add_argument("--wheel-drive-damping", type=float, default=1.0e4,
+                    help="車輪ジョイントの角度ドライブの damping。"
+                         "0 だと速度指令が力を生まない (下の set_wheel_drives)")
     ap.add_argument("--max-linear", type=float, default=0.5, help="[m/s]")
     ap.add_argument("--max-angular", type=float, default=1.5, help="[rad/s]")
 
@@ -190,7 +189,7 @@ import omni.graph.core as og  # noqa: E402
 import omni.usd  # noqa: E402
 from isaacsim.core.api import SimulationContext  # noqa: E402
 from isaacsim.core.utils.extensions import enable_extension  # noqa: E402
-from pxr import Gf, UsdGeom  # noqa: E402
+from pxr import Gf, Usd, UsdGeom, UsdPhysics  # noqa: E402
 
 
 # 拡張名の解決
@@ -205,39 +204,69 @@ from pxr import Gf, UsdGeom  # noqa: E402
 
 _NS_CANDIDATES = {
     "ros2": ("isaacsim.ros2.bridge", "omni.isaac.ros2_bridge"),
-    "core": ("isaacsim.core.nodes", "omni.isaac.core_nodes"),
+    # OnPlaybackTick だけは 6.0 で Kit 側 (omni.graph.action) にしか無い。
+    # Isaac* の 4 つは isaacsim.core.nodes のままなので、そちらを先に見る。
+    "core": ("isaacsim.core.nodes", "omni.graph.action", "omni.isaac.core_nodes"),
     "wheeled": ("isaacsim.robot.wheeled_robots", "omni.isaac.wheeled_robots"),
-    "rtx_sensor": ("isaacsim.sensors.experimental.rtx",
+    "graph": ("omni.graph.nodes",),
+    # 6.0 の IsaacCreateRenderProduct は isaacsim.core.nodes、IsaacReadIMU は
+    # isaacsim.sensors.physics に居る。RTX センサの Python API
+    # (isaacsim.sensors.experimental.rtx) は OmniGraph のノードを出さない。
+    "rtx_sensor": ("isaacsim.core.nodes", "isaacsim.sensors.physics",
+                   "isaacsim.sensors.experimental.rtx",
                    "isaacsim.sensors.rtx", "omni.isaac.sensor"),
 }
 _NS_RESOLVED = {}
 
 
-def _registered_types():
+def _type_exists(full_name):
+    """`full_name` のノード型がレジストリに在るか。
+
+    **`og.get_node_type()` で判定しないこと。** あれは未登録でも例外を投げずに
+    オブジェクトを返すので、常に「在る」になる。`ObjectLookup.node_type()` の
+    ほうは無ければ OmniGraphError を投げる (`og.Controller.edit` が内部で使うのも
+    こちら)。
+    """
     try:
-        return set(og.GraphRegistry().get_node_types())
+        og.ObjectLookup.node_type(full_name)
+        return True
     except Exception:
-        # 古い API 名。取れない場合は空集合を返して既定 (5.x) にフォールバックする。
-        return set()
-
-
-_REGISTRY = _registered_types()
+        return False
 
 
 def node_type(group, name):
-    """`group` の名前空間を解決して `<ns>.<name>` を返す。"""
-    if group not in _NS_RESOLVED:
-        chosen = _NS_CANDIDATES[group][0]
+    """`<ns>.<name>` のうち実在するものを返す。
+
+    **解決はグループ単位ではなくノード名ごと**に行う。6.0 で名前空間がノード
+    単位で散った (OnPlaybackTick が omni.graph.action、IsaacCreateRenderProduct が
+    isaacsim.core.nodes) ため、グループの先頭を一度決め打ちにすると
+    そのグループの他のノードが道連れで壊れる。
+
+    呼ぶのは拡張を有効化したあと (= グラフ構築時) に限ること。
+    """
+    key = (group, name)
+    if key not in _NS_RESOLVED:
         for ns in _NS_CANDIDATES[group]:
-            if not _REGISTRY or any(t.startswith(ns + ".") for t in _REGISTRY):
-                chosen = ns
+            if _type_exists(f"{ns}.{name}"):
+                _NS_RESOLVED[key] = ns
+                print(f"[isaac_raspicat] node type {name} -> {ns}")
                 break
-        _NS_RESOLVED[group] = chosen
-        print(f"[isaac_raspicat] namespace {group} -> {chosen}")
-    return f"{_NS_RESOLVED[group]}.{name}"
+        else:
+            raise SystemExit(
+                f"OmniGraph のノード型 {name} が見つからない。"
+                f"探した名前空間: {_NS_CANDIDATES[group]}。"
+                "拡張が有効化されていないか、この Isaac では名前が違う。"
+            )
+    return f"{_NS_RESOLVED[key]}.{name}"
 
 
 def enable_ros2_bridge():
+    """ROS 2 ブリッジ拡張を有効化する。
+
+    有効化が要るのはこれだけ。`isaacsim.core.nodes` /
+    `isaacsim.robot.wheeled_robots` / `omni.graph.action` は
+    `isaacsim.exp.base` の experience が既に立てている。
+    """
     for ns in _NS_CANDIDATES["ros2"]:
         try:
             enable_extension(ns)
@@ -271,7 +300,38 @@ def import_urdf(urdf_path, dest_prim):
     無視されるだけだが、差動駆動やセンサはこのスクリプトが OmniGraph で作り直す
     ので、URDF 側に残っていると「どちらが効いているのか」が分からなくなる。
     """
-    # モジュールパスは 5.x と 4.x で違う。OmniGraph のノード型名と同様に両対応する。
+    urdf_path = os.path.abspath(urdf_path)
+    if not os.path.isfile(urdf_path):
+        raise SystemExit(f"URDF not found: {urdf_path}")
+
+    # 6.0 で C++ の `_urdf` インタフェースが消え、URDF -> USD ファイルに落として
+    # 参照する形になった。RTX LiDAR / TransformTree と同じく、版数ではなく
+    # **実行時に何が在るか**で分岐させる。
+    try:
+        from isaacsim.asset.importer.urdf import URDFImporter, URDFImporterConfig
+    except Exception:
+        URDFImporter = None
+    if URDFImporter is not None:
+        print("[isaac_raspicat] urdf importer: isaacsim.asset.importer.urdf (6.0 API)")
+        # 出力先を URDF と同じディレクトリにしないこと。package:// の解決は
+        # URDF の置き場基準なので、生成物を混ぜると 2 度目以降が変わる。
+        out_dir = os.path.join(tempfile.gettempdir(), "isaac_raspicat_urdf")
+        os.makedirs(out_dir, exist_ok=True)
+        robot_usd = URDFImporter().import_urdf(URDFImporterConfig(
+            urdf_path=urdf_path,
+            usd_path=out_dir,
+            # 固定ジョイントを畳まない理由は下の 5.x 側と同じ。
+            merge_fixed_joints=False,
+            allow_self_collision=False,
+            fix_base=False,                 # 移動ロボットなので base は固定しない
+        ))
+        stage = omni.usd.get_context().get_stage()
+        prim = stage.DefinePrim(dest_prim, "Xform")
+        prim.GetReferences().AddReference(robot_usd)
+        print(f"[isaac_raspicat] imported URDF {urdf_path} -> {robot_usd} -> {dest_prim}")
+        return dest_prim
+
+    # 5.x / 4.x: モジュールパスが違うだけで API は同じ。
     _urdf = None
     for mod in ("isaacsim.asset.importer.urdf",      # 5.x
                 "omni.importer.urdf",                # 4.x
@@ -287,10 +347,6 @@ def import_urdf(urdf_path, dest_prim):
             "URDF importer 拡張が見つからない。--robot に変換済みの USD を渡すか、"
             "Isaac Sim の URDF Importer 拡張を有効化すること。"
         )
-
-    urdf_path = os.path.abspath(urdf_path)
-    if not os.path.isfile(urdf_path):
-        raise SystemExit(f"URDF not found: {urdf_path}")
 
     cfg = _urdf.ImportConfig()
     # 固定ジョイントを畳まない。畳むと base_link / lidar_mount_link といった
@@ -333,50 +389,96 @@ def add_robot(stage, args):
     xform.ClearXformOpOrder()
     xform.AddTranslateOp().Set(Gf.Vec3d(args.x, args.y, args.z))
     xform.AddRotateXYZOp().Set(Gf.Vec3d(0.0, 0.0, math.degrees(args.yaw)))
+
+    set_wheel_drives(stage, prim_path,
+                     (args.left_wheel_joint, args.right_wheel_joint),
+                     args.wheel_drive_damping)
     return prim_path
+
+
+def articulation_root(stage, robot_prim):
+    """`IsaacArticulationController` に渡す prim を探す。
+
+    渡すのは **articulation root を持つ prim** であって、`--robot-prim` の Xform では
+    ない。6.0 の URDF Importer は root を `<inertial>` を持つ最初のリンク
+    (raspicat なら `<robot_prim>/Geometry/base_footprint/base_link`) に置くので、
+    Xform を渡すと**掴めない**。掴めなくても**エラーも警告も出ず、ただ車輪が
+    回らない** —— `/cmd_vel` は届き、`/odom` も `/tf` も出続けるので、
+    症状は「nav2 がゴールに近づかない」だけになる (2026-08-20 に踏んだ)。
+    """
+    prim = stage.GetPrimAtPath(robot_prim)
+    for p in Usd.PrimRange(prim):
+        if "PhysicsArticulationRootAPI" in p.GetAppliedSchemas():
+            return str(p.GetPath())
+    print(f"[isaac_raspicat] warn: articulation root が見つからない ({robot_prim} 以下)。"
+          " そのまま渡すが、車輪は回らない見込み")
+    return robot_prim
+
+
+def set_wheel_drives(stage, robot_prim, joint_names, damping):
+    """車輪ジョイントの角度ドライブを速度追従にする。
+
+    URDF に `<dynamics damping=...>` が無いと Importer は damping=0 / stiffness=0 で
+    入れる。この状態では速度目標をいくら与えても**力が 1 N も出ない**ので、
+    上の articulation root と同じく「届いているのに動かない」になる。
+    stiffness は 0 のまま (0 でないと位置追従になり、車輪が原点へ戻ろうとする)。
+    キャスタは触らない —— あちらは damping 0 = 自由回転が正しい。
+    """
+    hit = []
+    for p in Usd.PrimRange(stage.GetPrimAtPath(robot_prim)):
+        if p.GetName() not in joint_names:
+            continue
+        drive = UsdPhysics.DriveAPI.Get(p, "angular")
+        if not drive:
+            drive = UsdPhysics.DriveAPI.Apply(p, "angular")
+        drive.CreateTypeAttr().Set("force")
+        drive.CreateStiffnessAttr().Set(0.0)
+        drive.CreateDampingAttr().Set(damping)
+        hit.append(p.GetName())
+    missing = [j for j in joint_names if j not in hit]
+    if missing:
+        raise SystemExit(
+            f"車輪ジョイントが見つからない: {missing} ({robot_prim} 以下)。"
+            " --left-wheel-joint / --right-wheel-joint を URDF に合わせること")
+    print(f"[isaac_raspicat] wheel drives: {hit} damping={damping}")
 
 
 def add_rtx_lidar(stage, args, robot_prim):
     """RTX LiDAR をロボット配下に作る。
 
-    プロファイル JSON がセンサの走査パターン (FOV / 分解能 / 回転数 / 到達距離) を
-    決める。2D は raspicat_description の Gazebo 設定 (min_range 0.1 / max_range 30) に
-    寄せ、mid360 は非回転走査の**近似**にしてある (configs/livox_mid360.json の
-    コメント参照)。
+    プロファイルがセンサの走査パターン (FOV / 分解能 / 回転数 / 到達距離) を決める。
+    **選べるのは Isaac 同梱レジストリの名前だけ。** Lidar.create が受け取るのは
+    SUPPORTED_LIDAR_CONFIGS の名前かセンサ資産の USD で、実体は
+    get_assets_root_path() から引かれる (JSON を読む機構 =
+    /app/sensors/nv/lidar/profileBaseFolder は参照されない)。実機の諸元に
+    合わせたいならセンサ資産の USD を作る経路になる (未着手)。
     """
-    if args.lidar_profile:
-        # 同梱プロファイルをそのまま使う。configs/*.json のスキーマが手元の
-        # Isaac のバージョンと合わなかった場合の確実な逃げ道。
-        profile = args.lidar_profile
-        print(f"[isaac_raspicat] using bundled lidar profile: {profile}")
-    else:
-        cfg_path = args.lidar_config or os.path.join(
-            HERE, "configs",
-            "raspicat_2d_lidar.json" if args.lidar == "2d" else "livox_mid360.json",
-        )
-        if not os.path.isfile(cfg_path):
-            raise SystemExit(
-                f"lidar config not found: {cfg_path}\n"
-                "--lidar-profile Example_Rotary のように同梱プロファイル名を"
-                "指定して回避できる。"
-            )
-
-        # Isaac は「プロファイル名」で JSON を探す。configs/ を検索パスに足す。
-        import carb
-        settings = carb.settings.get_settings()
-        key = "/app/sensors/nv/lidar/profileBaseFolder"
-        folders = list(settings.get(key) or [])
-        cfg_dir = os.path.dirname(cfg_path)
-        if cfg_dir not in folders:
-            folders.append(cfg_dir)
-            settings.set(key, folders)
-        profile = os.path.splitext(os.path.basename(cfg_path))[0]
+    profile = args.lidar_profile or _BUNDLED_PROFILE[args.lidar]
+    print(f"[isaac_raspicat] using bundled lidar profile: {profile}")
+    if not args.lidar_profile:
+        # **黙って落とさない。** 走査諸元が実機と違うことは、スキャンを見ても
+        # 「それらしい」ので気づけない。観測数に依存する評価 (emcl2 の重み、
+        # コストマップの追従) をこの構成で読むときは、ここを承知しておくこと。
+        print("[isaac_raspicat] warn: 同梱プロファイルで代用している。"
+              "**走査諸元 (FOV / 分解能 / 回転数 / 到達距離) は実機と違う。**")
     xyz = [float(v) for v in args.lidar_xyz.split(",")]
     rpy = [float(v) for v in args.lidar_rpy.split(",")]
 
     lidar_path = robot_prim + args.lidar_prim_path
-    lidar = _make_rtx_lidar(lidar_path, profile, xyz, _rpy_to_quat(rpy))
-    print(f"[isaac_raspicat] RTX lidar: {lidar_path} profile={profile}")
+    lidar = _make_rtx_lidar(lidar_path, profile)
+
+    # 取り付け位置は**作ったあとに自分で入れる**。6.0 の Lidar.create() は
+    # config と path しか受け取らず、translation / orientation を渡しても
+    # 黙って捨てられる (_make_rtx_lidar が warn を出すのはそのため)。原点に
+    # 置いたままでも 2m の壁を撃つ限りもっともらしいスキャンが返るので、
+    # 気づけないまま帯だけがずれる。
+    xform = UsdGeom.Xformable(stage.GetPrimAtPath(lidar_path))
+    xform.ClearXformOpOrder()
+    xform.AddTranslateOp().Set(Gf.Vec3d(*xyz))
+    xform.AddRotateXYZOp().Set(Gf.Vec3d(*(math.degrees(v) for v in rpy)))
+
+    print(f"[isaac_raspicat] RTX lidar: {lidar_path} profile={profile} "
+          f"xyz={xyz} rpy={rpy}")
     return lidar, lidar_path
 
 
@@ -387,43 +489,54 @@ def add_rtx_lidar(stage, args, robot_prim):
 # そこで「どちらが在るか」を実行時に見て、引数名は **シグネチャを調べて詰める**。
 # 引数名を決め打ちすると、どちらのバージョンでも TypeError で落ちるだけになり、
 # 「LiDAR が作れない」以上のことが分からない。
+# **姿勢 (translation / orientation) はここでは渡さない。** 6.0 の
+# Lidar.create は複数プリムを一度に作る API で、名前が複数形
+# (translations / orientations) なうえ orientations は**ワールド系**、
+# translations は**ローカル系**という混在。取り付け位置は add_rtx_lidar が
+# 作成後に USD の xform へ入れるので、経路を 1 本にしてある。
 _LIDAR_ALIASES = {
     "prim_path":   ("prim_path", "path"),
-    "name":        ("name",),
     "profile":     ("config_file_name", "config"),      # 5.x -> 6.0 で改名
-    "translation": ("translation", "position"),
-    "orientation": ("orientation",),
 }
 
+# lidar 構成ごとの既定プロファイル。**実機の諸元ではない**。2D は回転式、
+# mid360 は非回転 (ソリッドステート) というところだけを合わせてある。
+_BUNDLED_PROFILE = {"2d": "Example_Rotary_2D", "mid360": "Example_Solid_State"}
 
-def _make_rtx_lidar(lidar_path, profile, xyz, quat):
+_RTX_FACTORY = None
+
+
+def _rtx_lidar_factory():
+    """RTX LiDAR を作る呼び出し可能オブジェクトを返す。"""
+    global _RTX_FACTORY
+    if _RTX_FACTORY is None:
+        for mod_name, attr, maker in (
+            ("isaacsim.sensors.experimental.rtx", "Lidar", "create"),   # 6.0+
+            ("isaacsim.sensors.rtx", "LidarRtx", None),                 # 4.x / 5.x
+        ):
+            try:
+                cls = getattr(__import__(mod_name, fromlist=[attr]), attr)
+            except (ImportError, AttributeError):
+                continue
+            _RTX_FACTORY = getattr(cls, maker) if maker else cls
+            print(f"[isaac_raspicat] rtx lidar api -> {mod_name}.{attr}"
+                  + (f".{maker}" if maker else ""))
+            break
+        else:
+            raise SystemExit(
+                "RTX LiDAR の API が見つからない。isaacsim.sensors.experimental.rtx "
+                "(6.0+) と isaacsim.sensors.rtx (4.x/5.x) のどちらも import できない。"
+            )
+    return _RTX_FACTORY
+
+
+def _make_rtx_lidar(lidar_path, profile):
     import inspect
 
-    factory = None
-    for mod_name, attr, maker in (
-        ("isaacsim.sensors.experimental.rtx", "Lidar", "create"),   # 6.0+
-        ("isaacsim.sensors.rtx", "LidarRtx", None),                 # 4.x / 5.x
-    ):
-        try:
-            cls = getattr(__import__(mod_name, fromlist=[attr]), attr)
-        except (ImportError, AttributeError):
-            continue
-        factory = getattr(cls, maker) if maker else cls
-        print(f"[isaac_raspicat] rtx lidar api -> {mod_name}.{attr}"
-              + (f".{maker}" if maker else ""))
-        break
-    if factory is None:
-        raise SystemExit(
-            "RTX LiDAR の API が見つからない。isaacsim.sensors.experimental.rtx "
-            "(6.0+) と isaacsim.sensors.rtx (4.x/5.x) のどちらも import できない。"
-        )
-
+    factory = _rtx_lidar_factory()
     values = {
         "prim_path": lidar_path,
-        "name": "raspicat_lidar",
         "profile": profile,
-        "translation": xyz,
-        "orientation": quat,
     }
     try:
         accepted = set(inspect.signature(factory).parameters)
@@ -443,36 +556,46 @@ def _make_rtx_lidar(lidar_path, profile, xyz, quat):
     return factory(**kwargs)
 
 
-def _rpy_to_quat(rpy):
-    r, p, y = rpy
-    cr, sr = math.cos(r / 2), math.sin(r / 2)
-    cp, sp = math.cos(p / 2), math.sin(p / 2)
-    cy, sy = math.cos(y / 2), math.sin(y / 2)
-    return [
-        cr * cp * cy + sr * sp * sy,  # w
-        sr * cp * cy - cr * sp * sy,  # x
-        cr * sp * cy + sr * cp * sy,  # y
-        cr * cp * sy - sr * sp * cy,  # z
-    ]
-
-
 # ROS 2 ブリッジのグラフ
+
+def _time_source(use_sim_time):
+    """タイムスタンプの出どころを (ノード型, 出力アトリビュート) で返す。
+
+    **既定 (`--use-sim-time` なし) でシム時間を打たないこと。** そちらでは nav2 が
+    ウォールクロックで走るので、起動からの秒で刻印すると全メッセージが 56 年前に
+    なる。TF の引きが軒並み extrapolation で失敗し、`scan_to_scan_filter_chain` は
+    `/scan` を出さなくなり、**エラーも警告も出ないまま自己位置だけが壊れる**
+    (2026-08-20 の実測: `/scan_raw` の stamp が 767 秒でコンテナのウォールクロックが
+    1787197524。VIOLA が真値から 2.6m ずれ、機体が壁へ突っ込んだ)。`/clock` を出すのは
+    `--use-sim-time` のときだけなので、シム時間で刻印してよいのもそのときだけ。
+    """
+    if use_sim_time:
+        return (node_type("core", "IsaacReadSimulationTime"),
+                "SimTime.outputs:simulationTime")
+    return (node_type("core", "IsaacReadSystemTime"),
+            "SimTime.outputs:systemTime")
+
 
 def build_ros_graph(args, robot_prim, lidar_path):
     """/cmd_vel 購読 -> 差動駆動 -> odom/TF/scan 出版までを 1 つのグラフに組む。"""
     lidar_frame = args.lidar_frame or (
         "lidar_link" if args.lidar == "2d" else "livox_frame"
     )
+    time_type, time_out = _time_source(args.use_sim_time)
     publish_odom_tf = args.publish_odom_tf == "true"
     publish_link_tf = args.publish_link_tf == "true"
 
     nodes = [
         ("OnTick", node_type("core", "OnPlaybackTick")),
         ("Context", node_type("ros2", "ROS2Context")),
-        ("SimTime", node_type("core", "IsaacReadSimulationTime")),
+        ("SimTime", time_type),
 
         # /cmd_vel -> 車輪速度
         ("SubTwist", node_type("ros2", "ROS2SubscribeTwist")),
+        # Twist は 3 次元ベクトル、DifferentialController が取るのはスカラ。
+        # **繋ぐには分解が要る** (下の connections のコメント参照)。
+        ("BreakLin", node_type("graph", "BreakVector3")),
+        ("BreakAng", node_type("graph", "BreakVector3")),
         ("DiffDrive", node_type("wheeled", "DifferentialController")),
         ("Articulation", node_type("core", "IsaacArticulationController")),
 
@@ -485,8 +608,8 @@ def build_ros_graph(args, robot_prim, lidar_path):
     # 旧来の直接プリム入力は 6.0 でも deprecated として残るとされているが、
     # 「残るかどうか」ではなく**レジストリに新ノードが在るか**で分岐する。
     # バージョン番号で分岐すると、shim が外れた版で静かに TF が止まる。
-    split_tf = publish_link_tf and any(
-        t.endswith(".IsaacComputeTransformTree") for t in _REGISTRY
+    split_tf = publish_link_tf and _type_exists(
+        "isaacsim.core.nodes.IsaacComputeTransformTree"
     )
     if publish_link_tf:
         if split_tf:
@@ -511,10 +634,17 @@ def build_ros_graph(args, robot_prim, lidar_path):
         ("Context.outputs:context", "SubTwist.inputs:context"),
         ("Context.outputs:context", "PubOdom.inputs:context"),
 
-        ("SimTime.outputs:simulationTime", "PubOdom.inputs:timeStamp"),
+        (time_out, "PubOdom.inputs:timeStamp"),
 
-        ("SubTwist.outputs:linearVelocity", "DiffDrive.inputs:linearVelocity"),
-        ("SubTwist.outputs:angularVelocity", "DiffDrive.inputs:angularVelocity"),
+        # **直結してはいけない。** ROS2SubscribeTwist の出力は double3
+        # (vector)、DifferentialController の入力は double。OmniGraph は
+        # 型が合わない接続を**警告 1 行だけ出して黙って落とす**ので、
+        # グラフは組み上がり Isaac も普通に走り、`/cmd_vel` を投げても
+        # 機体が動かないだけになる。前進は x、旋回は z を取り出す。
+        ("SubTwist.outputs:linearVelocity", "BreakLin.inputs:tuple"),
+        ("BreakLin.outputs:x", "DiffDrive.inputs:linearVelocity"),
+        ("SubTwist.outputs:angularVelocity", "BreakAng.inputs:tuple"),
+        ("BreakAng.outputs:z", "DiffDrive.inputs:angularVelocity"),
         ("DiffDrive.outputs:velocityCommand", "Articulation.inputs:velocityCommand"),
 
         ("ComputeOdom.outputs:linearVelocity", "PubOdom.inputs:linearVelocity"),
@@ -525,7 +655,7 @@ def build_ros_graph(args, robot_prim, lidar_path):
     if publish_link_tf:
         connections += [
             ("Context.outputs:context", "PubTF.inputs:context"),
-            ("SimTime.outputs:simulationTime", "PubTF.inputs:timeStamp"),
+            (time_out, "PubTF.inputs:timeStamp"),
         ]
         if split_tf:
             connections += [
@@ -542,7 +672,7 @@ def build_ros_graph(args, robot_prim, lidar_path):
         connections += [
             ("OnTick.outputs:tick", "PubOdomTF.inputs:execIn"),
             ("Context.outputs:context", "PubOdomTF.inputs:context"),
-            ("SimTime.outputs:simulationTime", "PubOdomTF.inputs:timeStamp"),
+            (time_out, "PubOdomTF.inputs:timeStamp"),
             ("ComputeOdom.outputs:position", "PubOdomTF.inputs:translation"),
             ("ComputeOdom.outputs:orientation", "PubOdomTF.inputs:rotation"),
         ]
@@ -550,7 +680,7 @@ def build_ros_graph(args, robot_prim, lidar_path):
         connections += [
             ("OnTick.outputs:tick", "PubClock.inputs:execIn"),
             ("Context.outputs:context", "PubClock.inputs:context"),
-            ("SimTime.outputs:simulationTime", "PubClock.inputs:timeStamp"),
+            (time_out, "PubClock.inputs:timeStamp"),
         ]
 
     values = [
@@ -563,7 +693,9 @@ def build_ros_graph(args, robot_prim, lidar_path):
         ("DiffDrive.inputs:maxLinearSpeed", args.max_linear),
         ("DiffDrive.inputs:maxAngularSpeed", args.max_angular),
 
-        ("Articulation.inputs:targetPrim", [robot_prim]),
+        # **Xform ではなく articulation root を渡すこと** (articulation_root の説明)。
+        ("Articulation.inputs:targetPrim",
+         [articulation_root(omni.usd.get_context().get_stage(), robot_prim)]),
         ("Articulation.inputs:jointNames",
          [args.left_wheel_joint, args.right_wheel_joint]),
 
@@ -662,6 +794,21 @@ def build_lidar_graph(args, lidar_path, lidar_frame):
             og.Controller.Keys.SET_VALUES: values,
         },
     )
+    # RTX の helper は timeStamp 入力を持たず自分で打つ (既定はシム時間)。
+    # _time_source と同じ理由でここも切り替える。**ここだけ漏らすと、
+    # /odom と /tf はウォールクロック、/scan_raw だけシム時間**という
+    # いちばん分かりにくい形になる。
+    if not args.use_sim_time:
+        try:
+            og.Controller.set(
+                og.Controller.attribute(
+                    "/World/ROS2Lidar/PubLidar.inputs:useSystemTime"),
+                True)
+        except Exception as exc:      # noqa: BLE001 - 名前が違う版があり得る
+            print("[isaac_raspicat] warn: lidar helper の useSystemTime を"
+                  f"設定できない ({exc})。/scan_raw だけシム時間で出るので、"
+                  "--use-sim-time (と use_sim_time:=true) で揃えて回すこと")
+
     print(f"[isaac_raspicat] lidar graph -> "
           f"{'/scan_raw (LaserScan)' if is_2d else '/livox/lidar (PointCloud2)'}")
 
@@ -675,11 +822,12 @@ def build_imu_graph(args):
     lidar_bringup.launch.py は /livox/imu -> prepare_mid360_imu.py -> /imu/mid360 ->
     ekf_node と繋いでいるので、実機と同じ経路がそのまま通る。
     """
+    time_type, time_out = _time_source(args.use_sim_time)
     imu_prim = args.robot_prim + "/base_link/imu_sensor"
     nodes = [
         ("OnTick", node_type("core", "OnPlaybackTick")),
         ("Context", node_type("ros2", "ROS2Context")),
-        ("SimTime", node_type("core", "IsaacReadSimulationTime")),
+        ("SimTime", time_type),
         ("ReadIMU", node_type("rtx_sensor", "IsaacReadIMU")),
         ("PubIMU", node_type("ros2", "ROS2PublishImu")),
     ]
@@ -687,7 +835,7 @@ def build_imu_graph(args):
         ("OnTick.outputs:tick", "ReadIMU.inputs:execIn"),
         ("ReadIMU.outputs:execOut", "PubIMU.inputs:execIn"),
         ("Context.outputs:context", "PubIMU.inputs:context"),
-        ("SimTime.outputs:simulationTime", "PubIMU.inputs:timeStamp"),
+        (time_out, "PubIMU.inputs:timeStamp"),
         ("ReadIMU.outputs:linAcc", "PubIMU.inputs:linearAcceleration"),
         ("ReadIMU.outputs:angVel", "PubIMU.inputs:angularVelocity"),
         ("ReadIMU.outputs:orientation", "PubIMU.inputs:orientation"),

@@ -32,20 +32,39 @@ result CHECK "自己位置推定" "${LOCALIZER}"
 
 require "/map がある" has_topic /map
 
-# 地図は configs/site → その overrides の site: map: で決まる。走っている
+# 地図は src/daifuku_config/site → その overrides の site: map: で決まる。走っている
 # map_server がそれと違うものを読んでいたら、別の場所の地図で推定している。
+# **2 枚ある** — /map (経路計画、map_server) と /map_loc (自己位置推定、
+# map_server_loc)。取り違えると、経路計画用に手で壁を描き足した地図で推定する。
+# **amcl は 1 枚**。上流の localization_launch.py が自前で map_server を立てるので
+# map_server_loc も /map_loc も居ない (site: map: の 2 行が別の地図を指していれば
+# navigation が起動時に落ちているので、ここまで来た時点で 2 行は同じ地図)。
+MAP_PAIRS=(navigation:/map_server localization:/map_server_loc)
+if [[ "${LOCALIZER}" == "/amcl" ]]; then
+  skip "/map_loc" "localization:=amcl は地図 1 枚 (上流が自前で map_server を立てる)"
+  MAP_PAIRS=(navigation:/map_server)
+else
+  require "/map_loc がある" has_topic /map_loc
+fi
+
 check_map_matches_site() {
-  local site ov want got
+  local site ov pair role node want got bad=0
   site="$(site_name)"
-  ov="${ROOT}/configs/overrides/${site}.yaml"
-  want="$(sed -n '/^site:/,/^[^ #]/p' "${ov}" 2>/dev/null |
-    sed -n 's/^[[:space:]]*map:[[:space:]]*//p' | head -n 1)"
-  got="$(ros_run 10 param get /map_server yaml_filename 2>/dev/null |
-    sed 's/.*value is: //' | tr -d "\r'\"")"
-  echo "site=${site} 期待 ${want:-?} / 実際 ${got##*/}"
-  [[ -n "${want}" && "${got##*/}" == "${want##*/}" ]]
+  ov="${ROOT}/src/daifuku_config/overrides/${site}.yaml"
+  for pair in "${MAP_PAIRS[@]}"; do
+    role="${pair%%:*}"; node="${pair#*:}"
+    want="$(sed -n '/^site:/,/^[^ #]/p' "${ov}" 2>/dev/null |
+      sed -n "s/^[[:space:]]*${role}:[[:space:]]*//p" |
+      sed 's/[[:space:]]*#.*$//; s/[[:space:]]*$//' | head -n 1)"
+    got="$(ros_run 10 param get "${node}" yaml_filename 2>/dev/null |
+      sed 's/.*value is: //' | tr -d "\r'\"")"
+    echo "site=${site} ${role} 期待 ${want:-?} / 実際 ${got##*/}"
+    [[ -n "${want}" && "${got##*/}" == "${want##*/}" ]] || bad=1
+  done
+  return "${bad}"
 }
-item "map_server が configs/site の指す地図を読んでいる" check_map_matches_site
+item "map_server が src/daifuku_config/site の指す地図を読んでいる" \
+  check_map_matches_site
 
 item "map -> odom の時刻が進んでいる" tf_advancing map odom
 on_fail && diagnose "map -> odom が出ない" \

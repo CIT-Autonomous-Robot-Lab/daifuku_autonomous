@@ -73,7 +73,7 @@ from std_srvs.srv import SetBool
 HOLD_LIMIT = 5.0
 
 # cmd_vel publish rate.  vi_planner runs its control loop at 10 Hz
-# (configs/stack/nav2/vi_planner.yaml), so this matches what the driver already sees.
+# (src/daifuku_config/stack/vi_planner.yaml), so this matches what the driver already sees.
 TELEOP_HZ = 10.0
 
 # Human-issued velocity goes to the manual input of twist_mux, not to /cmd_vel
@@ -81,7 +81,7 @@ TELEOP_HZ = 10.0
 # HIGHER priority (100 vs 10), so this topic only gets through while the stack is
 # quiet -- that is why teleop is disabled while a goal is running.  robot_bringup
 # launches the mux by default; with twist_mux:=false nothing subscribes here and
-# the pad silently does nothing -- see configs/README.md.
+# the pad silently does nothing -- see src/daifuku_config/README.md.
 TELEOP_CMD_VEL_TOPIC = "/cmd_vel_teleop"
 
 DRIVER_NODES = ["raspicat_driver", "raspimouse"]

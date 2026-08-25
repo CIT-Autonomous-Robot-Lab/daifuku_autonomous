@@ -27,10 +27,9 @@ jobs:
     runs-on: ubuntu-latest
     container: ros:humble-ros-base
     env:
-      # daifuku_config だけ src/ の外 (リポジトリルートの configs/)。
-      PKGS_ALL: configs src/daifuku_bringup src/daifuku_stack src/daifuku_config_manager src/daifuku_rqt src/daifuku_waypoint_manager src/raspicat_driver
+      PKGS_ALL: src/daifuku_config src/daifuku_bringup src/daifuku_stack src/daifuku_config_manager src/daifuku_rqt src/daifuku_waypoint_manager src/raspicat_driver
       PKGS_PY: src/daifuku_bringup src/daifuku_stack src/daifuku_config_manager src/daifuku_rqt src/raspicat_driver
-      PKGS_CMAKE: configs src/daifuku_bringup src/daifuku_stack src/daifuku_waypoint_manager
+      PKGS_CMAKE: src/daifuku_config src/daifuku_bringup src/daifuku_stack src/daifuku_waypoint_manager
     steps:
       - uses: actions/checkout@v4
       - name: linter を入れる
@@ -53,8 +52,9 @@ jobs:
           ament_xmllint $PKGS_CMAKE
 
   # 実機で「yaml の綴り違い 1 つで機体が上がり直し続ける」のを止める関門
-  # (params.precheck) を、置いてある overrides 全部に掛ける。install が要らない
-  # のは、precheck が ament の索引を引くのが overrides_dir() だけだから。
+  # (params.precheck) を、置いてある overrides 全部に掛ける。地図の実在と断片の
+  # 重複も同じ場で見る。build せずに済むのは、ament の索引 (share) をソースツリー
+  # へ向け直しているから — 探し先はどれも src/<パッケージ名>/ と同じ形。
   config:
     runs-on: ubuntu-latest
     container: ros:humble-ros-base
@@ -70,43 +70,50 @@ jobs:
           sys.path.insert(0, "src/daifuku_config_manager/src")
           sys.path.insert(0, "src/daifuku_stack/launch")
 
+          # launch を立てずに呼ぶため context は空のものを作る。
+          from launch import LaunchContext
+
           from daifuku_config_manager import params
+          from daifuku_stack_launch import nav2_params
 
-          # share ではなくソースの overrides/ を見る (ここだけが ament 索引)。
-          params.overrides_dir = lambda: "configs/overrides"
-
-          # share ではなくソースの configs/ を見る (params.config_root は
-          # daifuku_config の share を引くので、install していないここでは使えない)。
-          ROOTS = {
-              package: os.path.join("configs", sub)
-              for package, sub in params.CONFIG_DIRS.items()
-          }
-          MAPS = "src/daifuku_stack/maps"
+          # share ではなくソースを見る。どちらも from-import しているので、
+          # モジュールごとに差し替える。**新しいモジュールが設定のパスを
+          # 組み立て始めたら、ここにも 1 行足すこと** (忘れると
+          # PackageNotFoundError で落ちる — 黙って素通りはしない)。
+          params.get_package_share_directory = lambda package: os.path.join("src", package)
+          nav2_params.get_package_share_directory = params.get_package_share_directory
 
           bad = []
           sites = params.available_overrides()
           if not sites:
               bad.append("overrides/ が空に見える (パスを間違えている)")
           for site in sites:
-              for package, root in ROOTS.items():
-                  ok, why = params.precheck(site, package, root)
+              for package in params.CONFIG_DIRS:
+                  ok, why = params.precheck(site, package, params.config_root(package))
                   print(f"{'ok  ' if ok else 'NG  '} {site} x {package} {why}")
                   if not ok:
                       bad.append(f"{site} x {package}: {why}")
-              # site: map: が指す地図の実在。無いと navigation が起動時に落ちる。
-              declared = str((params.load(params.overrides_path(site)).get("site")
-                              or {}).get("map") or "").strip()
-              if declared and not os.path.isfile(os.path.join(MAPS, declared)):
-                  bad.append(f"{site}: site: map: {declared} が {MAPS}/ に無い")
 
-          # 断片の重複 (同じノード名が configs/stack/nav2 の 2 ファイルに居ると起動時に
-          # 止まる)。launch を立てずに呼ぶため context は空のものを作る。
-          from launch import LaunchContext
+              # site: map: の書式と、指す 2 枚の実在。無いと navigation が起動時に
+              # 落ちる。判定は launch と同じ declared_maps を通す — ここで yaml を
+              # 読み直すと、2026-08-25 の「1 枚 -> 2 枚」のような書式の変更に
+              # 置いていかれる (実際そうなった)。
+              context = LaunchContext()
+              context.launch_configurations["overrides"] = site
+              context.launch_configurations["extra_params_file"] = ""
+              try:
+                  for role, path in nav2_params.declared_maps(context).items():
+                      mark = "ok  " if os.path.isfile(path) else "NG  "
+                      print(f"{mark} {site} map:{role} {path}")
+                      if not os.path.isfile(path):
+                          bad.append(f"{site}: site: map: {role}: {path} が無い")
+              except RuntimeError as err:
+                  bad.append(f"{site}: {err}")
 
-          from daifuku_stack_launch import nav2_params
-
+          # 断片の重複 (同じノード名が src/daifuku_config/stack/nav2 の 2 ファイルに
+          # 居ると起動時に止まる)。
           context = LaunchContext()
-          context.launch_configurations["params_dir"] = "configs/stack/nav2"
+          context.launch_configurations["params_dir"] = "src/daifuku_config/stack/nav2"
           context.launch_configurations["params_file"] = ""
           try:
               _, _, origin, _ = nav2_params.fragments_resolver(context)
@@ -158,6 +165,6 @@ jobs:
       - run: uv sync --frozen
       - name: map_19f を USD にして焼き戻す
         run: |
-          uv run map-to-usd ../src/daifuku_stack/maps/map_19f.yaml -o "$RUNNER_TEMP/world.usda"
+          uv run map-to-usd ../src/daifuku_stack/maps/19f/map_19f.yaml -o "$RUNNER_TEMP/world.usda"
           uv run python tests/verify_usda.py \
-            ../src/daifuku_stack/maps/map_19f.yaml "$RUNNER_TEMP/world.usda" free
+            ../src/daifuku_stack/maps/19f/map_19f.yaml "$RUNNER_TEMP/world.usda" free

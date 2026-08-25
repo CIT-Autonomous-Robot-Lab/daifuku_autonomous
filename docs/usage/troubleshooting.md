@@ -31,7 +31,7 @@ pc : osq_lock+0x7c/0x1a0
 note: raspimouse[...] exited with preempt_count 1
 ```
 
-`configs/bringup/robot/raspicat.yaml`の`use_light_sensors`は`false`にしてあります。
+`src/daifuku_config/bringup/robot/raspicat.yaml`の`use_light_sensors`は`false`にしてあります。
 `/light_sensors`を使うものはこのワークスペースにありません。
 
 背景として、mainlineの`mcp320x`（IIO）が同じSPIチップセレクトを掴んでいます。
@@ -218,7 +218,7 @@ Pi 4のCPU飽和によるゴール受理ackの取りこぼし（`nav2:=true`の�
 
 自律走行のつもりが前へ進まず、その場で反時計回りにぐるぐる回り続ける場合です。
 **これは故障ではなくnav2のrecoveryです。** `spin`は`+1.57 rad`（反時計回り）を
-`max_rotational_vel`（`configs/stack/nav2/behaviors.yaml`、1.0 rad/s）で回すので、失敗した
+`max_rotational_vel`（`src/daifuku_config/stack/nav2/behaviors.yaml`、1.0 rad/s）で回すので、失敗した
 ゴールの数だけ左回りが繰り返されます。
 
 ```bash
@@ -241,7 +241,8 @@ ros2 topic echo /rosout --field msg | grep 'Begin navigating'
 `stop_on_failure: false`なので1点ずつ失敗しながら最後まで進み、**そのあいだずっと
 左回りが続きます**。
 
-止めるのはモータ電源です。**RVizの「Navigation 2」パネルの`Reset`を押してはいけません。**
+止めるのはモータ電源です。**RVizの「Navigation 2」パネルの`Reset`を押しては
+いけません**（同梱の`navigation.rviz`にこのパネルは入っていません。自分で足したときの話です）。
 ライフサイクルマネージャは逆順に停止するので、先に`velocity_smoother`が落ち、
 `waypoint_follower`の停止で（走りっぱなしのコールバックを待って）固まります。すると
 `behavior_server`だけがactiveのまま残り、**`spin`は`velocity_smoother`を経由せず
@@ -257,7 +258,7 @@ ros2 topic echo /rosout --field msg | grep 'Begin navigating'
 プロセスが同時に立ち上がってloadが10〜19まで跳ね、bond形成が既定の4秒に間に合いま
 せん。
 
-`configs/stack/lifecycle_bond.yaml`でタイムアウトを60秒へ延長しています。値が効いて
+`src/daifuku_config/stack/lifecycle_bond.yaml`でタイムアウトを60秒へ延長しています。値が効いて
 いるか確認してください。
 
 ```bash
@@ -310,12 +311,14 @@ RESETのログが毎スキャン出て、推定姿勢が回り続ける場合で
 根本原因は地図と実環境の不整合です。実測では有効ビームの28%が地図上の壁を貫通して
 おり、alphaが0.0〜0.4に張り付いていました。
 
-1. RVizでスキャンと地図の壁が重なるか確認する
+1. RVizでスキャンと地図の壁が重なるか確認する。**表示は`Map (localization)`のほう**
+   （既定でオフ。既定でオンの`Map (navigation)`は`/map`＝経路計画用の地図で、
+   そちらは手で壁を描き足してあることがある。[自律移動](navigation.md#地図は2枚)）
 2. ずれている場合は[地図作成](mapping.md)からやり直す
 3. 地図を取り直すまでの暫定処置として、`alpha_threshold`を下げ、
    `expansion_radius_orientation`を狭め、`sensor_reset: false`にしてリセットを抑制する。
-   この3つは地図固有の値なので、断片の`configs/stack/localization/emcl2.yaml`ではなく
-   `configs/overrides/map_19f.yaml`に置く（19Fの地図では設定済み）
+   この3つは地図固有の値なので、断片の`src/daifuku_config/stack/localization/emcl2.yaml`ではなく
+   `src/daifuku_config/overrides/19f.yaml`に置く（19Fの地図では設定済み）
 
 現在の設定値と背景は[設定リファレンス](configuration.md#自己位置推定の暫定設定)を
 参照してください。地図を取り直したあとは既定寄りの値へ戻してください。
@@ -336,7 +339,7 @@ RESETのログが毎スキャン出て、推定姿勢が回り続ける場合で
 
 ## Mid-360で`bind failed`になる
 
-`configs/bringup/sensors/MID360_config.json`の`host_net_info`に設定したIPが、ROS 2ノードを動かすPCの対象NICへ実際に割り当てられているか確認します。LiDAR本体IPも同一セグメントに合わせます。
+`src/daifuku_config/bringup/sensors/MID360_config.json`の`host_net_info`に設定したIPが、ROS 2ノードを動かすPCの対象NICへ実際に割り当てられているか確認します。LiDAR本体IPも同一セグメントに合わせます。
 
 ## TFが競合または不安定になる
 
@@ -444,20 +447,22 @@ docker compose build --build-arg BUILD_JOBS=1
 
 ## 通路を塞いでも`/value_function`が変わらない
 
-`vi_planner`は狭域（±1mウィンドウ）で上げた値を全域へ広げますが、確かめるときに引っかかるところが2つあります。
+`vi_planner`は狭域（追従の窓）で上げた値を全域へ広げますが、確かめるときに引っかかるところが2つあります。
 
-まず**見るトピック**です。RVizで走行中に動いて見えるのは`/local_window_value`（±1m）だけで、これは機体と一緒に動きます。離れると下から`/value_function`が出てくるため、**上げた値が上書きされたように見えます**。`/value_function`は掃きスレッドが2秒ごとに出し直しますが、それには`global_sweep: true`と`value_publish_interval_ms`が正であることの両方が要ります（`--show-args`ではなく`ros2 param get /vi_planner global_sweep`で確認）。
+まず**見るトピック**です。RVizで走行中に動いて見えるのは`/local_window_value`（追従の窓）だけで、これは機体と一緒に動きます。離れると下から`/value_function`が出てくるため、**上げた値が上書きされたように見えます**。`/value_function`は掃きスレッドが2秒ごとに出し直しますが、それには`global_sweep: true`と`value_publish_interval_ms`が正であることの両方が要ります（`--show-args`ではなく`ros2 param get /vi_planner global_sweep`で確認）。`value_publish_interval_ms: 0`だと出すのが伝播の完了時だけになりますが、壁沿いを走っているあいだは毎tick次の伝播が積まれて完了しないので、**エラーも警告も出ないまま全域スライスが固まったまま**になります。
 
 次に**塞ぎ方**です。スキャンが置くのは壁ではなくコストなので、通路の一部だけを塞いでも脇を抜けられるなら遠方の値はほとんど上がりません（host実測で+0.75ステップ＝`cost_drawing_threshold: 60`なら色1段）。幅いっぱいを塞ぐと桁が変わります（同13→38ステップ）。迂回できるなら上がらないのが正しい挙動です。
 
 伝播が動いているかはログで見ます。走行中は壁が窓に入るたびに次の伝播が積まれるので、**上の行はまず出ません**。
 
 ```
-vi_planner: global sweep done in 3.4s, 358 tiles (still_dirty=false)   # 待ち行列が空になった
-vi_planner: tile repair running for 6.0s (412 visits, 27 tiles queued) # 2秒ごとの進捗
+vi_planner: global propagation settled in 3.4s (358 tiles)                  # 待ち行列が空になった
+vi_planner: global propagation running for 6.0s (412 tiles done, 27 queued) # 2秒ごとの進捗
 ```
 
-後者も出ないなら伝播が回っていません。`global_sweep`と、`planner:=vi`側の`solver`を確認してください（詳細は[`configs/README.md`](../../configs/README.md#効いているか確かめる)）。
+単位は密（`frontier2d_sparse`）なら`cells`、compact（`frontier2d_sparse_compact`）なら`tiles`です。行そのものはどちらの経路でも同じです（2026-08-20の上流の更新まで、下の進捗はcompactでしか出ませんでした）。
+
+後者も出ないなら伝播が回っていません。`global_sweep`と、`planner:=vi`側の`solver`を確認してください（詳細は[`src/daifuku_config/README.md`](../../src/daifuku_config/README.md#効いているか確かめる)）。
 
 ## ログを確認する
 
