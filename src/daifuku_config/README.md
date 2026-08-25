@@ -206,12 +206,22 @@ override も**通ります**（そして黙って無視されます）。
 一緒に変わるので、**人が動かす値を 1 つにしてある**という趣旨です。
 `overrides` は地図を変えると**置き換え**になります（追加ではありません）。
 
-**どの地図を読むかは、その overrides 自身が `site:` 節で宣言します。**
+**どの地図を読むかは、その overrides 自身が `site:` 節で宣言します。地図は役ごとに
+2 枚**（2026-08-25 から。それまでは 1 枚でした）。
 
 ```yaml
 site:
-  map: 19f/map_19f.yaml   # daifuku_stack の maps/ からの相対パス (絶対パスも可)
+  map:
+    navigation:   19f/map_19f.yaml   # 経路計画 (/map)。maps/ からの相対パス (絶対パスも可)
+    localization: 19f/map_19f.yaml   # 自己位置推定 (/map_loc)
 ```
+
+`navigation` は `map_server` が `/map` へ配信し、`vi_planner` と `global_costmap` の
+`static_layer` が読みます。`localization` は `map_server_loc` が `/map_loc` へ配信し、
+`emcl2` が読みます。**同じ地図で走らせるときも 2 行とも書きます**（片方だけ書けるように
+すると、書き忘れがもう一方の地図で黙って走るため）。分けられるのは
+`localization:=emcl2` のときだけで、理由と経緯は
+[自律移動](../../docs/usage/navigation.md#地図は2枚)。
 
 `site:` は 1 段目に書ける予約節で、パッケージ名の段には並べません。「その場所そのものに
 付く値」の置き場で、いまは地図だけが入っています。**overrides の名前と地図のファイル名は
@@ -241,8 +251,9 @@ ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=nav2
 重ねたときも同じです。どちらも**既定の地図へ落とさず起動時にエラーで止めます** —
 別の場所にいるのに 19F の地図で自己位置を推定し始めるほうが危ないためです。
 
-**地図を渡し替えて `overrides` を放置することはもうできません。** `map:=` を明示した
-ときは `site: map:` と同じファイルを指しているかを見て、違えば起動時にエラーで止まります
+**地図を渡し替えて `overrides` を放置することはもうできません。** `map:=` / `map_loc:=` を
+明示したときは `site: map:` の同じ役と同じファイルを指しているかを見て、違えば起動時に
+エラーで止まります
 （`nav2_params.resolve_map`）。以前は別の地図に 19F 用の EMCL2 調整が載ったまま
 黙って走っていました。存在しない override 名を渡した場合は、選べる名前を並べた
 エラーで止まります。

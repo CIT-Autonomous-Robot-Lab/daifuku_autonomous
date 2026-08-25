@@ -25,8 +25,12 @@
 
 # ── その場所そのものに付く値 (ノードのパラメータではない) ─────────────────────
 # **どの地図を読むかはここで決まる。** 値は daifuku_stack の maps/ からの相対パス。
+# **2 行とも書くこと** — 同じ地図で走らせるときも省略できない。2 枚を別にできるのは
+# localization:=emcl2 のときだけで、この地図はそちら (19F は VIOLA なので 1 枚固定)。
 site:
-  map: tsudanuma/map_tsudanuma.yaml
+  map:
+    navigation:   tsudanuma/map_tsudanuma.yaml   # 経路計画 (/map)
+    localization: tsudanuma/map_tsudanuma.yaml   # 自己位置推定 (/map_loc)
 
 daifuku_bringup:
   # ── 仰角フィルタ ──────────────────────────────────────────────────────────

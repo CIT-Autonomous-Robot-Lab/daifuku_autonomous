@@ -246,10 +246,14 @@ LIDAR_PID=$!
 # 構成を OVERRIDES で渡すので追随の対象外だし (params.follows_site)、告知する
 # site_manager も居ない。**params_arg に混ぜないこと** — この引数を宣言している
 # のは navigation だけで、上の lidar_bringup にも渡ってしまう。
+#
+# 地図は 2 枚 (navigation -> /map、localization -> /map_loc) だが、ハーネスが指すのは
+# MAP_NAME の 1 枚だけなので両方へ同じものを渡す。**map_loc:= を落とすと
+# OVERRIDES=none のとき resolve_map が「どの地図を読むか決まりません」で止まる。**
 ros2 launch daifuku_stack navigation.launch.py \
     use_rviz:=false \
     config_watch:=off \
-    map:="$MAP" "${params_arg[@]}" \
+    map:="$MAP" map_loc:="$MAP" "${params_arg[@]}" \
     planner:="$PLANNER" local_planner:="$LOCAL_PLANNER" nav2:="$NAV2" \
     localization:="$LOCALIZATION" >"$RUN/nav.log" 2>&1 &
 NAV_PID=$!

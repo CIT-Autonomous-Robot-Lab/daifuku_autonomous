@@ -19,10 +19,14 @@
 # `docker compose restart raspicat` が要る (tools/site.sh がやる)。
 
 # ── その場所そのものに付く値 (ノードのパラメータではない) ─────────────────────
-# **どの地図を読むかはここで決まる** (navigation の map:= の既定。nav2_params.resolve_map)。
-# 値は daifuku_stack の maps/ からの相対パス (絶対パスも可)。
+# **どの地図を読むかはここで決まる** (navigation の map:= / map_loc:= の既定。
+# nav2_params.resolve_map)。値は daifuku_stack の maps/ からの相対パス (絶対パスも可)。
+# **2 行とも書くこと** — 同じ地図で走らせるときも省略できない (書き忘れがもう一方の
+# 地図で黙って走るのを防ぐため)。2 枚を別にできるのは localization:=emcl2 のときだけ。
 site:
-  map: 19f/map_19f.yaml
+  map:
+    navigation:   19f/map_19f.yaml   # 経路計画 (/map)。vi_planner と global_costmap
+    localization: 19f/map_19f.yaml   # 自己位置推定 (/map_loc)。emcl2
 
 daifuku_bringup:
   # ── 仰角フィルタ ──────────────────────────────────────────────────────────

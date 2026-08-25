@@ -2,7 +2,8 @@
 #
 #   * LiDAR の帯 (仰角と高さ)   … 機体側。docker compose で常駐している
 #   * emcl2 と価値反復の調整      … 自律移動側。人が navigation を立てるとき
-#   * 地図 (navigation の map:=) … その overrides の site: map: が指すもの
+#   * 地図 2 枚 (map:= と map_loc:=) … その overrides の site: map: の
+#       navigation: (経路計画 /map) と localization: (自己位置推定 /map_loc)
 #
 # 名前は src/daifuku_config/overrides/<名前>.yaml のこと。**地図の名前とは揃っていなくてよい**
 # (どの地図を読むかは、その overrides 自身が site: 節に書いている)。

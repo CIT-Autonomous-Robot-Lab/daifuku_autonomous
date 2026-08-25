@@ -101,14 +101,47 @@ overrides自身が`site:`節で宣言します。**
 
 ```yaml
 site:
-  map: 19f/map_19f.yaml   # daifuku_stack の maps/ からの相対パス（絶対パスも可）
+  map:
+    navigation:   19f/map_19f.yaml   # 経路計画（/map）。daifuku_stack の maps/ からの相対パス
+    localization: 19f/map_19f.yaml   # 自己位置推定（/map_loc）
 ```
 
 `site:`はパッケージ名の段に並ばない予約節で、「その場所そのものに付く値」の置き場です
 （いまは地図だけ）。**overridesの名前と地図のファイル名は揃っていなくて構いません。**
-地図を差し替えるならこの1行を直します。場所の切り替えは`tools/site.sh <名前>`で、
+地図を差し替えるならこの行を直します。場所の切り替えは`tools/site.sh <名前>`で、
 機体側（LiDARの帯）の立て直しまで含めて1コマンドです
 （[日常操作](operations.md#走らせる場所を切り替える)）。
+
+### 地図は2枚
+
+**経路計画と自己位置推定で別の地図を使えます**（2026-08-25から。それまでは1枚でした）。
+経路計画には入ってほしくない場所を手で塗り潰した地図を使い、自己位置推定には実測の
+ままの地図を使う、という分け方が上流（[mugimaru_bringup](https://github.com/CIT-Autonomous-Robot-Lab/mugimaru_bringup)）の
+運用です。1枚しか持てないと、塗り潰した壁をLiDARが見つけられずに自己位置が壊れるか、
+経路が入ってほしくない場所へ引かれるかのどちらかになります。
+
+| 役 | トピック | ノード | 読むもの | launch引数 |
+|---|---|---|---|---|
+| `navigation` | `/map` | `map_server` | `vi_planner`、`global_costmap`の`static_layer` | `map:=` |
+| `localization` | `/map_loc` | `map_server_loc` | `emcl2` | `map_loc:=` |
+
+**`/map`が経路計画側なのは逆に見えますが、意図的です。** 経路計画側の購読者のうち
+2つ——`nav2:=true`のときに上流のvi版`navigation_launch.py`が立てる`vi_planner`と、
+Nav2の`global_costmap`の`static_layer`——は購読先が`map`固定で、こちらからremapする
+口がありません。remapできるのは自分で立てている`emcl2`だけなので、そちらを`/map_loc`へ
+回しています。
+
+**同じ地図で走らせるときも2行とも書きます。** 片方だけ書けるようにすると、書き忘れが
+もう一方の地図で黙って走る形になるためです（起動時にエラーで止まります）。同梱の
+`map_19f`と`map_tsudanuma`は2行とも同じ地図です。
+
+**2枚を別にできるのは`localization:=emcl2`のときだけです。** `amcl`は上流の
+`localization_launch.py`が自前で`map_server`を立てるので2枚目を渡す口がなく、
+`localization:=vi`（VIOLA）は`vi_planner`の地図の購読が1つしかないので経路計画と
+同じ地図を見ます。別の地図を指したまま他を選ぶと**起動時にエラーで止まります**。
+
+RVizには`Map (navigation)`と`Map (localization)`の2つの表示があります（後者は既定で
+オフ。同じ地図のときは重なるだけなので）。
 
 `map:=`を明示することもできますが、`site: map:`と別のファイルを指していると**起動時に
 エラーで止まります**（別の場所の帯とEMCL2調整を載せたまま走るのを防ぐため）。承知の

@@ -155,14 +155,30 @@ Docker 越しに叩く形は
   断片どうしは深くマージしない（深いマージが効くのは `overrides` を重ねるときだけ）。
 - **場所は 1 つの値で決まる — `src/daifuku_config/site` の 1 行。**
   すべての launch が `overrides` の既定をここから取り、`navigation.launch.py` は
-  `map` の既定もそこから導く。**導き方は「同じ名前の地図」ではなく、その overrides
-  自身が書いている `site: map:`**（2026-08-07 に改めた。`nav2_params.declared_map` /
-  `resolve_map`）。だから overrides の名前と地図のファイル名は揃っていなくてよい。
+  `map` / `map_loc` の既定もそこから導く。**導き方は「同じ名前の地図」ではなく、その
+  overrides 自身が書いている `site: map:`**（2026-08-07 に改めた。
+  `nav2_params.declared_maps` / `resolve_map`）。だから overrides の名前と地図の
+  ファイル名は揃っていなくてよい。
   `map:=` を明示したときに `site: map:` と別のファイルを指していると**起動時に
   エラーで止まる**（別の場所の帯と emcl2 の調整を載せたまま走るのを防ぐため。承知で
   やるなら `overrides:=none` を添える）。**地図が決まらないとき（`overrides:=none`、
   または `site: map:` の無い overrides）は `map:=` が必須で、既定の地図へは落とさずに
   止まる** — 別の場所にいるのに 19F の地図で自己位置を推定し始めるほうが危ないため。
+- **地図は 2 枚で、`site: map:` の下に `navigation:` と `localization:` を並べる**
+  （2026-08-25 に 1 枚から改めた。経路計画には入ってほしくない場所を手で塗り潰した
+  地図を使い、自己位置推定は実測のままの地図を使う、という上流の運用に合わせた）。
+  **`/map` が経路計画で `/map_loc` が自己位置推定**。逆に見えるが、経路計画側の
+  購読者のうち 2 つ——`nav2:=true` のとき上流の vi 版 `navigation_launch.py` が立てる
+  `vi_planner` と、Nav2 の `global_costmap` の `static_layer`——が購読先 `"map"` の
+  決め打ちで**こちらから remap する口が無い**ため、そちらを `/map` に置いて、remap
+  できる `emcl2` を `/map_loc` へ回している。`map_server` は 2 つ立つ（`map_server` と
+  `map_server_loc`）。**同じ地図でも 2 行とも書く**——片方だけ書けるようにすると、
+  書き忘れがもう一方の地図で黙って走る（いまは起動時に落ちる）。**`map_server_loc` は
+  設定ファイルの節を持たない**——`RewrittenYaml` は `yaml_filename` をキー名で振り替える
+  ので、断片に節を足すと 2 つが同じ地図になる。launch が直に渡している。**2 枚を別に
+  できるのは `localization:=emcl2` のときだけ**で、`amcl`（上流の
+  `localization_launch.py` が自前で `map_server` を立てる）と `localization:=vi`
+  （VIOLA。地図の購読が 1 つしかない）は `resolve_map` が起動時に落とす。
   `site:` は 1 段目に書ける予約節（`RESERVED_SECTIONS`）で、パッケージ名の段には
   並べない。`overrides` は
   **置き換え**（追加ではない）で、重ねないときは `overrides:=none`（空文字は

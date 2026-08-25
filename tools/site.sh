@@ -100,17 +100,19 @@ if [ ! -f "$OVERRIDES_DIR/$NAME.yaml" ]; then
     usage
     exit 2
 fi
-# 地図は overrides の site: map: が持つ。無いのはエラーにしない (navigation を
-# 立てるときに map:= を明示すれば通る) が、黙って進むと「なぜか地図が決まらない」
-# で悩むので言っておく。
+# 地図は overrides の site: map: が持つ。**役ごとに 2 枚** (navigation -> /map、
+# localization -> /map_loc)。無いのはエラーにしない (navigation を立てるときに
+# map:= / map_loc:= を明示すれば通る) が、黙って進むと「なぜか地図が決まらない」
+# で悩むので言っておく。片方だけのときは navigation が起動時に落ちる。
 if ! awk '
         /^site:[[:space:]]*$/ { in_site = 1; next }
         /^[^[:space:]#]/      { in_site = 0 }
-        in_site && /^[[:space:]]+map:/ { found = 1 }
-        END { exit !found }
+        in_site && /^[[:space:]]+navigation:/   { nav = 1 }
+        in_site && /^[[:space:]]+localization:/ { loc = 1 }
+        END { exit !(nav && loc) }
     ' "$OVERRIDES_DIR/$NAME.yaml"; then
-    echo "!  $NAME.yaml に site: map: がありません。" >&2
-    echo "   navigation は map:= を明示しないと起動時に止まります。" >&2
+    echo "!  $NAME.yaml の site: map: に navigation: / localization: が揃っていません。" >&2
+    echo "   navigation は map:= / map_loc:= を明示しないと起動時に止まります。" >&2
 fi
 
 BEFORE=$(current)

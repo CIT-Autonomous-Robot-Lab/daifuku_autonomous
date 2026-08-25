@@ -31,18 +31,24 @@ require "src/daifuku_config/site の名前が overrides にある" check_site_ex
 
 # 地図は「同じ名前の地図」ではなく、その overrides 自身の site: map: が決める。
 # 無いと navigation は既定の地図へ落とさずに起動時で止まる (別の場所の地図で
-# 自己位置を推定し始めるほうが危ないため)。
+# 自己位置を推定し始めるほうが危ないため)。2026-08-25 から **役ごとに 2 枚**
+# (navigation: /map、localization: /map_loc)。片方だけだと起動時に落ちる。
 check_site_map() {
-  local ov="${CONFIG}/overrides/${SITE}.yaml" map
-  map="$(sed -n '/^site:/,/^[^ #]/p' "${ov}" | sed -n 's/^[[:space:]]*map:[[:space:]]*//p' | head -n 1)"
-  [[ -n "${map}" ]] || {
-    echo "site: map: が無い → navigation は map:= が必須になる"
-    return 1
-  }
-  echo "${map}"
-  test -f "${ROOT}/src/daifuku_stack/maps/${map}" || test -f "${map}"
+  local ov="${CONFIG}/overrides/${SITE}.yaml" role map bad=0
+  for role in navigation localization; do
+    map="$(sed -n '/^site:/,/^[^ #]/p' "${ov}" \
+           | sed -n "s/^[[:space:]]*${role}:[[:space:]]*//p" |
+           sed 's/[[:space:]]*#.*$//; s/[[:space:]]*$//' | head -n 1)"
+    [[ -n "${map}" ]] || {
+      echo "site: map: ${role}: が無い → navigation が起動時に落ちる"
+      return 1
+    }
+    echo "${role}: ${map}"
+    test -f "${ROOT}/src/daifuku_stack/maps/${map}" || test -f "${map}" || bad=1
+  done
+  return "${bad}"
 }
-item "overrides の site: map: が指す地図が実在する" check_site_map
+item "overrides の site: map: が指す地図 2 枚が実在する" check_site_map
 
 # ── overrides の行き先 ──────────────────────────────────────────────────────
 # 1 段目はパッケージ名か site:。知らない名前は「誰も読まない部分木」になるので

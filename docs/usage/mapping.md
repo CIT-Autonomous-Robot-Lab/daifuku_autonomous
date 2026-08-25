@@ -219,7 +219,8 @@ VIの`unknown_as_obstacle`もコストマップの`track_unknown_space`も、未
 `map_19f`は19Fの地図の名前で、`src/daifuku_config/site`の既定値でもあります。別の場所の地図を
 作るときは名前を変えてください。そのとき`src/daifuku_config/overrides/<同じ名前>.yaml`も用意し、
 `tools/site.sh <名前>`で切り替えます。**どの地図を読むかは、そのoverridesの`site:`節に
-書きます**（`site: map: <フォルダ>/<ファイル名>`。`maps/`からの相対パス）。overridesの名前と地図の
+書きます**（`site: map:`の下に`navigation:`と`localization:`の2行。`maps/`からの相対パス。
+[自律移動](navigation.md#地図は2枚)）。overridesの名前と地図の
 ファイル名は揃っていなくて構いませんが、**書き忘れると起動時にエラーで止まります**
 （既定の地図へは落としません）。
 

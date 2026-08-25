@@ -1,6 +1,10 @@
 # 地図の配信と保存。「既定」= nav2_map_server (humble) の map_server.cpp / map_saver.cpp。
 # 合成順序と上書きは ../README.md を参照。
 
+# **map_server は 2 つ立つ**が、節はこちら (経路計画 /map) だけ。自己位置推定側
+# (map_server_loc -> /map_loc) は launch が use_sim_time と yaml_filename を直に渡す
+# ——ここに map_server_loc: を足すと RewrittenYaml が yaml_filename をキー名で振り替え、
+# 2 つが同じ地図になる。どちらの地図かは overrides の site: map: が決める。
 map_server:
   ros__parameters:
     use_sim_time: false
