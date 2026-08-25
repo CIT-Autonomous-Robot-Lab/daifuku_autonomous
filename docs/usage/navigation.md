@@ -140,8 +140,16 @@ Nav2の`global_costmap`の`static_layer`——は購読先が`map`固定で、�
 `localization:=vi`（VIOLA）は`vi_planner`の地図の購読が1つしかないので経路計画と
 同じ地図を見ます。別の地図を指したまま他を選ぶと**起動時にエラーで止まります**。
 
+**`localization:=vi`（VIOLA）では`/map_loc`を誰も読みません。** `map_server_loc`は
+立って配信しますが、購読するのは`emcl2`だけで、そちらが立たない構成だからです。
+**既定の`map_19f`がこれ**（`localizer: "belief"`のため`localization:=vi`が要る）なので、
+既定では`/map_loc`は出ているだけで効いていません。地図を2枚に分ける値打ちがあるのは
+`localization:=emcl2`で走らせる場所（`map_tsudanuma`や`tsudanuma_mugimaru`）です。
+
 RVizには`Map (navigation)`と`Map (localization)`の2つの表示があります（後者は既定で
-オフ。同じ地図のときは重なるだけなので）。
+オフ。同じ地図のときは重なるだけなので）。**自己位置がその場で回り出す症状を追うときは
+後者をオンにしてください**——貫通しているスキャンと突き合わせるべきなのは自己位置推定側の
+地図です（[困ったとき](troubleshooting.md)）。
 
 `map:=`を明示することもできますが、`site: map:`と別のファイルを指していると**起動時に
 エラーで止まります**（別の場所の帯とEMCL2調整を載せたまま走るのを防ぐため）。承知の

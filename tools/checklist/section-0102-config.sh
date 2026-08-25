@@ -159,6 +159,27 @@ check_no_launch_only_keys() {
 item "src/daifuku_config/stack と src/daifuku_config/overrides に standalone: / follow: / publish_tf: が無い" \
   check_no_launch_only_keys
 
+# 自己位置推定側の map_server (map_server_loc) は設定ファイルの節を持たない。
+# 足すと RewrittenYaml が yaml_filename を**キー名で**振り替えるので、2 つの
+# map_server が同じ地図を読む。**エラーも警告も出ないまま地図が 1 枚に戻る。**
+check_no_map_server_loc_section() {
+  local d hit
+  for d in "${CONFIG}/stack" "${CONFIG}/overrides"; do
+    [[ -d "${d}" ]] || {
+      echo "見る先が無い: ${d}"
+      return 1
+    }
+  done
+  hit="$(grep -rln '^[[:space:]]*map_server_loc:' \
+    "${CONFIG}/stack" "${CONFIG}/overrides" 2>/dev/null | tr '\n' ' ')"
+  [[ -z "${hit}" ]] || {
+    echo "map_server_loc: が書かれている (2 つの map_server が同じ地図になる): ${hit}"
+    return 1
+  }
+  echo "書かれていない"
+}
+item "src/daifuku_config/ に map_server_loc: の節が無い" check_no_map_server_loc_section
+
 # ── .env ────────────────────────────────────────────────────────────────────
 ROOT_ENV="${ROOT}/.env"
 PI_ENV="${ROOT}/docker/raspberrypi/.env"
