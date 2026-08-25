@@ -1,0 +1,112 @@
+# tsudanuma_mugimaru.yaml — 津田沼 (mugimaru_bringup 由来の地図、2500x1581 @0.1m
+# = 250.0m x 158.1m) 用の上書き。
+# 「断片」= 重ねる先の設定ファイルの値 (src/daifuku_config/bringup/sensors/{mid360_scan,mid360_elevation}.yaml、
+# src/daifuku_config/stack/nav2/{vi_planner,behaviors}.yaml、src/daifuku_config/stack/localization/emcl2.yaml)。
+# 地図そのものの素性は src/daifuku_stack/maps/tsudanuma_mugimaru/README.md。
+#
+#   tools/site.sh tsudanuma_mugimaru           # src/daifuku_config/site を書いて機体を立て直す
+#   ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=vi
+#   # map も overrides も src/daifuku_config/site から来るので渡さない
+#
+# **同梱の 3 つで唯一、地図を 2 枚に分けている。** navigation の地図は localization の
+# 地図に手描きの壁を 853m2 (11,326 個のかたまり) 足したもので、上流もそう使い分けて
+# いる (vi2_exp.launch.py)。**この節があるあいだ localization:=emcl2 でしか立たない** —
+# amcl は 2 枚目を渡す口が無く、localization:=vi は地図の購読が 1 つしかないので、
+# どちらも resolve_map が起動時に落とす。
+#
+# **隣の tsudanuma.yaml とは別の地図**。原点も解像度も違う (あちらは 0.05m で
+# 原点 [-100, -100]、こちらは 0.1m で [-68.946, -101.928]) ので、ウェイポイントは
+# 共用できない。
+#
+# **この地図には未観測がほぼ無い** (loc 側で 1,966 セル = 0.05%。空き 95.0% / 占有 4.9%)。
+# tsudanuma.yaml の地図が 68.2% 未観測で「未観測 = 通れない」が事実上の柵になって
+# いるのとは逆で、**こちらは描かれた壁だけが柵**。走ってほしい範囲が壁で閉じて
+# いなければ、その外へ経路が伸びる。costmaps.*.track_unknown_space も
+# vi の unknown_as_obstacle も効かない (切る未観測が無い)。
+#
+# **tsudanuma.yaml / 19f.yaml とはキーの集合をそろえてある。** 片方にしか要らない値も
+# 断片と同じ値で書いて並べる。例外は 19F の内蔵推定器 (VIOLA) の 4 つで、あれは
+# 密ソルバが要るのでここには置けない。
+#
+# **全体が未検証。** 値は tsudanuma.yaml (同じ場所・同じ機体) から写し、内部解像度で
+# 決まるものだけ計算し直してある。実機で通したら、この行を消して実測を書くこと。
+
+# ── その場所そのものに付く値 (ノードのパラメータではない) ─────────────────────
+# **どの地図を読むかはここで決まる。** 値は daifuku_stack の maps/ からの相対パス。
+# yaml が指す pgm はそれぞれ tsudanuma-challenge_nav3_9.pgm / _loc3.pgm。
+# **どちらも free_thresh が 0.2 で、未観測画素 205 (p=0.196) が nav 28 / loc 25 セル
+# ぶん空きへ化ける** (simulator/tests/verify_map_thresholds.py が NG を出す)。上流の値の
+# ままにしてあるので、気になるなら地図側の yaml を 0.15 へ下げること。
+site:
+  map:
+    navigation:   tsudanuma_mugimaru/navigation/tsudanuma-challenge_nav.yaml    # 経路計画 (/map)。手描きの壁 +853m2
+    localization: tsudanuma_mugimaru/localization/tsudanuma-challenge_loc.yaml  # 自己位置推定 (/map_loc)。実測のまま
+
+daifuku_bringup:
+  # ── 仰角フィルタ ──────────────────────────────────────────────────────────
+  # 場所は tsudanuma.yaml と同じなので、あちらと同じ切り方にしてある (勾配対策は無し)。
+  # 戻すなら 5.0 から。そのときは下の max_height と対で見ること。
+  elevation_filter:
+    ros__parameters:
+      min_elevation_deg: 0.0          # 断片も同じ値: 搭載高の水平面 = 断片の min_height 0.275 と同じ切り方。勾配対策は無し
+
+  # ── スキャンの切り出し ────────────────────────────────────────────────────
+  # tsudanuma.yaml と同じ帯 (同じ屋外・同じ機体)。仰角が 0.0 なので帯は全距離で
+  # 0.275-4.00m 固定、range_max 70.0 がそのまま実効の測距上限になる。
+  # 地図の対角が 296m あるので、emcl2 は 70m を使い切る。
+  pointcloud_to_laserscan:
+    ros__parameters:
+      min_height: 0.275               # 断片も同じ値: 搭載高 (2026-08-03 実測)。下げると床が載る
+      max_height: 4.00                # 断片 0.50: 樹冠・庇・看板を落とす (tsudanuma.yaml と同じ)。仰角 0.0 なので下限 0.275m と全距離で対
+      range_max: 70.0                 # 断片も同じ値: センサの測距上限 (反射率 80% で 70m)
+
+daifuku_stack:
+  # ── emcl2 ────────────────────────────────────────────────────────────────
+  # **emcl2 が読むのは localization の地図** (/map_loc)。手描きの壁 853m2 はそちらには
+  # 無いので、19F のような「地図に有って現実に無い壁」の貫通は起きにくいはず。それでも
+  # 2 つとも他の 2 地図から写してあるのは、キーの集合をそろえる約束と、屋外で観測が
+  # 疎になる区間があるため。**貫通が出ないと分かったら断片 (0.5 / 0.2) へ戻すこと。**
+  emcl2:
+    ros__parameters:
+      alpha_threshold: 0.2                # 断片 0.5 (EMCL2 既定 0.5): 他の 2 地図と同じ値。0 ではないので膨張リセットは起きる
+      expansion_radius_orientation: 0.05  # 断片 0.2 (EMCL2 既定 0.2): リセット時の姿勢の飛びを抑える (expansionReset の中でしか使わない)
+
+  # ── cmd_vel の頭打ち ──────────────────────────────────────────────────────
+  velocity_smoother:
+    ros__parameters:
+      max_velocity: [1.0, 0.0, 2.5]     # 断片 [0.4, 0.0, 1.0] (ノード既定 同左): tsudanuma.yaml と同じ屋外の頭。実際の速度は vi_planner の action_forward_m が決める
+      min_velocity: [-1.0, 0.0, -2.5]   # 断片 [-0.4, 0.0, -1.0] (ノード既定 同左): 上と対。後退は -0.2 なので断片でもクリップされない
+
+  # ── 価値反復プランナ ──────────────────────────────────────────────────────
+  # **地図がもう 0.1m/cell なので、map_scale の効き方が他の 2 つと違う。** scale 2 で
+  # 0.20m/cell = 1250x790x60 = 5925 万状態で、tsudanuma.yaml の scale 5 (5650 万) と
+  # ほぼ同じ規模。あちらが密で 3.17GB / OOM だったので、こちらも compact が要る
+  # (compact の実測 11.5 バイト/状態から見て sink は 680MB 見当)。
+  # **scale 3 (0.30m/cell) へは上げないこと** — 通路のセル幅が死ぬ上限は 0.25m/cell
+  # 付近で、あちらの scale 6 が解けなかったのがそこ (src/daifuku_config/README.md)。
+  vi_planner:
+    ros__parameters:
+      solver: "frontier2d_sparse_compact"  # 断片も同じ値: 密だと 5925 万状態 = 3.3GB 見当で tsudanuma と同じく OOM 圏。明示する
+      map_scale: 2                         # 既定 1 (断片は未設定): 内部だけ 0.20m/cell (5925 万状態)。地図が元から 0.1m なので 2 で足りる
+      downsample_policy: "conservative"    # 既定 同左 (断片は未設定): 2 倍なら通路が片側 0.1m しか細らないので保守のまま (楽観が要るのは 0.25m/cell の tsudanuma から)
+      action_forward_m: [0.5, -0.2, 0.0, 0.5, 0.0, 0.5]  # 断片も同じ値 (6 つとも)。これ以上は velocity_smoother の上限で頭打ち
+      action_rotation_deg: [0.0, 0.0, -40.0, -40.0, 40.0, 40.0]  # 断片 [0.0, 0.0, -30.0, -30.0, 30.0, 30.0] (ノード既定 ±20): 旋回半径 0.72m。同じ場所の tsudanuma.yaml が ±30 では 0.8m/s で右折を曲がれなかった (2026-08-20) ので写してある
+      goal_margin_radius: 0.6              # 断片 0.3 [m]: ゴールセル数はこれ ÷ 内部解像度なので、0.20m/cell では 3 セル = 19f.yaml と同じ数になる (断片のままだと 1.5 セルで潰れる)
+      safety_radius_penalty: 1             # 断片 30: 同じ場所の tsudanuma.yaml と同じ。30 だと貪欲ロールアウトが降下できない
+      max_rollout_steps: 100000            # 断片 10000: 対角 296m ÷ 1 手 0.5m ≒ 592 手だが、遠い start から回り込むと桁が足りない (tsudanuma.yaml と同じ)
+      cost_drawing_threshold: 600          # 断片 60: 表示専用。色スケール上限 [ステップ数≒秒] ≒296m (1 ステップ 0.5m)。**未計測**
+      early_start: true                    # 断片 false: ゴールまで方策が繋がった時点で solve を打ち切る。compact の値バンド幅は 4 x (0.5m ÷ 0.20m) x 1 = 10 ステップなので、592 ステップの値域には打ち切る隙がある。**未検証**
+      waypoint_prefetch: false             # 断片も同じ値: 場が 2 本になると sink 680MB x2 = 1.36GB + 1 コア。tsudanuma.yaml と同じく走行中の固まりの容疑者なので false のまま明示
+      follow_controller: "greedy"          # 既定 greedy (断片は未設定): 他の 2 地図と同じ。既定と同値だが切り分けの目印として明示
+
+# ── ここで上書きしていないもの ────────────────────────────────────────────
+# いずれも**未検証**。
+#   costmaps.*.track_unknown_space / vi の unknown_as_obstacle … **この地図では効かない**
+#     (未観測が 0.05% しか無い)。走ってほしい範囲を絞るのは navigation の地図に壁を
+#     描き足すほうで、上流もそうしている。
+#   compact_sink_dir … 断片のまま ("" = RAM)。sink 680MB 見当なので断片の
+#     compact_ram_limit_mb (4096MB) に収まる。**4GB 機で使うなら実ディスクを指すこと**
+#     (指定するとそちらが無条件に勝ち、compact_ram_limit_mb は一切読まれない)。
+#   value_publish_interval_ms … 断片の 500ms。全域スライスは 98.75 万セルで
+#     tsudanuma.yaml の 94 万とほぼ同じなので、走行中に途切れるなら 0 をここへ足す。
+#   emcl2.laser_likelihood_max_dist … 断片の 1.0 のまま (両地図に効いている)。

@@ -11,10 +11,9 @@
 こちらは `[-145.141138, -103.344482]`）ので、ウェイポイントも overrides も
 共用できない。
 
-**どの overrides からも参照されていないので、いまは `tools/site.sh` で選べない。**
-使うには `src/daifuku_config/overrides/<名前>.yaml` を足して `site: map:` を書く。
-**この地図こそ 2 枚に分ける値打ちがある** — 上流も `localization/` と `navigation/` で
-別の地図を読んでいる（`vi2_exp.launch.py`）。
+選ぶのは `src/daifuku_config/overrides/tsudanuma_mugimaru.yaml`（`tools/site.sh
+tsudanuma_mugimaru`）。**同梱の overrides で唯一、地図を 2 枚に分けている** — 上流も
+`localization/` と `navigation/` で別の地図を読んでいる（`vi2_exp.launch.py`）。
 
 ```yaml
 site:
@@ -25,8 +24,8 @@ site:
 
 **2 枚を別にできるのは `localization:=emcl2` のときだけ**（`amcl` と
 `localization:=vi` は起動時に落ちる。[自律移動](../../../../docs/usage/navigation.md#地図は2枚)）。
-VI の `solver` と `map_scale` は、この大きさだと密では載らないので
-`../../../daifuku_config/overrides/tsudanuma.yaml` を写して始めるのが早い。
+VI の値は隣の `tsudanuma.yaml` から写して内部解像度ぶんだけ計算し直してある
+（`map_scale: 2` で 0.20m/cell = 5925 万状態、compact）。**まだ実機で通していない。**
 
 ## 2 枚は何が違うか
 

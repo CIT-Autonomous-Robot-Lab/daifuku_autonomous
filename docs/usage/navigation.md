@@ -503,7 +503,7 @@ vi_planner: path with 412 poses in 0.34s (solved_now=true, iters=0, prefetched)
 有効なぶん代償も常時払います。価値関数が同時に2つ生きるので、場も2つ要ります。
 密ソルバではメモリがそのまま2倍です。compactでsinkがディスクへ出るのは
 `compact_sink_dir`を指定したときと`compact_ram_limit_mb`を超えたときだけで、
-**同梱の2地図はいまどちらも出ません**。したがって場は丸ごとRAMに載ります——**19Fは
+**同梱の3地図はいまどれも出ません**。したがって場は丸ごとRAMに載ります——**19Fは
 2026-08-09に`solver`を密へ戻したので、sinkの95 MB×2ではなく場そのものが
 655 MB×2＝1.31 GB**です（密にはディスクへ逃がす口がありません）。津田沼は`true`へ
 戻せば648 MB×2＝1.3 GBが匿名メモリとして居座ります。
@@ -523,7 +523,7 @@ solveのCPUも取られます（追従の`try_lock`は邪魔しませんが、10
 ゴールまでの経路**だけなので、それが引けた時点でsolveを打ち切れます。
 
 `early_start`を`true`にすると打ち切ります（断片の`src/daifuku_config/stack/vi_planner.yaml`は
-`false`のままで、**同梱の2地図は`overrides/`で`true`にしています**）。判定は
+`false`のままで、**同梱の3地図は`overrides/`で`true`にしています**）。判定は
 ロールアウトそのもの（`compute_path_to_pose`が返すのと同じ辿り方）なので、
 **打ち切った場でも経路は必ず引けます**。先読みとは別物なので、両方同時に有効に
 できます。
