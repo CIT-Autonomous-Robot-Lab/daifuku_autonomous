@@ -53,7 +53,8 @@ jobs:
 
   # 実機で「yaml の綴り違い 1 つで機体が上がり直し続ける」のを止める関門
   # (params.precheck) を、置いてある overrides 全部に掛ける。install が要らない
-  # のは、precheck が ament の索引を引くのが overrides_dir() だけだから。
+  # のは、ament の索引を引く 2 つ (overrides_dir / config_root) を下でソース側へ
+  # 差し替えているから。設定のパスを組み立てる口が増えたらここも足すこと。
   config:
     runs-on: ubuntu-latest
     container: ros:humble-ros-base
@@ -103,6 +104,10 @@ jobs:
           from launch import LaunchContext
 
           from daifuku_stack_launch import nav2_params
+
+          # nav2_params は config_root を from-import しているので、params 側では
+          # なくこちらの名前を差し替える (vi_planner.yaml の在処に使われる)。
+          nav2_params.config_root = lambda package: ROOTS[package]
 
           context = LaunchContext()
           context.launch_configurations["params_dir"] = "src/daifuku_config/stack/nav2"
