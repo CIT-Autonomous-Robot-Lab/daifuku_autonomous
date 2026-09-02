@@ -55,6 +55,9 @@ rtf-gate = "daifuku_sim.rtf_gate:main"
 # MAP_SCALE 指定時に呼ぶ)。パッケージ内 import を持たせないこと。持たせると
 # /opt/sim へ 1 ファイル配る現在のやり方が壊れる。
 downsample-map = "daifuku_sim.downsample_map:main"
+# corridor_map は順路から navigation 用の地図を作り直す (地図は順路から導かれるので、
+# 順路を変えたら再生成が要る)。ホストでしか使わない。
+corridor-map = "daifuku_sim.corridor_map:main"
 # isaac_raspicat は console script にしない。モジュール読み込み時に
 # SimulationApp を起動する (それ以降でしか omni.* を import できない Kit の制約)
 # ので、import 経由で呼ぶ形にすると起動順が見えなくなる。
