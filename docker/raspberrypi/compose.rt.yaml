@@ -10,17 +10,18 @@
 #   * 公式実装は車輪径 400mm を直書きしているので、実機 (200mm) では指令の
 #     70% で走る。合わせたいなら自前実装のほう。
 #
-# ドライバに依らない部分は compose.common.yaml。project 名はそちらと同じに
-# しておくこと (include されたファイルの name は無視されるため、ここに要る)。
-# original と同じ名前なので、行き来してもビルドキャッシュは同じものが見える。
+# ドライバに依らない部分は compose.common.yaml。**こちらは単体では完結せず、
+# compose.common.yaml と 2 つ重ねて渡す**（Compose 2.40 は include した側の
+# サービスをここで上書きさせず、`services.raspicat conflicts with imported
+# resource` で止まる。2026-09-02 に Pi 5 + compose 2.40.3 で踏んだ）。project 名は
+# common に無いのでここに要る。original と同じ名前なので、行き来してもビルド
+# キャッシュは同じものが見える。
 #
-# 使うときは -f ではなくリポジトリルートの .env で選ぶ:
+# 使うときは -f ではなくリポジトリルートの .env で選ぶ（**common が先**。
+# 後ろのファイルが前を上書きする）:
 #
-#   COMPOSE_FILE=docker/raspberrypi/compose.rt.yaml
+#   COMPOSE_FILE=docker/raspberrypi/compose.common.yaml:docker/raspberrypi/compose.rt.yaml
 name: daifuku-autonomous
-
-include:
-  - compose.common.yaml
 
 services:
   raspicat:

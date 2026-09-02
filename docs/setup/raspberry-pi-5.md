@@ -192,7 +192,7 @@ apt が走ると全リポジトリが `Release file ... is not valid yet` で拒
 ### 2. 起動する
 
 ```bash
-# .env が COMPOSE_FILE=docker/raspberrypi/compose.original.yaml を指していること（既定）
+# .env の COMPOSE_FILE が compose.common.yaml:compose.original.yaml を指していること（既定）
 docker compose up -d
 ```
 

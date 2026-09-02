@@ -5,13 +5,17 @@
 # rtmouse を載せないこと（ノードが起動時に拒否する）。経緯と検証項目は
 # docs/setup/raspberry-pi-4.md と raspberry-pi-5.md。
 #
-# ドライバに依らない部分は compose.common.yaml。project 名はそちらと同じに
-# しておくこと (include されたファイルの name は無視されるため、ここに要る)。
-# rt と同じ名前なので、行き来してもビルドキャッシュは同じものが見える。
+# ドライバに依らない部分は compose.common.yaml。**こちらは単体では完結せず、
+# compose.common.yaml と 2 つ重ねて渡す**（Compose 2.40 は include した側の
+# サービスをここで上書きさせず、`services.raspicat conflicts with imported
+# resource` で止まる。2026-09-02 に Pi 5 + compose 2.40.3 で踏んだ）。project 名は
+# common に無いのでここに要る。rt と同じ名前なので、行き来してもビルド
+# キャッシュは同じものが見える。
 #
-# 使うときは -f ではなくリポジトリルートの .env で選ぶ:
+# 使うときは -f ではなくリポジトリルートの .env で選ぶ（**common が先**。
+# 後ろのファイルが前を上書きする）:
 #
-#   COMPOSE_FILE=docker/raspberrypi/compose.original.yaml
+#   COMPOSE_FILE=docker/raspberrypi/compose.common.yaml:docker/raspberrypi/compose.original.yaml
 #
 # 変えるのは raspicat サービスだけ。ナビゲーション側 (ros2 サービス) は機種にも
 # ドライバにも依存しない。
@@ -40,9 +44,6 @@
 # deny ルールは既定で監査ログを出さないため dmesg にも残らない。security_opt で
 # 外す。上の /dev 丸渡しと同じ範囲の話で、これ以上広げてはいない。
 name: daifuku-autonomous
-
-include:
-  - compose.common.yaml
 
 services:
   raspicat:

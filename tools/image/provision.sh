@@ -432,11 +432,15 @@ fi
 # Pi 5とrtmouse無しのPi 4は自前実装(original)。取り違えるとノードが起動時に
 # 落ちる/拒否するので、ここで機種から決めてしまう。
 if [[ "${DAIFUKU_MODEL}" != "pi5" && "${DAIFUKU_WITH_RTMOUSE}" == "1" ]]; then
-  COMPOSE_ENTRY="docker/raspberrypi/compose.rt.yaml"
+  COMPOSE_DRIVER="docker/raspberrypi/compose.rt.yaml"
 else
-  COMPOSE_ENTRY="docker/raspberrypi/compose.original.yaml"
+  COMPOSE_DRIVER="docker/raspberrypi/compose.original.yaml"
 fi
-COMPOSE_FILE="${WORKSPACE}/${COMPOSE_ENTRY}"
+# 入口は 2 ファイルの重ね合わせ。common が先で、ドライバ側が後ろから上書きする
+# (順を入れ替えると common の placeholder が勝って raspicat が exit 1)。
+COMPOSE_COMMON="docker/raspberrypi/compose.common.yaml"
+COMPOSE_ENTRY="${COMPOSE_COMMON}:${COMPOSE_DRIVER}"
+COMPOSE_FILE="${WORKSPACE}/${COMPOSE_DRIVER}"
 
 # リポジトリルートの .env に置いておくと、以後 `docker compose` を -f 無しで
 # 叩ける（Composeが読むのはカレントディレクトリの .env なので、WORKSPACEから
@@ -454,7 +458,7 @@ fi
 
 if [[ "${DAIFUKU_BUILD_ON_FIRST_BOOT}" == "1" && -f "${COMPOSE_FILE}" ]]; then
   step "Dockerイメージをビルド（Pi 4では数時間かかります）"
-  docker compose -f "${COMPOSE_FILE}" build \
+  docker compose -f "${WORKSPACE}/${COMPOSE_COMMON}" -f "${COMPOSE_FILE}" build \
     --build-arg BUILD_JOBS="${DAIFUKU_BUILD_JOBS}" ||
     soft_fail "docker compose build"
 fi

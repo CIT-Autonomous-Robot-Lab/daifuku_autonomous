@@ -23,9 +23,9 @@ Livox関連ノード、teleopノードを含みます。RVizは含みません�
 
 | ファイル | 用途 |
 |---|---|
-| `compose.common.yaml` | 本体ドライバに依存しない部分。サービス`workspace-build` / `ros2` / `raspicat`の共通定義。`network_mode: host`、`ipc: host`で起動する。**直接`-f`で渡さない** |
-| `compose.original.yaml` | 入口。自前の本体ドライバ（`driver:=original`、[`src/raspicat_driver`](../../src/raspicat_driver/README.md)）。Pi 5では必須。**既定** |
-| `compose.rt.yaml` | 入口。公式実装の本体ドライバ（`driver:=raspimouse` + rtmouse）。**Pi 4専用** |
+| `compose.common.yaml` | 本体ドライバに依存しない部分。サービス`workspace-build` / `ros2` / `raspicat`の共通定義。`network_mode: host`、`ipc: host`で起動する。**単体では`raspicat`がexit 1する**（下の2つと重ねて使う） |
+| `compose.original.yaml` | 自前の本体ドライバ（`driver:=original`、[`src/raspicat_driver`](../../src/raspicat_driver/README.md)）。Pi 5では必須。**既定** |
+| `compose.rt.yaml` | 公式実装の本体ドライバ（`driver:=raspimouse` + rtmouse）。**Pi 4専用** |
 | `Dockerfile` | apt依存とツールチェーンだけを持つイメージ。ワークスペースはビルドしない |
 | `fastdds_udp_whitelist.xml` | Fast DDSのトランスポート設定（後述） |
 | `scripts/build-workspace.sh` | `up`のときにコンテナ内で走る`colcon build`（`/usr/local/bin/build-workspace`） |
@@ -52,9 +52,14 @@ docker compose up -d
 
 ```bash
 # .env（既定）
-COMPOSE_FILE=docker/raspberrypi/compose.original.yaml   # 自前実装。Pi 5では必須
-#COMPOSE_FILE=docker/raspberrypi/compose.rt.yaml        # 公式実装。Pi 4専用
+COMPOSE_FILE=docker/raspberrypi/compose.common.yaml:docker/raspberrypi/compose.original.yaml
+#COMPOSE_FILE=docker/raspberrypi/compose.common.yaml:docker/raspberrypi/compose.rt.yaml
 ```
+
+**commonを先に書きます。**後ろのファイルが前を上書きするので、順を入れ替えると
+commonの`raspicat`（exit 1するplaceholder）が勝ちます。ドライバ側から
+`include: - compose.common.yaml`へ戻してはいけません——Compose 2.40が
+`services.raspicat conflicts with imported resource`で拒みます。
 
 **Composeが`COMPOSE_FILE`を読むのはカレントディレクトリの`.env`なので、リポジトリ
 ルート以外から叩くと効きません**（`no configuration file provided`で止まります）。

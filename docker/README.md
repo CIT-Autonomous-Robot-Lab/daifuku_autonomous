@@ -66,8 +66,12 @@ Windows側（`dev/tools/windows/`）はPodman固有の処理が主で`raspberryp
 | `raspberrypi/compose.rt.yaml` | `daifuku-autonomous` |
 | `dev/compose.yaml` | `daifuku-raspicat-dev` |
 
-`raspberrypi/`の2つは本体ドライバ違いの入口で、どちらも共通部分
-（`compose.common.yaml`）を`include:`します。**プロジェクト名をわざと同じに
-してあります**。違えると、ドライバを替えた瞬間にビルドキャッシュのボリュームが
-別物になり、1〜2時間かけて建て直すことになります。`include:`されたファイルの
-`name:`は無視されるので、入口2つの側に書いてあります。
+`raspberrypi/`の2つは本体ドライバ違いの断片で、共通部分（`compose.common.yaml`）
+と**2つ重ねて**使います（`COMPOSE_FILE`にコロン区切りで並べる。commonが先）。
+**プロジェクト名をわざと同じにしてあります**。違えると、ドライバを替えた瞬間に
+ビルドキャッシュのボリュームが別物になり、1〜2時間かけて建て直すことになります。
+`compose.common.yaml`は`name:`を持たないので、ドライバ側2つに書いてあります。
+
+かつては入口側が`compose.common.yaml`を`include:`していましたが、Compose 2.40は
+includeした側のサービスの上書きを`services.raspicat conflicts with imported
+resource`で拒みます（2026-09-02にPi 5 + compose 2.40.3で判明）。**戻さないこと。**

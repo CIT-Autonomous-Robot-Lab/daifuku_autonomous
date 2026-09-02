@@ -339,21 +339,28 @@ Docker 越しに叩く形は
   一覧に要る**（実機はこの 3 つが無いと機体が上がらない）。一覧は 3 か所
   ——`docker/raspberrypi/scripts/build-workspace.sh`、`docker/dev/tools/build-workspace.sh`、
   `tools/setup/setup_native_base.sh`。
-- **`docker/raspberrypi/` に `compose.yaml` は無い。** 入口は本体ドライバ別の
-  `compose.rt.yaml`（公式実装 + rtmouse。Pi 4 専用）と `compose.original.yaml`
-  （自前実装。既定、Pi 5 では必須）の 2 つで、どちらも `compose.common.yaml` を
-  `include:` する。選ぶのは**リポジトリルートの `.env`** の `COMPOSE_FILE`
+- **`docker/raspberrypi/` に `compose.yaml` は無い。** 入口は
+  `compose.common.yaml` と本体ドライバ別の `compose.rt.yaml`（公式実装 + rtmouse。
+  Pi 4 専用）／`compose.original.yaml`（自前実装。既定、Pi 5 では必須）を
+  **2 つ重ねたもの**で、選ぶのは**リポジトリルートの `.env`** の `COMPOSE_FILE`
   （`.gitignore` 済み。`.env.example` から作る。`provision.sh` は機種を見て自動で
-  作る）。ここに 3 つ罠がある。**(1)** Compose が `.env` を読むのは**カレント
+  作る）。ここに 4 つ罠がある。**(1)** Compose が `.env` を読むのは**カレント
   ディレクトリ**なので、リポジトリルート以外から `docker compose` を叩くと
   `no configuration file provided` で止まる。**(2)** 入口 2 つは `name:
   daifuku-autonomous` をわざと揃えてある。違えるとドライバを替えた瞬間に
   ビルドキャッシュの名前付きボリュームが別物になり、**1〜2 時間かけて建て直しに
-  なる**（`include:` された側の `name:` は無視されるので、入口の側に要る）。
+  なる**（`compose.common.yaml` は `name:` を持たないので、ドライバ側の 2 つに要る）。
   **(3)** `compose.common.yaml` を単体で `-f` に渡すと `raspicat` が exit 1 で
   落ちる（どちらのドライバか決まらないまま起動しないための placeholder）。
   ドライバに依存しない `ros2` サービスだけを触る `tools/control.sh` と
-  `tools/shell.sh` は、意図してこちらを直接渡している。
+  `tools/shell.sh` は、意図してこちらを直接渡している。**(4)** 並べる順は
+  **common が先**。後ろのファイルが前を上書きするので、入れ替えると (3) の
+  placeholder が勝って `raspicat` が即死する。**ドライバ側から
+  `include: - compose.common.yaml` へ戻さないこと** —— Compose 2.40 は include
+  した側のサービスの上書きを `services.raspicat conflicts with imported resource`
+  で拒み、`build` も `config` も**1 行のエラーだけ出して何もしない**
+  （2026-09-02 に Pi 5 + Ubuntu 24.04 の compose 2.40.3 で踏んだ。それより前の
+  Compose では通っていた）。
 - **`.env` は 2 つ読まれ、値は合成される。** リポジトリルートのものと、
   `docker/raspberrypi/.env`（`provision.sh` が `ROS_DOMAIN_ID` と `BUILD_JOBS` を
   書いて生成する）の両方。**同じキーが両方にあると `docker/raspberrypi/.env` が
