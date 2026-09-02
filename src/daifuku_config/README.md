@@ -861,8 +861,11 @@ p90 と p99 の間へ置くと運用上通る範囲に階調を集中させ遠�
 
 `waypoint_prefetch` は **2026-09-02 に `true`** へしました（巡回で点が変わるたびに
 solve を丸ごと待つのをやめ、いまの点へ走っている間に次を解かせる）。場が 2 本になるので
-sink 680 MB × 2 = 1.36 GB が匿名メモリに乗ります——**Pi 5（8 GB）前提**で、4 GB 機では
-`false` へ戻してください（`tools/checklist/section-0102-config.sh` が Pi 4 では落とします）。
+sink 711 MB（`nstates × 12 B`。確保はこちらで、11.5 B/state の実測 680 MB とは別）× 2 =
+1.42 GB が匿名メモリに乗ります——**Pi 5（8 GB）前提**で、4 GB 機では `false` へ戻して
+ください。ノードのメモリ判定は 1 本ぶんしか見ないので（下）、4 GB でも 711 MB <
+`compact_ram_limit_mb` 4096 MB で両方 RAM に載り、OOM killer が解決します。
+`tools/checklist/section-0102-config.sh` の項は**実機が Pi 4 のときだけ**走ります。
 `nav2:=false`（既定）では `vi_planner` 自身が `follow_waypoints` で順路を受けて先読みへ
 渡すので、`/waypoints` を出すものが居なくても効きます。**未検証** — 津田沼が
 2026-08-08 に `false` へ戻した「走行中の固まり」が出たら、真っ先にここを戻してください。
@@ -899,7 +902,9 @@ sink 680 MB × 2 = 1.36 GB が匿名メモリに乗ります——**Pi 5（8 GB�
 **この地図は `waypoint_prefetch` を `true` にしてあるので、表の数字は 2 倍で読んでください**
 （先読み中は価値関数が 2 本生きる = 密の scale 2 で 1.3 GB が匿名メモリに乗る。密には
 `compact_ram_limit_mb` のようなディスクへ逃がす口がありません）。**4 GB 機では先読みのほうを
-外してください。** ノードのメモリ判定が見ているのが 1 本ぶんか 2 本の合計かは**未確認**です。
+外してください。** ノードのメモリ判定が見ているのは **1 本ぶん**です（`vi_planner` の
+`boot.rs` の `compact_sink_dir` は solve ごとに `nstates × 12 B` を上限と比べる）。
+2 本が同時に生きても判定は変わらないので、**合計が溢れても警告は出ません**。
 `true` にしている理由（巡回で点が変わるたびの solve 29 秒を消す）と、津田沼が 2026-08-08 に
 `false` へ戻した経緯（あちらは solve 87 秒、場は 648 MB × 2 = 1.3 GB）は
 [`docs/usage/navigation.md`](../../docs/usage/navigation.md#次の点を走行中に解いておくwaypoint_prefetch)。
