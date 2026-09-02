@@ -1,37 +1,16 @@
-# tsudanuma.yaml — 津田沼 (地図 tsudanuma/map_tsudanuma.yaml、5888x4000 @0.05m
-# = 294.4m x 200m) 用の上書き。
-# 「断片」= 重ねる先の設定ファイルの値 (src/daifuku_config/stack/sensors/{mid360_scan,mid360_elevation}.yaml、
-# src/daifuku_config/stack/nav2/{vi_planner,behaviors}.yaml、src/daifuku_config/stack/localization/emcl2.yaml)。
-# 値の由来・実測 (2026-08-01 の bench と solve 87 秒)・既知の制約は src/daifuku_config/README.md、
-# 仰角フィルタは docs/setup/lidar.md。
-#
-#   tools/site.sh tsudanuma                    # src/daifuku_config/site を書いて機体を立て直す
+# tsudanuma.yaml — 津田沼 (5888x4000 @0.05m = 294.4x200m) 用の上書き。
+# 「断片」= 重ねる先の設定ファイルの値 (stack/sensors/, stack/nav2/, stack/localization/)。
+# 値の由来・実測 (solve 87 秒)・既知の制約は ../README.md、仰角フィルタは docs/setup/lidar.md。
 #   ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=vi
-#   # map も overrides も src/daifuku_config/site から来るので渡さない
-#
-# **1 段目はパッケージ名。** 各 launch は自分の名前の部分木しか読まない。いまここに
-# 並ぶのは daifuku_stack: だけで、**機体 (daifuku_bringup) は場所を知らない**
-# (2026-08-25 に /scan を作る段ごと daifuku_stack へ移した)。だから地図を変えても
-# `docker compose restart raspicat` は要らず、navigation / mapping を立て直すだけでよい。
-#
-# **この地図は密ソルバでは解けない** (0.05m のまま 14.1 億状態 = 79GB、scale 5 の密でも
-# 3.17GB で OOM)。プランナ内部だけ粗くし (map_scale)、compact で解くことで通す。確定出力
-# (sink 648MB) は **RAM** に置く — Pi 5 (8GB) は走行中でも空きが 5.6GB あり、断片の
-# compact_ram_limit_mb (4096MB) に収まる。**4GB 機で使うなら compact_sink_dir を書き戻す
-# こと** (退避先は tmpfs でないこと。`findmnt -no FSTYPE <dir>`)。
-#
-# **19f.yaml とはキーの集合をそろえてある。** 片方にしか要らない値も、もう片方へ
-# 断片と同じ値で書いて並べる (地図ごとの違いが縦に並んで見えるように)。だから
-# 「断片も同じ値」の行は消しても挙動は変わらない。**例外は 2 つ**。19F の内蔵推定器
-# (VIOLA) の 4 つは密ソルバが要るのでこの地図には置けない (この地図は emcl2 で立つ)。
-# もう 1 つは 2026-08-26 に足した 8 手の行動 (action_names / action_forward_m /
-# action_rotation_deg) で、津田沼の 2 地図にだけ入れてある — 屋内の 19F は
-# 0.8m/手では曲がりきれない見込みで、あちらは断片の 6 手のまま。**未検証**。
+# **この地図は密ソルバでは解けない** (scale 5 の密でも 3.17GB で OOM)。内部だけ粗くし
+# (map_scale)、compact で解く。確定出力 (sink 648MB) は RAM — **4GB 機で使うなら
+# compact_sink_dir を書き戻すこと** (退避先は tmpfs でないこと)。
+# **3 ファイルはキーの集合をそろえてある** (「断片同値」の行は消しても挙動は変わらない)。
+# 例外は 19F の内蔵推定器 4 つ (密が要るのでここには置けない) と 8 手の行動 (津田沼の
+# 2 地図だけ。19F は断片の 6 手のまま。未検証)。
 
-# ── その場所そのものに付く値 (ノードのパラメータではない) ─────────────────────
-# **どの地図を読むかはここで決まる。** 値は daifuku_stack の maps/ からの相対パス。
-# **2 行とも書くこと** — 同じ地図で走らせるときも省略できない。2 枚を別にできるのは
-# localization:=emcl2 のときだけで、この地図はそちら (19F は VIOLA なので 1 枚固定)。
+# ── 地図 (ノードのパラメータではない) ─────────────────────────────────────
+# navigation の map:= / map_loc:= の既定。maps/ からの相対パス。**2 行とも書くこと**。
 site:
   map:
     navigation:   tsudanuma/map_tsudanuma.yaml   # 経路計画 (/map)
@@ -39,82 +18,63 @@ site:
 
 daifuku_stack:
   # ── 仰角フィルタ ──────────────────────────────────────────────────────────
-  # この地図には勾配があり、床が高さの帯へ入り込んで地図に無い壁として立つ。仰角で切れば
-  # 下限が距離に比例して上がるので min_elevation_deg より緩い勾配はどの距離でも入らない
-  # (2026-08-05 に導入。理屈と実効下限の表は docs/setup/lidar.md)。
-  # **2026-08-08 に 5.0 -> 0.0 へ戻したので、いまその勾配対策は効いていない** —
-  # 3 度 (5% 勾配) なら 5.2m 先から偽の壁が立つ。emcl2 の貫通が増える方向なので
-  # alpha_threshold と対で見ること (下)。戻すなら 5.0 から。**未検証**。
+  # この地図には勾配があり、床が帯へ入り込んで地図に無い壁として立つ。**2026-08-08 に
+  # 5.0 -> 0.0 へ戻したので、いまその対策は効いていない** (3 度なら 5.2m 先から偽の壁)。
+  # emcl2 の貫通が増える方向なので alpha_threshold と対で見る。戻すなら 5.0 から (未検証)。
   elevation_filter:
     ros__parameters:
-      min_elevation_deg: 0.0          # 断片も同じ値: 搭載高の水平面 = 断片の min_height 0.275 と同じ切り方。勾配対策は無し
+      min_elevation_deg: 0.0          # 断片同値: 搭載高の水平面。勾配対策は無し
 
   # ── スキャンの切り出し ────────────────────────────────────────────────────
-  # 仰角が 0.0 なので帯は全距離で 0.275-2.50m 固定、range_max 70.0 がそのまま実効の測距
-  # 上限になる (実際にここまで使うのは emcl2 だけ。costmap は 2.5m、SLAM は 10.0m で頭打ち)。
-  # **max_height は 2026-08-08 に 8.30 -> 5.00 -> 4.00 と 2 段下げ、2026-08-26 に 2.50 へ
-  # もう 1 段下げた** (樹冠・庇・看板が帯へ入っていたため)。戻し方は 2026-08-07 以前の
-  # 6.00 + range_max 50.0 の組。**未検証**。
-  # 仰角を 5.0 へ戻すときは、max_height をどこに置くかがそのまま帯の届く距離になる。
+  # 仰角 0.0 なので帯は全距離で 0.275-2.50m 固定、range_max がそのまま実効の上限になる。
+  # 仰角を 5.0 へ戻すときは、max_height をどこに置くかが帯の届く距離を決める。
   pointcloud_to_laserscan:
     ros__parameters:
-      min_height: 0.275               # 断片も同じ値: 搭載高 (2026-08-03 実測)。下げると床が載る
-      max_height: 2.50                # 断片 0.50: 高さ 2.5m を超えるものはどの距離でも入らない。仰角 0.0 なので下限 0.275m と全距離で対
-      range_max: 70.0                 # 断片も同じ値: センサの測距上限 (反射率 80% で 70m)。仰角を 0.0 へ戻したのでこれが実効
+      min_height: 0.275               # 断片同値: 搭載高 (2026-08-03 実測)。下げると床が載る
+      max_height: 2.50                # 断片 0.50: 樹冠・庇・看板を落とす (2026-08-26 に 4.00 から)
+      range_max: 70.0                 # 断片同値: センサの測距上限 (反射率 80% で 70m)
 
   # ── emcl2 ────────────────────────────────────────────────────────────────
-  # この地図は 68.2% が未観測で占有セルが 0.4% しかなく、19F と同じ alpha 崩壊が起きる
-  # 余地があるため値は map_19f.yaml から写してある。判定は `alpha_ < alpha_threshold_`
-  # (alpha は非貫通率) なので、上げるほど膨張リセットが起きやすい。**偽の壁でその場で
-  # 回るのと、一度ずれたら自力で戻れないのとの折衷**で、回るようなら 0.1 へ、それでも
-  # 回るならリセットを切る 0.0 へ。**未検証**。
+  # 68.2% が未観測で占有セルが 0.4% しかなく、19F と同じ alpha 崩壊の余地があるため
+  # 値は 19f.yaml から写してある。上げるほど膨張リセットが起きやすい。偽の壁でその場で
+  # 回るなら 0.1 へ、それでも回るならリセットを切る 0.0 へ (未検証)。
   emcl2:
     ros__parameters:
-      alpha_threshold: 0.2                # 断片 0.5 (EMCL2 既定 0.5): 19F と同じ値。0 ではないので膨張リセットは起きる
-      expansion_radius_orientation: 0.05  # 断片 0.2 (EMCL2 既定 0.2): リセット時の姿勢の飛びを抑える (expansionReset の中でしか使わない)
+      alpha_threshold: 0.2                # 断片 0.5: 19F と同じ値。0 ではないので膨張リセットは起きる
+      expansion_radius_orientation: 0.05  # 断片 0.2: リセット時の姿勢の飛びを抑える
 
   # ── cmd_vel の頭打ち ──────────────────────────────────────────────────────
   velocity_smoother:
     ros__parameters:
-      max_velocity: [1.0, 0.0, 2.5]     # 断片 [0.4, 0.0, 1.0] (ノード既定 同左): VI の前進量のクリップを外す (0.8〜1.0m/s の走行実験用の頭。実際の速度は vi_planner の action_forward_m が決める)。theta は誰も 1.0 を超えないので効かない
-      min_velocity: [-1.0, 0.0, -2.5]   # 断片 [-0.4, 0.0, -1.0] (ノード既定 同左): 上と対。後退は -0.2 なので断片でもクリップされない
+      max_velocity: [1.0, 0.0, 2.5]     # 断片 [0.4, 0.0, 1.0]: VI の前進量のクリップを外す (実速度は action_forward_m が決める)
+      min_velocity: [-1.0, 0.0, -2.5]   # 断片 [-0.4, 0.0, -1.0]: 上と対
 
   # ── 価値反復プランナ ──────────────────────────────────────────────────────
   # map_scale / downsample_policy / action_forward_m / goal_margin_radius は**セットで
-  # 効く**。1 つでも欠けると波がゴール近傍で止まり、到達列 1 で「収束」する。
-  # scale 6 は楽観でも通路のセル幅が足りず解けない。
+  # 効く**。1 つでも欠けると波がゴール近傍で止まる。scale 6 は楽観でも解けない。
+  # action_names / _forward_m / _rotation_deg は**同じ長さでないと起動時に落ちる**。
   vi_planner:
     ros__parameters:
-      solver: "frontier2d_sparse_compact"  # 断片も同じ値: 密だと 3.17GB で OOM。この地図では必須なので明示する
-      map_scale: 5                         # 既定 1 (断片は未設定): 内部だけ 0.25m/cell (5650 万状態)
-      downsample_policy: "optimistic"      # 既定 conservative (断片は未設定): 保守側だと通路のセル幅が死ぬ
-      # **行動を 6 手から 8 手へ増やしてある** (2026-08-26)。旋回しながら前へ出る手を
-      # 速い側 (0.8m/±20 度) と遅い側 (0.4m/±30 度) の 2 段にして、曲がりの半径を
-      # 選べるようにしたもの。名前・前進量・旋回角の 3 つは**同じ長さでないと起動時に
-      # 落ちる** (params.rs の length mismatch)。**未検証**。
-      action_names: ["forward", "back", "right", "rightfw", "rightfwsl", "left", "leftfw", "leftfwsl"]  # 既定 6 手 [forward, back, right, rightfw, left, leftfw] (断片は未設定): 旋回前進を 2 段にするため fwsl を左右へ足した
-      action_forward_m: [0.8, -0.2, 0.0, 0.8, 0.4, 0.0, 0.8, 0.4]  # 断片 [0.5, -0.2, 0.0, 0.5, 0.0, 0.5] (6 つ): 直進と速い旋回前進を 0.8m へ。これ以上は velocity_smoother の上限 (1.0m/s) で頭打ち
-      action_rotation_deg: [0.0, 0.0, -30.0, -20.0, -30.0, 30.0, 20.0, 30.0]  # 断片 [0.0, 0.0, -30.0, -30.0, 30.0, 30.0] (ノード既定 ±20): 速い側 ±20 度 (0.8m で旋回半径 2.29m)、遅い側 ±30 度 (0.4m で 0.76m)。2026-08-20 に ±20 だけでは 0.8m/s で WP1 右折を曲がれなかったので、遅い側を足して両方持たせた
-      goal_margin_radius: 0.75             # 断片 0.3 [m]: ゴールセル数はこれ ÷ 内部解像度なので、scale 5 (0.25m/cell) では 3 セル = 19f.yaml と同じ数になる (断片のままだと 1.2 セルで潰れる)
-      safety_radius_penalty: 5             # 断片 30: 30 だと貪欲ロールアウトが降下できない。2026-08-26 に 1 -> 5 (壁際を避けさせる方向)。**未検証**
+      solver: "frontier2d_sparse_compact"  # 断片同値: 密だと 3.17GB で OOM。必須なので明示する
+      map_scale: 5                         # 既定 1: 内部だけ 0.25m/cell (5650 万状態)
+      downsample_policy: "optimistic"      # 既定 conservative: 保守側だと通路のセル幅が死ぬ
+      action_names: ["forward", "back", "right", "rightfw", "rightfwsl", "left", "leftfw", "leftfwsl"]  # 既定 6 手: 旋回前進を速い/遅いの 2 段にするため fwsl を足した (2026-08-26。未検証)
+      action_forward_m: [0.8, -0.2, 0.0, 0.8, 0.4, 0.0, 0.8, 0.4]  # 断片 6 つ [0.5, -0.2, 0.0, 0.5, 0.0, 0.5]: 直進と速い旋回前進を 0.8m へ。上限は velocity_smoother の 1.0m/s
+      action_rotation_deg: [0.0, 0.0, -30.0, -20.0, -30.0, 30.0, 20.0, 30.0]  # 断片 6 つ: 速い側 ±20 度 (0.8m で半径 2.29m)、遅い側 ±30 度 (0.4m で 0.76m)。±20 だけでは WP1 右折を曲がれなかった (2026-08-20)
+      goal_margin_radius: 0.75             # 断片 0.3 [m]: ゴール圏 ÷ 0.25m/cell = 3 セル (断片のままだと 1.2 セルで潰れる)
+      safety_radius_penalty: 5             # 断片 30: 30 だと貪欲ロールアウトが降下できない。2026-08-26 に 1 -> 5 (未検証)
       max_rollout_steps: 100000            # 断片 10000: 広域では遠い start から届かない
-      cost_drawing_threshold: 600          # 断片 60: 表示専用。色スケール上限 [ステップ数≒秒] ≒480m (1 ステップ 0.8m)。**未計測** — 実測の分布ではなく地図の広がりから置いた見込み
-      early_start: true                    # 断片 false: ゴールまで方策が繋がった時点で solve を打ち切る。**効くのはこちらの地図** (compact の値バンド幅は 4 x (0.8m ÷ 0.25m) x 5 = 64 ステップ、値域は 300m ÷ 0.8m ≒ 375 ステップなので打ち切る隙は残る)。2026-08-26 に前進量とペナルティを上げたぶんバンドが 8 -> 64 ステップへ広がったので、隙は以前より狭い。代償は経路の外が未確定で、機体が外れると場を捨てて 87 秒のフル solve を待つこと。**未検証**
-      waypoint_prefetch: false             # 断片も同じ値: 走行中の固まりの切り分けのため 2026-08-08 に true から戻した (断片と同値だが明示して残してある)。巡回は点あたり 87 秒止まる。戻すと sink 648MB x2 = 1.3GB + 1 コア
-      follow_controller: "greedy"          # 既定 greedy (断片は未設定): dwa (場は変えず読み方だけ連続に) は 2026-08-20 の左それの切り分けで greedy へ戻した (19F と同時)。既定と同値だが切り分けの目印として明示
-      # ▲ 同じ日の上流の更新で dwa は margin 帯 (penalty >= 2xPROB_BASE) を踏む候補を
-      #   棄却するようになった (dwa_lethal_penalty、既定 2.0 = 有効)。壁際が通れず経路が
-      #   出ないなら dwa_lethal_penalty: 0.0 で以前の挙動に戻る (どちらも未検証)。
-      # ▲ global_sweep は断片のまま (compact でもタイル修復として効く)。動いているかは
-      #   2 秒ごとの "global propagation running for" で見る (settled は走行中は出ない)。
+      cost_drawing_threshold: 600          # 断片 60: 表示専用。色スケール上限 [ステップ≒秒] ≒480m (未計測)
+      early_start: true                    # 断片 false: 方策が繋がった時点で solve を打ち切る。**効くのはこちらの地図** (値バンド 64 ステップ < 値域 375 ステップ)。代償は経路の外が未確定で、外れると場を捨てて 87 秒のフル solve (未検証)
+      waypoint_prefetch: false             # 断片同値: 走行中の固まりの切り分けのため 2026-08-08 に true から戻した (目印として明示)。巡回は点あたり 87 秒止まる。戻すと 648MB x2 = 1.3GB + 1 コア
+      follow_controller: "greedy"          # 既定同値: dwa は 2026-08-20 の左それの切り分けで戻した (19F と同時)。壁際が通れないなら dwa_lethal_penalty: 0.0
+      # global_sweep は断片のまま (compact でもタイル修復として効く)。動いているかは
+      # 2 秒ごとの "global propagation running for" で見る (settled は走行中は出ない)。
 
-# ── ここで上書きしていないもの ────────────────────────────────────────────
-# いずれも**未検証**。次も上書きが要るかもしれない。
-#   costmaps.*.track_unknown_space / vi の unknown_as_obstacle … 未観測を通行可にするか。
-#     今はどちらも「未観測 = 通れない」= 舗装路のみ通行可。
+# ── ここで上書きしていないもの (いずれも未検証) ──────────────────────────────
+#   costmaps.*.track_unknown_space / vi の unknown_as_obstacle … 今は「未観測 = 通れない」。
 #   compact_sink_dir … 断片のまま ("" = RAM)。**指定するとそちらが無条件に勝ち、
-#     compact_ram_limit_mb は一切読まれない**。書くなら速い実ディスクへ (コンテナの /tmp は SD)。
-#   compact_ram_limit_mb … 断片が 4096MB。効いている条件は「> sink 648MB」だけ。下げると
-#     黙って /tmp/vi_planner_sink = SD カードへ落ちる。
-#   value_publish_interval_ms … 断片の 500ms。**この地図では全域スライス 1 枚 (94 万セル) が
-#     重い**ので、走行中に 2 秒おきの途切れが再発したら 0 をここへ足す (src/daifuku_config/README.md)。
+#     compact_ram_limit_mb は一切読まれない**。書くなら速い実ディスクへ (/tmp は SD)。
+#   compact_ram_limit_mb … 断片 4096MB。下げると黙って SD カードへ落ちる。
+#   value_publish_interval_ms … 断片 500ms。全域スライス 94 万セルが重いので、走行中に
+#     2 秒おきの途切れが出たら 0 をここへ足す。

@@ -1,127 +1,80 @@
-# tsudanuma_mugimaru.yaml — 津田沼 (mugimaru_bringup 由来の地図、2500x1581 @0.1m
-# = 250.0m x 158.1m) 用の上書き。
-# 「断片」= 重ねる先の設定ファイルの値 (src/daifuku_config/stack/sensors/{mid360_scan,mid360_elevation}.yaml、
-# src/daifuku_config/stack/nav2/{vi_planner,behaviors}.yaml、src/daifuku_config/stack/localization/emcl2.yaml)。
-# 地図そのものの素性は src/daifuku_stack/maps/tsudanuma_mugimaru/README.md。
-#
-#   tools/site.sh tsudanuma_mugimaru           # src/daifuku_config/site を書いて機体を立て直す
+# tsudanuma_mugimaru.yaml — 津田沼 (mugimaru_bringup 由来、2500x1581 @0.1m
+# = 250.0x158.1m) 用の上書き。地図の素性は maps/tsudanuma_mugimaru/README.md、
+# 値の由来と 2026-09-02 の solve 実測 (ホストは amd64 4 コア。Pi 5 の値ではない) は ../README.md。
 #   ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=vi
-#   # map も overrides も src/daifuku_config/site から来るので渡さない
-#
-# **同梱の 3 つで唯一、地図を 2 枚に分けている。** navigation の地図は localization の
-# 地図に手描きの壁を 853m2 (11,326 個のかたまり) 足したもので、上流もそう使い分けて
-# いる (vi2_exp.launch.py)。**この節があるあいだ localization:=emcl2 でしか立たない** —
-# amcl は 2 枚目を渡す口が無く、localization:=vi は地図の購読が 1 つしかないので、
-# どちらも resolve_map が起動時に落とす。
-#
-# **隣の tsudanuma.yaml とは別の地図**。原点も解像度も違う (あちらは 0.05m で
-# 原点 [-100, -100]、こちらは 0.1m で [-68.946, -101.928]) ので、ウェイポイントは
-# 共用できない。
-#
-# **この地図には未観測がほぼ無い** (loc 側で 1,966 セル = 0.05%。空き 95.0% / 占有 4.9%)。
-# tsudanuma.yaml の地図が 68.2% 未観測で「未観測 = 通れない」が事実上の柵になって
-# いるのとは逆で、**こちらは描かれた壁だけが柵**。走ってほしい範囲が壁で閉じて
-# いなければ、その外へ経路が伸びる。costmaps.*.track_unknown_space も
-# vi の unknown_as_obstacle も効かない (切る未観測が無い)。
-#
-# **tsudanuma.yaml / 19f.yaml とはキーの集合をそろえてある。** 片方にしか要らない値も
-# 断片と同じ値で書いて並べる。例外は 2 つ。19F の内蔵推定器 (VIOLA) の 4 つは
-# 密ソルバが要るのでここには置けない。もう 1 つは 2026-08-26 に足した 8 手の行動
-# (action_names / action_forward_m / action_rotation_deg) で、津田沼の 2 地図に
-# だけ入れてある (19F は断片の 6 手のまま)。**未検証**。
-#
-# **実機ではまだ通していない。** 値は tsudanuma.yaml (同じ場所・同じ機体) から写し、
-# 内部解像度で決まるものだけ計算し直してある。**2026-09-02 に simulator/ の
-# ハーネス (run_case.sh + fake_robot) で solve だけを実測した** — 下の
-# map_scale / waypoint_prefetch の行がそれ。**ホストは amd64 の 4 コア pin (8GB) で、
-# Pi 5 の値ではない。** 秒数そのものではなく比 (この地図は tsudanuma の 2.4 倍重い、
-# scale を上げても速くならない、先読みは 1 スレッドだと通常の 1.9 倍かかる) を見ること。
-# 同条件のフル solve: この地図 27.95s / tsudanuma 11.83s。状態数はほぼ同じ
-# (5932 万 vs 5654 万) で、差は自由空間の広さ (この地図は未観測 0.05% = ほぼ全部が
-# 通行可、tsudanuma は 68.2% が未観測 = 障害物扱い)。**solve を根本から軽くするなら、
-# navigation の地図に壁を描き足して走ってほしい範囲を閉じるのが筋** (上流もそうしている)。
+# **地図を 2 枚に分けている唯一の場所**なので localization:=emcl2 でしか立たない
+# (amcl は 2 枚目を渡す口が無く、vi は地図の購読が 1 つ)。
+# **隣の tsudanuma.yaml とは別の地図** (原点も解像度も違うのでウェイポイントは共用できない)。
+# **未観測がほぼ無い** (0.05%) ので、柵になるのは描かれた壁だけ — track_unknown_space も
+# unknown_as_obstacle も効かない。範囲を絞るのは navigation の地図に壁を描くほう。
+# **実機ではまだ通していない。** 値は tsudanuma.yaml から写し、内部解像度で決まるものだけ
+# 計算し直してある。3 ファイルでキーの集合をそろえてある (例外は 19F の内蔵推定器 4 つ)。
 
-# ── その場所そのものに付く値 (ノードのパラメータではない) ─────────────────────
-# **どの地図を読むかはここで決まる。** 値は daifuku_stack の maps/ からの相対パス。
-# yaml が指す pgm はそれぞれ tsudanuma-challenge_nav3_9.pgm / _loc3.pgm。
-# **どちらも free_thresh が 0.2 で、未観測画素 205 (p=0.196) が nav 28 / loc 25 セル
-# ぶん空きへ化ける** (simulator/tests/verify_map_thresholds.py が NG を出す)。上流の値の
-# ままにしてあるので、気になるなら地図側の yaml を 0.15 へ下げること。
+# ── 地図 (ノードのパラメータではない) ─────────────────────────────────────
+# **どちらも free_thresh 0.2 で、未観測画素 205 が nav 28 / loc 25 セルぶん空きへ化ける**
+# (simulator/tests/verify_map_thresholds.py が NG を出す)。気になるなら地図側を 0.15 へ。
 site:
   map:
-    navigation:   tsudanuma_mugimaru/navigation/tsudanuma-challenge_nav_corridor.yaml  # 経路計画 (/map)。手描きの壁 + 順路から 5m の回廊だけ (下)
+    navigation:   tsudanuma_mugimaru/navigation/tsudanuma-challenge_nav_corridor.yaml  # 経路計画 (/map)。手描きの壁 + 順路から 5m の回廊だけ。**順路を変えたら作り直すこと**
     localization: tsudanuma_mugimaru/localization/tsudanuma-challenge_loc.yaml  # 自己位置推定 (/map_loc)。実測のまま
 
 daifuku_stack:
   # ── 仰角フィルタ ──────────────────────────────────────────────────────────
-  # 場所は tsudanuma.yaml と同じなので、あちらと同じ切り方にしてある (勾配対策は無し)。
-  # 戻すなら 5.0 から。そのときは下の max_height と対で見ること。
+  # 場所は tsudanuma.yaml と同じなので同じ切り方。戻すなら 5.0 から (max_height と対)。
   elevation_filter:
     ros__parameters:
-      min_elevation_deg: 0.0          # 断片も同じ値: 搭載高の水平面 = 断片の min_height 0.275 と同じ切り方。勾配対策は無し
+      min_elevation_deg: 0.0          # 断片同値: 搭載高の水平面。勾配対策は無し
 
   # ── スキャンの切り出し ────────────────────────────────────────────────────
-  # tsudanuma.yaml と同じ帯 (同じ屋外・同じ機体)。仰角が 0.0 なので帯は全距離で
-  # 0.275-2.50m 固定、range_max 70.0 がそのまま実効の測距上限になる。
-  # 地図の対角が 296m あるので、emcl2 は 70m を使い切る。
+  # tsudanuma.yaml と同じ帯。仰角 0.0 なので全距離で 0.275-2.50m 固定。
+  # 対角が 296m あるので emcl2 は range_max を使い切る。
   pointcloud_to_laserscan:
     ros__parameters:
-      min_height: 0.275               # 断片も同じ値: 搭載高 (2026-08-03 実測)。下げると床が載る
-      max_height: 2.50                # 断片 0.50: 樹冠・庇・看板を落とす (tsudanuma.yaml と同じ。2026-08-26 に 4.00 から下げた)。仰角 0.0 なので下限 0.275m と全距離で対
-      range_max: 70.0                 # 断片も同じ値: センサの測距上限 (反射率 80% で 70m)
+      min_height: 0.275               # 断片同値: 搭載高 (2026-08-03 実測)。下げると床が載る
+      max_height: 2.50                # 断片 0.50: 樹冠・庇・看板を落とす (tsudanuma.yaml と同じ)
+      range_max: 70.0                 # 断片同値: センサの測距上限 (反射率 80% で 70m)
 
   # ── emcl2 ────────────────────────────────────────────────────────────────
-  # **emcl2 が読むのは localization の地図** (/map_loc)。手描きの壁 853m2 はそちらには
-  # 無いので、19F のような「地図に有って現実に無い壁」の貫通は起きにくいはず。それでも
-  # 2 つとも他の 2 地図から写してあるのは、キーの集合をそろえる約束と、屋外で観測が
-  # 疎になる区間があるため。**貫通が出ないと分かったら断片 (0.5 / 0.2) へ戻すこと。**
+  # **emcl2 が読むのは localization の地図**で、手描きの壁はそちらに無いので 19F のような
+  # 貫通は起きにくいはず。他の 2 地図から写してあるのは屋外で観測が疎になる区間のため。
+  # **貫通が出ないと分かったら断片 (0.5 / 0.2) へ戻すこと。**
   emcl2:
     ros__parameters:
-      alpha_threshold: 0.2                # 断片 0.5 (EMCL2 既定 0.5): 他の 2 地図と同じ値。0 ではないので膨張リセットは起きる
-      expansion_radius_orientation: 0.05  # 断片 0.2 (EMCL2 既定 0.2): リセット時の姿勢の飛びを抑える (expansionReset の中でしか使わない)
+      alpha_threshold: 0.2                # 断片 0.5: 他の 2 地図と同じ値。0 ではないので膨張リセットは起きる
+      expansion_radius_orientation: 0.05  # 断片 0.2: リセット時の姿勢の飛びを抑える
 
   # ── cmd_vel の頭打ち ──────────────────────────────────────────────────────
   velocity_smoother:
     ros__parameters:
-      max_velocity: [1.0, 0.0, 2.5]     # 断片 [0.4, 0.0, 1.0] (ノード既定 同左): tsudanuma.yaml と同じ屋外の頭。実際の速度は vi_planner の action_forward_m が決める
-      min_velocity: [-1.0, 0.0, -2.5]   # 断片 [-0.4, 0.0, -1.0] (ノード既定 同左): 上と対。後退は -0.2 なので断片でもクリップされない
+      max_velocity: [1.0, 0.0, 2.5]     # 断片 [0.4, 0.0, 1.0]: tsudanuma.yaml と同じ屋外の頭 (実速度は action_forward_m が決める)
+      min_velocity: [-1.0, 0.0, -2.5]   # 断片 [-0.4, 0.0, -1.0]: 上と対
 
   # ── 価値反復プランナ ──────────────────────────────────────────────────────
-  # **地図がもう 0.1m/cell なので、map_scale の効き方が他の 2 つと違う。** scale 2 で
-  # 0.20m/cell = 1250x790x60 = 5925 万状態で、tsudanuma.yaml の scale 5 (5650 万) と
-  # ほぼ同じ規模。あちらが密で 3.17GB / OOM だったので、こちらも compact が要る
-  # (sink は 711MB。2026-09-02 の実測で、ノードが "compact output -> RAM (0.71 GB)" と出す)。
-  # **scale 3 (0.30m/cell) へは上げないこと** — 通路のセル幅が死ぬ上限は 0.25m/cell
-  # 付近で、あちらの scale 6 が解けなかったのがそこ (src/daifuku_config/README.md)。
+  # **地図が元から 0.1m/cell なので map_scale の効き方が他の 2 つと違う** (scale 2 =
+  # 0.20m/cell で tsudanuma の scale 5 とほぼ同規模)。**scale 3 へは上げないこと** —
+  # 通路のセル幅が死ぬ上限が 0.25m/cell 付近。
+  # action_names / _forward_m / _rotation_deg は**同じ長さでないと起動時に落ちる**。
   vi_planner:
     ros__parameters:
-      solver: "frontier2d_sparse_compact"  # 断片も同じ値: 密だと 5925 万状態 = 3.3GB 見当で tsudanuma と同じく OOM 圏。明示する
-      map_scale: 2                         # 既定 1 (断片は未設定): 内部だけ 0.20m/cell (5925 万状態)。地図が元から 0.1m なので 2 で足りる。**上げても solve は速くならない** (2026-09-02 の実測: scale 3 は状態数 44% でフル solve 27.72s / iters 1366、scale 2 は 27.95s / iters 527。1 手 0.8m が 4 セル -> 2.67 セルに減って反復が増え、状態数の減りを相殺する)。減るのは sink だけ (0.71 -> 0.32GB)
-      downsample_policy: "conservative"    # 既定 同左 (断片は未設定): 2 倍なら通路が片側 0.1m しか細らないので保守のまま (楽観が要るのは 0.25m/cell の tsudanuma から)
-      # **行動を 6 手から 8 手へ増やしてある** (2026-08-26)。同じ場所の tsudanuma.yaml と
-      # 同じ手を写したもので、旋回しながら前へ出る手を速い側 (0.8m/±20 度) と
-      # 遅い側 (0.4m/±30 度) の 2 段にしてある。名前・前進量・旋回角の 3 つは
-      # **同じ長さでないと起動時に落ちる** (params.rs の length mismatch)。**未検証**。
-      action_names: ["forward", "back", "right", "rightfw", "rightfwsl", "left", "leftfw", "leftfwsl"]  # 既定 6 手 [forward, back, right, rightfw, left, leftfw] (断片は未設定): 旋回前進を 2 段にするため fwsl を左右へ足した
-      action_forward_m: [0.8, -0.2, 0.0, 0.8, 0.4, 0.0, 0.8, 0.4]  # 断片 [0.5, -0.2, 0.0, 0.5, 0.0, 0.5] (6 つ): 直進と速い旋回前進を 0.8m へ。これ以上は velocity_smoother の上限 (1.0m/s) で頭打ち
-      action_rotation_deg: [0.0, 0.0, -30.0, -20.0, -30.0, 30.0, 20.0, 30.0]  # 断片 [0.0, 0.0, -30.0, -30.0, 30.0, 30.0] (ノード既定 ±20): 速い側 ±20 度 (0.8m で旋回半径 2.29m)、遅い側 ±30 度 (0.4m で 0.76m)。同じ場所の tsudanuma.yaml から写してある
-      goal_margin_radius: 0.75             # 断片 0.3 [m]: 同じ場所の tsudanuma.yaml と同じ許容差 [m]。ゴールセル数はこれ ÷ 内部解像度なので、0.20m/cell では 3.75 セル (あちらは 0.25m/cell で 3 セル。**そろえてあるのはメートルのほうでセル数ではない**)
-      safety_radius_penalty: 5             # 断片 30: 同じ場所の tsudanuma.yaml と同じ。30 だと貪欲ロールアウトが降下できない。2026-08-26 に 1 -> 5 (壁際を避けさせる方向)。**未検証**
-      max_rollout_steps: 100000            # 断片 10000: 対角 296m ÷ 1 手 0.8m ≒ 370 手だが、遠い start から回り込むと桁が足りない (tsudanuma.yaml と同じ)
-      cost_drawing_threshold: 600          # 断片 60: 表示専用。色スケール上限 [ステップ数≒秒] ≒480m (1 ステップ 0.8m)。**未計測**
-      early_start: true                    # 断片 false: ゴールまで方策が繋がった時点で solve を打ち切る。compact の値バンド幅は 4 x (0.8m ÷ 0.20m) x 5 = 80 ステップ、値域は 296m ÷ 0.8m ≒ 370 ステップなので打ち切る隙は残る。2026-08-26 に前進量とペナルティを上げたぶんバンドが 10 -> 80 ステップへ広がったので、隙は以前より狭い。**未検証**
-      waypoint_prefetch: true              # 断片 false: 巡回で点ごとに 1 回ぶんの solve を待つのをやめ、いまの点へ走っている間に次を解く (2026-09-02 に false から)。**効くことは実測済み** — 順路 2 点で 1 点目 13.56s に対し 2 点目は「先読みから採用 0.04s (iters=0)」。ただし先読みは **1 スレッド**なので 54.29s かかり、間に合うのは「点間の走行 > それ」のときだけ (この実測は走行 86.94s)。**1 点目は必ず待つ。** 場が 2 本になり sink 711MB x2 = 1.42GB + 1 コア — **Pi 5 (8GB) 前提**で、4GB 機では false へ戻すこと。**ノードのメモリ判定は 1 本ぶんしか見ない**ので (boot.rs の compact_sink_dir)、4GB でも 711MB < compact_ram_limit_mb 4096MB で両方 RAM に載って OOM になる。検査 (section-0102-config.sh) が落とすのは実機が Pi 4 のときだけ。**実機の solve は本ホストより遅い一方で走行時間は変わらない**ので、間に合わなければ waypoint_prefetch_threads を上げること (2 で 54.29 -> 37.50s。代わりに 1 点目が 13.56 -> 15.37s)。走行中の固まりが出たら tsudanuma.yaml と同じくここを疑って false へ
-      waypoint_prefetch_threads: 2         # 既定 1: 先読みは既定だと 1 スレッドで、本体の solve が使うコア数の恩恵を受けない (2026-09-02 の実測: 回廊地図でフル solve 13.07s / 4 スレッドに対し先読みは 51.01s)。2 にすると 32.44s = 走行 89.85s の 1/2.8 に収まる。**実機の solve が本ホストの 2.8 倍まで遅くても間に合う目安がこれ。** 代償は 1 点目が 0.5 秒ほど伸びること (追従ループとコアを取り合う)。**Pi 5 の 4 コアで 3 以上にしないこと** — 10Hz の追従と emcl2 と global sweep が同じコアに載る
-      follow_controller: "greedy"          # 既定 greedy (断片は未設定): 他の 2 地図と同じ。既定と同値だが切り分けの目印として明示
+      solver: "frontier2d_sparse_compact"  # 断片同値: 密だと 3.3GB 見当で tsudanuma と同じく OOM 圏。明示する
+      map_scale: 2                         # 既定 1: 内部だけ 0.20m/cell (5925 万状態)。**上げても solve は速くならない** (scale 3 は状態数 44% でフル solve 27.72s、scale 2 は 27.95s。1 手が跨ぐセルが減って反復が増え相殺する)。減るのは sink だけ (0.71 -> 0.32GB)
+      downsample_policy: "conservative"    # 既定同値: 2 倍なら通路は片側 0.1m しか細らない (楽観が要るのは 0.25m/cell から)
+      action_names: ["forward", "back", "right", "rightfw", "rightfwsl", "left", "leftfw", "leftfwsl"]  # 既定 6 手: tsudanuma.yaml から写した 8 手 (未検証)
+      action_forward_m: [0.8, -0.2, 0.0, 0.8, 0.4, 0.0, 0.8, 0.4]  # 断片 6 つ [0.5, -0.2, 0.0, 0.5, 0.0, 0.5]: 上限は velocity_smoother の 1.0m/s
+      action_rotation_deg: [0.0, 0.0, -30.0, -20.0, -30.0, 30.0, 20.0, 30.0]  # 断片 6 つ: 速い側 ±20 度 (0.8m で半径 2.29m)、遅い側 ±30 度 (0.4m で 0.76m)
+      goal_margin_radius: 0.75             # 断片 0.3 [m]: tsudanuma.yaml と同じ許容差。**そろえてあるのはメートルでセル数ではない** (0.20m/cell では 3.75 セル)
+      safety_radius_penalty: 5             # 断片 30: tsudanuma.yaml と同じ。30 だと貪欲ロールアウトが降下できない (未検証)
+      max_rollout_steps: 100000            # 断片 10000: 対角 296m ÷ 0.8m ≒ 370 手だが、回り込むと桁が足りない
+      cost_drawing_threshold: 600          # 断片 60: 表示専用。色スケール上限 [ステップ≒秒] ≒480m (未計測)
+      early_start: true                    # 断片 false: 方策が繋がった時点で solve を打ち切る。値バンド 80 ステップ < 値域 370 ステップなので隙は残る (未検証)
+      waypoint_prefetch: true              # 断片 false: いまの点へ走っている間に次を解く (2026-09-02)。**効くことは実測済み** (2 点目は先読みから 0.04s で採用)。**1 点目は必ず待つ。** 場が 2 本で sink 711MB x2 = 1.42GB + 1 コア — **Pi 5 (8GB) 前提**、4GB 機では false へ (**ノードのメモリ判定は 1 本ぶんしか見ない**ので黙って OOM になる)。走行中の固まりが出たら真っ先にここを疑う
+      waypoint_prefetch_threads: 2         # 既定 1: 先読みは既定だと 1 スレッドで本体のコア数の恩恵を受けない (回廊地図でフル solve 13.07s に対し先読み 51.01s)。2 で 32.44s = 走行 89.85s の 1/2.8 に収まる。**実機の solve が 2.8 倍まで遅くても間に合う目安。** 代償は 1 点目が 0.5 秒ほど伸びること。**Pi 5 の 4 コアで 3 以上にしないこと**
+      follow_controller: "greedy"          # 既定同値: 他の 2 地図と同じ (目印として明示)
 
-# ── ここで上書きしていないもの ────────────────────────────────────────────
-# いずれも**未検証**。
+# ── ここで上書きしていないもの (いずれも未検証) ──────────────────────────────
 #   costmaps.*.track_unknown_space / vi の unknown_as_obstacle … **この地図では効かない**
-#     (未観測が 0.05% しか無い)。走ってほしい範囲を絞るのは navigation の地図に壁を
-#     描き足すほうで、上流もそうしている。
-#   compact_sink_dir … 断片のまま ("" = RAM)。sink 711MB (実測) なので断片の
-#     compact_ram_limit_mb (4096MB) に収まる。**4GB 機で使うなら実ディスクを指すこと**
-#     (指定するとそちらが無条件に勝ち、compact_ram_limit_mb は一切読まれない)。
-#   value_publish_interval_ms … 断片の 500ms。全域スライスは 98.75 万セルで
-#     tsudanuma.yaml の 94 万とほぼ同じなので、走行中に途切れるなら 0 をここへ足す。
+#     (未観測が 0.05% しか無い)。範囲を絞るのは navigation の地図に壁を描くほう。
+#   compact_sink_dir … 断片のまま ("" = RAM)。sink 711MB は断片の compact_ram_limit_mb
+#     (4096MB) に収まる。**4GB 機で使うなら実ディスクを指すこと** (指定すると無条件に勝つ)。
+#   value_publish_interval_ms … 断片 500ms。全域スライス 98.75 万セル。途切れるなら 0 へ。
 #   emcl2.laser_likelihood_max_dist … 断片の 1.0 のまま (両地図に効いている)。
