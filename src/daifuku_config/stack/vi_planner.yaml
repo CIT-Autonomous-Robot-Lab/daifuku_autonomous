@@ -68,11 +68,11 @@ vi_planner:
     #   refine_pass_until は毎 tick 窓の x 最小端から掃き直す (途中再開のカーソルが無い)
     #   ので、上の refine_budget_ms 40ms で足りないと**窓の x 大きい側が一度も掃かれない**。
     #   19F (map_scale 2 = 0.10m/cell) は窓 16.57m² = 約 1657 セル x60θ ≒ 99k 状態 ≒ 99ms
-    #   (Pi4 実測 約 1M states/s) で足りず、掃けるのは約 4 割。**同梱の overrides は 2 地図とも
-    #   follow_controller: dwa** で、あちらの軌道棄却は penalty を直に読む (スキャン注入が
-    #   毎 tick 効くので回避そのものは生きる) が、生き残り候補の順位付けは V̂ = 掃いた値なので
-    #   遅れる。greedy だと**判断が丸ごと掃き待ち**になるので (2026-08-20 から 2 地図とも
-    #   greedy)、19F で使うなら refine_budget_ms を上げるか窓を縮めること。
+    #   (Pi4 実測 約 1M states/s) で足りず、掃けるのは約 4 割。**19F と津田沼は greedy**
+    #   (2026-08-20 から) なので**判断が丸ごと掃き待ち**になる。19F で使うなら
+    #   refine_budget_ms を上げるか窓を縮めること。dwa (tsudanuma_mugimaru だけ) は
+    #   軌道棄却が penalty を直に読む (スキャン注入が毎 tick 効くので回避そのものは
+    #   生きる) が、生き残り候補の順位付けは V̂ = 掃いた値なので遅れる。
     #   津田沼 (scale 5 = 0.25m/cell) は 265 セル ≒ 16ms で収まる。
     # ▲ **津田沼では形が変形しない**。update_axes の不感帯は 0.3 セル = 0.075m/tick で、
     #   1 tick の最大変位 (action_forward_m 0.5 ÷ control_frequency 10 = 0.05m) がそれに届かない。
@@ -87,13 +87,14 @@ vi_planner:
     # ~30µs / mppi ~0.2ms (どちらも上の refine_budget_ms 40ms に対して誤差)。
     # **この機体では未検証** — 上の action_forward_m を 0.5 へ上げてあるぶん 1 手が長く、
     # 連続に読むと旋回半径 (断片 ±30 で 0.95m、同梱 2 地図の ±40 で 0.72m) の制約から外れた指令が出る側なので、試すなら実機で。
-    # **同梱の overrides は 2 地図とも greedy** (2026-08-09 に dwa へ、2026-08-20 に戻した)。
+    # **19F と津田沼は greedy** (2026-08-09 に dwa へ、2026-08-20 に戻した)。
+    # **tsudanuma_mugimaru だけ dwa** (2026-09-02。未検証)。
     # follow_controller: "greedy"   # greedy (既定) / dwa / mppi
     # dwa_horizon_s: 1.0          # dwa・mppi の前方シミュレーション時間 [s]
     # dwa_lethal_penalty: 2.0     # 既定 2.0 [PROB_BASE 倍]: 軌道の途中で margin 帯を踏む候補を棄却する
     #     ▲ **2026-08-09 に上流が足した新しい既定**で、それまでの dwa には無かった。
     #       0 にすると「壁を掠める」旧挙動へ戻る (上流の実機での言い分)。効くのは dwa の
-    #       ときだけ (2026-08-20 から同梱の 3 地図は greedy なので、いまは効いていない)。
+    #       ときだけなので、いま効いているのは tsudanuma_mugimaru だけ。
     # mppi_samples: 256           # mppi のサンプル本数
     #     ▲ 候補数 (dwa 7x11) と温度・ノイズは同じ整理でキーごと消え、ノード内の
     #       const になった (dwa_n_v / dwa_n_w / mppi_lambda / mppi_sigma_* は書いても読まれない)。
