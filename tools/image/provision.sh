@@ -143,6 +143,7 @@ fi
 step "aptの更新と共通パッケージの導入"
 apt_retry update || soft_fail "apt-get update"
 apt_install \
+  btop \
   ca-certificates \
   chrony \
   curl \
@@ -154,7 +155,34 @@ apt_install \
   python3 \
   rsync \
   tmux \
+  vim \
   || soft_fail "共通パッケージの導入"
+
+# 自動更新の停止
+
+step "Ubuntuの自動更新を止める"
+# 機体は走っている最中に apt が動くと困る。止めるのは 2 つ。
+#
+#   * リリース更新 (do-release-upgrade)。上げるとカーネルが替わるので
+#     rtmouse を積み直すことになり (Pi 4)、Docker イメージも建て直しになる。
+#     人が段取って行うもので、機体が勝手に始めてよいものではない。
+#   * unattended-upgrades。カーネルや docker が黙って入れ替わると、再起動
+#     するまで動いているカーネルと /lib/modules がずれる。**エラーは出ない。**
+#
+# APT::Periodic を 0 にすれば apt-daily.timer は起きても何もしないので、
+# タイマー自体は mask しない (systemd 側の依存を触らずに済む)。
+if [[ -f /etc/update-manager/release-upgrades ]]; then
+  sed -i 's/^Prompt=.*/Prompt=never/' /etc/update-manager/release-upgrades ||
+    soft_fail "release-upgrades の Prompt=never"
+fi
+cat >/etc/apt/apt.conf.d/99-daifuku-no-auto-upgrade <<'EOF'
+// daifuku_autonomous: tools/image/provision.sh が生成。
+// 更新は人が docker compose build と合わせて行う。
+APT::Periodic::Update-Package-Lists "0";
+APT::Periodic::Download-Upgradeable-Packages "0";
+APT::Periodic::Unattended-Upgrade "0";
+APT::Periodic::AutocleanInterval "0";
+EOF
 
 # 時刻同期
 
