@@ -2,8 +2,8 @@ param(
     [ValidateSet('Static', 'Disable')]
     [string]$Mode = 'Static',
     [string]$EthernetAlias = '',
-    # Kept for command-line compatibility; static mode does not use an
-    # Internet-facing adapter or NAT.
+    # コマンドラインの互換のために残してある (固定 IP では NAT も外向きの
+    # アダプタも使わない)。
     [string]$InternetAlias = '',
     [string]$RobotHostAddress = '192.168.1.1',
     [ValidateRange(1, 32)]
@@ -27,8 +27,8 @@ if (-not $EthernetAlias) {
 
     $EthernetAlias = $upEthernet[0].Name
 
-    # Once the physical adapter is attached to an external Hyper-V switch,
-    # assign the host address to the management-OS vEthernet adapter.
+    # 物理アダプタが Hyper-V の外部スイッチに繋がっているときは、ホストのアドレスを
+    # 管理 OS 側の vEthernet アダプタへ振る。
     $externalSwitch = Get-VMSwitch -SwitchType External -ErrorAction SilentlyContinue |
         Where-Object NetAdapterInterfaceDescription -eq $upEthernet[0].InterfaceDescription |
         Select-Object -First 1
@@ -50,9 +50,8 @@ foreach ($connection in @($sharing.EnumEveryConnection())) {
     if ($config.SharingEnabled) { $config.DisableSharing() }
 }
 
-# An older setup may have installed Open DHCP Server separately from ICS.
-# Keep its files/configuration intact, but prevent it from serving leases on
-# the fixed robot LAN or restarting at the next Windows boot.
+# 古い構成では ICS とは別に Open DHCP Server が入っていることがある。ファイルと
+# 設定はそのままに、固定のロボット LAN でリースを配らせず、次回の起動でも上げない。
 $openDhcp = Get-Service -Name 'OpenDHCPServer' -ErrorAction SilentlyContinue
 if ($openDhcp) {
     if ($openDhcp.Status -ne 'Stopped') {
@@ -61,8 +60,8 @@ if ($openDhcp) {
     Set-Service -Name 'OpenDHCPServer' -StartupType Disabled
 }
 
-# Remove the legacy ICS subnet. Raspberry Pi Cat and Livox use fixed addresses
-# on 192.168.1.0/24, so no DHCP or NAT is required on this cable.
+# 以前の ICS のサブネットを外す。Raspberry Pi Cat も Livox も 192.168.1.0/24 の
+# 固定アドレスなので、このケーブルに DHCP も NAT も要らない。
 Get-NetIPAddress `
     -InterfaceAlias $EthernetAlias `
     -AddressFamily IPv4 `

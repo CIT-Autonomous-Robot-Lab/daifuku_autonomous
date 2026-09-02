@@ -1,44 +1,33 @@
 #!/usr/bin/env bash
-# `docker compose up` のたびに走るワークスペースビルド。
-#
-# イメージが持つのは apt 依存とツールチェーン (ROS, Livox SDK, Rust, ros2_rust)
-# だけで、ソースは compose が ../../src を ${ROS_WS}/src へマウントして供給する。
-# colcon は前回の build/ を名前付きボリュームに残しているので、変わった
-# パッケージだけが建て直される。
-#
-# **rosdep はここでは回さない。** apt の依存解決はイメージ側の責務で、
-# 「apt パッケージを変えたときだけイメージを焼き直す」という切り分けを保つため。
-# 起動のたびに rosdep を回すとネットワークが要るうえ、apt の状態が毎回変わる。
-# 新しい apt 依存を足したときは `docker compose build` をやり直すこと。
-#
+# `docker compose up` のたびに走るワークスペースビルド。ソースは compose が
+# マウントし、前回の build/ は名前付きボリュームに残るので差分だけが建て直される。
 # ROS と ros2_rust のオーバーレイは /ros_entrypoint.sh が読み込み済み。
+#
+# **rosdep はここでは回さない** (apt の解決はイメージ側の責務。回すとネットワークが
+# 要るうえ apt の状態が毎回変わる)。**新しい apt 依存を足したら
+# `docker compose build` からやり直すこと。**
 set -eo pipefail
 
 WS="${ROS_WS:-/opt/ros_ws}"
-# Pi4 の 4 コアを使い切る。メモリは 4GB しかないが、実測では release の rustc
-# 2 本で RSS 750MB・available 2.5GB と余っていた (低メモリ時は BUILD_JOBS で
-# 絞る)。cargo 側の並列数は既定 (nproc) のままにしてある。
+# 既定 4 = Pi 4 の全コア (release の rustc 2 本で available 2.5GB 残る実測)。
+# cargo 側の並列数は既定 (nproc) のまま。
 BUILD_JOBS="${BUILD_JOBS:-4}"
 
 cd "${WS}"
 mkdir -p src
 
-# クレートのレジストリはビルド用ボリュームに置く。イメージ側の /opt/cargo には
-# ツールチェーンしか入っていない (レジストリを焼き込むとイメージが太るだけで、
-# ワークスペースが要るクレートとは限らない)。ここに置けば up をまたいで残る。
+# クレートのレジストリはビルド用ボリュームに置く (up をまたいで残る。イメージ側の
+# /opt/cargo にはツールチェーンしか入っていない)。
 export CARGO_HOME="${WS}/build/.cargo"
 mkdir -p "${CARGO_HOME}"
 
-# 外部パッケージの取得。ホスト側で vcs import 済みならそれをそのまま使う。
+# 外部パッケージの取得。**揃っているときは vcs import を呼ばない** —
+# `--skip-existing` でも既存リポジトリには git fetch まで走るので、ネットワークが
+# 無いと `Could not resolve host` で落ちて `set -e` で up ごと止まる。作業ツリーは
+# どのみち変わらないので、呼ばないのと結果は同じ。
 #
-# **揃っているときは vcs import を呼ばない。** `--skip-existing` はチェックアウトを
-# 動かさないだけで、URL が一致する既存リポジトリには git fetch まで走る。つまり
-# 揃っていても Wi-Fi が無いと `Could not resolve host` で落ち、`set -e` で
-# `docker compose up` ごと止まる (2026-08-05 に踏んだ)。--skip-existing がある以上
-# fetch しても作業ツリーは変わらないので、呼ばないことと結果は同じ。
-#
-# 足りないものがあるときだけ import する。そこで失敗したら、名前を並べて落とす
-# (黙って進めると colcon が「そんなパッケージは無い」という無関係な顔で落ちる)。
+# 足りないときだけ import し、失敗したら名前を並べて落とす (黙って進めると colcon が
+# 「そんなパッケージは無い」という無関係な顔で落ちる)。
 if [[ -f "${WS}/daifuku_autonomous.repos" ]]; then
   # repos ファイルのキーが取り込み先のパス (WS からの相対)。
   mapfile -t repo_paths < <(python3 - "${WS}/daifuku_autonomous.repos" <<'PY'
@@ -52,13 +41,13 @@ with open(sys.argv[1], 'rb') as f:
 PY
   )
   # mapfile は右辺が失敗しても成功するので、空なら自分で落とす (パースに失敗した
-  # まま「揃っている」と見えると、上と同じ無関係な失敗に化ける)。
+  # まま「揃っている」と見えると無関係な失敗に化ける)。
   if [[ ${#repo_paths[@]} -eq 0 ]]; then
     echo "daifuku_autonomous.repos を読めませんでした" >&2
     exit 1
   fi
 
-  # 空ディレクトリは「無い」とみなす (マウントし損ねた跡が残っていても取りに行く)。
+  # 空ディレクトリは「無い」とみなす。
   missing=()
   for repo_path in "${repo_paths[@]}"; do
     [[ -n "$(ls -A "${WS}/${repo_path}" 2>/dev/null)" ]] || missing+=("${repo_path}")
@@ -80,8 +69,7 @@ PY
 fi
 
 # livox_ros_driver2 は ROS 2 用の manifest と launch を上流で別名に置いている。
-# タイムスタンプを保存しないでコピーする (Windows/Podman のバインドマウントは
-# 一部の Unix タイムスタンプを設定できない)。
+# タイムスタンプは保存しない (Windows/Podman のバインドマウントが設定できない)。
 if [[ -d src/livox_ros_driver2 ]]; then
   cp -f src/livox_ros_driver2/package_ROS2.xml src/livox_ros_driver2/package.xml
   mkdir -p src/livox_ros_driver2/launch
@@ -90,10 +78,8 @@ fi
 
 MULTIARCH="$(dpkg-architecture -qDEB_HOST_MULTIARCH)"
 
-# CMake パッケージは ros2_rust のオーバーレイ抜きで建てる。
-# --symlink-install により、launch/config/params といった非コンパイル資産は
-# install/ から src/ への symlink になる。つまり YAML や launch を直しただけなら
-# ビルドすら要らず、ノードを起動し直すだけで反映される。
+# CMake パッケージは ros2_rust のオーバーレイ抜きで建てる。--symlink-install なので
+# launch や yaml は install/ から src/ への symlink になり、直しただけならビルドは要らない。
 colcon build --merge-install --symlink-install \
     --parallel-workers "${BUILD_JOBS}" \
     --packages-select daifuku_bringup daifuku_config daifuku_config_manager daifuku_stack \
@@ -113,11 +99,9 @@ colcon build --merge-install --symlink-install \
 
 # 価値反復プランナは rclrs を使うので、上で建てた install/ を載せてから建てる。
 source "${WS}/install/local_setup.bash"
-# **見えなければ落ちること。** colcon が vi_planner を見つけられないとき
-# --packages-select は警告 1 行で 0 個ビルドし、exit 0 で下まで抜ける。機体は
-# 前のバイナリのまま上がるので、docker compose up を何度通しても直らない
-# (2026-08-09 の実機。vi_rs が仮想マニフェストになって以降、上流の
-# workspace.metadata.colcon が無いとクロールごと止まっていた)。
+# **見えなければ落ちること。** vi_planner が見つからないと --packages-select は
+# 警告 1 行で 0 個建てて exit 0 するので、機体が前のバイナリのまま上がり、
+# `docker compose up` を何度通しても直らない。
 colcon list --packages-select vi_planner --names-only 2>/dev/null \
     | grep -qx vi_planner || {
   printf 'vi_planner が colcon から見えません (vi_rs/Cargo.toml の\n' >&2
@@ -129,11 +113,9 @@ colcon build --merge-install --symlink-install \
     --packages-select vi_planner \
     --cargo-args --release
 
-# ament_cargo は package.xml の <install>launch</install> を実行しないので、
-# launch ファイルは自前で install/ へ置く。**上流の移動でパスが変わったら黙って
-# 何も入らないのではなく落ちること** — 入らないと local_planner:=nav2 が
-# navigation_launch.py を見つけられず、原因から遠いところで起動時に落ちる
-# (2026-08-09 の上流の整理で vi_ros2/ から vi_rs/ へ移った)。
+# ament_cargo は <install>launch</install> を実行しないので、launch は自前で置く。
+# **上流の移動でパスが変わったら、黙って何も入らないのではなく落ちること** —
+# 入らないと local_planner:=nav2 が原因から遠いところで起動時に落ちる。
 src_dir="src/value_iteration3/vi_rs/vi_planner/launch"
 for launch_file in "${src_dir}"/*.py; do
   install -D -m 0644 "${launch_file}" \

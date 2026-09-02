@@ -1,6 +1,5 @@
-# ディレクトリ名からプロジェクト名を作らせない。名前付きボリューム
-# (autonomous-build/install/log) はプロジェクト名を接頭辞に持つので、
-# 固定しないとディレクトリ移動でcolconのキャッシュが別ボリュームに化ける。
+# プロジェクト名は固定する。名前付きボリュームがこれを接頭辞に持つので、
+# ディレクトリを動かすと colcon のキャッシュが別ボリュームに化ける。
 name: daifuku-raspicat-dev
 
 services:
@@ -27,8 +26,8 @@ services:
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-90}
       ROS_LOCALHOST_ONLY: ${ROS_LOCALHOST_ONLY:-0}
       RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}
-      # Native ROS 2 nodes on the Raspberry Pi must not be mistaken for
-      # same-host peers through Fast DDS shared memory.
+      # Pi 上のネイティブな ROS 2 ノードを、Fast DDS の共有メモリで同一ホストの
+      # 相手と取り違えさせない。
       FASTDDS_BUILTIN_TRANSPORTS: ${FASTDDS_BUILTIN_TRANSPORTS:-UDPv4}
     extra_hosts:
       - "host.docker.internal:host-gateway"

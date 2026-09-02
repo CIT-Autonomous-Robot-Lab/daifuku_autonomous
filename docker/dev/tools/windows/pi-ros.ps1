@@ -1,6 +1,5 @@
-# Inspect ROS 2 state on Raspberry Pi Cat over SSH, without starting DDS on
-# the Windows host. The robot LAN uses fixed addresses, so no discovery is
-# performed; pass -PiAddress if the robot is somewhere else.
+# Raspberry Pi Cat の ROS 2 の様子を SSH 越しに見る (Windows 側で DDS を立てない)。
+# ロボット LAN は固定アドレスなのでディスカバリはしない。別の場所なら -PiAddress。
 [CmdletBinding()]
 param(
     [ValidateSet('List', 'Nodes', 'Info', 'Echo', 'Hz')]

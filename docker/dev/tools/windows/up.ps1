@@ -10,8 +10,7 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'common.ps1')
 
-# The static LAN setup needs Administrator, so it runs as a separate elevated
-# process rather than in this session.
+# 固定 LAN の設定には管理者が要るので、このセッションではなく昇格した別プロセスで走らせる。
 $arguments = @(
     '-NoProfile', '-ExecutionPolicy', 'Bypass',
     '-File', (Join-Path $PSScriptRoot 'network.ps1'),

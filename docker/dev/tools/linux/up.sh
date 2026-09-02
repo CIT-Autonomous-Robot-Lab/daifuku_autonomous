@@ -7,8 +7,8 @@ COMPOSE_FILES=(-f "${DEV_DIR}/compose.yaml")
 
 if grep -qi microsoft /proc/sys/kernel/osrelease 2>/dev/null; then
   COMPOSE_FILES+=(-f "${DEV_DIR}/compose.wsl.yaml")
-  # Under WSL the Windows-side static LAN is still configured by the Windows
-  # tool, so this Linux script intentionally reaches into ../windows.
+  # WSL でも Windows 側の固定 LAN を作るのは Windows のスクリプトなので、
+  # ここから意図的に ../windows を呼ぶ。
   WINDOWS_DIR="$(cd -- "${LINUX_DIR}/../windows" && pwd)"
   WIN_SCRIPT="$(wslpath -w "${WINDOWS_DIR}/network.ps1")"
   echo "Requesting Administrator permission to configure the Windows static robot LAN..."

@@ -1,48 +1,22 @@
 # 本体ドライバに自前実装 (driver:=original、src/raspicat_driver) を使う構成。
+# **Pi 5 では必須** (rtmouse が動かない)。Pi 4 で使うなら rtmouse を載せないこと
+# (ノードが起動時に拒否する)。docs/setup/raspberry-pi-{4,5}.md。
 #
-# Pi 5 では**必須**（rtmouse が動かないので公式実装を選べない）。Pi 4 では任意で、
-# compose.rt.yaml のほうが公式実装 + rtmouse になる。Pi 4 でこちらを使うときは
-# rtmouse を載せないこと（ノードが起動時に拒否する）。経緯と検証項目は
-# docs/setup/raspberry-pi-4.md と raspberry-pi-5.md。
+# **単体では完結せず、compose.common.yaml と 2 つ重ねて渡す。common が先**
+# (Compose 2.40 は include した側のサービスの上書きを
+# `services.raspicat conflicts with imported resource` で拒む)。選ぶのは .env の
+# COMPOSE_FILE。project 名は common に無いのでここに要り、rt と同じ名前にして
+# あるので行き来してもビルドキャッシュは同じものが見える。
 #
-# ドライバに依らない部分は compose.common.yaml。**こちらは単体では完結せず、
-# compose.common.yaml と 2 つ重ねて渡す**（Compose 2.40 は include した側の
-# サービスをここで上書きさせず、`services.raspicat conflicts with imported
-# resource` で止まる。2026-09-02 に Pi 5 + compose 2.40.3 で踏んだ）。project 名は
-# common に無いのでここに要る。rt と同じ名前なので、行き来してもビルド
-# キャッシュは同じものが見える。
+# 変えるのは raspicat サービスだけ (ros2 側はドライバに依存しない)。
 #
-# 使うときは -f ではなくリポジトリルートの .env で選ぶ（**common が先**。
-# 後ろのファイルが前を上書きする）:
-#
-#   COMPOSE_FILE=docker/raspberrypi/compose.common.yaml:docker/raspberrypi/compose.original.yaml
-#
-# 変えるのは raspicat サービスだけ。ナビゲーション側 (ros2 サービス) は機種にも
-# ドライバにも依存しない。
-#
-# ステップクロックは /sys/class/pwm から出す。カーネルの PWM サブシステムには
-# キャラクタデバイスの API が無いので、sysfs を通すしかない。Docker は既定で
-# /sys を read-only で見せるため、必要な 2 つを rw で重ねる。
-#
-#   * /sys/class/pwm    … pwmchip* と export/unexport
-#   * /sys/devices      … /sys/class/pwm/pwmchipN は実体へのシンボリックリンクで、
-#                         こちらが無いとリンクが宙に浮く
-#
-# /sys/devices を丸ごと rw で渡すのは広い。ただし compose.common.yaml は既にモータ
-# 制御のために /dev を丸ごと渡し `device_cgroup_rules: c *:* rwm` を付けており、
-# キャラクタデバイスについてはほぼ privileged 相当になっている
-# (compose.common.yaml のコメント)。ここもその延長で、狭めるなら pwmchip の実体
-# パスだけを名指しでマウントする (機種ごとにアドレスが変わるので書き換えが要る)。
-#
-# コンテナは user: "1000:1000" で動くので、ホスト側で sysfs と /dev の所有権を
-# 渡しておく必要がある。tools/image/udev/99-daifuku-raspicat.rules を参照。
-#
-# マウントと所有権だけでは足りない。Docker 既定の AppArmor プロファイル
-# (docker-default) は /sys/fs 以外の /sys/** への書き込みを一律で拒否するので、
-# 所有者が合っていても export が EACCES になる (Pi 5 実機 2026-08-04:
-# "configure failed: [Errno 13] Permission denied: /sys/class/pwm/pwmchip0/export")。
-# deny ルールは既定で監査ログを出さないため dmesg にも残らない。security_opt で
-# 外す。上の /dev 丸渡しと同じ範囲の話で、これ以上広げてはいない。
+# ステップクロックは /sys/class/pwm から出す (PWM サブシステムに char デバイスの
+# API が無い)。Docker は /sys を read-only で見せるので、pwmchip 本体と、その
+# symlink の実体がある /sys/devices の 2 つを rw で重ねる。**マウントと所有権
+# (tools/image/udev/99-daifuku-raspicat.rules) だけでは足りず、AppArmor の
+# docker-default が /sys/** への書き込みを拒む** — 所有者が合っていても export が
+# EACCES になり、deny は監査ログを出さないので dmesg にも残らない。security_opt で
+# 外してある。範囲は common の /dev 丸渡しと同じで、これ以上広げてはいない。
 name: daifuku-autonomous
 
 services:
