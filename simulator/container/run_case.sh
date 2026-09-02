@@ -14,6 +14,9 @@
 #   LOCALIZATION=emcl2|amcl     localization:=
 #   MAP_NAME=19f/map_19f|tsudanuma/map_tsudanuma|...  share/maps/<name>.yaml を使う
 #                               OVERRIDES 未指定ならフォルダ名 (= 場所) の override を選ぶ
+#   SITE_MAPS=1                 map:= / map_loc:= を渡さず overrides の site: map:
+#                               に任せる。地図を 2 枚に分けている場所 (mugimaru) 用。
+#                               MAP_NAME は fake_robot 用に localization の地図を指す
 #   VI_MAP_SCALE=               vi_planner の map_scale (地図をプランナ内部で
 #                               粗くする倍率。津田沼 (5888x4000@0.05m) は 3 で
 #                               1963x1334@0.15m = 1.57 億状態)
@@ -35,6 +38,8 @@
 #   INITIALPOSE_DELAY=          その再送間隔 [s] (fake_robot 既定 5.0)
 #   START_X/START_Y/START_YAW_DEG   シムのスポーン位置 (既定は実機プローブ時の自己位置)
 #   GOAL_X/GOAL_Y/GOAL_YAW_DEG      ゴール (既定は実機プローブと同じ)
+#   TOUR="x,y,yawdeg;..."      単発ゴールの代わりに順路 (/follow_waypoints) を投げる。
+#                               **先読み (waypoint_prefetch) が効くのはこちらだけ**
 #   SETTLE=                     ゴール送信前の待機秒 (bringup 完了待ち)
 #   TIMEOUT=                    ゴールの打ち切り秒
 #   EXTRA_OBSTACLES="x,y,r;..." 地図に無い障害物
@@ -141,7 +146,12 @@ overlay = {}
 
 
 def put(node, key, value):
-    overlay.setdefault(node, {}).setdefault("ros__parameters", {})[key] = value
+    # **1 段目はパッケージ名。** extra_params_file も overrides と同じ規則で読まれる
+    # (params.compose の KNOWN_PACKAGES) ので、ノード名を直に置くと
+    # 「知らないパッケージ名です」で起動時に落ちる。2026-08-25 に設定が
+    # daifuku_config へ出て 1 段目がパッケージ名になったとき、ここが追随して
+    # いなかった (2026-09-02 に実測で判明。VI_SOLVER などを渡すと必ず落ちていた)。
+    overlay.setdefault("daifuku_stack", {}).setdefault(node, {}).setdefault("ros__parameters", {})[key] = value
 
 
 solver = os.environ.get("VI_SOLVER", "")
@@ -248,11 +258,19 @@ sleep 3
 # 地図は 2 枚 (navigation -> /map、localization -> /map_loc) だが、ハーネスが指すのは
 # MAP_NAME の 1 枚だけなので両方へ同じものを渡す。**map_loc:= を落とすと
 # OVERRIDES=none のとき resolve_map が「どの地図を読むか決まりません」で止まる。**
+# SITE_MAPS=1 のときは map:= / map_loc:= を渡さず overrides の site: map: に任せる。
+# **地図を 2 枚に分けている場所 (tsudanuma_mugimaru) はこちらでないと立たない** —
+# ハーネスは MAP_NAME の 1 枚しか持たないので、両方へ同じものを渡すと resolve_map が
+# localization 側の食い違いで止める。fake_robot は MAP_NAME をそのまま使うので、
+# **実環境に当たる localization の地図を指すこと**。
+map_arg=(map:="$MAP" map_loc:="$MAP")
+[ "${SITE_MAPS:-0}" = "1" ] && map_arg=()
+
 ros2 launch daifuku_stack navigation.launch.py \
     use_rviz:=false \
     config_watch:=off \
     lidar:=2d lidar_driver:=false \
-    map:="$MAP" map_loc:="$MAP" "${params_arg[@]}" \
+    "${map_arg[@]}" "${params_arg[@]}" \
     planner:="$PLANNER" local_planner:="$LOCAL_PLANNER" nav2:="$NAV2" \
     localization:="$LOCALIZATION" >"$RUN/nav.log" 2>&1 &
 NAV_PID=$!
@@ -266,9 +284,16 @@ NAV_PID=$!
   done ) >"$RUN/load.log" 2>&1 &
 MON_PID=$!
 
-python3 "$(dirname "$0")/probe.py" \
-    --goal-x "$GOAL_X" --goal-y "$GOAL_Y" --goal-yaw "$GOAL_YAW_DEG" \
-    --settle "$SETTLE" --timeout "$TIMEOUT" 2>&1 | tee "$RUN/probe.log"
+# TOUR="x,y,yawdeg;..." を渡すと単発ゴールではなく順路を投げる (tour.py)。
+# **先読み (waypoint_prefetch) が効くのはこちら** — vi_planner は
+# follow_waypoints のゴールから次の点を知るので、単発ゴールでは何も先読みしない。
+if [ -n "${TOUR:-}" ]; then
+    python3 "$(dirname "$0")/tour.py" --poses="$TOUR" --settle "$SETTLE" --timeout "$TIMEOUT" 2>&1 | tee "$RUN/probe.log"
+else
+    python3 "$(dirname "$0")/probe.py" \
+        --goal-x "$GOAL_X" --goal-y "$GOAL_Y" --goal-yaw "$GOAL_YAW_DEG" \
+        --settle "$SETTLE" --timeout "$TIMEOUT" 2>&1 | tee "$RUN/probe.log"
+fi
 rc=${PIPESTATUS[0]}
 
 kill $MON_PID $NAV_PID $SIM_PID 2>/dev/null

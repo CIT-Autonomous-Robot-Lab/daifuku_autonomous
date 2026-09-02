@@ -30,8 +30,16 @@
 # (action_names / action_forward_m / action_rotation_deg) で、津田沼の 2 地図に
 # だけ入れてある (19F は断片の 6 手のまま)。**未検証**。
 #
-# **全体が未検証。** 値は tsudanuma.yaml (同じ場所・同じ機体) から写し、内部解像度で
-# 決まるものだけ計算し直してある。実機で通したら、この行を消して実測を書くこと。
+# **実機ではまだ通していない。** 値は tsudanuma.yaml (同じ場所・同じ機体) から写し、
+# 内部解像度で決まるものだけ計算し直してある。**2026-09-02 に simulator/ の
+# ハーネス (run_case.sh + fake_robot) で solve だけを実測した** — 下の
+# map_scale / waypoint_prefetch の行がそれ。**ホストは amd64 の 4 コア pin (8GB) で、
+# Pi 5 の値ではない。** 秒数そのものではなく比 (この地図は tsudanuma の 2.4 倍重い、
+# scale を上げても速くならない、先読みは 1 スレッドだと通常の 1.9 倍かかる) を見ること。
+# 同条件のフル solve: この地図 27.95s / tsudanuma 11.83s。状態数はほぼ同じ
+# (5932 万 vs 5654 万) で、差は自由空間の広さ (この地図は未観測 0.05% = ほぼ全部が
+# 通行可、tsudanuma は 68.2% が未観測 = 障害物扱い)。**solve を根本から軽くするなら、
+# navigation の地図に壁を描き足して走ってほしい範囲を閉じるのが筋** (上流もそうしている)。
 
 # ── その場所そのものに付く値 (ノードのパラメータではない) ─────────────────────
 # **どの地図を読むかはここで決まる。** 値は daifuku_stack の maps/ からの相対パス。
@@ -82,13 +90,13 @@ daifuku_stack:
   # **地図がもう 0.1m/cell なので、map_scale の効き方が他の 2 つと違う。** scale 2 で
   # 0.20m/cell = 1250x790x60 = 5925 万状態で、tsudanuma.yaml の scale 5 (5650 万) と
   # ほぼ同じ規模。あちらが密で 3.17GB / OOM だったので、こちらも compact が要る
-  # (compact の実測 11.5 バイト/状態から見て sink は 680MB 見当)。
+  # (sink は 711MB。2026-09-02 の実測で、ノードが "compact output -> RAM (0.71 GB)" と出す)。
   # **scale 3 (0.30m/cell) へは上げないこと** — 通路のセル幅が死ぬ上限は 0.25m/cell
   # 付近で、あちらの scale 6 が解けなかったのがそこ (src/daifuku_config/README.md)。
   vi_planner:
     ros__parameters:
       solver: "frontier2d_sparse_compact"  # 断片も同じ値: 密だと 5925 万状態 = 3.3GB 見当で tsudanuma と同じく OOM 圏。明示する
-      map_scale: 2                         # 既定 1 (断片は未設定): 内部だけ 0.20m/cell (5925 万状態)。地図が元から 0.1m なので 2 で足りる
+      map_scale: 2                         # 既定 1 (断片は未設定): 内部だけ 0.20m/cell (5925 万状態)。地図が元から 0.1m なので 2 で足りる。**上げても solve は速くならない** (2026-09-02 の実測: scale 3 は状態数 44% でフル solve 27.72s / iters 1366、scale 2 は 27.95s / iters 527。1 手 0.8m が 4 セル -> 2.67 セルに減って反復が増え、状態数の減りを相殺する)。減るのは sink だけ (0.71 -> 0.32GB)
       downsample_policy: "conservative"    # 既定 同左 (断片は未設定): 2 倍なら通路が片側 0.1m しか細らないので保守のまま (楽観が要るのは 0.25m/cell の tsudanuma から)
       # **行動を 6 手から 8 手へ増やしてある** (2026-08-26)。同じ場所の tsudanuma.yaml と
       # 同じ手を写したもので、旋回しながら前へ出る手を速い側 (0.8m/±20 度) と
@@ -102,7 +110,7 @@ daifuku_stack:
       max_rollout_steps: 100000            # 断片 10000: 対角 296m ÷ 1 手 0.8m ≒ 370 手だが、遠い start から回り込むと桁が足りない (tsudanuma.yaml と同じ)
       cost_drawing_threshold: 600          # 断片 60: 表示専用。色スケール上限 [ステップ数≒秒] ≒480m (1 ステップ 0.8m)。**未計測**
       early_start: true                    # 断片 false: ゴールまで方策が繋がった時点で solve を打ち切る。compact の値バンド幅は 4 x (0.8m ÷ 0.20m) x 5 = 80 ステップ、値域は 296m ÷ 0.8m ≒ 370 ステップなので打ち切る隙は残る。2026-08-26 に前進量とペナルティを上げたぶんバンドが 10 -> 80 ステップへ広がったので、隙は以前より狭い。**未検証**
-      waypoint_prefetch: true              # 断片 false: 巡回で点ごとに 1 回ぶんの solve を待つのをやめ、いまの点へ走っている間に次を解く (2026-09-02 に false から)。場が 2 本になり sink 711MB (12B/state。確保はこちら。11.5B/state の実測 680MB とは別) x2 = 1.42GB + 1 コア — **Pi 5 (8GB) 前提**で、4GB 機では false へ戻すこと。**ノードのメモリ判定は 1 本ぶんしか見ない**ので (boot.rs の compact_sink_dir)、4GB でも 711MB < compact_ram_limit_mb 4096MB で両方 RAM に載って OOM になる。検査 (section-0102-config.sh) が落とすのは実機が Pi 4 のときだけ。nav2:=false (既定) なら vi_planner 自身が follow_waypoints で順路を受けて先読みへ渡すので、/waypoints を出すものが居なくても効く。**未検証** — 走行中の固まりが出たら tsudanuma.yaml と同じくここを疑って false へ
+      waypoint_prefetch: true              # 断片 false: 巡回で点ごとに 1 回ぶんの solve を待つのをやめ、いまの点へ走っている間に次を解く (2026-09-02 に false から)。**効くことは実測済み** — 順路 2 点で 1 点目 13.56s に対し 2 点目は「先読みから採用 0.04s (iters=0)」。ただし先読みは **1 スレッド**なので 54.29s かかり、間に合うのは「点間の走行 > それ」のときだけ (この実測は走行 86.94s)。**1 点目は必ず待つ。** 場が 2 本になり sink 711MB x2 = 1.42GB + 1 コア — **Pi 5 (8GB) 前提**で、4GB 機では false へ戻すこと。**ノードのメモリ判定は 1 本ぶんしか見ない**ので (boot.rs の compact_sink_dir)、4GB でも 711MB < compact_ram_limit_mb 4096MB で両方 RAM に載って OOM になる。検査 (section-0102-config.sh) が落とすのは実機が Pi 4 のときだけ。**実機の solve は本ホストより遅い一方で走行時間は変わらない**ので、間に合わなければ waypoint_prefetch_threads を上げること (2 で 54.29 -> 37.50s。代わりに 1 点目が 13.56 -> 15.37s)。走行中の固まりが出たら tsudanuma.yaml と同じくここを疑って false へ
       follow_controller: "greedy"          # 既定 greedy (断片は未設定): 他の 2 地図と同じ。既定と同値だが切り分けの目印として明示
 
 # ── ここで上書きしていないもの ────────────────────────────────────────────
@@ -110,7 +118,7 @@ daifuku_stack:
 #   costmaps.*.track_unknown_space / vi の unknown_as_obstacle … **この地図では効かない**
 #     (未観測が 0.05% しか無い)。走ってほしい範囲を絞るのは navigation の地図に壁を
 #     描き足すほうで、上流もそうしている。
-#   compact_sink_dir … 断片のまま ("" = RAM)。sink 680MB 見当なので断片の
+#   compact_sink_dir … 断片のまま ("" = RAM)。sink 711MB (実測) なので断片の
 #     compact_ram_limit_mb (4096MB) に収まる。**4GB 機で使うなら実ディスクを指すこと**
 #     (指定するとそちらが無条件に勝ち、compact_ram_limit_mb は一切読まれない)。
 #   value_publish_interval_ms … 断片の 500ms。全域スライスは 98.75 万セルで
