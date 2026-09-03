@@ -4,9 +4,21 @@
   ~/.bashrc の FASTRTPS_DEFAULT_PROFILES_FILE、コンテナは compose.common.yaml
   のマウントから読む。
 
-  1) UDP を loopback とロボット LAN (192.168.1.50) に絞る。白リストが無いと
+  1) UDP を loopback とロボット LAN に絞る。白リストが無いと
      wlan0 (192.168.23.x) のロケータも広告され、届かないロケータと UDP の
      バッファ圧でディスカバリが揺れる (ノードが現れたり消えたりする)。
+
+     **この <address> はロボット LAN に居る「自分の」アドレスの一覧で、
+     読む側の host ごとに要る。** Fast DDS はローカルに実在するものだけを
+     使うので、要らない行があっても害は無い。逆に自分のアドレスが 1 つも
+     無いと、useBuiltinTransports=false と組んで UDP が 1 本も張られず、
+     SHM しか残らない —— **エラーも警告も出ないまま同じホストの外が
+     まったく見えなくなる** (`ros2 topic list` が /rosout と
+     /parameter_events だけを返す)。2026-09-03 に .51 の SBC を足して踏んだ。
+     **ロボット LAN に host を足したらここに 1 行足すこと。**
+
+     切り分けのときは `ros2 topic list --no-daemon` を使う。ros2 daemon は
+     先に立った環境のまま残るので、環境変数を変えて叩き直しても効かない。
 
   2) 同一ホスト内は SHM。約 20 参加者を UDP だけに載せると購読者ごとの sendmsg
      でカーネルが溺れ (Pi 4 で sys 57% / load 24)、TF が 20 秒以上遅れて
@@ -26,7 +38,8 @@
       <type>UDPv4</type>
       <interfaceWhiteList>
         <address>127.0.0.1</address>
-        <address>192.168.1.50</address>
+        <address>192.168.1.50</address>  <!-- Raspberry Pi Cat -->
+        <address>192.168.1.51</address>  <!-- NanoPi R3S LTS -->
       </interfaceWhiteList>
     </transport_descriptor>
   </transport_descriptors>

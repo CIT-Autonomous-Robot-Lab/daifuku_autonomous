@@ -367,6 +367,16 @@ Docker 越しに叩く形は
   で拒み、`build` も `config` も**1 行のエラーだけ出して何もしない**
   （2026-09-02 に Pi 5 + Ubuntu 24.04 の compose 2.40.3 で踏んだ。それより前の
   Compose では通っていた）。
+- **`docker/raspberrypi/fastdds_udp_whitelist.xml` の `<address>` は
+  「ロボット LAN に居る自分のアドレス」の一覧で、読む host ごとに 1 行要る。**
+  Fast DDS はローカルに実在するものだけを使うので余分な行は無害だが、自分のが
+  1 つも無いと `useBuiltinTransports: false` と組んで UDP が 1 本も張られず、
+  SHM だけが残る。**エラーも警告も出ないまま自ホストの外が何も見えなくなり**、
+  `ros2 topic list` は `/rosout` と `/parameter_events` だけを返す
+  （2026-09-03 に `192.168.1.51` の SBC を足して踏んだ）。**ロボット LAN に
+  host を足したらここに 1 行足すこと。** 切り分けには
+  `ros2 topic list --no-daemon` を使う —— ros2 daemon は先に立った環境のまま
+  残るので、環境変数を変えて叩き直しても効かない。
 - **`.env` は 2 つ読まれ、値は合成される。** リポジトリルートのものと、
   `docker/raspberrypi/.env`（`provision.sh` が `ROS_DOMAIN_ID` と `BUILD_JOBS` を
   書いて生成する）の両方。**同じキーが両方にあると `docker/raspberrypi/.env` が
