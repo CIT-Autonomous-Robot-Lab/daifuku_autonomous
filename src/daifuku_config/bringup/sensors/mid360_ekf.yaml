@@ -1,17 +1,15 @@
-# 車輪オドメトリと Mid-360 の IMU を融合する EKF (robot_localization) と、その手前で
-# 生の IMU を整える prepare_mid360_imu。
-# 「既定」= robot_localization (humble-devel) の src/ros_filter.cpp の declare_parameter
-# (prepare_mid360_imu は src/prepare_mid360_imu.py の declare_parameter)。
-# use_mid360_imu:=true (既定。環境変数 USE_MID360_IMU で切り替える) のときだけ起動し、/odom と
-# odom -> base_footprint TF を出す。lidar_bringup.launch.py が両ノードへ直接渡す。
-# **車輪ノード側も同じ引数で /wheel/odom + TF なしに切り替えること** (robot_bringup)。
+# 車輪オドメトリと Mid-360 の IMU を融合する EKF (robot_localization) と、その手前で生の
+# IMU を整える prepare_mid360_imu。「既定」= robot_localization (humble-devel) の
+# src/ros_filter.cpp (prepare_mid360_imu は src/prepare_mid360_imu.py) の declare_parameter。
+# use_mid360_imu:=true (既定) のときだけ起動し、/odom と odom -> base_footprint TF を出す。
+# odom_fusion.launch.py が両ノードへ直接渡す。**車輪ノード側も同じ引数で /wheel/odom +
+# TF なしに切り替わる** (同じ launch なので片方だけの状態は作れない)。
 
 # 生の IMU に共分散を付け、ジャイロのバイアスを引き、加速度を g から m/s^2 へ直して
 # /imu/mid360 へ出す。**起動時は機体を静止させておくこと** (バイアスを測る)。
-# **入力は生の /livox/imu (200 Hz) ではなく throttle が 50 指定で間引いた
-# /livox/imu_throttled (実測 44 Hz)。** rclpy の 1 通あたりの代金が重く、200 Hz を
-# 直に食わせると Pi 4 で 1 コアの 24% を使う (odom_fusion.launch.py)。下の
-# bias_samples はそのレートを前提にした値。
+# **入力は生の /livox/imu (200 Hz) ではなく throttle が間引いた /livox/imu_throttled
+# (実測 44 Hz)** — 200 Hz を直に食わせると rclpy の代金だけで Pi 4 の 1 コアの 24% を使う。
+# 下の bias_samples はそのレート前提。
 prepare_mid360_imu:
   ros__parameters:
     estimate_gyro_bias: true    # 既定 同左: 起動後の静止区間からバイアスを測るか。false なら下の値を使う
@@ -50,11 +48,9 @@ ekf_filter_node:
     # 既定は全 false (何も取り込まない)。位置・姿勢そのものは取らず、車輪から vx、
     # IMU から vyaw だけを取る = 積分は EKF 側で行い、二重積分を避ける。
     # **車輪の vyaw を true に戻さないこと** — カウンタは約 55ms 単位でしか進まない
-    # (基板側のラッチ。2026-08-20 に右輪を浮かせて実測) ので、左右の更新が別 tick に
-    # 落ちた瞬間の生の差分は ±700 deg/s の偽旋回になる。2026-08-20 まで true +
-    # covariance 未設定 (= 1e-6 扱い) で IMU を押し潰し、走行中に yaw が数十度流れて
-    # WP1 通過後に左へそれた (rosbags/analysis_20260820)。ドライバ側も twist を
-    # ラッチ間隔で測るよう直したが、yaw レートは IMU 専任のままにする。
+    # (基板側のラッチ。2026-08-20 に実測) ので、左右の更新が別 tick に落ちた瞬間の生の
+    # 差分は ±700 deg/s の偽旋回になる。covariance 未設定 (= 1e-6 扱い) で IMU を押し潰し、
+    # 走行中に yaw が数十度流れて WP1 通過後に左へそれた (rosbags/analysis_20260820)。
     odom0_config: [false, false, false,
                    false, false, false,
                    true,  false, false,

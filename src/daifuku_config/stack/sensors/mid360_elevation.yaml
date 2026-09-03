@@ -1,16 +1,11 @@
 # Mid-360 の 3D 点群 (/livox/lidar) を仰角で切る (elevation_filter:=true、既定)。
-# 「既定」= src/elevation_filter.py の declare_parameter。
-# scan_pipeline.launch.py がノードへ直接渡す。pointcloud_to_laserscan の**手前**に
-# 入り、切った残りを /livox/lidar_elevation へ出す。
-#
-# mid360_scan.yaml の min_height と違い、これは**距離に比例する下限**になる
-# (base_footprint で見ると lidar_z + 距離 x tan(min_elevation))。床も天井も遠方では
-# 仰角 0 度へ収束するので、min_elevation より緩い勾配は**どの距離でも入らない**。
-# 高さで切ると勾配は min_height/tan(勾配) の先で必ず入ってくるので、そこが違う。
-# 導出と地図ごとの値は ../README.md と ../overrides/tsudanuma.yaml。
-#
-# ここの 0.0 度は搭載高 (lidar_z = 0.275m) の水平面そのもので、19F の断片が持つ
-# min_height: 0.275 と**同じ切り方**。既定のままなら 19F の挙動は変わらない。
+# 「既定」= src/elevation_filter.py の declare_parameter。scan_pipeline.launch.py が
+# ノードへ直接渡す。pointcloud_to_laserscan の**手前**に入り、切った残りを
+# /livox/lidar_elevation へ出す。導出と地図ごとの値は ../README.md と ../overrides/。
+# mid360_scan.yaml の min_height と違い、これは**距離に比例する下限**になるので
+# (base_footprint で見ると lidar_z + 距離 x tan(min_elevation))、min_elevation より緩い
+# 勾配は**どの距離でも入らない**。下の 0.0 度は搭載高 (0.275m) の水平面そのもので、
+# 19F の断片が持つ min_height: 0.275 と**同じ切り方**。
 
 elevation_filter:
   ros__parameters:

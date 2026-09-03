@@ -1,6 +1,6 @@
-# tsudanuma.yaml — 津田沼 (5888x4000 @0.05m = 294.4x200m) 用の上書き。
-# 「断片」= 重ねる先の設定ファイルの値 (stack/sensors/, stack/nav2/, stack/localization/)。
-# 値の由来・実測 (solve 87 秒)・既知の制約は ../README.md、仰角フィルタは docs/setup/lidar.md。
+# tsudanuma.yaml — 津田沼 (5888x4000 @0.05m = 294.4x200m) 用の上書き。「断片」= 重ねる先の
+# 設定ファイル (stack/sensors/, stack/nav2/, stack/localization/) の値。値の由来・実測
+# (solve 87 秒)・既知の制約は ../README.md、仰角フィルタは docs/setup/lidar.md。
 #   ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=vi
 # **この地図は密ソルバでは解けない** (scale 5 の密でも 3.17GB で OOM)。内部だけ粗くし
 # (map_scale)、compact で解く。確定出力 (sink 648MB) は RAM — **4GB 機で使うなら
