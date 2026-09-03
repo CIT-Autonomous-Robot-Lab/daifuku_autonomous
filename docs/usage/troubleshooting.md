@@ -313,8 +313,8 @@ RESETのログが毎スキャン出て、推定姿勢が回り続ける場合で
 おり、alphaが0.0〜0.4に張り付いていました。
 
 1. RVizでスキャンと地図の壁が重なるか確認する。**表示は`Map (localization)`のほう**
-   （既定でオフ。既定でオンの`Map (navigation)`は`/map`＝経路計画用の地図で、
-   そちらは手で壁を描き足してあることがある。[自律移動](navigation.md#地図は2枚)）
+   （既定でオン。`Map (navigation)`は`/map`＝経路計画用の地図で、そちらは手で壁を
+   描き足したり回廊の外を塗り潰したりしてある。[自律移動](navigation.md#地図は2枚)）
 2. ずれている場合は[地図作成](mapping.md)からやり直す
 3. 地図を取り直すまでの暫定処置として、`alpha_threshold`を下げ、
    `expansion_radius_orientation`を狭め、`sensor_reset: false`にしてリセットを抑制する。
