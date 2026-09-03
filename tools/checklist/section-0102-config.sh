@@ -225,13 +225,14 @@ else
 fi
 
 # ── compose の入口 ──────────────────────────────────────────────────────────
-# 入口 2 つは name: daifuku-autonomous をわざと揃えてある。違えるとドライバを
+# 入口は name: daifuku-autonomous をわざと揃えてある。違えるとドライバを
 # 替えた瞬間にビルドキャッシュの名前付きボリュームが別物になり、**1〜2 時間
 # かけて建て直しになる** (include: された側の name: は無視されるので、揃える
-# 必要があるのは入口の側)。
+# 必要があるのは入口の側)。入口を足したらこの一覧にも足すこと。
+COMPOSE_ENTRIES=(compose.rt.yaml compose.original.yaml compose.none.yaml)
 check_compose_name() {
   local f n names=()
-  for f in compose.rt.yaml compose.original.yaml; do
+  for f in "${COMPOSE_ENTRIES[@]}"; do
     n="$(sed -n 's/^name:[[:space:]]*//p' "${ROOT}/docker/raspberrypi/${f}" 2>/dev/null | head -n 1)"
     [[ -n "${n}" ]] || {
       echo "${f} に name: が無い"
@@ -240,9 +241,11 @@ check_compose_name() {
     names+=("${n}")
   done
   echo "${names[*]}"
-  [[ "${names[0]}" == "${names[1]}" ]]
+  for n in "${names[@]}"; do
+    [[ "${n}" == "${names[0]}" ]] || return 1
+  done
 }
-item "compose の入口 2 つで name: が揃っている" check_compose_name
+item "compose の入口 ${#COMPOSE_ENTRIES[@]} つで name: が揃っている" check_compose_name
 
 # ── 機種と設定の取り違え ────────────────────────────────────────────────────
 MODEL="$(pi_model)"

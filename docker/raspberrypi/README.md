@@ -23,9 +23,10 @@ Livox関連ノード、teleopノードを含みます。RVizは含みません�
 
 | ファイル | 用途 |
 |---|---|
-| `compose.common.yaml` | 本体ドライバに依存しない部分。サービス`workspace-build` / `ros2` / `raspicat`の共通定義。`network_mode: host`、`ipc: host`で起動する。**単体では`raspicat`がexit 1する**（下の2つと重ねて使う） |
+| `compose.common.yaml` | 本体ドライバに依存しない部分。サービス`workspace-build` / `ros2` / `raspicat`の共通定義。`network_mode: host`、`ipc: host`で起動する。**単体では`raspicat`がexit 1する**（下の3つのどれかと重ねて使う） |
 | `compose.original.yaml` | 自前の本体ドライバ（`driver:=original`、[`src/raspicat_driver`](../../src/raspicat_driver/README.md)）。Pi 5では必須。**既定** |
 | `compose.rt.yaml` | 公式実装の本体ドライバ（`driver:=raspimouse` + rtmouse）。**Pi 4専用** |
+| `compose.none.yaml` | 本体ドライバを立てない。機体のハードウェアが無い環境で`workspace-build`と`ros2`だけを回すとき。`raspicat`は`profiles`に入れてあるので`up`で作られない |
 | `Dockerfile` | apt依存とツールチェーンだけを持つイメージ。ワークスペースはビルドしない |
 | `fastdds_udp_whitelist.xml` | Fast DDSのトランスポート設定（後述） |
 | `scripts/build-workspace.sh` | `up`のときにコンテナ内で走る`colcon build`（`/usr/local/bin/build-workspace`） |

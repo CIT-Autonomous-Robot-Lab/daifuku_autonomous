@@ -342,12 +342,17 @@ Docker 越しに叩く形は
   `tools/setup/setup_native_base.sh`。
 - **`docker/raspberrypi/` に `compose.yaml` は無い。** 入口は
   `compose.common.yaml` と本体ドライバ別の `compose.rt.yaml`（公式実装 + rtmouse。
-  Pi 4 専用）／`compose.original.yaml`（自前実装。既定、Pi 5 では必須）を
+  Pi 4 専用）／`compose.original.yaml`（自前実装。既定、Pi 5 では必須）／
+  `compose.none.yaml`（ドライバを立てない。機体のハードウェアが無い環境で
+  `workspace-build` と `ros2` だけを回す。**`raspicat` を消すのではなく
+  `profiles` へ入れてある** — Compose には重ねる側からサービスを削る書き方が
+  無く、common の placeholder を残すと `restart: unless-stopped` と組んで
+  上がり直しが止まらないため）を
   **2 つ重ねたもの**で、選ぶのは**リポジトリルートの `.env`** の `COMPOSE_FILE`
   （`.gitignore` 済み。`.env.example` から作る。`provision.sh` は機種を見て自動で
   作る）。ここに 4 つ罠がある。**(1)** Compose が `.env` を読むのは**カレント
   ディレクトリ**なので、リポジトリルート以外から `docker compose` を叩くと
-  `no configuration file provided` で止まる。**(2)** 入口 2 つは `name:
+  `no configuration file provided` で止まる。**(2)** 入口 3 つは `name:
   daifuku-autonomous` をわざと揃えてある。違えるとドライバを替えた瞬間に
   ビルドキャッシュの名前付きボリュームが別物になり、**1〜2 時間かけて建て直しに
   なる**（`compose.common.yaml` は `name:` を持たないので、ドライバ側の 2 つに要る）。

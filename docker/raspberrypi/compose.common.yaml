@@ -31,6 +31,11 @@ services:
       # colcon の並列数。既定 4 = Pi 4 の全コア。**イメージのビルドには効かない**
       # (build.args に渡していない。渡すと下げた瞬間に層が全部作り直しになる)。
       BUILD_JOBS: ${BUILD_JOBS:-4}
+      # 1 パッケージの中の make / cargo の並列数。**--parallel-workers とは別物**で、
+      # colcon はこちらに -j を渡さないので、絞らないと nproc 分の g++ が同時に立つ。
+      # emcl2 は 1 パッケージだけで RAM 2GB を食い潰す (RAM 2GB の SBC で実測)。
+      MAKEFLAGS: -j${BUILD_JOBS:-4}
+      CARGO_BUILD_JOBS: ${BUILD_JOBS:-4}
       # cargo を crates.io へ出さないか。**ゲートウェイの無い機体では true が要る**
       # — index を引けないと vi_planner が落ち、set -e で up ごと止まる。新しい
       # クレートを足したときだけ wlan0 を上げて false へ (.env.example)。
