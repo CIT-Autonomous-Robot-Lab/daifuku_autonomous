@@ -18,12 +18,15 @@
 
     uv run corridor-map nav.yaml out.yaml \\
         --waypoints ../src/daifuku_stack/waypoints/waypoints_*_v1.1.yaml \\
-        --radius 5.0
+        --radius 8.5
 
 **この出力は順路から導かれるので、順路を変えたら作り直しが要ります。** 新しい
 点が回廊の外に出ると、その点は占有セルに乗るので**ゴールが出ないだけ**で、
-地図が古いとは誰も言いません。作り直しを忘れないよう、書き出す前に全点が
-自由セルに落ちることを確かめ、落ちなければ**書かずに落とします**。
+地図が古いとは誰も言いません。作り直しを忘れないよう、書き出す前に (1) 全点が
+自由セルに落ちること (2) 加工前に繋がっていた点どうしが繋がったままであること
+を確かめ、どちらか欠ければ**書かずに落とします**。(2) が要るのは、回廊が順路の
+**直線**の周りにしか引かれないためです——実際に走れる道は建物を回り込むので、
+細い回廊は壁で分断され、点は自由セルのままなのに経路が引けなくなります。
 
 `--waypoints` は複数渡せます。実機の `waypoints_file` は既定が空で、どの版を
 使うかが決まっていないため (v1.0 と v1.1 は 1〜4m ずれる)、**両方を渡して
@@ -32,9 +35,11 @@
 
 import argparse
 import os
+import sys
 
 import numpy as np
 import yaml
+from scipy import ndimage
 
 
 def read_pgm(path):
@@ -83,9 +88,9 @@ def load_waypoints(paths):
 def corridor_mask(shape, meta, tours, radius_m, closed):
     """順路の線分から radius_m 以内のセルを True にした配列を返す。
 
-    セル中心のワールド座標と線分との距離で判定する。**y は上下反転する** —
-    ROS の map_server は画像の行 0 を世界の y=origin_y として読むため
-    (`docs` と downsample_map.py と同じ規約)。
+    セル中心のワールド座標と線分との距離で判定する。**返す直前に上下を反転する**
+    — ROS の map_server は画像の行 0 を世界の y の**最大**として読む
+    (`msg.data[MAP_IDX(w, height - y - 1, x)]`。map_to_usd.py と同じ規約)。
     """
     h, w = shape
     res = meta["resolution"]
@@ -122,9 +127,14 @@ def corridor_mask(shape, meta, tours, radius_m, closed):
                 t = np.clip(((gx - x0) * dx + (gy - y0) * dy) / seg2, 0.0, 1.0)
             px, py = x0 + t * dx, y0 + t * dy
             near = (gx - px) ** 2 + (gy - py) ** 2 <= r2
-            # 行 0 = y=origin_y なので、そのまま iy が y の増える向き。
             mask[iy0 : iy1 + 1, ix0 : ix1 + 1] |= near
-    return mask
+    # ここまで行 0 = y=origin_y で組んだので、画像の並び (行 0 = y 最大) へ返す。
+    return mask[::-1]
+
+
+# 連結成分は 4 近傍で見る。8 近傍だと斜めに触れているだけの 2 部屋が繋がって
+# 見えるが、VI の行動は前進と旋回なので斜め 1 セルは通れない。
+NEIGHBORS = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]])
 
 
 def classify(img, meta):
@@ -145,15 +155,19 @@ def main():
         help="順路の yaml。複数渡すとそれぞれの回廊の和を残す",
     )
     ap.add_argument(
-        "--radius", type=float, default=5.0,
-        help="回廊の半径 [m] (既定 5.0 = 幅 10m)。狭めるほど solve は速くなるが、"
-             "機体がここから出ると start が占有セルになり方策が引けない",
+        "--radius", type=float, default=8.5,
+        help="回廊の半径 [m] (既定 8.5 = 幅 17m)。狭めるほど solve は速くなるが、"
+             "機体がここから出ると start が占有セルになり方策が引けない。"
+             "**下限は連結性が決める** — 順路の点どうしが直線では繋がって"
+             "いない区間があり、細いと回廊が壁で分断される (下の検算が落とす)",
     )
     ap.add_argument(
         "--open", action="store_true",
         help="順路を閉路として扱わない (既定は最後の点から最初の点へも回廊を作る)",
     )
     args = ap.parse_args()
+    # WARN の日本語で落ちると、統計を出したあと **書き出す前に** 死ぬ (Windows の cp1252)。
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
     with open(args.map_in, encoding="utf-8") as f:
         meta = yaml.safe_load(f)
@@ -185,7 +199,7 @@ def main():
     # **書く前に、元の地図で自由だった点が出力でも自由であることを確かめる。**
     # ここが通らない地図は「ゴールが出ない」としてしか現れないので生成時点で止める。
     # 元から占有だった点は**この加工のせいではない**ので、告げるだけで続ける
-    # (2026-09-02 の時点で mugimaru の nav 地図には 3 点そういう点がある)。
+    # (2026-09-03 の時点で mugimaru の nav 地図には 1 点そういう点がある)。
     ox, oy = meta["origin"][0], meta["origin"][1]
     lost, already = [], []
     for path, pts in zip(args.waypoints, tours):
@@ -194,9 +208,9 @@ def main():
             where = f"{os.path.basename(path)}[{k}] ({x:.2f}, {y:.2f})"
             if not (0 <= ix < w and 0 <= iy < h):
                 lost.append(where + " — 地図の外")
-            elif not free[iy, ix]:
+            elif not free[h - 1 - iy, ix]:  # 行 0 = y 最大
                 already.append(where)
-            elif not out_free[iy, ix]:
+            elif not out_free[h - 1 - iy, ix]:
                 lost.append(where)
     for where in already:
         print(f"WARN: 元の地図で既に自由セルではありません: {where}")
@@ -204,6 +218,35 @@ def main():
         raise SystemExit(
             "この加工で順路の点が自由セルでなくなりました (%d 点):\n  %s\n"
             "--radius を広げてください。" % (len(lost), "\n  ".join(lost[:10]))
+        )
+
+    # **点が自由なだけでは足りない。回廊が繋がっていることも確かめる。**
+    # 順路の線分は直線だが実際に走れる道は曲がっているので、細い回廊は建物で
+    # 分断され得る。分断されると点は自由セルのままなのに経路が引けず、
+    # **エラーも警告も出ないままゴールが出ない** — 上の検算と同じ穴なので同じ形で塞ぐ。
+    # 元の地図で既に別々だった点は**この加工のせいではない**ので、そこは咎めない。
+    lab_in, _ = ndimage.label(free, structure=NEIGHBORS)
+    lab_out, _ = ndimage.label(out_free, structure=NEIGHBORS)
+    split = {}
+    for path, pts in zip(args.waypoints, tours):
+        for k, (x, y) in enumerate(pts):
+            ix, iy = int((x - ox) / res), h - 1 - int((y - oy) / res)
+            if not (0 <= ix < w and 0 <= iy < h) or not free[iy, ix]:
+                continue
+            where = f"{os.path.basename(path)}[{k}] ({x:.2f}, {y:.2f})"
+            split.setdefault(lab_in[iy, ix], {}).setdefault(lab_out[iy, ix], []).append(where)
+    broken = [g for g in split.values() if len(g) > 1]
+    if broken:
+        raise SystemExit(
+            "この加工で順路が分断されました (%d か所)。--radius を広げてください。\n%s"
+            % (
+                len(broken),
+                "\n".join(
+                    "  かたまり: %d 点 (%s ...)" % (len(v), ", ".join(sorted(v)[:2]))
+                    for g in broken
+                    for v in g.values()
+                ),
+            )
         )
 
     out_dir = os.path.dirname(os.path.abspath(args.map_out))

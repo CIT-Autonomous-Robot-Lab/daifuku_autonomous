@@ -108,8 +108,8 @@ symlink になるので、効くのは**ソース側の権限**です。Windows 
   `PackageNotFoundError` になる。
 
 これ以外の挙動の確認は実機か `simulator/` のハーネスで行います。単体で回せるのは
-`simulator/tests/` の 2 つ（`map-to-usd` の出力検算と、地図の `free_thresh` の検算）
-だけです。
+`simulator/tests/` の 3 つ（`map-to-usd` の出力検算と、地図の `free_thresh` の検算と、
+`corridor-map` の回廊の上下の向きの検算）だけです。
 
 **実機で通すぶんは `tools/checklist/` にあります。** `colcon test` からは走りません
 （人に聞く項も機体が動く項もあるため）。使いかたと番号の意味は `checkall.sh` の冒頭に
@@ -142,6 +142,7 @@ lint は詰め合わせ（`ament_lint_common`）を使わず、自前 7 パッ�
 ```bash
 cd simulator && uv run python tests/verify_usda.py <map.yaml> <world.usda> free
 cd simulator && uv run python tests/verify_map_thresholds.py ../src/daifuku_stack/maps/*/*.yaml
+cd simulator && uv run python tests/verify_corridor_orientation.py
 ```
 
 ```bash
@@ -431,13 +432,23 @@ Docker 越しに叩く形は
   走行中の固まりが出て、容疑者の 1 つとして戻した（切り分けは未了）ので、
   再発したらまずここを疑う。
 - **`tsudanuma_mugimaru` の navigation の地図は順路から作られている。**
-  `tsudanuma-challenge_nav_corridor.pgm` は `nav3_9` から**順路の 5m 以内だけを残して
-  自由空間を削った**もので、フル solve が 27.95 → 13.07 秒になる（2026-09-02。
+  `tsudanuma-challenge_nav_corridor.pgm` は `nav3_9` から**順路の 8.5m 以内だけを残して
+  自由空間を削った**もので、フル solve が 27.95 → 13.07 秒になる（2026-09-02 の実測。
+  ただし**測ったのは 2026-09-03 に作り直す前の地図**なので要再測。
   `uv run corridor-map` で作り直せる）。**だから順路を変えたら地図も作り直すこと** —
   新しい点が回廊の外に出ると占有セルに乗るので、**エラーも警告も出ないままゴールが
   出ない**。生成ツールは書き出す前に全点が自由セルに落ちるか確かめて落とすが、
-  それは作り直したときしか走らない。**すでに 3 点、`nav3_9` の時点で壁の中にある**
+  それは作り直したときしか走らない。**1 点だけ `nav3_9` の時点で壁の中にある**
   （`src/daifuku_stack/maps/tsudanuma_mugimaru/README.md`）。
+  **半径の下限は連結性が決める** — 回廊は順路の点どうしを結ぶ**直線**の周りに
+  引かれるが、実際に走れる道は建物を回り込むので、細いと回廊が壁で分断される。
+  点は自由セルのままなので**エラーも警告も出ないまま経路が引けない**（生成ツールが
+  加工前の地図と比べて落とす。この順路での下限は 8.0m）。
+  **回廊は画像の行の向きを間違えると上下逆に載る**（`map_server` は行 0 を y の
+  **最大**として読む）。形も面積もそれらしいままで、順路の点が壁に乗るという形で
+  しか現れず、生成時の検算を同じ添字で書くと自分では気づけない（2026-09-02 の
+  生成物がこれで、66 点中 22 点が壁の中だった）。見張りは
+  `simulator/tests/verify_corridor_orientation.py`。
 - **`map_scale` を上げても solve は速くならない。** 状態数は scale^2 で減るが、1 手
   （`action_forward_m`）が跨ぐセル数も同じだけ減るので反復が増えて相殺する
   （2026-09-02 に `tsudanuma_mugimaru` で実測: scale 3 は状態数 44% でフル solve

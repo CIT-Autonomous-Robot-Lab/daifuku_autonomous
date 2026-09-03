@@ -8,6 +8,8 @@ dependencies = [
     "numpy>=1.24",
     "pillow>=10.0",
     "pyyaml>=6.0",
+    # corridor-map の連結性の検算 (ndimage.label) だけに要る。
+    "scipy>=1.10",
 ]
 
 # Isaac Sim 本体。**既定では入らない** (新規 147 パッケージと大きいため)。
