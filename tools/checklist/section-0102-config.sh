@@ -12,7 +12,6 @@ source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 section 0102 "設定の整合"
 
 CONFIG="${ROOT}/src/daifuku_config"
-PARAMS_PY="${ROOT}/src/daifuku_config_manager/src/daifuku_config_manager/params.py"
 
 require "src/daifuku_config/ がある" test -d "${CONFIG}"
 
@@ -66,78 +65,12 @@ check_site_map() {
 item "overrides の site: map: が指す地図 2 枚が実在する" check_site_map
 
 # ── overrides の行き先 ──────────────────────────────────────────────────────
-# 1 段目はパッケージ名か site:。知らない名前は「誰も読まない部分木」になるので
-# params.py が起動時に落とす。ここで先に見つける。
-known_packages() {
-  sed -n '/^CONFIG_DIRS = {/,/^}/p' "${PARAMS_PY}" | grep -o '"[a-z_]*":' | tr -d '":'
+# 1 段目のパッケージ名、2 段目のノード名、nav2 断片の重複は起動時と同じ関数
+# (overlay.audit_tree) で見る。sed/awk で YAML を拾うと段が深いときに検査だけ通る。
+check_overrides_same_as_launch() {
+  python3 "${ROOT}/tools/checklist/check_overrides.py" "${CONFIG}"
 }
-
-check_override_toplevel() {
-  local f key bad=() known
-  known="$(known_packages) site"
-  for f in "${CONFIG}"/overrides/*.yaml; do
-    while read -r key; do
-      grep -qw -- "${key}" <<<"${known}" || bad+=("${f##*/}:${key}")
-    done < <(grep -o '^[a-z_][a-z_0-9]*:' "${f}" | tr -d ':')
-  done
-  ((${#bad[@]} == 0)) || {
-    echo "知らない 1 段目: ${bad[*]}"
-    return 1
-  }
-  echo "$(known_packages | tr '\n' ' ')site のみ"
-}
-item "overrides の 1 段目がパッケージ名か site: だけ" check_override_toplevel
-
-# 2 段目はノード名。そのパッケージのどの設定ファイルにも無い名前は起動時に落ちる
-# (綴り違いが黙って消えるのを防ぐため)。
-declared_nodes() {
-  # $1 = bringup | stack。設定ファイルの 1 段目 = ノード名。
-  grep -ho '^[a-zA-Z_][a-zA-Z_0-9]*:' "${CONFIG}/$1"/*/*.yaml "${CONFIG}/$1"/*.yaml 2>/dev/null |
-    tr -d ':' | sort -u
-}
-
-check_override_nodes() {
-  local f pkg dir node bad=() nodes
-  for f in "${CONFIG}"/overrides/*.yaml; do
-    for pkg in $(known_packages); do
-      dir="$(sed -n "s/^[[:space:]]*\"${pkg}\":[[:space:]]*\"\\([a-z]*\\)\".*/\\1/p" "${PARAMS_PY}" | head -n 1)"
-      [[ -n "${dir}" ]] || continue
-      nodes="$(declared_nodes "${dir}")"
-      # そのパッケージの部分木 (1 段目 pkg: の次の 1 段目まで) の 2 段目を拾う。
-      while read -r node; do
-        [[ -n "${node}" ]] || continue
-        grep -qx -- "${node}" <<<"${nodes}" || bad+=("${f##*/}:${pkg}:${node}")
-      done < <(awk -v pkg="${pkg}:" '
-        $0 == pkg { inpkg = 1; next }
-        /^[^ \t#]/ { inpkg = 0 }
-        inpkg && /^  [a-zA-Z_][a-zA-Z_0-9]*:[[:space:]]*$/ { gsub(/[ :]/, "", $0); print }
-      ' "${f}")
-    done
-  done
-  ((${#bad[@]} == 0)) || {
-    echo "行き先の無いノード名: ${bad[*]}"
-    return 1
-  }
-  echo "すべて行き先がある"
-}
-item "overrides の 2 段目のノード名に行き先がある" check_override_nodes
-
-# ── params_file の断片 ──────────────────────────────────────────────────────
-# stack/nav2/*.yaml と stack/vi_planner.yaml (Nav2 のノードではないので nav2/ の
-# 外に居るが合成には入る) がファイル名順に 1 つの params_file へ束ねられる。
-# **同じノード名が 2 つの断片にあると起動時にエラーで止まる** (キーが重なって
-# いなくても止まる)。
-check_nav2_dup() {
-  local dup
-  dup="$(grep -ho '^[a-zA-Z_][a-zA-Z_0-9]*:'     "${CONFIG}"/stack/nav2/*.yaml "${CONFIG}"/stack/vi_planner.yaml |
-    tr -d ':' | sort | uniq -d | tr '\n' ' ')"
-  [[ -z "${dup}" ]] || {
-    echo "2 つの断片に居る: ${dup}"
-    return 1
-  }
-  echo "重複なし"
-}
-item "params_file の断片にノード名の重複が無い" check_nav2_dup
+item "overrides の行き先と断片の重複が起動時と同じ規則で通る" check_overrides_same_as_launch
 
 # standalone を設定に書くと、Nav2 構成で立てたとき navigate_to_pose のサーバが
 # bt_navigator と 2 つになる。**どちらに繋がったかはログにも ros2 action list にも
@@ -225,13 +158,14 @@ else
 fi
 
 # ── compose の入口 ──────────────────────────────────────────────────────────
-# 入口 2 つは name: daifuku-autonomous をわざと揃えてある。違えるとドライバを
+# 入口は name: daifuku-autonomous をわざと揃えてある。違えるとドライバを
 # 替えた瞬間にビルドキャッシュの名前付きボリュームが別物になり、**1〜2 時間
 # かけて建て直しになる** (include: された側の name: は無視されるので、揃える
-# 必要があるのは入口の側)。
+# 必要があるのは入口の側)。入口を足したらこの一覧にも足すこと。
+COMPOSE_ENTRIES=(compose.rt.yaml compose.original.yaml compose.none.yaml)
 check_compose_name() {
   local f n names=()
-  for f in compose.rt.yaml compose.original.yaml; do
+  for f in "${COMPOSE_ENTRIES[@]}"; do
     n="$(sed -n 's/^name:[[:space:]]*//p' "${ROOT}/docker/raspberrypi/${f}" 2>/dev/null | head -n 1)"
     [[ -n "${n}" ]] || {
       echo "${f} に name: が無い"
@@ -240,9 +174,11 @@ check_compose_name() {
     names+=("${n}")
   done
   echo "${names[*]}"
-  [[ "${names[0]}" == "${names[1]}" ]]
+  for n in "${names[@]}"; do
+    [[ "${n}" == "${names[0]}" ]] || return 1
+  done
 }
-item "compose の入口 2 つで name: が揃っている" check_compose_name
+item "compose の入口 ${#COMPOSE_ENTRIES[@]} つで name: が揃っている" check_compose_name
 
 # ── 機種と設定の取り違え ────────────────────────────────────────────────────
 MODEL="$(pi_model)"

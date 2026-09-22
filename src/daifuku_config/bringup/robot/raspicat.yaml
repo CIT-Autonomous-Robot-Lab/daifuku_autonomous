@@ -1,31 +1,20 @@
-# raspimouse (Raspberry Pi Cat 本体ドライバ) のパラメータ。
-# 「既定」= 上流 raspicat_ros の raspicat/config/raspicat.param.yaml。
-# 括弧内の「ノード既定」は raspimouse2 の raspimouse_component.cpp の declare_parameter で、
-# こちらは Raspberry Pi **Mouse** 向けの値。Cat では raspicat_ros 側が上書きしている。
+# raspimouse (Raspberry Pi Cat 本体ドライバ) のパラメータ。「既定」= 上流 raspicat_ros の
+# raspicat/config/raspicat.param.yaml (括弧内の「ノード既定」は raspimouse2 の
+# raspimouse_component.cpp が持つ Raspberry Pi **Mouse** 向けの値)。
 # robot_bringup.launch.py が LifecycleNode の parameters= に直接渡す。
-#
-# このファイルは差分ではなく上流の**完全なコピー**。launch_ros はノード自身の
-# parameters= をグローバル (SetParametersFromFile) より後に展開する = ノード側が
-# 勝つので、上流 launch へ差分を重ねる方式では上書きできない (../README.md)。
-# 下の 4 行以外は上流に追従すること。未設定キーは無い (ノードが宣言する 14 個で全部)。
+# **差分ではなく上流の完全なコピー** — launch_ros はノード自身の parameters= をグローバル
+# (SetParametersFromFile) より後に展開する = ノード側が勝つので、上流 launch へ差分を重ねる
+# 方式では上書きできない (../README.md)。下の 4 行以外は上流に追従すること。未設定キーは
+# 無い (ノードが宣言する 14 個で全部)。
 
 raspimouse:
   ros__parameters:
     odometry_scale_left_wheel : 1.0     # 既定 1.0: 左車輪の回転量に掛ける補正係数
     odometry_scale_right_wheel: 1.0     # 既定 1.0: 右車輪の同上
-    # 既定 true から変更。true にすると rtmouse の MCP3204 読みでカーネルが oops し、
-    # raspimouse ごと落ちて odom も TF も出なくなる (docs/usage/troubleshooting.md)。
-    use_light_sensors         : false   # 既定 true: 赤外線測距センサを読んで /light_sensors へ出す
-
-    # 既定 false のまま: true (エンコーダ) が本来正しいが、この個体の I2C カウンタが
-    # 走行中にランダムで固着してリブートが要る。天秤と復旧手順は ../README.md。
-    use_pulse_counters        : false   # true = /dev/rtcounter_* から odom を積む、false = cmd_vel を積分
-
-    # 既定 0.1524 / 0.27918 (ノード既定 0.048 / 0.0925 は Pi Mouse の値)。
-    # この個体の実測値 (2026-08-03)。上流へ戻さないこと。
-    wheel_diameter            : 0.2     # [m] 車輪の直径 (実測 200 mm)
-    wheel_tread               : 0.35    # [m] 左右車輪の間隔 (実測 350 mm)
-
+    use_light_sensors         : false   # 既定 true: 赤外線測距センサを読んで /light_sensors へ出す。**true にすると rtmouse の MCP3204 読みでカーネルが oops し、raspimouse ごと落ちて odom も TF も出なくなる** (docs/usage/troubleshooting.md)
+    use_pulse_counters        : false   # 既定 false: true = /dev/rtcounter_* から odom を積む、false = cmd_vel を積分。**true が本来正しいが、この個体の I2C カウンタが走行中にランダムで固着してリブートが要る** (天秤と復旧手順は ../README.md)
+    wheel_diameter            : 0.2     # 既定 0.1524 [m]: 車輪の直径 (この個体の実測 200mm。2026-08-03)。**上流へ戻さないこと**
+    wheel_tread               : 0.35    # 既定 0.27918 [m]: 左右車輪の間隔 (同 350mm)
     pulses_per_revolution     : 400.0   # 既定 400.0: 車輪 1 回転あたりのエンコーダパルス数。実測は 1073 だが上流ノードは odom にしか使わず、cmd_vel → 周波数は 400 直書きで直せない (../README.md)
     light_sensors_hz          : 100.0   # 既定 100.0 [Hz]: 測距センサを読む周期
     odom_hz                   : 100.0   # 既定 100.0 [Hz]: odom と TF を出す周期

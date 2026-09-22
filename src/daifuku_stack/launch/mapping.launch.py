@@ -13,13 +13,16 @@
 
 # SLAM Toolbox で地図を作る。
 #
-# **センサは立てない。** LiDAR も EKF も robot_bringup.launch.py の受け持ちで、
-# docker compose up で常駐している。ここは slam_toolbox と RViz だけを足す。
+# **センサのドライバは立てない。** LiDAR も EKF も robot_bringup.launch.py の
+# 受け持ちで、docker compose up で常駐している。ここが足すのは slam_toolbox と
+# RViz と、**/scan を作る段** (scan_pipeline.launch.py) の 3 つ。
 #
-# そのため、**地図を作る場所に合わせて LiDAR の帯 (仰角フィルタと高さ) を変えるには
-# SLAM を始める前に `tools/site.sh <名前>` を通す**必要がある (src/daifuku_config/site を書いて
-# raspicat を立て直すところまでやる)。この launch へ overrides:= を渡しても効くのは
-# daifuku_stack: の部分木、すなわち slam_toolbox の節だけ。
+# **地図を作る場所に合わせた LiDAR の帯 (仰角フィルタと高さ) は overrides:= で
+# 渡せる。** 2026-08-25 に scan_pipeline がこちらへ移るまでは機体側が読んでいたので、
+# SLAM を始める前に `tools/site.sh <名前>` で機体を立て直す必要があった。
+#
+# **navigation.launch.py と同時に立てないこと。** 両方が /scan を作るので publisher が
+# 2 つになる (もともと map->odom も衝突するので排他だが、段が増えた)。
 
 import os
 import sys
@@ -38,6 +41,7 @@ if _LAUNCH_DIR not in sys.path:
     sys.path.insert(0, _LAUNCH_DIR)
 
 from daifuku_config_manager import params  # noqa: E402
+from daifuku_stack_launch import scan  # noqa: E402
 
 
 def generate_launch_description():
@@ -63,6 +67,8 @@ def generate_launch_description():
         DeclareLaunchArgument("use_rviz", default_value="false"),
         *params.declare_args(),
         params.declare_watch_arg(),
+        # /scan を作る段の引数 (実体は scan_pipeline.launch.py)。
+        *scan.declare_args(),
 
         # slam_params_file へ overrides を重ねる (slam_toolbox: の節を持つものだけ
         # 効く)。LiDAR 側の設定ファイルは robot_bringup.launch.py が同じ overrides で
@@ -82,6 +88,10 @@ def generate_launch_description():
             function=params.sentinel_actions,
             kwargs={"package": "daifuku_stack", "config_root": config_root},
         ),
+
+        # 点群 (または生スキャン) を /scan に変える段。**機体側が出すのはセンサ
+        # そのままのデータまで**で、帯と仰角は場所で変わるのでこちら側に居る。
+        scan.include_scan_pipeline(pkg_share),
 
         Node(
             package="slam_toolbox",

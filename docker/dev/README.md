@@ -287,21 +287,21 @@ ros2 launch daifuku_stack navigation.launch.py \
 `use_rviz`の既定は`false`なので、表示するここでは明示します。モーター電源は、この
 起動確認だけでは有効にしません。
 
-**`navigation.launch.py`はセンサーを1つも立てません。** LiDARの引数（`lidar`、
-`lidar_z`、`publish_lidar_tf`）は`daifuku_bringup`側にあり、実機では`raspicat`サービスが
-`robot_bringup.launch.py`として常駐しています。この環境で自前にLiDARの前処理だけを
-立てるなら`lidar_bringup.launch.py`を別に叩いてください（`robot_bringup`のほうは本体
-ドライバも立てるのでPCでは上がりません）。
+**`navigation.launch.py`はセンサーのドライバを立てません。** ドライバの引数（`lidar_z`、
+`publish_lidar_tf`、`mid360_config`）は`daifuku_bringup`側にあり、実機では`raspicat`
+サービスが`robot_bringup.launch.py`として常駐しています。**点群を`/scan`に変える段だけは
+`navigation` / `mapping`が立てます**（`scan_pipeline.launch.py`。2026-08-25から）ので、
+この環境でその段だけを試すなら次でも立てられます。
 
 ```bash
-ros2 launch daifuku_bringup lidar_bringup.launch.py
+ros2 launch daifuku_stack scan_pipeline.launch.py
 ```
 
 `/scan_raw`が来ないときは、まず`/livox/lidar`が届いているか見てください。この環境は
 PC側なので、Mid-360を繋いでもいないしバッグも再生していないなら、空なのが正常です。
 
 `/livox/lidar`は来ているのに`/scan_raw`だけが無いなら、スタンプ打ち直しを疑います。
-中継は他のノードと同じ`Node`（`lib/daifuku_bringup/restamp_scan.py`）です。実行ファイルが
+中継は他のノードと同じ`Node`（`lib/daifuku_stack/restamp_scan.py`）です。実行ファイルが
 無ければlaunchごとエラーで止まるので、`build-autonomous`を一度も通していない場合や
 古い`install/`ボリュームが残っている場合でも、**黙って`/scan_raw`だけが欠けることは
 ありません**。まず`ros2 launch`のログを見てください。

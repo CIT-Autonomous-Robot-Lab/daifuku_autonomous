@@ -120,6 +120,45 @@ check_one_site_manager_launch() {
 }
 item "site_manager を立てる launch がちょうど 1 つ" check_one_site_manager_launch
 
+# ── LiDAR 構成の既定 ────────────────────────────────────────────────────────
+# lidar / lidar_driver は 2 つの launch にまたがる (機体側が生データを出し、
+# navigation / mapping 側が /scan にする)。食い違うと**エラーも警告も出ないまま
+# /scan が空になる**ので、どちらも同じ環境変数から既定を取ることで揃えている。
+# 片方を素の文字列に戻すと、.env の 1 行が片側にしか効かなくなる。
+check_lidar_defaults() {
+  local bringup="${ROOT}/src/daifuku_bringup/launch/daifuku_bringup_launch/lidar.py"
+  local stack="${ROOT}/src/daifuku_stack/launch/daifuku_stack_launch/scan.py"
+  local key bad=()
+  for key in LIDAR LIDAR_DRIVER; do
+    grep -q "env_default(\"${key}\"" "${bringup}" || bad+=("lidar.py:${key}")
+    grep -q "env_default(\"${key}\"" "${stack}" || bad+=("scan.py:${key}")
+  done
+  ((${#bad[@]} == 0)) || {
+    echo "環境変数から既定を取っていない: ${bad[*]}"
+    return 1
+  }
+  echo "lidar.py / scan.py とも LIDAR と LIDAR_DRIVER から取っている"
+}
+item "lidar / lidar_driver の既定が 2 つの launch で同じ出どころ" check_lidar_defaults
+
+# IncludeLaunchDescription の launch_arguments は親と同じ文脈に積まれる。
+# lidar_bringup が宣言する lidar_frame が漏れると URDF の lidar_link と入れ替わり、
+# IMU の TF が消える (AGENTS.md)。scan_pipeline と同じく GroupAction で囲む。
+check_lidar_include_scoped() {
+  local f="${ROOT}/src/daifuku_bringup/launch/daifuku_bringup_launch/lidar.py"
+  awk '
+    /^def include_lidar_bringup\(/ { in_fn = 1 }
+    in_fn && /^def / && !/^def include_lidar_bringup\(/ { exit }
+    in_fn && /GroupAction\(/ { found = 1 }
+    END { exit found ? 0 : 1 }
+  ' "${f}" || {
+    echo "include_lidar_bringup が GroupAction で囲んでいない"
+    return 1
+  }
+  echo "include_lidar_bringup は GroupAction で囲んでいる"
+}
+item "lidar_bringup の include が GroupAction で囲まれている" check_lidar_include_scoped
+
 # ── 順路のトピック名 ────────────────────────────────────────────────────────
 # パネル (絶対名) と joy_teleop (相対名) と vi_planner の waypoint_topic の 3 か所に
 # あり、1 つだけ変えると**エラーも警告も出ないまま先読みだけが起きなくなる**。
@@ -149,6 +188,25 @@ check_waypoint_topic() {
   [[ "${panel#/}" == "${joy#/}" && "${panel#/}" == "${vi#/}" ]]
 }
 item_warn "順路のトピック名が食い違っていない" check_waypoint_topic
+
+# 順路 YAML の書式は joy_waypoints.py が仕様で、パネルの readYamlFile が同じ
+# 3 つの決まりを持つ。パーサを 2 つにしている以上、契約の置き場が片方だけに
+# なると「実機では走るのにパネルでは開けない」に戻る。
+check_waypoint_schema() {
+  local py="${ROOT}/src/daifuku_bringup/src/joy_waypoints.py"
+  local cpp="${ROOT}/src/daifuku_waypoint_manager/src/waypoint_manager_panel.cpp"
+  local test="${ROOT}/simulator/tests/verify_waypoints.py"
+  local bad=()
+  [[ -f "${py}" ]] || bad+=("joy_waypoints.py が無い")
+  grep -q 'load_waypoint_document' "${cpp}" || bad+=("パネルが joy_waypoints を指していない")
+  [[ -f "${test}" ]] || bad+=("verify_waypoints.py が無い")
+  ((${#bad[@]} == 0)) || {
+    echo "${bad[*]}"
+    return 1
+  }
+  echo "joy_waypoints.py / パネル / verify_waypoints.py"
+}
+item "順路 YAML の書式が Python とパネルと検算で同じ置き場を指している" check_waypoint_schema
 
 # ── RViz のパネル ───────────────────────────────────────────────────────────
 # nav2 の「Navigation 2」パネルは /waypoints へ MarkerArray を、自前の

@@ -120,7 +120,7 @@ class FakeRobot(Node):
         p("initial_yaw", 0.0)
         p("odom_hz", 50.0)
         p("scan_hz", 10.0)
-        # pointcloud_to_laserscan (src/daifuku_config/bringup/sensors/mid360_scan.yaml) と同じ視野・分解能。
+        # pointcloud_to_laserscan (src/daifuku_config/stack/sensors/mid360_scan.yaml) と同じ視野・分解能。
         p("angle_min", -math.pi)
         p("angle_max", math.pi)
         p("angle_increment", 0.008726646)

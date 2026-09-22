@@ -757,7 +757,7 @@ def build_ros_graph(args, robot_prim, lidar_path):
 def build_lidar_graph(args, lidar_path, lidar_frame):
     """RTX LiDAR の出版だけ別グラフにする。
 
-    lidar:=2d     -> /scan_raw  (LaserScan)。lidar_bringup.launch.py の
+    lidar:=2d     -> /scan_raw  (LaserScan)。scan_pipeline.launch.py の
                      scan_to_scan_filter_chain がこれを受けて /scan にする。
     lidar:=mid360 -> /livox/lidar (PointCloud2)。実機の livox_ros_driver2 は
                      xfer_format:=0 = PointCloud2 なので、ドライバの出力と同型。
@@ -819,7 +819,7 @@ def build_lidar_graph(args, lidar_path, lidar_frame):
 def build_imu_graph(args):
     """MID360 の IMU を /livox/imu に出す。
 
-    lidar_bringup.launch.py は /livox/imu -> prepare_mid360_imu.py -> /imu/mid360 ->
+    odom_fusion.launch.py は /livox/imu -> prepare_mid360_imu.py -> /imu/mid360 ->
     ekf_node と繋いでいるので、実機と同じ経路がそのまま通る。
     """
     time_type, time_out = _time_source(args.use_sim_time)

@@ -109,8 +109,9 @@ site:
 `site:`はパッケージ名の段に並ばない予約節で、「その場所そのものに付く値」の置き場です
 （いまは地図だけ）。**overridesの名前は場所であって、地図のファイル名ではありません**
 （`19f` / `tsudanuma`。`maps/`のフォルダ名と同じ）。地図を差し替えるならこの行を直します。
-場所の切り替えは`ros2 param set /site_manager site <名前>`か`echo <名前> >`、または機体の
-立て直しまで面倒を見る`tools/site.sh <名前>`です
+場所の切り替えは`ros2 param set /site_manager site <名前>`か`echo <名前> >`、または
+その2つを選び分ける`tools/site.sh <名前>`です（**機体は立て直しません**。2026-08-25から
+LiDARの帯もこの launch 側が読みます）
 （[日常操作](operations.md#走らせる場所を切り替える)）。
 
 ### 地図は2枚
@@ -147,10 +148,17 @@ Nav2の`global_costmap`の`static_layer`——は購読先が`map`固定で、�
 既定では`/map_loc`は出ているだけで効いていません。地図を2枚に分ける値打ちがあるのは
 `localization:=emcl2`で走らせる場所（`tsudanuma`や`tsudanuma_mugimaru`）です。
 
-RVizには`Map (navigation)`と`Map (localization)`の2つの表示があります（後者は既定で
-オフ。同じ地図のときは重なるだけなので）。**自己位置がその場で回り出す症状を追うときは
-後者をオンにしてください**——貫通しているスキャンと突き合わせるべきなのは自己位置推定側の
-地図です（[困ったとき](troubleshooting.md)）。
+RVizには`Map (navigation)`と`Map (localization)`の2つの表示があります。**既定でオンなのは
+後者（`/map_loc`）です**——経路計画用の地図は手で壁を描き足したり回廊の外を塗り潰したり
+してあるので、実環境と見比べるには実測のままの自己位置推定側のほうが読めます。同じ理由で
+**自己位置がその場で回り出す症状を追うときもこちら**です（貫通しているスキャンと
+突き合わせるべきなのは自己位置推定が使っている地図。[困ったとき](troubleshooting.md)）。
+経路計画が「なぜそこを通らないか」を見たいときだけ`Map (navigation)`をオンにしてください。
+
+**`localization:=amcl`では`/map_loc`が出ません**（上流の`localization_launch.py`が自前で
+`map_server`を1つ立てるため）。その構成では地図が出ないので、`Map (navigation)`のほうへ
+戻してください。`emcl2`と`vi`は`map_server_loc`が立つので出ます（`vi`は誰も購読しませんが、
+配信はされています）。
 
 `map:=`を明示することもできますが、`site: map:`と別のファイルを指していると**起動時に
 エラーで止まります**（別の場所の帯とEMCL2調整を載せたまま走るのを防ぐため）。承知の
@@ -347,7 +355,7 @@ BTを外すと、VIが損をしていた点が消えます。**毎秒の再計�
 `compact_sink_dir`を戻してください。**
 
 ```bash
-tools/site.sh tsudanuma   # 場所を切り替える（機体も立て直す）
+tools/site.sh tsudanuma   # 場所を切り替える
 ros2 launch daifuku_stack navigation.launch.py \
   planner:=vi
 ```

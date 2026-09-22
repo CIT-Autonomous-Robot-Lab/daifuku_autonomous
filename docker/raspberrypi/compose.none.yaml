@@ -1,0 +1,22 @@
+# 本体ドライバを立てない構成。機体のハードウェアが無い環境（別の SBC や開発ホスト）
+# で workspace-build と ros2 だけを回すためのもの。
+#
+# **単体では完結せず、compose.common.yaml と 2 つ重ねて渡す。common が先**
+# (Compose 2.40 は include した側のサービスの上書きを
+# `services.raspicat conflicts with imported resource` で拒む)。選ぶのは .env の
+# COMPOSE_FILE。project 名は common に無いのでここに要り、rt / original と同じ名前に
+# してあるので行き来してもビルドキャッシュは同じものが見える。
+#
+# **raspicat を消すのではなく profiles に入れてある。** Compose には重ねる側から
+# サービスを削る書き方が無く、common の placeholder (exit 1) をそのまま残すと
+# `restart: unless-stopped` と組んで上がり直しが止まらない。有効にしていない
+# profile のサービスは `docker compose up` で作られない。
+# **`docker compose up raspicat` と名指ししたときだけは立つ**（Compose は名指し
+# されたサービスの profile を自動で有効にする）ので、そのときは common の
+# placeholder が「ドライバを選べ」と言って exit 1 する。
+name: daifuku-autonomous
+
+services:
+  raspicat:
+    profiles:
+      - driver

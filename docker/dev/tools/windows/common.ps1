@@ -1,4 +1,4 @@
-# Shared helpers for the Windows host scripts. Dot-source it with:
+# Windows のホストスクリプトが共有するヘルパ。dot-source して使う:
 #   . (Join-Path $PSScriptRoot 'common.ps1')
 
 # $PSScriptRoot = <repo>/docker/dev/tools/windows
@@ -6,18 +6,16 @@ $RaspicatDevDir = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $RaspicatComposeFile = Join-Path $RaspicatDevDir 'compose.yaml'
 # <repo>/docker/dev -> <repo>/docker -> <repo>
 $RaspicatRepoDir = Split-Path -Parent (Split-Path -Parent $RaspicatDevDir)
-# compose.yaml mounts the repo root here.
+# compose.yaml はリポジトリルートをここへマウントする。
 $RaspicatWorkspace = '/workspaces/daifuku_autonomous'
 
 function Resolve-ContainerFile {
-    # Returns a path that is readable inside $Container for a file that lives in
-    # the repo.
+    # リポジトリ内のファイルを $Container から読めるパスにして返す。
     #
-    # The Hyper-V podman machine periodically loses its Windows bind mount: the
-    # container keeps running but every access under the workspace fails with
-    # "Input/output error" (statfs on /mnt/c). The named volumes (build/install/
-    # log) are unaffected because they live inside the VM. When that happens,
-    # copy the file in rather than failing, so the GUI tools still work.
+    # **Hyper-V の podman マシンは Windows のバインドマウントを時々失う** —
+    # コンテナは動いたままワークスペース配下だけが "Input/output error" になる
+    # (名前付きボリュームは VM 内なので無事)。そのときは落とさずコピーで渡し、
+    # GUI ツールが使えるようにする。
     param(
         [Parameter(Mandatory)][string]$Container,
         [Parameter(Mandatory)][string]$Path,
@@ -64,9 +62,9 @@ function Set-PodmanConnection {
 }
 
 function Set-DockerToPodman {
-    # Docker Compose is used as Podman's compose provider. Docker Desktop may
-    # leave the CLI on the desktop-linux context, so point it at the Podman
-    # Hyper-V API pipe explicitly.
+    # Podman の compose プロバイダとして Docker Compose を使う。Docker Desktop が
+    # CLI を desktop-linux コンテキストに残すことがあるので、Podman の Hyper-V の
+    # API パイプを明示的に指す。
     param(
         [string]$Connection = 'podman-hyperv-root',
         [string]$Pipe = 'podman-hyperv'
@@ -95,16 +93,16 @@ function Get-DisplayTarget {
 }
 
 function Get-XPort {
-    # Hyper-V/WinNAT can reserve TCP 6000 after a reboot. Display :400 maps to
-    # TCP 6400 and stays outside the observed reserved range.
+    # Hyper-V / WinNAT が再起動後に TCP 6000 を予約することがある。ディスプレイ
+    # :400 = TCP 6400 なら実測した予約範囲の外に出る。
     param([int]$XDisplay)
 
     6000 + $XDisplay
 }
 
 function Start-XServer {
-    # Returns $true when an X server is listening for the display. The caller
-    # decides whether a missing GUI is a warning or an error.
+    # X サーバが待ち受けていれば $true。GUI が無いことを警告とするか失敗とするかは
+    # 呼び出し元が決める。
     param([int]$XDisplay)
 
     $port = Get-XPort $XDisplay

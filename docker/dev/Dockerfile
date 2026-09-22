@@ -51,8 +51,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       xterm \
     && rm -rf /var/lib/apt/lists/*
 
-# MID360 support. livox_ros_driver2 links to this library when the mounted
-# autonomous workspace is built.
+# MID360 用。マウントしたワークスペースを建てるとき livox_ros_driver2 がリンクする。
 RUN git clone --depth 1 --branch "${LIVOX_SDK2_REF}" \
       https://github.com/Livox-SDK/Livox-SDK2.git /tmp/Livox-SDK2 \
     && cmake -S /tmp/Livox-SDK2 -B /tmp/Livox-SDK2/build \
@@ -62,8 +61,8 @@ RUN git clone --depth 1 --branch "${LIVOX_SDK2_REF}" \
     && rm -rf /tmp/Livox-SDK2 \
     && ldconfig
 
-# The documentation uses the PC manifest.  Convert its SSH GitHub URLs to HTTPS
-# so a clean Docker build does not depend on a developer's private SSH key.
+# PC 用の manifest を使う。SSH の GitHub URL を HTTPS へ直して、まっさらな
+# Docker ビルドが個人の SSH 鍵に依存しないようにする。
 RUN git clone https://github.com/CIT-Autonomous-Robot-Lab/raspicat2.git "${RASPICAT2_WS}" \
     && git -C "${RASPICAT2_WS}" checkout "${RASPICAT2_REF}" \
     && sed -E 's#git@github.com:([^ ]+)#https://github.com/\1#g' \
@@ -86,9 +85,8 @@ RUN printf '%s\n' \
       'source /opt/raspicat2/install/setup.bash' \
       >> /root/.bashrc
 
-# Source packages may add rosdep-only build dependencies. Keep the known Livox
-# dependency in the final dev image so rebuilding the workspace is repeatable
-# after a container recreation.
+# ソースパッケージが rosdep 経由でだけ足すビルド依存。コンテナを作り直しても
+# ワークスペースを建て直せるよう、既知の Livox の依存はイメージに残す。
 RUN apt-get update && apt-get install -y --no-install-recommends \
       libaprutil1-dev \
     && rm -rf /var/lib/apt/lists/*

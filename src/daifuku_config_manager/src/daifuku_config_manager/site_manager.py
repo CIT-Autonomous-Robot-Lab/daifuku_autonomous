@@ -33,38 +33,27 @@
   ros2 topic echo /daifuku/site              流れている値
 """
 
-import json
 import os
 
 import rclpy
 from rcl_interfaces.msg import SetParametersResult
 from rclpy.node import Node
 from rclpy.parameter import Parameter
-from rclpy.qos import QoSDurabilityPolicy, QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
 from std_msgs.msg import String
 
 from . import params
-
-# 場所の告知。**絶対名にしてある** — namespace:= を付けた構成でも、機体側と
-# 自律移動側が同じ 1 本を見なければ意味が無い。
-SITE_TOPIC = "/daifuku/site"
-
-# 立ち上がりが前後しても取りこぼさないよう latch する (config_sentinel は
-# あとから上がってくる)。
-LATCHED = QoSProfile(
-    depth=1,
-    history=QoSHistoryPolicy.KEEP_LAST,
-    reliability=QoSReliabilityPolicy.RELIABLE,
-    durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
-)
+from .site_bus import LATCHED, SITE_TOPIC, encode_site
 
 
 def validate(site):
     """その場所に切り替えてよいかを、**両方のパッケージについて**確かめる。
 
     片方だけ見ると、機体は上がるのに navigation が立たない (あるいはその逆の)
-    場所へ切り替えられてしまう。**その状態で sentinel が機体を落とすと、
+    場所へ切り替えられてしまう。**その状態で sentinel が launch を落とすと、
     上がり直しては同じ理由で落ちる**ので、ここで止めるのが唯一の関門になる。
+    2026-08-25 に機体側の部分木が空になった (場所ごとに変わる設定は
+    daifuku_stack へ移った) が、**両方見るのは変えない** — 機体側にまた置いた
+    ときに黙って素通しになるのを防ぐため。
 
     **どちらのパッケージの部分木も必ず見る。** 設定の実体は daifuku_config に
     あるので、daifuku_stack が入っていない機械でも `daifuku_stack:` の下の綴り
@@ -144,10 +133,7 @@ class SiteManager(Node):
 
     def _publish(self):
         msg = String()
-        msg.data = json.dumps(
-            {"site": self._site, "file": os.path.realpath(self._file)},
-            ensure_ascii=False, sort_keys=True,
-        )
+        msg.data = encode_site(self._site, os.path.realpath(self._file))
         self._pub.publish(msg)
 
     def _on_set(self, parameters):

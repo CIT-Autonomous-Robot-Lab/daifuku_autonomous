@@ -11,6 +11,11 @@
        この 2 つは互いに依存しない。ここから両者を参照してはいけない
        (参照した瞬間に循環する)。 -->
   <exec_depend>ament_index_python</exec_depend>
+  <!-- 設定の実体は持たないが、**その在処は引く** (params.overrides_dir /
+       config_root / site_file が daifuku_config の share を指す)。宣言が抜けて
+       いると、依存だけを並べる環境 (colcon test) で PackageNotFoundError になる。
+       daifuku_config は他へ依存しない葉なので、これで循環はしない。 -->
+  <exec_depend>daifuku_config</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>python3-yaml</exec_depend>
 
@@ -29,6 +34,13 @@
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
   <test_depend>python3-pytest</test_depend>
+
+  <!-- test/test_*_launch.py (launch_testing の統合テスト)。pytest の plugin は
+       launch_testing 側が登録するので、CMake の add_launch_test は要らない。 -->
+  <test_depend>launch_testing</test_depend>
+  <!-- test_site_manager_launch.py が `ros2 param set` を実際に叩く
+       (AGENTS.md が案内している切り替えの口そのもの)。 -->
+  <test_depend>ros2param</test_depend>
 
   <export>
     <build_type>ament_python</build_type>

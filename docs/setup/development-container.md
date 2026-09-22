@@ -63,10 +63,11 @@ ros2 launch daifuku_stack navigation.launch.py \
   planner:=navfn use_rviz:=true
 ```
 
-`use_rviz`の既定は`false`なので、この環境で表示するなら明示します。**LiDARの引数は
-ありません**——`navigation.launch.py`はセンサーを1つも立てず、`/scan`と`/odom`の消費者に
-徹します。上の確認コマンドで`/scan`が来るのは実機の`raspicat`サービスが出しているから
-なので、実機につながずにこの環境だけでセンサーを立てたいときは
+`use_rviz`の既定は`false`なので、この環境で表示するなら明示します。
+**`navigation.launch.py`はセンサーのドライバを立てません**——実機の`raspicat`サービスが
+出す生データ（`/livox/lidar`など）と`/odom`を受け取る側です。ただし**点群を`/scan`に
+変える段はこの launch が持ちます**（`scan_pipeline.launch.py`。2026-08-25から）。
+実機につながずにセンサーのドライバまで立てたいときは
 `ros2 launch daifuku_bringup lidar_bringup.launch.py`を別に叩いてください
 （`robot_bringup.launch.py`のほうは本体ドライバも立てるのでPCでは上がりません）。
 

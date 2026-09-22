@@ -14,17 +14,20 @@
 # 機体の起動。**docker compose up で立つのはこれ**（raspicat サービス）。
 #
 # 「機体としてのロボット」を丸ごと持つ: 駆動ドライバ、URDF/TF、cmd_vel の仲裁、
-# ゲームパッド、**LiDAR 一式**、**オドメトリ融合**。ナビゲーション
-# (navigation.launch.py / mapping.launch.py) はここが出すトピックの消費者に徹し、
-# センサは一切立てない。
+# ゲームパッド、**LiDAR ドライバ**、**オドメトリ融合**。
 #
-#   include lidar_bringup.launch.py   LiDAR -> /scan
+#   include lidar_bringup.launch.py   LiDAR -> /livox/lidar, /livox/imu (or /scan_raw)
 #   include odom_fusion.launch.py     車輪 + IMU -> /odom, odom -> base_footprint
 #
 # LiDAR と EKF をここに置いてあるのは、navigation を立て直すたびに EKF が再起動して
-# /odom が原点へ飛ぶのを避けるため。**ドライバが finalized まで落ちるとこの launch
-# ごと終了する**ので、駆動の障害はセンサも道連れにする (下の
-# register_shutting_down_transition。詳細は AGENTS.md)。
+# /odom が原点へ飛んだり LiDAR の初期化を待たされたりするのを避けるため。
+# **ドライバが finalized まで落ちるとこの launch ごと終了する**ので、駆動の障害は
+# センサも道連れにする (下の register_shutting_down_transition。詳細は AGENTS.md)。
+#
+# **点群を /scan に変える段はここには無い** (2026-08-25 に daifuku_stack の
+# scan_pipeline.launch.py へ出した)。あの段だけが場所ごとに変わる値 (帯と仰角) を
+# 持っていて、そのせいで常駐しているこちらが src/daifuku_config/site を読む形に
+# なっていた。出したので、**機体は場所を知らない**。
 #
 # 上流 raspicat_ros の raspicat.launch.py 相当だが、raspimouse ノードを自前で
 # 立てている (上流の parameters= に勝てないため。src/daifuku_config/bringup/robot/raspicat.yaml
@@ -331,9 +334,17 @@ def launch_setup(context, *args, **kwargs):
     # **落ちたあと上げ直すのは compose の restart: unless-stopped**（この launch は
     # raspicat サービスの PID 1）。ドライバが finalized で落ちたときと同じ経路で、
     # LiDAR も EKF も一緒に上がり直す。
+    #
+    # **場所は見ない (watch_site=False)。** 2026-08-25 に /scan を作る段が
+    # daifuku_stack へ移ってから、機体には場所ごとに変わる設定が 1 つも無い。
+    # 見たままにすると `tools/site.sh` のたびに常駐している機体が上がり直す
+    # (読む値は無いのに、駆動も LiDAR も EKF も止まって上がり直す)。
+    # bringup 自身の設定 (raspicat.yaml / twist_mux.yaml / mid360_ekf.yaml) の
+    # 書き換えはこれまでどおり見る。
     sentinel = params.sentinel_actions(
         context, package="daifuku_bringup",
         config_root=params.config_root("daifuku_bringup"),
+        watch_site=False,
     )
 
     return override_logs + mux_logs + joy_logs + mux_actions + joy_actions + [
@@ -375,16 +386,22 @@ def generate_launch_description():
     # 車輪オドメトリと Mid-360 IMU の融合。**ドライバと同じ launch に置くのが要点**で、
     # use_mid360_imu 1 つで「ドライバが TF を止める」と「EKF が TF を出す」が同時に
     # 切り替わる。use_mid360_imu:=false なら向こうで何も立たない。
-    odom_fusion_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(pkg_share, "launch", "odom_fusion.launch.py")
+    #
+    # **GroupAction で囲むこと。** 子が宣言する base_frame / odom_topic /
+    # mid360_ekf_params_file が親へ漏れると、後ろの lidar_bringup の同名引数が
+    # 既定を入れられなくなる。lidar / scan の include と同じ囲い方。
+    odom_fusion_launch = GroupAction([
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(pkg_share, "launch", "odom_fusion.launch.py")
+            ),
+            launch_arguments=[
+                (name, LaunchConfiguration(name))
+                for name in ("use_mid360_imu", "wheel_odom_topic", "use_sim_time",
+                             "overrides", "extra_params_file")
+            ],
         ),
-        launch_arguments=[
-            (name, LaunchConfiguration(name))
-            for name in ("use_mid360_imu", "wheel_odom_topic", "use_sim_time",
-                         "overrides", "extra_params_file")
-        ],
-    )
+    ])
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -458,7 +475,7 @@ def generate_launch_description():
         ),
         *params.declare_args(),
         params.declare_watch_arg(),
-        # LiDAR 構成の引数 (lidar / lidar_driver / scan_filter_* / mid360_* /
+        # LiDAR ドライバの引数 (lidar / lidar_driver / mid360_config /
         # publish_lidar_tf / lidar_x..yaw / urg_*)。daifuku_bringup_launch/lidar.py。
         *lidar_common.declare_shared_args(),
         DeclareLaunchArgument("use_sim_time", default_value="false"),

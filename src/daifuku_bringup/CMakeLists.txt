@@ -14,12 +14,14 @@ install(DIRECTORY launch src
 )
 
 install(PROGRAMS
-  src/elevation_filter.py
   src/prepare_mid360_imu.py
-  src/restamp_scan.py
-  # joy_buttons.py は実行するものではないが、joy_teleop.py が隣から import する
-  # ので同じ lib/ へ入れる (share/ 側にも上の install(DIRECTORY) で入る)。
+  # joy_buttons.py / joy_waypoints.py は実行するものではないが、joy_teleop.py が
+  # 隣から import するので同じ lib/ へ入れる (share/ 側にも上の
+  # install(DIRECTORY) で入る)。
   src/joy_buttons.py
+  src/joy_waypoints.py
+  src/joy_motor.py
+  src/joy_patrol.py
   src/joy_teleop.py
   DESTINATION lib/${PROJECT_NAME}
 )

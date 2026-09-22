@@ -1,8 +1,12 @@
-# 建てないし走らせない。見るのは「読めるか・綴りが合っているか・実行ビットが
-# 付いているか」まで。colcon build を回さないのは、要るものが Livox-SDK2 の
+# ほとんど建てないし走らせない。見るのは「読めるか・綴りが合っているか・実行ビットが
+# 付いているか」まで。ワークスペースを丸ごと建てないのは、要るものが Livox-SDK2 の
 # ソースビルドと raspicat2 のワークスペースと ros2_rust で全部上流側にあり、かつ
 # 自前 7 パッケージは --symlink-install なので建て直さなくても値が効くため
 # (CLAUDE.md のビルド表)。C++ / Rust のコンパイルはここでは守られない。
+#
+# **例外は launch-test の 1 ジョブだけ**で、そこは葉の 2 パッケージ
+# (daifuku_config / daifuku_config_manager) を建てて launch_testing を走らせる。
+# この 2 つは上流に何も要らないので、上の理由に当たらない。
 name: CI
 
 on:
@@ -50,6 +54,28 @@ jobs:
           ament_flake8 $PKGS_PY
           ament_lint_cmake $PKGS_CMAKE
           ament_xmllint $PKGS_CMAKE
+
+  # ノードを本当にプロセスとして立てる唯一のジョブ (launch_testing)。建てるのは
+  # 葉の 2 つだけなので、Livox-SDK2 も ros2_rust も要らず ros-base のまま通る
+  # (launch_testing / ros2param / rclpy はイメージに入っている)。
+  #
+  # **落とすのは colcon test-result のほう。** colcon test はテストが落ちても 0 で
+  # 返るので、これを外すと赤くならないまま緑になる。
+  launch-test:
+    runs-on: ubuntu-latest
+    container: ros:humble-ros-base
+    env:
+      # runner に他の ROS が居ても混ざらない (テスト側も ROS_DOMAIN_ID を撒くが、
+      # そちらは実機で colcon test を回したときのため)。
+      ROS_LOCALHOST_ONLY: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: 葉の 2 つを建てて launch_testing を走らせる
+        run: |
+          . /opt/ros/humble/setup.sh
+          colcon build --packages-select daifuku_config daifuku_config_manager
+          colcon test --packages-select daifuku_config_manager
+          colcon test-result --all --verbose
 
   # 実機で「yaml の綴り違い 1 つで機体が上がり直し続ける」のを止める関門
   # (params.precheck) を、置いてある overrides 全部に掛ける。地図の実在と断片の

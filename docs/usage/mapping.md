@@ -125,14 +125,19 @@ Mid-360 + IMUの場合:
 ros2 launch daifuku_stack mapping.launch.py use_sim_time:=false
 ```
 
-**LiDARの構成によらず同じコマンドです。** `/scan`を出すのは機体側なので、Mid-360でも
-2D LiDARでもこちらは変わりません（構成の切り替えは前節）。地図の様子をその場で見るなら
-`use_rviz:=true`を足します（既定は`false`）。
+**LiDARの構成によらず同じコマンドです。** どちらの構成かは環境変数`LIDAR`から来るので、
+Mid-360でも2D LiDARでもこちらは変わりません（構成の切り替えは前節）。**ただし`/scan`を
+作るのはこの launch です**（2026-08-25から。機体が出すのは生データまで）。だから
+`overrides:=<場所>`を渡せばLiDARの帯もその場所のものになりますし、`navigation`と同時に
+立てると`/scan`のpublisherが2つになります（もともと排他ですが、段が増えました）。
+地図の様子をその場で見るなら`use_rviz:=true`を足します（既定は`false`）。
 
 SLAM Toolboxの値を差し替えるなら、`slam_params_file:=`でファイルごと渡すほかに、
 `overrides:=`で一部のキーだけを重ねられます（`slam_toolbox:`の節を書きます。
 `mapping.launch.py`も既定で`src/daifuku_config/site`の名前を受けるので、別の場所を測るときは
-先に`tools/site.sh`で切り替えるか、`overrides:=none`を渡してください）。書きかたは
+先に`tools/site.sh`で切り替えるか、`overrides:=<場所>`をこの launch へ直接渡してください。
+**LiDARの帯もそれで一緒に変わります** — 2026-08-25より前は機体側だったので、
+場所を切り替えて機体を立て直す必要がありました）。書きかたは
 [設定](configuration.md)の「上書き（overrides）の行き先」にあります。
 
 **ただし、走らせたまま直さないでください。** `mapping.launch.py`も`config_sentinel`を
@@ -218,7 +223,7 @@ VIの`unknown_as_obstacle`もコストマップの`track_unknown_space`も、未
 
 `19f`は**場所の名前**（`src/daifuku_config/site`の既定値）で、地図のファイルはその場所の
 `maps/19f/map_19f.yaml`です。別の場所で地図を作るときは`src/daifuku_config/overrides/<場所>.yaml`
-も用意し、`tools/site.sh <場所>`で切り替えます。**どの地図を読むかは、そのoverridesの`site:`節に
+も用意し、`tools/site.sh <場所>`で切り替えます（`overrides:=<場所>`を直接渡しても同じです）。**どの地図を読むかは、そのoverridesの`site:`節に
 書きます**（`site: map:`の下に`navigation:`と`localization:`の2行。`maps/`からの相対パス。
 [自律移動](navigation.md#地図は2枚)）。overridesの名前と地図の
 ファイル名は揃っていなくて構いませんが、**書き忘れると起動時にエラーで止まります**

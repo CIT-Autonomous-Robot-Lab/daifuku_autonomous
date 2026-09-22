@@ -94,7 +94,7 @@ docker compose up -d
 cp .env.example .env    # 初回だけ。provision.sh は機種を見て自動で作る
 
 # 公式実装（rtmouse 入りの Pi 4）に替えるとき
-sed -i 's|^COMPOSE_FILE=.*|COMPOSE_FILE=docker/raspberrypi/compose.rt.yaml|' .env
+sed -i 's|^COMPOSE_FILE=.*|COMPOSE_FILE=docker/raspberrypi/compose.common.yaml:docker/raspberrypi/compose.rt.yaml|' .env
 docker compose up -d
 ```
 

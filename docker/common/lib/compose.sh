@@ -1,18 +1,11 @@
 #!/usr/bin/env bash
-# ホスト側スクリプトで共有するCompose操作。dot-sourceして使う:
-#
-#   COMMON_LIB="$(cd -- "${SCRIPT_DIR}/../../common/lib" && pwd)"
-#   source "${COMMON_LIB}/compose.sh"
-#   compose_init "${COMPOSE_FILE}"
-#   compose ps
-#
-# 呼び出し元との深さは環境ごとに違うので、パスはBASH_SOURCEから各自で組み立てる
-# こと（ここでハードコードしない）。
+# ホスト側スクリプトで共有する Compose 操作。dot-source して compose_init を
+# 呼んでから使う。呼び出し元との深さは環境ごとに違うので、パスは BASH_SOURCE から
+# 各自で組み立てること (ここでハードコードしない)。
 
 # compose_init COMPOSE_FILE [COMPOSE_FILE...]
-#
-# Docker CLIへの到達手段を決めて COMPOSE 配列を用意する。Piではユーザーが
-# dockerグループに入っていないことがあるので、パスワード不要のsudoにも落ちる。
+# Docker CLI への到達手段を決める。Pi ではユーザーが docker グループに入っていない
+# ことがあるので、パスワード不要の sudo にも落ちる。
 compose_init() {
   (($# > 0)) || {
     echo "compose_init: compose ファイルを1つ以上指定してください。" >&2
@@ -51,9 +44,7 @@ compose_is_running() {
 }
 
 # compose_ensure_running SERVICE
-#
-# 起動していなければ起動する。イメージのビルドはしない（ビルドは各環境の
-# up スクリプトの仕事で、ここで暗黙にやると想定外の長時間ビルドになる）。
+# 起動していなければ起動する。**ビルドはしない** (暗黙にやると想定外の長時間ビルド)。
 compose_ensure_running() {
   local service="$1"
   if ! compose_is_running "${service}"; then
@@ -63,15 +54,9 @@ compose_ensure_running() {
 }
 
 # compose_shell SERVICE [BASH_ARGS...]
-#
-# コンテナ内でシェルを開く。ROS環境の読み込みはイメージ側の
-# /ros_entrypoint.sh に任せる（オーバーレイの一覧を持つのは1箇所でよい）。
-#
-# bash に渡すフラグは呼び出し元が決める。-i を付けるかどうかはイメージ依存で、
-# ここで決め打ちにはできない。dev のイメージは .bashrc で
-# /opt/ros/humble/setup.bash を読み直すので、-i を付けると entrypoint が積んだ
-# ワークスペースのオーバーレイより後ろにベースのROSが入り、AMENT_PREFIX_PATH の
-# 優先順位が引っくり返る。
+# コンテナ内でシェルを開く。ROS 環境の読み込みは /ros_entrypoint.sh に任せる。
+# **-i を付けるかは呼び出し元が決める** — dev のイメージは .bashrc で base の ROS を
+# 読み直すので、付けるとオーバーレイより後ろに入って AMENT_PREFIX_PATH が逆転する。
 compose_shell() {
   local service="$1"
   shift

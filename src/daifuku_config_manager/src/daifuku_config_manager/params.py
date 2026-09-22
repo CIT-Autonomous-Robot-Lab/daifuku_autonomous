@@ -58,8 +58,6 @@ SetParameter / SetParametersFromFile では設定ファイルに既にあるキ�
 親の段を渡す事故が起き、検査が黙って広がるため。
 """
 
-import difflib
-import glob
 import hashlib
 import json
 import os
@@ -78,6 +76,18 @@ from launch.event_handlers import OnProcessExit
 from launch.events import Shutdown
 
 from . import env_default, value
+from .overlay import (  # noqa: F401 - launch とノードが params.KNOWN_PACKAGES を見る
+    CONFIG_DIRS,
+    KNOWN_PACKAGES,
+    RESERVED_SECTIONS,
+    check_sections as _check_sections,
+    config_files as _config_files,
+    load,
+    meta as _meta,
+    overlay as _overlay,
+    reject_unknown_nodes as _reject_unknown_nodes,
+    select as _select,
+)
 
 # 読めなかったときの最後の砦 (同梱の既定の場所)。
 _FALLBACK_SITE = "19f"
@@ -135,24 +145,8 @@ DEFAULT_OVERRIDES_ORIGIN = (
     "環境変数 OVERRIDES" if os.environ.get("OVERRIDES", "").strip() else "src/daifuku_config/site"
 )
 
-# overrides ファイルの 1 段目に書けるパッケージ名と、そのパッケージの設定が
-# daifuku_config のどの段に居るか。
-#
-# **ここに無い名前は起動時に落とす。** 各 launch は自分の名前の部分木しか見ないので、
-# `daifuku_stak:` のような綴り違いを許すと、どの launch からも読まれないまま
-# エラーも警告も出ずに消える (ノード名の綴り違いを _reject_unknown_nodes で
-# 潰しているのと同じ理由)。パッケージが増えたときだけここを足す。
-CONFIG_DIRS = {
-    "daifuku_bringup": "bringup",
-    "daifuku_stack": "stack",
-}
-KNOWN_PACKAGES = tuple(CONFIG_DIRS)
-
-# 1 段目に書ける、パッケージ名ではない節。**ノードのパラメータではないもの**を
-# ここへ入れる (今は地図だけ)。パッケージ名の段に混ぜないのは、どちらのパッケージの
-# ものでもないから — 地図を読むのは daifuku_stack だが、「その場所の地図」という値は
-# 場所の属性であってノードの設定ではない。
-RESERVED_SECTIONS = ("site",)
+# CONFIG_DIRS / KNOWN_PACKAGES / RESERVED_SECTIONS は overlay.py。
+# 検査と checklist が同じ定義を見るために、合成の規則と一緒に置いてある。
 
 # config_sentinel が「設定が変わったので立て直したい」と言うときの終了コード。
 #
@@ -183,27 +177,6 @@ def config_root(package):
     読まない部分木になるのを止める検査が、黙って効かなくなる)。
     """
     return os.path.join(get_package_share_directory("daifuku_config"), CONFIG_DIRS[package])
-
-
-def load(path):
-    """YAML を dict として読む (空ファイルは {})。"""
-    with open(path, "rb") as f:
-        return yaml.safe_load(f.read().decode("utf-8")) or {}
-
-
-def _overlay(base, extra):
-    """extra を base の上に深く重ねる。
-
-    dict どうしは再帰、それ以外は置き換え。costmaps.yaml のように
-    「ノード名 -> ノード名 -> ros__parameters」と 1 段深いものがあるので、
-    段数を決め打ちにしない。list を置き換えるのは意図的で、
-    action_forward_m のような並びを連結してはいけない。
-    """
-    for key, val in extra.items():
-        if isinstance(val, dict) and isinstance(base.get(key), dict):
-            _overlay(base[key], val)
-        else:
-            base[key] = val
 
 
 def _dump_temp(prefix, body):
@@ -269,37 +242,6 @@ def site_name(context):
     for name in [n.strip() for n in value(context, "overrides").split(",") if n.strip()]:
         return "" if name.lower() == "none" else name
     return ""
-
-
-def _check_sections(body, label):
-    """1 段目に知らない名前が無いか見る。
-
-    知らない名前は**どの launch からも読まれない**ので、綴り違いが黙って消える
-    前にここで止める。
-    """
-    unknown = [
-        k for k in body if k not in KNOWN_PACKAGES and k not in RESERVED_SECTIONS
-    ]
-    if unknown:
-        raise RuntimeError(
-            f"{label}: これらは知らないパッケージ名です: {', '.join(sorted(unknown))}\n"
-            f"overrides の 1 段目は {' / '.join(KNOWN_PACKAGES)} "
-            f"(2 段目がノード名) か、予約節の {' / '.join(RESERVED_SECTIONS)} "
-            "です。どの launch も自分のパッケージ名の部分木しか読まないので、"
-            "名前を間違えるとエラーも警告も出ないまま消えます。"
-        )
-
-
-def _select(body, label, package):
-    """1 ファイルから package の部分木を取り出す (1 段目の検査つき)。"""
-    _check_sections(body, label)
-    return body.get(package) or {}
-
-
-def _meta(body):
-    """1 ファイルから site: 節 (ノードのパラメータではない値) を取り出す。"""
-    section = body.get("site")
-    return section if isinstance(section, dict) else {}
 
 
 def site_meta(context):
@@ -415,46 +357,6 @@ def _compose_one(name, base, owned, origin, layers, always):
     return out, log, hit
 
 
-def _reject_unknown_nodes(layers, hit, config_root):
-    """どの設定ファイルにも無いノード名を書いていたら止める。
-
-    ROS 2 は宣言されていないキーを黙って捨てるし、行き先の無い節も黙って
-    消える。「書いたのに効かない」を起動時に見つけるためのもの。
-
-    見るのは**呼び元のパッケージの部分木だけ** (パッケージ名の段で既に分かれて
-    いる)。同じパッケージの中で、この launch が読まない設定ファイル宛の節
-    (mapping での emcl2: など) は正常なので、config_root の下**全体**が
-    宣言しているノード名を見る。
-    """
-    unmatched = {}
-    for label, body in layers:
-        for node_name in body:
-            if node_name not in hit:
-                unmatched.setdefault(node_name, label)
-    if not unmatched:
-        return
-
-    declared = {}
-    for path in _config_files(config_root)[0]:
-        for node_name in load(path):
-            declared.setdefault(node_name, os.path.relpath(path, config_root))
-
-    unknown = {n: label for n, label in unmatched.items() if n not in declared}
-    if not unknown:
-        return
-
-    lines = []
-    for node_name, label in sorted(unknown.items()):
-        near = difflib.get_close_matches(node_name, declared, n=3)
-        lines.append(f"  {node_name} ({label})"
-                     + (f" -- did you mean: {', '.join(near)}?" if near else ""))
-    raise RuntimeError(
-        "These override sections have nowhere to go -- no file under "
-        f"{config_root} declares such a node:\n" + "\n".join(lines) + "\n"
-        f"Known nodes: {', '.join(sorted(declared))}"
-    )
-
-
 def compose(context, *args, package, config_root, targets,
             base_resolvers=None, **kwargs):
     """targets の各 launch 引数が指す設定ファイルへ overrides を重ねる。
@@ -504,29 +406,6 @@ def overrides_path(site):
 def is_site(name):
     """場所を名乗っている名前か (none / 空は名乗っていない)。"""
     return bool(name) and name.strip().lower() != "none"
-
-
-def _config_files(config_root):
-    """config_root の下の設定ファイル (overrides/ を除く) をパス順に。
-
-    **開けないものは飛ばす。** `--symlink-install` の install/ は src/ への
-    symlink なので、設定ファイルを別のパッケージへ移すと**古い symlink が
-    install/ に残る** (2026-08-07 の実機: daifuku_stack の share にまだ
-    当時の config/robot/joy_teleop.yaml が居た。移したのは f922a80)。glob には出るが
-    開けないので、読みにいくと launch ごと落ちる。ここは「今ある設定」を数える
-    ところなので、リンク切れは設定ではないと見なす。
-
-    Returns:
-        (読めたファイル, リンク切れなどで飛ばしたもの)。飛ばしたほうは呼び元が
-        言うためのもので、**黙って捨てない**。
-    """
-    pattern = os.path.join(config_root, "**", "*.yaml")
-    found, stale = [], []
-    for path in sorted(glob.glob(pattern, recursive=True)):
-        if os.path.basename(os.path.dirname(path)) == "overrides":
-            continue
-        (found if os.path.isfile(path) else stale).append(path)
-    return found, stale
 
 
 def config_digest(site, package, config_root):
@@ -655,18 +534,25 @@ def declare_watch_arg():
 
 
 def sentinel_actions(context, *args, package, config_root, action=None,
-                     node_name=None, **kwargs):
+                     node_name=None, watch_site=True, **kwargs):
     """設定の書き換えを見張るノードと、その終了を launch の停止に繋ぐ handler。
 
     **top-level の launch だけが呼ぶこと。** include される側 (lidar_bringup /
-    odom_fusion) でも呼ぶと、1 つの launch 木に見張りが 3 つ立って、それぞれが
-    勝手に launch を落としにかかる。
+    odom_fusion / scan_pipeline) でも呼ぶと、1 つの launch 木に見張りが 3 つ立って、
+    それぞれが勝手に launch を落としにかかる。
 
     Args:
         package: この launch のパッケージ名 (overrides のどの部分木を見るか)。
         config_root: このパッケージの src/daifuku_config/ (指紋を取る範囲)。
         action: shutdown / warn / off。省略すると launch 引数 config_watch。
         node_name: 既定は config_sentinel_<パッケージ名から daifuku_ を除いたもの>。
+        watch_site: 場所 (overrides と /daifuku/site) も見るか。**False にできるのは
+            そのパッケージが overrides の部分木を 1 つも持たないときだけ**で、
+            持っているのに False だと**書き換えても気づかない穴になる**ので、
+            下で確かめて落とす。機体 (daifuku_bringup) が False なのは、
+            2026-08-25 に場所ごとに変わる値 (/scan の帯と仰角) が daifuku_stack へ
+            移って、**機体は場所を知らなくなった**ため — 見たままにすると、
+            読みもしない値のために常駐している機体が上がり直す。
 
     Returns:
         action の並び (OpaqueFunction からそのまま返せる)。
@@ -685,6 +571,18 @@ def sentinel_actions(context, *args, package, config_root, action=None,
         )
 
     site = site_name(context)
+    if not watch_site:
+        # 「持っていないから見ない」を、持ち始めた瞬間に気づけるようにする。
+        # ファイルが無いときは黙って通す — 綴り違いは compose が先に落とす。
+        path = overrides_path(site) if is_site(site) else ""
+        if path and os.path.isfile(path) and (load(path).get(package) or {}):
+            raise RuntimeError(
+                f"overrides:{site} に {package}: の部分木がありますが、この launch の "
+                "見張りは場所を見ない設定 (watch_site=False) です。\n"
+                "書き換えても気づかないので、部分木を消すか watch_site を外して"
+                "ください。"
+            )
+        site = ""
     name = node_name or f"config_sentinel_{package.replace('daifuku_', '')}"
     try:
         digest = config_digest(site, package, config_root)

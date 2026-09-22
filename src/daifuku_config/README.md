@@ -16,7 +16,8 @@
 | `stack/localization/emcl2.yaml` | `navigation.launch.py` | `emcl2_params_file` でノードへ直接 |
 | `stack/lifecycle_bond.yaml` | `navigation.launch.py` | `bond_params_file` を `SetParametersFromFile` でグループ内の全ノードへ注入 |
 | `stack/mapping/slam_toolbox.yaml` | `mapping.launch.py` | `slam_params_file` でノードへ直接 |
-| `bringup/sensors/*.yaml` | `lidar_bringup.launch.py` / `odom_fusion.launch.py` | 各ノードへ直接（`scan_filter_params_file`、`mid360_ekf_params_file` など） |
+| `stack/sensors/*.yaml` | `scan_pipeline.launch.py`（`navigation` / `mapping` が include） | 各ノードへ直接（`scan_filter_params_file`、`mid360_scan_params_file`、`mid360_elevation_params_file`）。**2026-08-25 に `bringup/` から移した** — 場所ごとに変わるのはこの 3 つだけで、常駐している機体がそれを読むために `site` を知る必要があったため |
+| `bringup/sensors/mid360_ekf.yaml` | `odom_fusion.launch.py` | `ekf_filter_node` と `prepare_mid360_imu` へ直接（`mid360_ekf_params_file`） |
 | `bringup/sensors/MID360_config.json` | `lidar_bringup.launch.py` | `livox_ros_driver2` へ直接。**ROS のパラメータファイルではない**ので上書きの対象外 |
 | `bringup/robot/raspicat_driver.yaml` | `robot_bringup.launch.py` | `raspicat_driver` (LifecycleNode) へ直接。`driver:=original` (自前実装 / 標準 / Pi 4・Pi 5) |
 | `bringup/robot/raspicat.yaml` | `robot_bringup.launch.py` | `raspimouse` (LifecycleNode) へ直接。`driver:=raspimouse` (公式実装 / rtmouse 入りの Pi 4 のみ) |
@@ -24,10 +25,13 @@
 | `bringup/robot/joy_teleop.yaml` | `robot_bringup.launch.py` | `joy_node` と `joy_teleop` の**両方**へ直接（1 ファイルに 2 ノード分）。`joy:=true` (既定) のときだけ |
 
 **`bringup/` の値を変えたら `docker compose up -d` が要ります。** navigation を
-立て直しても、常駐している raspicat サービスは読み直しません。
+立て直しても、常駐している raspicat サービスは読み直しません。逆に **`stack/` の値は
+`navigation` / `mapping` を立て直すだけ**で、機体はそのままです（`stack/sensors/` も
+そちら側なので、LiDAR の帯を変えるのに機体を触る必要はありません）。
 
-`lidar_bringup.launch.py` と `odom_fusion.launch.py` は `robot_bringup.launch.py` が
-include します。単独でも立てられます（`simulator/` はそうしています）。
+`lidar_bringup.launch.py` と `odom_fusion.launch.py` は `robot_bringup.launch.py` が、
+`scan_pipeline.launch.py` は `navigation.launch.py` / `mapping.launch.py` が
+include します。どれも単独で立てられます（`simulator/` は `odom_fusion` をそうしています）。
 
 `robot/raspicat.yaml` だけは**上流ファイルの完全なコピー**で、差分ではありません。
 launch_ros はノード自身の `parameters=` をグローバル (`SetParametersFromFile`) より
@@ -68,9 +72,9 @@ resample_interval: 1         # 既定 1: 何回の更新ごとにリサンプル
 | `localization/emcl2.yaml` | `src/emcl2_ros2` の `emcl2_node.cpp` |
 | `mapping/slam_toolbox.yaml` | `slam_toolbox` の `slam_toolbox_common.cpp` / `slam_mapper.cpp` / `laser_utils.cpp` / `ceres_solver.cpp` |
 | `sensors/mid360_ekf.yaml` | `robot_localization` の `ros_filter.cpp` |
-| `sensors/mid360_scan.yaml` | `pointcloud_to_laserscan` の `pointcloud_to_laserscan_node.cpp` |
-| `sensors/mid360_elevation.yaml` | `src/elevation_filter.py` の `declare_parameter` |
-| `sensors/scan_filter.yaml` | `laser_filters` の `sector_filter.h`（既定なし＝全項目必須） |
+| `stack/sensors/mid360_scan.yaml` | `pointcloud_to_laserscan` の `pointcloud_to_laserscan_node.cpp` |
+| `stack/sensors/mid360_elevation.yaml` | `daifuku_stack` の `src/elevation_filter.py` の `declare_parameter` |
+| `stack/sensors/scan_filter.yaml` | `laser_filters` の `sector_filter.h`（既定なし＝全項目必須） |
 | `robot/raspicat.yaml` | 上流 `raspicat_ros` の `raspicat/config/raspicat.param.yaml` |
 | `robot/raspicat_driver.yaml` | `src/raspicat_driver` の `src/raspicat_driver/node.py` |
 | `robot/twist_mux.yaml` | `twist_mux` の `twist_mux.cpp`（既定なし＝書いた値がすべて） |
@@ -172,14 +176,16 @@ override も**通ります**（そして黙って無視されます）。
 `daifuku_stack:` で、**各 launch は自分のパッケージ名の部分木しか読みません**。
 2 段目がノード名で、`emcl2:` の節は `localization/emcl2.yaml` へ、`slam_toolbox:` は
 `mapping/slam_toolbox.yaml` へ、`pointcloud_to_laserscan:` は
-`daifuku_bringup` の `sensors/mid360_scan.yaml` へ、というように、同じノード名を
+`stack/sensors/mid360_scan.yaml` へ、というように、同じノード名を
 宣言している設定ファイルの上に深くマージされます。書きかたと重ね方は 3 つとも
 同じで、`extra_params_file` も同じ規則で配られます。
 
-**1 地図 = 1 ファイル**です。場所が決まれば LiDAR の帯（機体側）も emcl2 の調整
-（自律移動側）も決まる、という 1 つの話なので、パッケージでは割っていません。
-パッケージ名の段は、その 1 ファイルをどちらの launch がどこまで読むかを
-**明示するため**にあります。
+**1 地図 = 1 ファイル**です。場所が決まれば LiDAR の帯も emcl2 の調整も決まる、
+という 1 つの話なので、パッケージでは割っていません。パッケージ名の段は、その
+1 ファイルをどちらの launch がどこまで読むかを**明示するため**にあります。
+**同梱の 3 つはいまどれも `daifuku_stack:` しか持ちません** — 2026-08-25 に帯と
+仰角が `/scan` を作る段ごと `daifuku_stack` へ移ったので、機体側の部分木は
+空になりました（機体は場所を知りません）。
 
 **3 つの overrides はキーの集合をそろえてあります。** 1 つにしか要らない値も、ほかへ
 断片と同じ値で書いて並べます（地図ごとの違いが縦に並んで見えるように）。
@@ -243,24 +249,24 @@ ros2 param set /site_manager site tsudanuma
 # 2. 上がっていないとき (開発ホスト)
 echo tsudanuma > src/daifuku_config/site
 
-# 3. 1 と 2 を選び分け、届かなければ raspicat も立て直す便利口
+# 3. 1 と 2 を選び分ける便利口
 tools/site.sh tsudanuma
 
 # 自律移動側。map も overrides も src/daifuku_config/site から来るので渡さない
 ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=nav2
 ```
 
-**機体側（LiDAR の帯）を読むのは常駐している raspicat サービスで、起動時にしか
-読みません。** だから素手で書いたときは `docker compose restart raspicat` が要ります
-（1 と 3 はそこまでやる）。1 の経路では site_manager が `/daifuku/site` へ流し、機体の
-launch に居る `config_sentinel` が**機体が止まっているのを確かめてから**自分を終了し、
-compose の `restart: unless-stopped` が新しい設定で上げ直します（走行中に切り替えても
-その場では止まりません）。**上がり直すとき機体は静止させておくこと** — Mid-360 の
-ジャイロの電源投入時バイアスを起動後の静止区間から測るためです。
+**どの経路でも機体（raspicat サービス）は立て直しません。** 2026-08-25 に LiDAR の帯と
+仰角が `daifuku_stack` へ移ってから、機体には場所ごとに変わる設定が 1 つもありません
+（`robot_bringup.launch.py` の見張りも `watch_site=False` で場所を見ません）。
+**反映するには `navigation` / `mapping` を立て直してください** — 帯も仰角も地図も
+emcl2 も VI も、みなそちらが起動時に読みます。走っている `navigation` は
+`config_sentinel` が落とすので、立て直すだけで新しい場所になります。
 
-`overrides:=` を navigation へ渡しても効くのは `daifuku_stack:` の部分木だけで、
-`mapping` から LiDAR の帯を変えられないのも同じ理由です（新しい場所で地図を作るときは、
-SLAM を始める前に場所を切り替えておくこと）。
+`overrides:=` は `mapping` にも同じように効きます（`daifuku_stack:` の部分木ぜんぶ、
+つまり `slam_toolbox` も LiDAR の帯も）。**2026-08-25 より前は帯が機体側だったので、
+新しい場所で地図を作るには SLAM を始める前に場所を切り替えて機体を立て直す必要が
+ありました。**
 
 何も重ねないときは `overrides:=none` です。`ros2 launch` は値が空の
 `overrides:=` を malformed として弾くので、空文字ではなく `none` を使います。
@@ -304,12 +310,11 @@ SLAM を始める前に場所を切り替えておくこと）。
 必要です。
 
 ```yaml
-daifuku_bringup:            # 機体側。変えたら docker compose up -d
-  elevation_filter:         # -> daifuku_bringup の sensors/mid360_elevation.yaml
+daifuku_stack:              # 自律移動側。変えたら navigation / mapping を立て直す
+  elevation_filter:         # -> stack/sensors/mid360_elevation.yaml
     ros__parameters:
       min_elevation_deg: 5.0
 
-daifuku_stack:              # 自律移動側
   vi_planner:               # -> stack/vi_planner.yaml (params_file の合成結果)
     ros__parameters:
       safety_radius_penalty: 1
@@ -680,6 +685,16 @@ fw_var_per_fw + |angle| * fw_var_per_rot)`）。距離 L [m] を直進したと�
 等しくしてあるのは「向きを変えるかどうかで 1 m あたりの手数が変わらない」状態を保つ
 ためで、**3 つは一緒に動かすこと**。
 
+**同じ理屈が「その場旋回」の回転量にも効きます。** 1 手のコストが一律なので、
+`right` / `left`（前進 0）の回転量はそのまま「止まって向きを変えるレート」の値段です。
+これが旋回前進の回転量より**大きい**と、向きを変えるにはまず止まるのが常に最安になり、
+上と同じ「その場旋回 → 直進の繰り返し」へ戻ります。**据え切りは旋回前進以下に保つこと。**
+断片と 19F は据え切りも旋回前進も ±30、`tsudanuma` は据え切り ±30 に対し遅い側の旋回前進が
+±30 で、いずれも等しく置いてあります。等しいときは旋回前進が前へ出るぶんだけ安いので、
+**据え切りは前が塞がったときだけ**選ばれます。破ったのは `tsudanuma_mugimaru` で、据え切り
+だけ ±60（旋回前進は ±40 / ±20）にした構成が 2026-09-03 の実機でその場で回り続けたため、
+±40 へそろえて戻しました。
+
 **上限を決めるのは `velocity_smoother` で、いまそこは 0.4 です。** `follow_path` の
 `cmd_vel` は `velocity_smoother` を通ってから車輪へ行き（`nav2:=false` でも通る）、その
 `max_velocity` は `nav2/behaviors.yaml` が **DWB の `max_vel_x` に合わせた
@@ -695,7 +710,9 @@ fw_var_per_fw + |angle| * fw_var_per_rot)`）。距離 L [m] を直進したと�
 * **旋回半径が変わります**（`linear.x / angular.z` = 前進量 ÷ 回転量）。0.5 へ上げた当初は
   20 deg/s のままで 0.859 m → 1.432 m に広がり、2026-08-20 の実機（津田沼、0.8 m/s）で
   WP1 の右折を曲がりきれず蛇行したため、`action_rotation_deg` を断片と 19F は ±30
-  （0.955 m）、津田沼の override だけ ±40（**0.716 m**、0.8 m/s 時 1.15 m）へ上げてあります。曲がりきれない狭さでは価値反復が
+  （0.955 m）へ上げてあります。津田沼の 2 つは override で旋回前進を速い／遅いの 2 段に
+  していて、遅い側が `tsudanuma` は ±30（0.4 m で **0.764 m**）、`tsudanuma_mugimaru` は
+  ±40（0.5 m で **0.716 m**）です。曲がりきれない狭さでは価値反復が
   `right` / `left`（前進 0）を選ぶだけなので**壊れはしません**。前進量を下げる側で
   戻すと 1 m あたりの手数の話に戻ります。
 * **薄い壁のすり抜けが 0.3 m から 0.5 m へ広がります。** 遷移は着地セルしか見ないので、
@@ -842,7 +859,7 @@ p90 と p99 の間へ置くと運用上通る範囲に階調を集中させ遠�
 | `map_scale` | 2 | 5 | 2 |
 | プランナ内部 | 458x289 @0.10m | 1178x800 @0.25m | 1250x790 @0.20m |
 | 状態数（x60 θ） | 794 万 | 5650 万 | 5925 万 |
-| solver | 密（654.8 MB 実測） | compact（sink 648 MB） | compact（sink 680 MB 見当） |
+| solver | 密（654.8 MB 実測） | compact（sink 648 MB） | compact（sink 711 MB 実測） |
 
 状態数が津田沼とほぼ同じなので、**solver も compact が要ります**（津田沼は密だと
 3.17 GB で OOM）。`downsample_policy` だけは津田沼と違って `conservative` のままです
@@ -850,9 +867,78 @@ p90 と p99 の間へ置くと運用上通る範囲に階調を集中させ遠�
 まだ届かないためです。**`map_scale: 3`（0.30 m/cell）へは上げないでください** — 通路の
 セル幅が死ぬ上限が 0.25 m/cell 付近で、津田沼の `map_scale: 6` が解けなかったのがそこです。
 
-`goal_margin_radius` は `0.6` にしてあります。ゴール圏のセル数は「半径 ÷ 内部解像度」
-なので、0.20 m/cell では断片の `0.3` だと 1.5 セルに潰れます。`0.6` で 3 セル = 19F と
-同じ数です。
+`goal_margin_radius` は `1.0` にしてあります。ゴール圏のセル数は「半径 ÷ 内部解像度」
+なので、0.20 m/cell では断片の `0.3` だと 1.5 セルに潰れます。**効くのはメートルのほうで
+セル数ではありません** — この値は 5 セルぶんで、`tsudanuma` の `0.75`（0.25 m/cell で 3
+セル）とも 19F の `0.3`（0.10 m/cell で 3 セル）とも違うこの地図だけの許容差です
+（2026-09-02 に 1 手 1.0 m へ上げたときに `0.75` から。**未検証**）。
+
+### この地図の solve の実測 (2026-09-02)
+
+`simulator/` のハーネス (`container/run_case.sh` + `fake_robot.py`) で、WP0 →  WP1
+(57 m) を走らせて測ったものです。**ホストは amd64 の 4 コア pin (8 GB) で、Pi 5 の値では
+ありません。** 秒数そのものではなく比を見てください。**測ったのは 1 手 0.8 m /
+`safety_radius_penalty: 5` / ±20・±30 度の頃**で、そのあと同じ 2026-09-02 に
+1 手 1.0 m・penalty 10・±20/±40/±60 度・`follow_controller: dwa` へ変えてあります
+（下の秒数は当時の条件のままです）。**その構成は 2026-09-03 の実機でスピンした**ので、
+据え切りを ±40 へ下げて `follow_controller` を `greedy` へ戻してあります。
+
+| | tsudanuma | tsudanuma_mugimaru |
+| --- | --- | --- |
+| 内部格子 | 1178x800 @0.25m x60 = 5654 万 | 1250x791 @0.20m x60 = 5932 万 |
+| フル solve (`early_start: false`) | **11.83 s** (iters 446) | **27.95 s** (iters 527) |
+| `early_start` の打ち切り | 8.17 / 7.27 s | 13.56 s |
+| 先読み (1 スレッド) | — (`false`) | 54.29 s |
+| 先読み (2 スレッド) | — | 37.50 s |
+| 先読みからの採用 | — | **0.04 s** (iters 0) |
+
+読み取れることが 3 つあります。
+
+**1. 状態数がほぼ同じなのに、この地図は 2.4 倍重い。** 差は自由空間の広さです——
+tsudanuma は 68.2% が未観測で、それがそのまま障害物扱い (= 解かなくてよい) になって
+いるのに対し、この地図は未観測が 0.05% しかなく、ほぼ全域が通行可として解かれます。
+**そこで 2026-09-02 に、順路から 8.5m の回廊だけを残した navigation の地図を作りました**
+(`tsudanuma-challenge_nav_corridor.pgm`。生成は `uv run corridor-map`、詳細は
+[`maps/tsudanuma_mugimaru/README.md`](../daifuku_stack/maps/tsudanuma_mugimaru/README.md))。
+自由空間が 36,801 → 18,144 m² になり、**フル solve は 27.95 → 13.07 秒**
+(tsudanuma の 11.83 秒とほぼ同じ) です。**この地図は順路から導かれるので、順路を
+変えたら作り直すこと** — 新しい点が回廊の外に出ると、その点は占有セルに乗るので
+「ゴールが出ない」としてしか現れません。**秒数は 2026-09-03 の作り直しより前の
+地図で測ったもので、要再測です** (あちらは回廊が上下逆に載っていた。直すのと
+対で連結性のため半径を 5.0 → 8.5m に広げたので、自由空間は 30.6% → 45.9% に
+増えた = **短縮はこの数字より小さくなるはず**。
+[`maps/tsudanuma_mugimaru/README.md`](../daifuku_stack/maps/tsudanuma_mugimaru/README.md#上下反転していた))。
+
+**2. `map_scale` を上げても速くなりません。** scale 3 (0.30 m/cell、状態数 44%) の
+フル solve は 27.72 s / iters 1366 で、scale 2 の 27.95 s / iters 527 と変わりません。
+1 手 0.8 m が 4 セルから 2.67 セルに減って反復が 2.6 倍に増え、状態数の減りを相殺する
+ためです。減るのは sink だけ (0.71 → 0.32 GB) なので、**メモリが目的なら有効、速度が
+目的なら無意味**です。
+
+**3. 先読みは効くが条件付き。** 2 点目は 0.04 s で走り出せました。ただし先読みは
+**1 スレッド固定** (`waypoint_prefetch_threads` 既定 1) で 54.29 s かかり、間に合うのは
+「点間の走行時間 > それ」のときだけです (この実測は走行 86.94 s)。**順路の 1 点目は
+必ず solve を待ちます。** そして**実機では solve だけが遅くなり、走行時間は変わりません**
+——実機の tsudanuma が 87 秒 ([`docs/usage/navigation.md`](../../docs/usage/navigation.md))
+なのに対しここでは 11.83 s なので、この比のぶんだけ先読みは間に合いにくくなります
+(87 秒は 2026-08-26 の 8 手・0.8 m 化より前の実測なので、係数そのものは信用しすぎない
+こと)。そこで **`waypoint_prefetch_threads` を 2 にしてあります**。先読みは回廊化の恩恵を
+受けない (1 スレッドなので 54.29 → 51.01 秒にしかならない) 一方、2 スレッドにすると
+32.44 秒 = 走行 89.85 秒の 1/2.8 に収まります (回廊地図での実測はどれも上記のとおり
+**要再測**)。**実機の solve が本ホストの 2.8 倍まで
+遅くても次の点に間に合う、という目安がこれ。** Pi 5 の 4 コアで 3 以上にはしないで
+ください (10Hz の追従・emcl2・global sweep が同じコアに載ります)。
+
+`waypoint_prefetch` は **2026-09-02 に `true`** へしました（巡回で点が変わるたびに
+solve を丸ごと待つのをやめ、いまの点へ走っている間に次を解かせる）。場が 2 本になるので
+sink 711 MB × 2 = 1.42 GB が匿名メモリに乗ります（2026-09-02 の実測。ノードが起動時に
+`compact output -> RAM (0.71 GB)` と `budget the sink directory for 1.42 GB` を出す）——**Pi 5（8 GB）前提**で、4 GB 機では `false` へ戻して
+ください。ノードのメモリ判定は 1 本ぶんしか見ないので（下）、4 GB でも 711 MB <
+`compact_ram_limit_mb` 4096 MB で両方 RAM に載り、OOM killer が解決します。
+`tools/checklist/section-0102-config.sh` の項は**実機が Pi 4 のときだけ**走ります。
+`nav2:=false`（既定）では `vi_planner` 自身が `follow_waypoints` で順路を受けて先読みへ
+渡すので、`/waypoints` を出すものが居なくても効きます。**未検証** — 津田沼が
+2026-08-08 に `false` へ戻した「走行中の固まり」が出たら、真っ先にここを戻してください。
 
 **この地図の値はすべて未検証**です。津田沼（同じ場所・同じ機体）から写し、内部解像度で
 決まるものだけ計算し直してあります。
@@ -886,7 +972,9 @@ p90 と p99 の間へ置くと運用上通る範囲に階調を集中させ遠�
 **この地図は `waypoint_prefetch` を `true` にしてあるので、表の数字は 2 倍で読んでください**
 （先読み中は価値関数が 2 本生きる = 密の scale 2 で 1.3 GB が匿名メモリに乗る。密には
 `compact_ram_limit_mb` のようなディスクへ逃がす口がありません）。**4 GB 機では先読みのほうを
-外してください。** ノードのメモリ判定が見ているのが 1 本ぶんか 2 本の合計かは**未確認**です。
+外してください。** ノードのメモリ判定が見ているのは **1 本ぶん**です（`vi_planner` の
+`boot.rs` の `compact_sink_dir` は solve ごとに `nstates × 12 B` を上限と比べる）。
+2 本が同時に生きても判定は変わらないので、**合計が溢れても警告は出ません**。
 `true` にしている理由（巡回で点が変わるたびの solve 29 秒を消す）と、津田沼が 2026-08-08 に
 `false` へ戻した経緯（あちらは solve 87 秒、場は 648 MB × 2 = 1.3 GB）は
 [`docs/usage/navigation.md`](../../docs/usage/navigation.md#次の点を走行中に解いておくwaypoint_prefetch)。
@@ -936,16 +1024,12 @@ p90 と p99 の間へ置くと運用上通る範囲に階調を集中させ遠�
   | --- | --- | --- | --- | --- | --- |
   | `19f` | 0.10 m/cell（`map_scale: 2`） | 約 1,657 | 約 99,000 | 約 99 ms | **約 4 割** |
   | `tsudanuma` | 0.25 m/cell（`map_scale: 5`） | 約 265 | 約 16,000 | 約 16 ms | 全部 |
+  | `tsudanuma_mugimaru` | 0.20 m/cell（`map_scale: 2`） | 約 414 | 約 25,000 | 約 25 ms | 全部 |
 
-  **19F では窓の 6 割が掃かれません。** 効き方は `follow_controller` で変わります。
-  **同梱の overrides は 2 地図とも `dwa`** で、あちらの軌道棄却は `penalty` を直に読むので
-  （スキャン注入は毎 tick 効く）**障害物回避そのものは生きます**。掃き待ちになるのは
-  生き残った候補の順位付け（V̂ = 掃いた値）だけです。ただし `dwa` が候補全滅か無進展ガード
-  （どちらも V̂ を見る）で手を引くと `greedy` へ落ちるので、**その落ち先は掃き待ちの
-  `optimal_action` です**。`greedy` に戻すと `optimal_action` が
-  掃いた結果そのものなので、**判断が丸ごと掃き待ち**になります。そのときは
-  `refine_budget_ms` を上げるか窓を縮めてください。**未検証**（上の時間は式に値を入れた
-  見積もりで、実機では測っていません）。
+  **19F では窓の 6 割が掃かれません。3 地図とも `follow_controller` は `greedy`** で、
+  `optimal_action` が掃いた結果そのものなので**判断が丸ごと掃き待ち**になります。
+  掃き切れないのは 19F だけなので、あの地図で使うなら `refine_budget_ms` を上げるか窓を
+  縮めてください。**未検証**（上の時間は式に値を入れた見積もりで、実機では測っていません）。
 * **`tsudanuma` では形が変形しません。** 伸縮の不感帯は 0.3 セル
   （`DEADBAND_CELLS`、プランナ格子のセル）＝ 0.25 m/cell では 0.075 m/tick ですが、
   1 tick の最大変位は `action_forward_m 0.5 ÷ control_frequency 10` = 0.05 m しかなく、

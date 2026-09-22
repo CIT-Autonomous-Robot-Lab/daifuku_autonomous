@@ -49,19 +49,10 @@ import rclpy
 import yaml
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
-from rclpy.qos import QoSDurabilityPolicy, QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
 from std_msgs.msg import String
 
 from . import params
-
-SITE_TOPIC = "/daifuku/site"
-
-LATCHED = QoSProfile(
-    depth=1,
-    history=QoSHistoryPolicy.KEEP_LAST,
-    reliability=QoSReliabilityPolicy.RELIABLE,
-    durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
-)
+from .site_bus import LATCHED, SITE_TOPIC, decode_site
 
 
 class ConfigSentinel(Node):
@@ -107,7 +98,12 @@ class ConfigSentinel(Node):
         if not self._package or not self._config_root:
             raise RuntimeError("package と config_root は必須です")
 
-        self.create_subscription(String, SITE_TOPIC, self._on_site, LATCHED)
+        # **site が空なら場所は見ない。** 名乗っていない (overrides:=none) か、
+        # そもそも場所ごとに変わる設定を持たない launch (2026-08-25 以降の機体) の
+        # どちらかで、どちらも「/daifuku/site に別の名前が流れた」は自分には
+        # 関係がない。購読したままだと、機体が読みもしない値のために上がり直す。
+        if self._site:
+            self.create_subscription(String, SITE_TOPIC, self._on_site, LATCHED)
         self.create_subscription(Odometry, odom_topic, self._on_odom, 10)
         self.create_timer(self._period, self._poll)
 
@@ -121,12 +117,13 @@ class ConfigSentinel(Node):
     # ── 入力 ──────────────────────────────────────────────────────────────
 
     def _on_site(self, msg):
-        try:
-            self._announced = (yaml.safe_load(msg.data) or {}).get("site", "")
-        except yaml.YAMLError:
-            # JSON は YAML の部分集合なので safe_load で読める。読めないものが
-            # 流れてきたら告知の側の問題なので、こちらは黙って前の値を保つ。
+        site = decode_site(msg.data)
+        if site is None:
+            # 壊れた告知は前の値を保つ。読めないものを場所が変わったと見なすと
+            # 立て直しが止まらなくなる。
             self.get_logger().warning(f"{SITE_TOPIC} を読めません: {msg.data!r}")
+            return
+        self._announced = site
 
     def _on_odom(self, msg):
         now = time.monotonic()
@@ -202,7 +199,7 @@ class ConfigSentinel(Node):
         if self.exit_requested:
             return
 
-        if (not self._announced and not self._no_manager_said
+        if (self._site and not self._announced and not self._no_manager_said
                 and time.monotonic() - self._started > 60.0):
             self._no_manager_said = True
             self.get_logger().warning(

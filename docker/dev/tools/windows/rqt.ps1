@@ -12,12 +12,9 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'common.ps1')
 
-# rqt runs as a python script, so its process name is python3 and `pgrep -x rqt`
-# never matches. Match the interpreter argument instead. The bracket keeps the
-# pattern from matching the `bash -lc` that carries it, and the trailing anchor
-# keeps it off the siblings: an unanchored /bin/rqt also matches
-# /bin/rqt_plot, which docs/usage/control-panel.md tells people to open next to
-# this panel. Without the anchor, -Restart would kill it.
+# rqt は python スクリプトなのでプロセス名は python3 で、`pgrep -x rqt` は当たらない
+# (引数のほうを見る)。角括弧はパターンを運ぶ `bash -lc` 自身に当たらないため、末尾の
+# アンカーは /bin/rqt_plot まで拾わないため — 無いと -Restart がそちらを殺す。
 $RqtPattern = '[/]bin/rqt( |$)'
 
 Set-PodmanConnection -Name $PodmanConnection
@@ -31,11 +28,9 @@ if (-not (Start-XServer $XDisplay)) {
     throw "No X server is listening on TCP $(Get-XPort $XDisplay). Install VcXsrv at 'C:\Program Files\VcXsrv\vcxsrv.exe' or start an X server yourself."
 }
 
-# The workspace overlay is what carries daifuku_rqt. Unlike RViz there is no
-# single file to stage from the host when the bind mount drops, so say what is
-# missing rather than letting rqt come up without the plugin -- with
-# -NoStandalone that failure is just an absent menu entry, which explains
-# itself even less.
+# daifuku_rqt を載せているのはワークスペースのオーバーレイ。RViz と違って
+# バインドマウントが落ちたときにホストから渡せる 1 ファイルが無いので、プラグイン
+# 抜きで上げずに何が無いかを言う (-NoStandalone だとメニュー項目が消えるだけになる)。
 $overlay = "$RaspicatWorkspace/install/setup.bash"
 podman exec $Container test -r $overlay *> $null
 if ($LASTEXITCODE -ne 0) {
@@ -64,7 +59,7 @@ if (-not $NoStandalone) {
     $rqtArgs += "--standalone '$Plugin'"
 }
 if ($ForceDiscover) {
-    # rqt caches the plugin list, so a newly built plugin can stay invisible.
+    # rqt はプラグイン一覧を覚えているので、建てたばかりのものが見えないことがある。
     $rqtArgs += '--force-discover'
 }
 
@@ -86,8 +81,8 @@ Start-Sleep -Seconds 2
 $rqtPid = podman exec $Container bash -lc "pgrep -f '$RqtPattern' | head -n 1" 2>$null
 if (-not $rqtPid) {
     podman exec $Container bash -lc 'tail -n 50 /tmp/rqt.log 2>/dev/null || true'
-    # A -Plugin that matches nothing is the likely cause; the log says so.
-    # `rqt --list-plugins` in the container lists what it would accept.
+    # -Plugin が何にも当たっていないのが大抵の原因 (ログに出る)。コンテナ内の
+    # `rqt --list-plugins` が受け付ける名前を並べる。
     throw 'rqt exited during startup. The container log is shown above.'
 }
 

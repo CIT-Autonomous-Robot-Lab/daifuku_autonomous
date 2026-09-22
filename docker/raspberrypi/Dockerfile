@@ -4,8 +4,8 @@
 # 上げるときは人が明示的にこの sha を書き換えること。
 ARG ROS_IMAGE=ros:humble-ros-base-jammy@sha256:7bea3d9aa2483d3ca34c8e30d921b79273b0913bd7dc64bebf51d082b5d107e4
 
-# Build on the target architecture.  The official ros-base image supports both
-# amd64 and arm64, unlike osrf/ros:humble-desktop-full (amd64 only).
+# 目的アーキテクチャの上で建てる。公式の ros-base は amd64 と arm64 の両方を持つ
+# (osrf/ros:humble-desktop-full は amd64 だけ)。
 FROM ${ROS_IMAGE} AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -51,22 +51,16 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       ros-humble-slam-toolbox \
       ros-humble-topic-tools
 
-# **ARG は「最初に使う RUN の直前」に置くこと。** BuildKit は FROM より後に宣言した
-# ARG を、**使っていない RUN も含めて**それ以降の全 RUN のキャッシュキーへ入れる
-# (`docker history` の `RUN |2 LIVOX_SDK2_REF=... BUILD_JOBS=...` がそれ)。上の
-# apt の層は 2.85GB / Pi 4 で 6 分あるので、そこより上に置くと
-# `--build-arg BUILD_JOBS=1` がそれを作り直しにいく。ここへ下ろしてあるので、
-# 巻き添えは Livox 以降 (数分) で済む — ゼロにはならない。
+# **ARG は「最初に使う RUN の直前」に置くこと。** BuildKit は FROM より後の ARG を
+# **使っていない RUN も含めて**それ以降の全 RUN のキャッシュキーに入れるので、上の
+# apt 層 (2.85GB / Pi 4 で 6 分) より上に置くと --build-arg がそれを作り直しにいく。
 ARG LIVOX_SDK2_REF=v1.3.1
-# ビルドの並列数。**compose は環境変数の BUILD_JOBS をここへ渡さない** (`args:`
-# に無い)。渡すと OOM 避けの `BUILD_JOBS=1 docker compose up -d` — つまり up 時の
-# colcon だけを絞りたいとき — がこの下の層を全部作り直すため。イメージ側を絞るのは
-# 明示のときだけ:
-#
-#   docker compose build --build-arg BUILD_JOBS=1
+# ビルドの並列数。**compose は環境変数の BUILD_JOBS をここへ渡さない** (渡すと
+# OOM 避けで下げた瞬間に下の層が全部作り直しになる)。イメージ側を絞るのは明示のとき
+# だけ: docker compose build --build-arg BUILD_JOBS=1
 ARG BUILD_JOBS=4
 
-# Livox SDK2 is required by livox_ros_driver2.
+# livox_ros_driver2 が要る。
 RUN git clone --depth 1 --branch "${LIVOX_SDK2_REF}" \
       https://github.com/Livox-SDK/Livox-SDK2.git /tmp/Livox-SDK2 \
     && cmake -S /tmp/Livox-SDK2 -B /tmp/Livox-SDK2/build \
@@ -75,11 +69,9 @@ RUN git clone --depth 1 --branch "${LIVOX_SDK2_REF}" \
     && cmake --install /tmp/Livox-SDK2/build \
     && rm -rf /tmp/Livox-SDK2
 
-# vi_planner は rclrs を使う。compose は user: "1000:1000"
-# で回すので、/root (0700) ではなく誰でも読める /opt にツールチェーンを置く。
-# クレートのレジストリは層には残さない (キャッシュマウントなので、イメージには
-# 入らないまま次回のビルドからは再利用される)。ワークスペースのビルド時は
-# build-workspace.sh が CARGO_HOME をビルド用ボリュームへ向けるので無関係。
+# vi_planner が使う rclrs のツールチェーン。**compose は user: "1000:1000" で回す**
+# ので、/root (0700) ではなく誰でも読める /opt に置く。レジストリはキャッシュ
+# マウント (イメージには入らない。up 時の CARGO_HOME はビルド用ボリューム側)。
 ENV CARGO_HOME=/opt/cargo \
     RUSTUP_HOME=/opt/rustup \
     PATH=/opt/cargo/bin:${PATH}
@@ -99,8 +91,7 @@ RUN git clone https://github.com/ros2-rust/ros2_rust.git \
     && rm -rf ros2
 
 WORKDIR /opt/ros2_rust_ws
-# 中間生成物は同じ層の中で消す。層を分けて消しても、実体は前の層に残ったまま
-# イメージのサイズに乗る。
+# 中間生成物は同じ層の中で消す (層を分けて消しても実体は前の層に残る)。
 RUN --mount=type=cache,target=/opt/cargo/registry \
     source /opt/ros/${ROS_DISTRO}/setup.bash \
     && colcon build --merge-install \
@@ -108,10 +99,8 @@ RUN --mount=type=cache,target=/opt/cargo/registry \
          --packages-up-to rclrs \
     && rm -rf build log
 
-# Some Humble installations do not ship Rust bindings for the message packages
-# vi_planner depends on.  Build the source fallback only for the missing ones.
-# tf2_msgs joined the list on 2026-08-09 (upstream added publish_tf, the
-# AMCL-contract map->odom broadcaster).
+# vi_planner が使うメッセージの Rust バインディングは Humble に無いことがある。
+# 無いものだけソースから建てる (tf2_msgs は 2026-08-09 に publish_tf が入って加わった)。
 RUN --mount=type=cache,target=/opt/cargo/registry \
     pkgs=""; \
     for spec in "nav2_msgs https://github.com/ros-navigation/navigation2.git" \
@@ -133,19 +122,13 @@ RUN --mount=type=cache,target=/opt/cargo/registry \
     fi \
     && rm -rf /opt/ros2_rust_ws/build /opt/ros2_rust_ws/log
 
-# 外部パッケージのソースは **rosdep に apt 依存を解決させるためだけ** に取る。
-# ワークスペースのビルドは compose の up 時にコンテナ内で行うので
-# (docker/raspberrypi/scripts/build-workspace.sh)、解決が済んだら捨てる。
+# 外部パッケージのソースは **rosdep に apt 依存を解かせるためだけ**に取り、済んだら
+# 捨てる (ワークスペースのビルドは up 時にコンテナ内で行う)。rosdep をここに置くのは
+# 「apt が変わったときだけイメージを焼き直す」ため。
 #
-# 狙いは「apt パッケージが変わったときだけイメージを焼き直す」こと。rosdep を
-# 起動時に回すとネットワークが要るうえ apt の状態が毎回変わるので、ここに残す。
-#
-# **COPY ではなくバインドマウントで渡す。** マウントは層を作らないので中身は
-# イメージに残らず (だからここで rm する必要も無い)、それでいて内容ハッシュは
-# キャッシュキーに入る。**rosdep が読むのは package.xml 1 つだけ**なので、
-# daifuku_stack の地図や config を直してもこの層から下は作り直されない
-# (以前はツリーごと COPY していて、yaml を 1 行直すたびに rosdep と apt が
-# やり直しになっていた)。
+# **COPY ではなくバインドマウントで渡す。** 層を作らないのでイメージに残らず、内容
+# ハッシュはキャッシュキーに入る。**rosdep が読むのは package.xml 1 つだけ**なので、
+# 地図や config を直してもここから下は作り直されない。
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     --mount=type=bind,source=daifuku_autonomous.repos,target=/tmp/repos.yaml \
@@ -162,10 +145,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && cd / \
     && rm -rf /tmp/vcs
 
-# arm64 の CMake が、生成された相対探索で ROS の共有ライブラリを見失うこと
-# (QEMU 下で顕著) への当て木。エクスポートの探索先を、実在を確認した ROS の
-# lib ディレクトリに固定する。ワークスペースのビルドは up 時にこのイメージの
-# 中で走るので、この修正は実行イメージにもそのまま残る。
+# arm64 の CMake が相対探索で ROS の共有ライブラリを見失う (QEMU 下で顕著) ことへの
+# 当て木。探索先を実在を確かめた lib ディレクトリに固定する。
 RUN if [[ "$(dpkg --print-architecture)" == "arm64" ]]; then \
       test -f /opt/ros/${ROS_DISTRO}/lib/librcutils.so; \
       find /opt/ros/${ROS_DISTRO}/share -type f \
@@ -175,8 +156,10 @@ RUN if [[ "$(dpkg --print-architecture)" == "arm64" ]]; then \
           '{}' +; \
     fi
 
-# 実行時にだけ要るノード。rosdep が見るのはビルド依存なので、launch から起動する
-# だけのものはここで明示的に入れる。
+# 実行時にだけ要るノード。rosdep が見るのはビルド依存なので、launch が起動するだけの
+# ものはここで明示的に入れる。urg_node は lidar:=2d 用 (既定は MID360 だが、焼き直さず
+# に差し替えられるように入れてある)。**意図的に入れていないもの**: rviz2 /
+# joint_state_publisher_gui (この機は headless)、joy_linux (使うのは SDL 版の joy)。
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
@@ -191,28 +174,12 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       ros-humble-urg-node \
       ros-humble-xacro
 
-# urg_node は lidar:=2d のときだけ使う。本機の既定は MID360 なので通常は動かない
-# が、2D LiDAR に差し替えたときにイメージを焼き直さず起動できるよう入れてある
-# (lidar_bringup.launch.py が raspicat_bringup の URG パラメータで立てる)。
-#
-# raspicat_bringup / raspicat_description が package.xml で宣言している依存のうち、
-# 次のものは意図的に入れていない。rosdep はビルドのために入れるが、実行には要らない。
-#   * rviz2 / joint_state_publisher_gui
-#                — raspicat_description の表示用 launch 専用。この機はheadless。
-#   * joy_linux  — /dev/input/js* を読む旧実装。本機が使うのは SDL 版の joy
-#                  (joy_node) のほうで、そちらは上の一覧に入れてある
-#                  (robot_bringup.launch.py の joy:=true が立てる)。
-#                  teleop_twist_joy の依存として既に入っている可能性が高いので、
-#                  焼き直す前に `ros2 pkg executables joy` で確かめてよい。
 ENV ROS_LOCALHOST_ONLY=0 \
     RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 
-# ワークスペースは空で用意する。src/ は compose が ../../src をここへマウントし、
-# build/install/log は名前付きボリュームが受け持つ。
-#
-# 名前付きボリュームは「イメージ側の同じパスの中身と所有者」で初期化される。
-# compose は user: "1000:1000" で回すので、ここで作って chown しておかないと
-# 空のボリュームが root 所有で作られ、colcon が build/install へ書けない。
+# ワークスペースは空で用意する (src/ は compose がマウント、build/install/log は
+# 名前付きボリューム)。**ここで作って chown しておくこと** — ボリュームはイメージ側の
+# 同じパスの所有者で初期化されるので、無いと root 所有になり colcon が書けない。
 RUN ldconfig \
     && mkdir -p ${ROS_WS}/src ${ROS_WS}/build ${ROS_WS}/install ${ROS_WS}/log \
     && chown -R 1000:1000 ${ROS_WS}

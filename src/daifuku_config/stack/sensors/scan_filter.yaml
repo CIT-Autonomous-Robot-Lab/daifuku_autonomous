@@ -1,5 +1,5 @@
 # LiDAR の角度フィルタ (laser_filters の LaserScanSectorFilter)。
-# lidar_bringup.launch.py が scan_filter_params_file でノードへ直接渡す。
+# scan_pipeline.launch.py が scan_filter_params_file でノードへ直接渡す。
 #
 # このフィルタに**既定値は無い**。sector_filter.h の configure() は 6 つすべてを
 # getParam で要求し、1 つでも欠けると ERROR を出して設定失敗になる (上流 example の

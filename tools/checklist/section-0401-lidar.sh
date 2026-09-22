@@ -41,13 +41,20 @@ else
   skip "/livox/lidar" "トピックが無い (lidar:=2d か、ドライバが上がっていない)"
 fi
 
-require "/scan がある" has_topic /scan
-item "/scan が 8Hz 以上" hz_at_least /scan 8
-on_fail && diagnose "/scan が来ない" \
-  "/livox/lidar は来ているか|点群はあるのに /scan が無い = 切り出し (pointcloud_to_laserscan) 側|min_height / max_height と仰角フィルタの帯を見る。潰れていると空になる" \
-  "Mid-360 の ping が通らなかったか|センサが LAN に居ない。**コンテナは正常に上がったように見える**|結線と電源、MID360_config.json の IP を見る" \
-  "ping は通るのに点群が来ないか|bind failed (別プロセスが同じポートを掴んでいる)|docker compose restart raspicat。残骸は docs/usage/troubleshooting.md" \
-  "lidar:=2d で立てているか|URG のデバイスが見えていない|/dev/ttyACM* と udev ルールを見る"
+# **/scan を作るのは機体ではない。** 2026-08-25 から点群を切り出す段
+# (scan_pipeline.launch.py) は navigation / mapping の側に居るので、機体だけを
+# 上げた状態では /scan は無いのが正常。だから require ではなく skip にする
+# (ここで止めると下のフレーム名の検査まで飛んでしまう)。
+if has_topic /scan; then
+  item "/scan が 8Hz 以上" hz_at_least /scan 8
+  on_fail && diagnose "/scan が来ない" \
+    "/livox/lidar は来ているか|点群はあるのに /scan が無い = 切り出し (pointcloud_to_laserscan) 側|min_height / max_height と仰角フィルタの帯を見る。潰れていると空になる" \
+    "Mid-360 の ping が通らなかったか|センサが LAN に居ない。**コンテナは正常に上がったように見える**|結線と電源、MID360_config.json の IP を見る" \
+    "ping は通るのに点群が来ないか|bind failed (別プロセスが同じポートを掴んでいる)|docker compose restart raspicat。残骸は docs/usage/troubleshooting.md" \
+    "lidar:=2d で立てているか|URG のデバイスが見えていない|/dev/ttyACM* と udev ルールを見る"
+else
+  skip "/scan" "トピックが無い (navigation / mapping を立てていない。機体は生データまで)"
+fi
 
 # 全ビームが inf = 何も見えていない。帯の切り方を間違えるとこうなり、
 # **エラーも警告も出ない**まま emcl2 も costmap も動かなくなる。
@@ -65,7 +72,11 @@ check_scan_has_returns() {
   echo "有効ビーム ${n} 本"
   ((n > 0))
 }
-item "/scan に有効なビームがある" check_scan_has_returns
+if has_topic /scan; then
+  item "/scan に有効なビームがある" check_scan_has_returns
+else
+  skip "/scan に有効なビームがある" "/scan が無い (上と同じ)"
+fi
 
 # ── フレーム名 ──────────────────────────────────────────────────────────────
 # livox_ros_driver2 は IMU の frame_id を無視して livox_frame をべた書きする

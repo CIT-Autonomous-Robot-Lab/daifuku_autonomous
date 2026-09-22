@@ -23,9 +23,10 @@ Livox関連ノード、teleopノードを含みます。RVizは含みません�
 
 | ファイル | 用途 |
 |---|---|
-| `compose.common.yaml` | 本体ドライバに依存しない部分。サービス`workspace-build` / `ros2` / `raspicat`の共通定義。`network_mode: host`、`ipc: host`で起動する。**直接`-f`で渡さない** |
-| `compose.original.yaml` | 入口。自前の本体ドライバ（`driver:=original`、[`src/raspicat_driver`](../../src/raspicat_driver/README.md)）。Pi 5では必須。**既定** |
-| `compose.rt.yaml` | 入口。公式実装の本体ドライバ（`driver:=raspimouse` + rtmouse）。**Pi 4専用** |
+| `compose.common.yaml` | 本体ドライバに依存しない部分。サービス`workspace-build` / `ros2` / `raspicat`の共通定義。`network_mode: host`、`ipc: host`で起動する。**単体では`raspicat`がexit 1する**（下の3つのどれかと重ねて使う） |
+| `compose.original.yaml` | 自前の本体ドライバ（`driver:=original`、[`src/raspicat_driver`](../../src/raspicat_driver/README.md)）。Pi 5では必須。**既定** |
+| `compose.rt.yaml` | 公式実装の本体ドライバ（`driver:=raspimouse` + rtmouse）。**Pi 4専用** |
+| `compose.none.yaml` | 本体ドライバを立てない。機体のハードウェアが無い環境で`workspace-build`と`ros2`だけを回すとき。`raspicat`は`profiles`に入れてあるので`up`で作られない |
 | `Dockerfile` | apt依存とツールチェーンだけを持つイメージ。ワークスペースはビルドしない |
 | `fastdds_udp_whitelist.xml` | Fast DDSのトランスポート設定（後述） |
 | `scripts/build-workspace.sh` | `up`のときにコンテナ内で走る`colcon build`（`/usr/local/bin/build-workspace`） |
@@ -52,9 +53,14 @@ docker compose up -d
 
 ```bash
 # .env（既定）
-COMPOSE_FILE=docker/raspberrypi/compose.original.yaml   # 自前実装。Pi 5では必須
-#COMPOSE_FILE=docker/raspberrypi/compose.rt.yaml        # 公式実装。Pi 4専用
+COMPOSE_FILE=docker/raspberrypi/compose.common.yaml:docker/raspberrypi/compose.original.yaml
+#COMPOSE_FILE=docker/raspberrypi/compose.common.yaml:docker/raspberrypi/compose.rt.yaml
 ```
+
+**commonを先に書きます。**後ろのファイルが前を上書きするので、順を入れ替えると
+commonの`raspicat`（exit 1するplaceholder）が勝ちます。ドライバ側から
+`include: - compose.common.yaml`へ戻してはいけません——Compose 2.40が
+`services.raspicat conflicts with imported resource`で拒みます。
 
 **Composeが`COMPOSE_FILE`を読むのはカレントディレクトリの`.env`なので、リポジトリ
 ルート以外から叩くと効きません**（`no configuration file provided`で止まります）。
@@ -190,9 +196,15 @@ bash tools/shell.sh
 `fastdds_udp_whitelist.xml`は`/etc/fastdds/udp_whitelist.xml`へマウントされ、
 `FASTRTPS_DEFAULT_PROFILES_FILE`から読み込まれます。狙いは2点です。
 
-1. UDPの通信インターフェースをループバックとロボットLAN（`192.168.1.50`）に限定する。
+1. UDPの通信インターフェースをループバックとロボットLANに限定する。
    制限しない場合、参加者はwlan0側のロケータも広告し、相手から到達できないロケータと
    UDPバッファの逼迫でディスカバリが不安定になります。
+   `<address>`はロボットLANに居る**自分の**アドレスの一覧で、読む側のホストごとに
+   必要です。Fast DDSはローカルに実在するものだけを使うので、余分な行は無害です。
+   逆に自分のアドレスが1行も無いと、`useBuiltinTransports: false`と組んでUDPが1本も
+   張られず、**エラーも警告も出ないまま自ホストの外が何も見えなくなります**
+   （`ros2 topic list`が`/rosout`と`/parameter_events`だけを返す）。
+   **ロボットLANにホストを足したらここへ1行足してください。**
 2. 同一ホスト内の通信に共有メモリ（SHM）を使う。約20個の参加者をUDPのみで動かすと、
    購読者ごとの`sendmsg`でカーネルが飽和し、TFのタイムスタンプが20秒以上遅れて
    ナビゲーションが中断しました。

@@ -3,6 +3,9 @@
 #   navigation.launch.py (lidar:=2d) + fake_robot.py を起動 -> probe.py で
 #   NavigateToPose を1回投げる -> ログを要約して停止。
 #
+# Isaac 版は同じディレクトリの nav_container.sh。起動前処理 (ROS overlay、
+# cleanup、overrides、params overlay、ログ要約) は harness_common.sh。
+#
 # 環境変数で条件を振る (既定値は Pi 実機の現行設定に一致):
 #   PLANNER=vi|navfn            planner:=
 #   LOCAL_PLANNER=auto|nav2|vi  local_planner:=
@@ -14,6 +17,9 @@
 #   LOCALIZATION=emcl2|amcl     localization:=
 #   MAP_NAME=19f/map_19f|tsudanuma/map_tsudanuma|...  share/maps/<name>.yaml を使う
 #                               OVERRIDES 未指定ならフォルダ名 (= 場所) の override を選ぶ
+#   SITE_MAPS=1                 map:= / map_loc:= を渡さず overrides の site: map:
+#                               に任せる。地図を 2 枚に分けている場所 (mugimaru) 用。
+#                               MAP_NAME は fake_robot 用に localization の地図を指す
 #   VI_MAP_SCALE=               vi_planner の map_scale (地図をプランナ内部で
 #                               粗くする倍率。津田沼 (5888x4000@0.05m) は 3 で
 #                               1963x1334@0.15m = 1.57 億状態)
@@ -35,76 +41,26 @@
 #   INITIALPOSE_DELAY=          その再送間隔 [s] (fake_robot 既定 5.0)
 #   START_X/START_Y/START_YAW_DEG   シムのスポーン位置 (既定は実機プローブ時の自己位置)
 #   GOAL_X/GOAL_Y/GOAL_YAW_DEG      ゴール (既定は実機プローブと同じ)
+#   TOUR="x,y,yawdeg;..."      単発ゴールの代わりに順路 (/follow_waypoints) を投げる。
+#                               **先読み (waypoint_prefetch) が効くのはこちらだけ**
 #   SETTLE=                     ゴール送信前の待機秒 (bringup 完了待ち)
 #   TIMEOUT=                    ゴールの打ち切り秒
 #   EXTRA_OBSTACLES="x,y,r;..." 地図に無い障害物
 #   CASE=                       ログ/結果の識別名
 # set -u は使わない: ROS の setup.bash が未定義変数を参照するため。
 
-source /opt/ros/humble/setup.bash
-[ -f /opt/ros2_rust_ws/install/local_setup.bash ] && source /opt/ros2_rust_ws/install/local_setup.bash
-[ -f /opt/ros_ws/install/setup.bash ] && source /opt/ros_ws/install/setup.bash
-
-PLANNER=${PLANNER:-vi}
-LOCAL_PLANNER=${LOCAL_PLANNER:-auto}
-NAV2=${NAV2:-auto}
-# **既定が emcl2 でないのは、既定の場所 (19f) がそれでは立たないため。**
-# src/daifuku_config/overrides/19f.yaml が vi_planner の localizer を
-# 'belief' (VIOLA) にしているので、localization:=emcl2 だと推定器が 2 つに
-# なり backends.validate_localization が起動時に止める。tsudanuma は
-# 逆に belief を置けない (密ソルバが要り 3.17GB で OOM) ので emcl2 に戻すこと。
-LOCALIZATION=${LOCALIZATION:-vi}
+. "$(dirname "$0")/harness_common.sh"
+source_ros_overlays
+default_nav_env
 START_X=${START_X:--1.27}
 START_Y=${START_Y:--0.63}
 START_YAW_DEG=${START_YAW_DEG:-0}
-GOAL_X=${GOAL_X:-4.28}
-GOAL_Y=${GOAL_Y:--2.92}
-GOAL_YAW_DEG=${GOAL_YAW_DEG:--24}
-SETTLE=${SETTLE:-45}
-TIMEOUT=${TIMEOUT:-300}
-CASE=${CASE:-default}
 EXTRA_OBSTACLES=${EXTRA_OBSTACLES:-}
 
-# 前回ケースの残骸を必ず落とす。実機でも「docker exec 残骸」が graph を汚して
-# 診断を狂わせたので、ここは徹底する (laser_filters のように名前が nav2_ で
-# 始まらないノードが取り残されやすい)。
-cleanup_ros() {
-    pkill -f '/opt/ros/humble/lib/' 2>/dev/null
-    pkill -f '/opt/ros_ws/install/lib/' 2>/dev/null
-    pkill -f 'fake_robot.py' 2>/dev/null
-    pkill -f 'ros2 launch daifuku_stack' 2>/dev/null
-    pkill -f 'ros2 launch daifuku_bringup' 2>/dev/null
-    sleep 2
-    pkill -9 -f '/opt/ros/humble/lib/' 2>/dev/null
-    pkill -9 -f '/opt/ros_ws/install/lib/' 2>/dev/null
-    pkill -9 -f 'fake_robot.py' 2>/dev/null
-    sleep 1
-}
-cleanup_ros
-ros2 daemon stop >/dev/null 2>&1
-# **止めたら必ず立て直す。** ros2cli は毎回 127.0.0.1 のデーモンへ繋ぎに行き、
-# 居なければ ECONNREFUSED ですぐ諦める…… のは NAT の話。.wslconfig が
-# networkingMode=mirrored だと Linux の 127.0.0.1 は Windows 側にも向くので、
-# 繋ぎ先が居ないと**握られたまま 2 分待つ**。下の `timeout 5 ros2 topic list` は
-# 全部空を返し、Isaac が正しく喋っていても「トピックが見えない」で exit 4 になる。
-ros2 daemon start >/dev/null 2>&1
-
-SHARE=/opt/ros_ws/install/share/daifuku_stack
-# overrides は daifuku_config の share。**maps/ を持つ daifuku_stack とは置き場が違う**
-# (2026-08-08 まで $SHARE/config/overrides/ を見ていた。設定を src/daifuku_config/ へ出して
-# daifuku_stack がその段を install しなくなった時点から、**どの地図でも overrides:=none
-# に落ちていたはず** — この修正ともども**未検証**。効かせるには一度ビルドが要る)。
-CONFIG_SHARE=/opt/ros_ws/install/share/daifuku_config
-RUN=/tmp/pi4_sim/$CASE
-rm -rf "$RUN"; mkdir -p "$RUN"
-export ROS_LOG_DIR=$RUN/log
-
-MAP_NAME=${MAP_NAME:-19f/map_19f}   # 既定は 19F の地図。maps/ からの相対パス (地図ごとのフォルダを含む)
-MAP=$SHARE/maps/$MAP_NAME.yaml
-if [ ! -f "$MAP" ]; then
-    echo "map not found: $MAP" >&2
-    exit 2
-fi
+cleanup_ros fake_robot.py
+restart_ros_daemon
+resolve_map
+setup_run_dir /tmp/pi4_sim
 
 # 第 3 引数はこのスクリプトのあるディレクトリ (= /opt/sim)。downsample_map.py も
 # fake_robot.py / probe.py と一緒にそこへ配られている。
@@ -131,77 +87,11 @@ elif free_thresh:
     out = os.path.join(run, "map.yaml")
     yaml.safe_dump(meta, open(out, "w"))
     print(f"MAP_OVERRIDE {out} free_thresh={free_thresh}")
-
-# パラメータの上書きは launch と同じ経路 (extra_params_file) に載せる。ここで
-# nav2_params 相当を作り直すと src/daifuku_config/stack/nav2/*.yaml の合成を素通りしてしまうので、
-# 環境変数で触るキーだけの overlay を書く。
-# BT の差し替え (planner:=vi 用) は navigation.launch.py 自身が behavior_trees/ を
-# 指すので、ハーネス側では何もしない。
-overlay = {}
-
-
-def put(node, key, value):
-    overlay.setdefault(node, {}).setdefault("ros__parameters", {})[key] = value
-
-
-solver = os.environ.get("VI_SOLVER", "")
-pub_vf = os.environ.get("VI_PUBLISH_VF", "")
-planner_freq = os.environ.get("PLANNER_EXPECTED_FREQ", "")
-map_scale = os.environ.get("VI_MAP_SCALE", "")
-sink_dir = os.environ.get("VI_COMPACT_SINK_DIR", "")
-bt_timeout = os.environ.get("BT_SERVER_TIMEOUT", "")
-
-# 2026-08-08 の上流の整理で vi_global_planner ノードは消え、広域だけ VI
-# (local_planner:=nav2) も同じ vi_planner を follow: false で立てるようになった。
-# 宛先が 1 つになったので、ここも 1 つだけに書く。
-if solver:
-    put("vi_planner", "solver", solver)
-if pub_vf:
-    # 配信の on/off だった publish_value_function は 2026-08-09 の上流の整理で
-    # value_publish_interval_ms に吸収された (負 = 配信そのものを立てない)。
-    put("vi_planner", "value_publish_interval_ms",
-        500 if pub_vf.lower() == "true" else -1)
-if map_scale:
-    put("vi_planner", "map_scale", int(map_scale))
-if sink_dir:
-    put("vi_planner", "compact_sink_dir", sink_dir)
-if bt_timeout:
-    # bt_navigator の BtActionNode がゴール受理 ack を待つ時間 [ms]。
-    # nav2 既定は 20ms で、CPU 飢餓時はこれを超えて全アクションが即失敗する。
-    put("bt_navigator", "default_server_timeout", int(bt_timeout))
-if planner_freq:
-    # planner_server は達成できない周波数を設定したときだけ実測値を WARN に
-    # 出す。キャリブレーション (実機実測 7.6Hz) はこれを読む。
-    put("planner_server", "expected_planner_frequency", float(planner_freq))
-
-if overlay:
-    out = os.path.join(run, "overlay.yaml")
-    yaml.safe_dump(overlay, open(out, "w"))
-    print(f"PARAMS_OVERLAY {out} solver={solver or '-'} publish_vf={pub_vf or '-'}")
 PY
 
+write_params_overlay
 [ -f "$RUN/map.yaml" ] && MAP=$RUN/map.yaml
-# overlay と EXTRA_PARAMS は params.compose が後勝ちで重ねる (カンマ区切り)。
-# ros2 launch は `arg:=` (値が空) を malformed として弾くので、値があるときだけ渡す。
-EXTRA=""
-[ -f "$RUN/overlay.yaml" ] && EXTRA=$RUN/overlay.yaml
-[ -n "${EXTRA_PARAMS:-}" ] && EXTRA="${EXTRA:+$EXTRA,}${EXTRA_PARAMS}"
-params_arg=()
-# overrides は**必ず明示的に渡す**。launch の既定は 19f なので、渡さないと
-# MAP_NAME を変えても 19F 用の調整 (emcl2 のリセット閾値など) が載ったままになる。
-# 選ぶのは**地図の入っているフォルダ名 (= 場所の名前)** で、同名の override が
-# あればそれを、無ければ none (= 何も重ねない)。**ファイル名のほうではない** —
-# 2026-08-25 に overrides を場所の名前 (19f) にしたので、map_19f では当たらない。
-if [ -z "${OVERRIDES:-}" ]; then
-    SITE_NAME=$(dirname "$MAP_NAME")
-    if [ -f "$CONFIG_SHARE/overrides/$SITE_NAME.yaml" ]; then
-        OVERRIDES=$SITE_NAME
-    else
-        OVERRIDES=none
-    fi
-fi
-params_arg+=(overrides:="$OVERRIDES")
-[ -n "$EXTRA" ] && params_arg+=(extra_params_file:="$EXTRA")
+resolve_params_arg
 
 obs_arg=()
 if [ -n "$EXTRA_OBSTACLES" ]; then
@@ -233,62 +123,60 @@ python3 "$(dirname "$0")/fake_robot.py" --ros-args \
 SIM_PID=$!
 sleep 3
 
-# 角度フィルタ (/scan_raw -> /scan)。**実機ではこれも robot_bringup.launch.py が
-# 立てる**ので、navigation.launch.py からは出ていった。
-# lidar_driver:=false: /scan_raw は fake_robot.py が出すので、lidar:=2d の
-# 実機ドライバ (urg_node) は立てない。
-# odom_fusion は立てない (2D LiDAR に IMU は無く、odom -> base_footprint は
+# 角度フィルタ (/scan_raw -> /scan) は navigation.launch.py が立てる
+# (2026-08-25 に scan_pipeline.launch.py として機体側から出てきた段)。下で
+# lidar:=2d lidar_driver:=false を渡しているのがそれで、/scan_raw は
+# fake_robot.py が出すので実機ドライバ (urg_node) は立たない。
+# odom_fusion も立てない (2D LiDAR に IMU は無く、odom -> base_footprint は
 # fake_robot.py が出す)。
-ros2 launch daifuku_bringup lidar_bringup.launch.py \
-    lidar:=2d lidar_driver:=false "${params_arg[@]}" \
-    >"$RUN/lidar.log" 2>&1 &
-LIDAR_PID=$!
 
 # config_watch:=off で設定の見張り (config_sentinel) を立てない。ここは 1 回きりの
 # 構成を OVERRIDES で渡すので追随の対象外だし (params.follows_site)、告知する
 # site_manager も居ない。**params_arg に混ぜないこと** — この引数を宣言している
-# のは navigation だけで、上の lidar_bringup にも渡ってしまう。
+# のは navigation だけ。
 #
 # 地図は 2 枚 (navigation -> /map、localization -> /map_loc) だが、ハーネスが指すのは
 # MAP_NAME の 1 枚だけなので両方へ同じものを渡す。**map_loc:= を落とすと
 # OVERRIDES=none のとき resolve_map が「どの地図を読むか決まりません」で止まる。**
+# SITE_MAPS=1 のときは map:= / map_loc:= を渡さず overrides の site: map: に任せる。
+# **地図を 2 枚に分けている場所 (tsudanuma_mugimaru) はこちらでないと立たない** —
+# ハーネスは MAP_NAME の 1 枚しか持たないので、両方へ同じものを渡すと resolve_map が
+# localization 側の食い違いで止める。fake_robot は MAP_NAME をそのまま使うので、
+# **実環境に当たる localization の地図を指すこと**。
+map_arg=(map:="$MAP" map_loc:="$MAP")
+[ "${SITE_MAPS:-0}" = "1" ] && map_arg=()
+
 ros2 launch daifuku_stack navigation.launch.py \
     use_rviz:=false \
     config_watch:=off \
-    map:="$MAP" map_loc:="$MAP" "${params_arg[@]}" \
+    lidar:=2d lidar_driver:=false \
+    "${map_arg[@]}" "${params_arg[@]}" \
     planner:="$PLANNER" local_planner:="$LOCAL_PLANNER" nav2:="$NAV2" \
     localization:="$LOCALIZATION" >"$RUN/nav.log" 2>&1 &
 NAV_PID=$!
 
-# 立ち上がり中の負荷とメモリを1秒毎に記録する (Pi4 4GB では OOM がここで出る)。
-( while :; do
-    printf '%s load=%s mem=%s\n' "$(date +%T)" \
-        "$(cut -d' ' -f1-3 /proc/loadavg)" \
-        "$(cat /sys/fs/cgroup/memory.current 2>/dev/null)"
-    sleep 1
-  done ) >"$RUN/load.log" 2>&1 &
-MON_PID=$!
+start_load_monitor
 
-python3 "$(dirname "$0")/probe.py" \
-    --goal-x "$GOAL_X" --goal-y "$GOAL_Y" --goal-yaw "$GOAL_YAW_DEG" \
-    --settle "$SETTLE" --timeout "$TIMEOUT" 2>&1 | tee "$RUN/probe.log"
+# TOUR="x,y,yawdeg;..." を渡すと単発ゴールではなく順路を投げる (tour.py)。
+# **先読み (waypoint_prefetch) が効くのはこちら** — vi_planner は
+# follow_waypoints のゴールから次の点を知るので、単発ゴールでは何も先読みしない。
+if [ -n "${TOUR:-}" ]; then
+    python3 "$(dirname "$0")/tour.py" --poses="$TOUR" --settle "$SETTLE" --timeout "$TIMEOUT" 2>&1 | tee "$RUN/probe.log"
+else
+    python3 "$(dirname "$0")/probe.py" \
+        --goal-x "$GOAL_X" --goal-y "$GOAL_Y" --goal-yaw "$GOAL_YAW_DEG" \
+        --settle "$SETTLE" --timeout "$TIMEOUT" 2>&1 | tee "$RUN/probe.log"
+fi
 rc=${PIPESTATUS[0]}
 
-kill $MON_PID $NAV_PID $LIDAR_PID $SIM_PID 2>/dev/null
+kill $MON_PID $NAV_PID $SIM_PID 2>/dev/null
 sleep 3
-cleanup_ros
+cleanup_ros fake_robot.py
 
-echo "=== 実測 planner 周波数 (キャリブレーション用; 実機 Pi4 の実測は 7.6Hz) ==="
-grep -h -o 'current loop rate is [0-9.]* Hz' "$RUN/nav.log" | tail -3 || true
-
-echo "=== bond / lifecycle ==="
-grep -h -E 'connected with bond|Managed nodes are active|Aborting bringup|Failed to change state|bond' \
-    "$RUN/nav.log" | tail -12 || true
-
-echo "=== KILLED (OOM 等でプロセスが落ちていないか) ==="
+summarize_nav_logs
 dmesg 2>/dev/null | tail -20 | grep -i -E 'oom|killed' || echo "(dmesg unavailable in container)"
 grep -h -i -E 'error|killed|terminated|exited with|abort' \
-    "$RUN"/nav.log "$RUN"/lidar.log 2>/dev/null | tail -25
+    "$RUN"/nav.log 2>/dev/null | tail -25
 echo "=== peak mem: $(sort -t= -k3 -n "$RUN/load.log" 2>/dev/null | tail -1)"
 echo "=== CASE=$CASE done rc=$rc, logs in $RUN"
 exit $rc

@@ -1,9 +1,6 @@
 # AGENTS.md
 
-このリポジトリで作業するエージェント（Claude Code / Codex）向けの指針です。**指針の
-実体はこのファイルだけ**で、`CLAUDE.md` は取り込むだけの入口です（2 つに分けていた
-2026-08-08 まで、AGENTS.md が config 統合前で止まったままパッケージ数もパスも嘘に
-なっていました）。
+このリポジトリで作業するエージェント向けの指針です。**指針の実体はこのファイルだけ**です。
 
 ## 概要
 
@@ -33,9 +30,9 @@ Raspberry Pi Cat を ROS 2 Humble / Nav2 で自律移動させる colcon ワー�
 
 | パッケージ | 持つもの |
 | --- | --- |
-| `daifuku_bringup` | 機体。駆動ドライバ・URDF・cmd_vel の仲裁・ゲームパッド・**LiDAR**・**EKF**。`docker compose up` で常駐する |
-| `daifuku_stack` | 自律移動。Nav2 / emcl2 / VI の launch、地図、ウェイポイント、RViz |
-| `daifuku_config_manager` | 設定の合成規則（`params.py`）と、`site_manager` / `config_sentinel`（設定が書き変わったことを見つける役。**どちらも他を import しない**）。**設定の実体は持たない** |
+| `daifuku_bringup` | 機体。駆動ドライバ・URDF・cmd_vel の仲裁・ゲームパッド・**LiDAR ドライバ**・**EKF**。`docker compose up` で常駐する。**場所を知らない** |
+| `daifuku_stack` | 自律移動。Nav2 / emcl2 / VI の launch、地図、ウェイポイント、RViz。**点群を `/scan` に変える段**（`scan_pipeline.launch.py`）もここ |
+| `daifuku_config_manager` | 設定の合成規則（`overlay.py` の行き先検査と `params.py` の launch 合成）と、`site_manager` / `config_sentinel`（設定が書き変わったことを見つける役。**どちらも他パッケージを import しない**）。**設定の実体は持たない** |
 | `daifuku_config` | 設定の実体だけ。`bringup/` と `stack/` と `overrides/` と `site` |
 
 `vcs import` で入るものを直しても本リポジトリのコミットには入らないので、上流を
@@ -94,16 +91,27 @@ symlink になるので、効くのは**ソース側の権限**です。Windows 
 
 ## テストと起動
 
-自動テストはありません。`colcon test` で走るのは lint だけです（`raspicat_driver` の
-`test/test_control.py` が唯一の例外でしたが、2026-08-09 に PI 補正ごと消しました）。
-挙動の確認は実機か `simulator/` のハーネスで行います。単体で回せるのは
-`simulator/tests/` の 2 つ（`map-to-usd` の出力検算と、地図の `free_thresh` の検算）
-だけです。
+`colcon test` で走るのは lint と、**`daifuku_config_manager` の
+`test/test_*_launch.py` 2 つだけ**です（`raspicat_driver` の `test/test_control.py`
+は 2026-08-09 に PI 補正ごと消しました）。後者は launch_testing の統合テストで、
+`config_sentinel` と `site_manager` を本当にプロセスとして立てます。踏むのは 2 つ:
+
+- **実機の上で `colcon test` を回すと、本物の `site_manager` と名前がぶつかる**
+  （ノード名は固定）。テスト側が `ROS_DOMAIN_ID=77` と `ROS_LOCALHOST_ONLY=1` を
+  撒いて避けているので、**その 2 行を消さないこと**。
+- **`daifuku_config_manager` は `daifuku_config` に exec_depend する。**
+  `params` が設定の在処（`config_root` / `overrides_dir` / `site_file`）をあちらの
+  share から引くため。依存だけを並べる環境（`colcon test`）で宣言が抜けていると
+  `PackageNotFoundError` になる。
+
+これ以外の挙動の確認は実機か `simulator/` のハーネスで行います。単体で回せるのは
+`simulator/tests/` の 4 つ（`map-to-usd` の出力検算と、地図の `free_thresh` の検算と、
+`corridor-map` の回廊の上下の向きの検算と、ウェイポイント YAML の書式）だけです。
 
 **実機で通すぶんは `tools/checklist/` にあります。** `colcon test` からは走りません
 （人に聞く項も機体が動く項もあるため）。使いかたと番号の意味は `checkall.sh` の冒頭に
 あるので**ここには写しません**。段の 01 は静的検査で、このファイルが述べている約束ごと
-（ヘッダの位置・lint の顔ぶれ・見張りの立て方・順路のトピック名）をそのまま突き
+（ヘッダの位置・lint の顔ぶれ・見張りの立て方・LiDAR 構成の既定の出どころ・順路のトピック名）をそのまま突き
 合わせます。**ここを直したら 0103 も直すこと。**
 
 lint は詰め合わせ（`ament_lint_common`）を使わず、自前 7 パッケージが**同じものを
@@ -131,6 +139,8 @@ lint は詰め合わせ（`ament_lint_common`）を使わず、自前 7 パッ�
 ```bash
 cd simulator && uv run python tests/verify_usda.py <map.yaml> <world.usda> free
 cd simulator && uv run python tests/verify_map_thresholds.py ../src/daifuku_stack/maps/*/*.yaml
+cd simulator && uv run python tests/verify_corridor_orientation.py
+cd simulator && uv run python tests/verify_waypoints.py
 ```
 
 ```bash
@@ -159,7 +169,8 @@ Docker 越しに叩く形は
   説明は `src/daifuku_config/README.md`）。だから切り替えは
   `ros2 param set /site_manager site <名前>`（機体が上がっているとき）か
   `echo <名前> > src/daifuku_config/site`（上がっていないとき）で足り、
-  `tools/site.sh` は**その 2 つを選び分けて `raspicat` を立て直す便利口**でしかない。
+  `tools/site.sh` は**その 2 つを選び分ける便利口**でしかない（2026-08-25 まではもう
+  1 つ、`raspicat` を立て直す仕事があった。機体が場所を知らなくなったので消えた）。
   すべての launch が `overrides` の既定をここから取り、`navigation.launch.py` は
   `map` / `map_loc` の既定もそこから導く。**導き方は「同じ名前の地図」ではなく、その
   overrides 自身が書いている `site: map:`**（2026-08-07 に改めた。
@@ -189,10 +200,10 @@ Docker 越しに叩く形は
   `site:` は 1 段目に書ける予約節（`RESERVED_SECTIONS`）で、パッケージ名の段には
   並べない。`overrides` は
   **置き換え**（追加ではない）で、重ねないときは `overrides:=none`（空文字は
-  `ros2 launch` が弾く）。LiDAR の帯を読むのは
-  `daifuku_bringup`（= 常駐している raspicat サービス）で**起動時にしか読まない**ので、
-  素手でファイルを直したときは `docker compose restart raspicat` が要る（`tools/site.sh`
-  と `site_manager` 経由はそこまで面倒を見る）。`.env` の `OVERRIDES` は 2026-08-07 に廃止した — 環境変数はコンテナ
+  `ros2 launch` が弾く）。**いま `overrides` の 1 段目に立つのは `daifuku_stack:` だけ**
+  ——LiDAR の帯も仰角も、2026-08-25 に `/scan` を作る段ごと `daifuku_stack` へ移った。
+  だから場所を変えても機体（常駐している raspicat サービス）は立て直さなくてよく、
+  `navigation` / `mapping` を立て直せば足りる。`.env` の `OVERRIDES` は 2026-08-07 に廃止した — 環境変数はコンテナ
   生成時に焼かれるので作り直しが要り、かつ「仕立てるときに 1 度決める」値と混ざって
   忘れやすかった。**環境変数 `OVERRIDES` 自体はファイルより強いまま残してある**が、
   compose はもう渡さない（`simulator/` が 1 回きりの構成を渡す口）。
@@ -210,18 +221,27 @@ Docker 越しに叩く形は
   入っていない**。落とす合図の `SENTINEL_RESTART_CODE` を **0 にしないこと** —
   `OnProcessExit` → `EmitEvent(Shutdown)` が 0 で発火すると、ノードがバグで落ちただけでも
   機体が上がり直し、`restart: unless-stopped` と組んで止まらなくなる。
+  **`robot_bringup` の見張りだけは場所を見ない**（`sentinel_actions(watch_site=False)`）。
+  2026-08-25 に場所ごとに変わる設定が `daifuku_stack` へ移って、機体には 1 つも
+  無くなったため——見たままにすると `tools/site.sh` のたびに読みもしない値のために
+  常駐している機体が上がり直す。機体自身の設定（`bringup/` の下）の書き換えは
+  これまでどおり見る。**`daifuku_bringup:` の部分木を overrides に戻したら
+  `watch_site=False` も外すこと**（そのままだと書き換えても気づかない穴になるので、
+  `sentinel_actions` が起動時に落とす）。
 - **`overrides/*.yaml` の行き先はパッケージ名とノード名で決まる。** 1 段目が
   `daifuku_bringup:` か `daifuku_stack:` で、各 launch は**自分のパッケージ名の
-  部分木しか読まない**。2 段目がノード名で、同じノード名を宣言している設定ファイル
+  部分木しか読まない**（**同梱の 3 つはいまどれも `daifuku_stack:` しか持たない**。
+  2026-08-25 に帯と仰角がそちらへ移ったので、機体側の部分木は空になった）。2 段目がノード名で、同じノード名を宣言している設定ファイル
   （そのパッケージの `src/daifuku_config/` の下のどれか）に重なる。落ちるのは 2 通り:
-  **知らないパッケージ名**（`params.py` の `KNOWN_PACKAGES`。誰も読まない部分木に
+  **知らないパッケージ名**（`overlay.py` の `KNOWN_PACKAGES`。誰も読まない部分木に
   なるため）と、**そのパッケージのどの設定ファイルにも無いノード名**。どちらも
   綴り違いが黙って消えるのを防ぐため。ノード名を持たない
   `sensors/MID360_config.json` だけは上書きできない。
-- **`overrides/*.yaml` の実体は `daifuku_config` にある。** 地図ごとの調整は
-  LiDAR の帯（機体側）と emcl2 / VI（自律移動側）にまたがるので、どちらかに置くと
-  他方がそちらへ依存してしまう。1 地図 = 1 ファイルのまま、葉のパッケージに置いて
-  ある。
+- **`overrides/*.yaml` の実体は `daifuku_config` にある。** 地図ごとの調整が
+  LiDAR の帯（当時は機体側）と emcl2 / VI（自律移動側）にまたがっていたので、
+  どちらかに置くと他方がそちらへ依存してしまうため。**2026-08-25 に帯も
+  `daifuku_stack` へ移ってまたがらなくなった**が、置き場は変えていない
+  （`site` と 1 地図 1 ファイルの単位はどちらのパッケージのものでもない）。
 - **VI のノードは `vi_planner` 1 つだけ**（`local_planner` はその立ち方を選ぶ。
   `auto|vi` は両アクション、`nav2` は `follow: false` で広域だけ担わせて追従を
   `controller_server` に渡す）。**2026-08-08 の上流の整理まで後者は
@@ -318,21 +338,43 @@ Docker 越しに叩く形は
   一覧に要る**（実機はこの 3 つが無いと機体が上がらない）。一覧は 3 か所
   ——`docker/raspberrypi/scripts/build-workspace.sh`、`docker/dev/tools/build-workspace.sh`、
   `tools/setup/setup_native_base.sh`。
-- **`docker/raspberrypi/` に `compose.yaml` は無い。** 入口は本体ドライバ別の
-  `compose.rt.yaml`（公式実装 + rtmouse。Pi 4 専用）と `compose.original.yaml`
-  （自前実装。既定、Pi 5 では必須）の 2 つで、どちらも `compose.common.yaml` を
-  `include:` する。選ぶのは**リポジトリルートの `.env`** の `COMPOSE_FILE`
+- **`docker/raspberrypi/` に `compose.yaml` は無い。** 入口は
+  `compose.common.yaml` と本体ドライバ別の `compose.rt.yaml`（公式実装 + rtmouse。
+  Pi 4 専用）／`compose.original.yaml`（自前実装。既定、Pi 5 では必須）／
+  `compose.none.yaml`（ドライバを立てない。機体のハードウェアが無い環境で
+  `workspace-build` と `ros2` だけを回す。**`raspicat` を消すのではなく
+  `profiles` へ入れてある** — Compose には重ねる側からサービスを削る書き方が
+  無く、common の placeholder を残すと `restart: unless-stopped` と組んで
+  上がり直しが止まらないため）を
+  **2 つ重ねたもの**で、選ぶのは**リポジトリルートの `.env`** の `COMPOSE_FILE`
   （`.gitignore` 済み。`.env.example` から作る。`provision.sh` は機種を見て自動で
-  作る）。ここに 3 つ罠がある。**(1)** Compose が `.env` を読むのは**カレント
+  作る）。ここに 4 つ罠がある。**(1)** Compose が `.env` を読むのは**カレント
   ディレクトリ**なので、リポジトリルート以外から `docker compose` を叩くと
-  `no configuration file provided` で止まる。**(2)** 入口 2 つは `name:
+  `no configuration file provided` で止まる。**(2)** 入口 3 つは `name:
   daifuku-autonomous` をわざと揃えてある。違えるとドライバを替えた瞬間に
   ビルドキャッシュの名前付きボリュームが別物になり、**1〜2 時間かけて建て直しに
-  なる**（`include:` された側の `name:` は無視されるので、入口の側に要る）。
+  なる**（`compose.common.yaml` は `name:` を持たないので、ドライバ側の 2 つに要る）。
   **(3)** `compose.common.yaml` を単体で `-f` に渡すと `raspicat` が exit 1 で
   落ちる（どちらのドライバか決まらないまま起動しないための placeholder）。
   ドライバに依存しない `ros2` サービスだけを触る `tools/control.sh` と
-  `tools/shell.sh` は、意図してこちらを直接渡している。
+  `tools/shell.sh` は、意図してこちらを直接渡している。**(4)** 並べる順は
+  **common が先**。後ろのファイルが前を上書きするので、入れ替えると (3) の
+  placeholder が勝って `raspicat` が即死する。**ドライバ側から
+  `include: - compose.common.yaml` へ戻さないこと** —— Compose 2.40 は include
+  した側のサービスの上書きを `services.raspicat conflicts with imported resource`
+  で拒み、`build` も `config` も**1 行のエラーだけ出して何もしない**
+  （2026-09-02 に Pi 5 + Ubuntu 24.04 の compose 2.40.3 で踏んだ。それより前の
+  Compose では通っていた）。
+- **`docker/raspberrypi/fastdds_udp_whitelist.xml` の `<address>` は
+  「ロボット LAN に居る自分のアドレス」の一覧で、読む host ごとに 1 行要る。**
+  Fast DDS はローカルに実在するものだけを使うので余分な行は無害だが、自分のが
+  1 つも無いと `useBuiltinTransports: false` と組んで UDP が 1 本も張られず、
+  SHM だけが残る。**エラーも警告も出ないまま自ホストの外が何も見えなくなり**、
+  `ros2 topic list` は `/rosout` と `/parameter_events` だけを返す
+  （2026-09-03 に `192.168.1.51` の SBC を足して踏んだ）。**ロボット LAN に
+  host を足したらここに 1 行足すこと。** 切り分けには
+  `ros2 topic list --no-daemon` を使う —— ros2 daemon は先に立った環境のまま
+  残るので、環境変数を変えて叩き直しても効かない。
 - **`.env` は 2 つ読まれ、値は合成される。** リポジトリルートのものと、
   `docker/raspberrypi/.env`（`provision.sh` が `ROS_DOMAIN_ID` と `BUILD_JOBS` を
   書いて生成する）の両方。**同じキーが両方にあると `docker/raspberrypi/.env` が
@@ -343,12 +385,13 @@ Docker 越しに叩く形は
   そのとき `workspace-build` は走らない。** デーモンが上げ直すときは `depends_on`
   が効かず、各コンテナが独立に上がるため。`install/` が名前付きボリュームに残るので
   それで動くが、**C++ / Rust を直した分は再起動しても反映されない**（`docker compose
-  up -d` を人手で通すこと）。**LiDAR と EKF も `raspicat` サービスに入ったので、この
-  性質はセンサ側にも及ぶ。**
+  up -d` を人手で通すこと）。**LiDAR ドライバと EKF も `raspicat` サービスに入ったので、
+  この性質はセンサ側にも及ぶ。**
 - **ドライバが `finalized` まで落ちると launch ごと終了する**
-  （`robot_bringup.launch.py` の `register_shutting_down_transition`）。LiDAR と EKF が
-  同じ launch に居るので、**駆動の障害はセンサも道連れにし、`restart: unless-stopped`
-  で全部が上がり直す**。踏むのは Pi 5 で `driver:=raspimouse` を選んだときのような
+  （`robot_bringup.launch.py` の `register_shutting_down_transition`）。LiDAR ドライバと
+  EKF が同じ launch に居るので、**駆動の障害はセンサも道連れにし、
+  `restart: unless-stopped` で全部が上がり直す**（`/scan` を作る段は別の launch なので
+  巻き込まれないが、入力が消えるので出力も止まる）。踏むのは Pi 5 で `driver:=raspimouse` を選んだときのような
   設定の取り違えで、そこは直せば直る。
 - **Mid-360 が LAN に居ないまま boot すると、コンテナは正常に上がったように見える。**
   `ros2 launch` は子ノードが死んでも終了しないので、`/livox/lidar` が来ないまま
@@ -379,22 +422,54 @@ Docker 越しに叩く形は
   この穴は無い** — `follow_waypoints` を `vi_planner` 自身が受けるので、順路はゴールと
   同じ経路で入る（トピックはもう 1 つの入口として残る）。**ノード側の宣言と
   `src/daifuku_config/stack/vi_planner.yaml` は `false` で、同梱の overrides で `true` へ
-  上書きしているのは `19f` だけ**（津田沼は 2026-08-07 に `true` にしたあと
-  2026-08-08 に `false` へ戻した。走行中の固まりの切り分けで、消える待ちは 19F が
-  29 秒、津田沼が 87 秒）。価値関数が同時に 2 つ生きるので、**密ソルバでは
+  上書きしているのは `19f` と `tsudanuma_mugimaru` の 2 つ**（`tsudanuma` は
+  2026-08-07 に `true` にしたあと 2026-08-08 に `false` へ戻した。走行中の固まりの
+  切り分けで、消える待ちは 19F が 29 秒、津田沼が 87 秒。`tsudanuma_mugimaru` は
+  2026-09-02 に `true` へ — 巡回で点ごとに solve を待つのをやめるため。**効くことは
+  simulator/ のハーネスで実測した**（順路 2 点で 2 点目が「先読みから採用 0.04 秒」。
+  ただし先読みは **1 スレッド固定**で、間に合うのは「点間の走行 > 先読みの solve」の
+  ときだけ。**1 点目は必ず待つ**。数字は `src/daifuku_config/README.md`）。実機は**未検証**で、
+  同じ固まりが出たら真っ先にここを戻す）。価値関数が同時に 2 つ生きるので、**密ソルバでは
   メモリが 2 倍要る**。compact でも同梱の 3 地図は sink が RAM なので（2026-08-04 に
   津田沼の `compact_sink_dir` を外した）、そのまま 2 倍が匿名メモリに乗る
   （**19F は 2026-08-09 に密へ戻したので 655MB×2 = 1.31GB**。compact の頃は 95MB×2。
-  津田沼は戻せば 648MB×2 = 1.3GB）。**Pi 4 (4GB) では `true` に
+  `tsudanuma_mugimaru` は 711MB×2 = 1.42GB（2026-09-02 の実測）、`tsudanuma` は戻せば 648MB×2 = 1.3GB）。**Pi 4 (4GB) では `true` に
   しないこと。ただし既定の `19f` が `true` なので、引数を何も
-  足さずに立てると Pi 4 でもこれが効く。** 外すには使う地図の
+  足さずに立てると Pi 4 でもこれが効く**（`tools/checklist/section-0102-config.sh` が
+  Pi 4 では落とす）。 外すには使う地図の
   `overrides/*.yaml` の `waypoint_prefetch` を消すか `false` と書くしかない（キー 1 つだけ外す launch 引数は無い。
-  津田沼は後者で、断片と同値の `false` を切り分けの目印として明示してある。
+  `tsudanuma` は後者で、断片と同値の `false` を切り分けの目印として明示してある。
   `overrides:=none` にすると emcl2 の 2 つの対症療法ごと落ちて、19F では自己位置が
   その場で回り出す（3 つめの `sensor_reset` は 2026-08-09 に断片ごと `false` に
   なったので、どの overrides にも無い）。2026-08-04 に一度**断片**で `true` へ反転したときは同日の実機で
   走行中の固まりが出て、容疑者の 1 つとして戻した（切り分けは未了）ので、
   再発したらまずここを疑う。
+- **`tsudanuma_mugimaru` の navigation の地図は順路から作られている。**
+  `tsudanuma-challenge_nav_corridor.pgm` は `nav3_9` から**順路の 8.5m 以内だけを残して
+  自由空間を削った**もので、フル solve が 27.95 → 13.07 秒になる（2026-09-02 の実測。
+  ただし**測ったのは 2026-09-03 に作り直す前の地図**なので要再測。
+  `uv run corridor-map` で作り直せる）。**だから順路を変えたら地図も作り直すこと** —
+  新しい点が回廊の外に出ると占有セルに乗るので、**エラーも警告も出ないままゴールが
+  出ない**。生成ツールは書き出す前に全点が自由セルに落ちるか確かめて落とすが、
+  それは作り直したときしか走らない。**1 点だけ `nav3_9` の時点で壁の中にある**
+  （`src/daifuku_stack/maps/tsudanuma_mugimaru/README.md`）。
+  **半径の下限は連結性が決める** — 回廊は順路の点どうしを結ぶ**直線**の周りに
+  引かれるが、実際に走れる道は建物を回り込むので、細いと回廊が壁で分断される。
+  点は自由セルのままなので**エラーも警告も出ないまま経路が引けない**（生成ツールが
+  加工前の地図と比べて落とす。この順路での下限は 8.0m）。
+  **回廊は画像の行の向きを間違えると上下逆に載る**（`map_server` は行 0 を y の
+  **最大**として読む）。形も面積もそれらしいままで、順路の点が壁に乗るという形で
+  しか現れず、生成時の検算を同じ添字で書くと自分では気づけない（2026-09-02 の
+  生成物がこれで、66 点中 22 点が壁の中だった）。見張りは
+  `simulator/tests/verify_corridor_orientation.py`。
+- **`map_scale` を上げても solve は速くならない。** 状態数は scale^2 で減るが、1 手
+  （`action_forward_m`）が跨ぐセル数も同じだけ減るので反復が増えて相殺する
+  （2026-09-02 に `tsudanuma_mugimaru` で実測: scale 3 は状態数 44% でフル solve
+  27.72 秒 / iters 1366、scale 2 は 27.95 秒 / iters 527）。**減るのは sink だけ**
+  （0.71 → 0.32GB）なので、メモリが目的なら有効、速度が目的なら無意味。速度を決めて
+  いるのは**解くべき自由空間の広さ**のほうで、同条件のフル solve は `tsudanuma` が
+  11.83 秒に対し `tsudanuma_mugimaru` が 27.95 秒（状態数はほぼ同じ。前者は 68.2% が
+  未観測 = 障害物扱いで解かなくてよい、後者は未観測 0.05% でほぼ全域を解く）。
 - **`vi_planner` の `early_start` は compact では効かない地図がある。** ゴールまで
   方策が繋がった時点で solve を打ち切る機能だが、compact（断片の solver。2026-08-09 に
   `19f` だけ密へ戻したので、compact なのは津田沼だけ）の確定は
@@ -461,24 +536,33 @@ Docker 越しに叩く形は
   下限が距離とともに上がるので、**`max_height` をその下に置くと帯が潰れ、
   `range_max` を伸ばしてもエラーも警告も出ないまま手前で何も入らなくなる**
   （5 度なら 70m 先の実効下限は 6.40m）。地図ごとの角度は `overrides/` 側。
-  設定は `src/daifuku_config/bringup/sensors/` で、**変えたら `docker compose up -d`**
-  （読むのは常駐している raspicat サービス）。
+  設定は `src/daifuku_config/stack/sensors/` で、**変えたら `navigation` /
+  `mapping` を立て直す**（2026-08-25 に `bringup/sensors/` から移した。読むのは
+  `scan_pipeline.launch.py` で、機体ではない）。
   `range_max` の既定 70.0 はセンサの測距上限だが、**そこまで使うのは `emcl2` だけ**
   （costmap は `obstacle_max_range: 2.5`、SLAM は `max_laser_range: 10.0` で頭打ち）。
   **`tsudanuma` は 2026-08-08 に `min_elevation_deg` を 5.0 から断片と同じ 0.0 へ
   戻したので、いまこの地図では仰角フィルタが実質素通し**（0.0 度 = 搭載高の水平面 =
-  断片の `min_height: 0.275` と同じ切り方）。帯は全距離で 0.275〜4.00m の高さ帯に
+  断片の `min_height: 0.275` と同じ切り方）。帯は全距離で 0.275〜2.50m の高さ帯に
   なっていて、`elevation_filter:=false` にしても**帯は変わらない**。組で決まるのは
-  5.0 へ戻したときの話で、そのときは `max_height`（同日に 8.30 → 5.00 → 4.00 と
-  下げた）が帯の届く距離をそのまま決める。**未検証**。
-- **センサを立てるのは `robot_bringup.launch.py` だけ。** LiDAR（`/scan`）も EKF
+  5.0 へ戻したときの話で、そのときは `max_height`（8.30 → 5.00 → 4.00 と同日に
+  下げ、2026-08-26 に 2.50 へもう 1 段）が帯の届く距離をそのまま決める。**未検証**。
+- **センサの「ドライバ」を立てるのは `robot_bringup.launch.py` だけ。**
+  LiDAR（`/livox/lidar`・`/livox/imu`、`lidar:=2d` なら `/scan_raw`）も EKF
   （`/odom`・`odom→base_footprint`）もそちらが `include` していて、**`docker compose up`
-  で常駐している**。`navigation.launch.py` / `mapping.launch.py` は消費者に徹し、
-  センサの引数を 1 つも持たない。手元で単独に立てるなら先に
-  `ros2 launch daifuku_bringup robot_bringup.launch.py` を通すこと（`/scan` が
-  来ないと emcl2 も costmap も動かない）。`simulator/` は駆動ドライバが要らないので、
-  `nav_container.sh` / `run_case.sh` が `lidar_bringup.launch.py` と
-  `odom_fusion.launch.py` を直接立てている。
+  で常駐している**。手元で単独に立てるなら先に
+  `ros2 launch daifuku_bringup robot_bringup.launch.py` を通すこと。
+  **`/scan` を作る段（`scan_pipeline.launch.py`）だけは `navigation.launch.py` /
+  `mapping.launch.py` が `include` する**（2026-08-25 に機体側から移した。場所ごとに
+  変わる値を持つのがその段だけで、常駐している機体が `site` を読む形になっていたため）。
+  裏返しに **`lidar:=` と `lidar_driver:=` は 2 つの launch にまたがる**ので、
+  既定を環境変数（`LIDAR` / `LIDAR_DRIVER`）から取り、Compose が `.env` の 1 行を
+  `raspicat` と `ros2` の両サービスへ配っている。**食い違うとエラーも警告も出ないまま
+  `/scan` が空になる。** また `navigation` と `mapping` はどちらもこの段を立てるので、
+  **2 つを同時に立てると `/scan` の publisher が 2 つになる**（もともと `map→odom` が
+  衝突するので排他だが、段が増えた）。`simulator/` は駆動ドライバが要らないので、
+  `nav_container.sh` / `run_case.sh` が `odom_fusion.launch.py` を直接立て、
+  `lidar:=` / `lidar_driver:=false` は `navigation.launch.py` へ渡している。
 - **`use_mid360_imu` は 1 つの launch に閉じている。** `robot_bringup.launch.py` が
   ドライバと EKF（`odom_fusion.launch.py`）の両方を立てるので、**片方だけ切り替わる
   状態は作れない**。`true`（既定）では `odom→base_footprint` と `/odom` の所有者が EKF
@@ -550,11 +634,11 @@ Docker 越しに叩く形は
 | 触るもの | 先に読む |
 | --- | --- |
 | `src/daifuku_config/` の yaml の値 | [`src/daifuku_config/README.md`](src/daifuku_config/README.md)（合成・override の仕組みと、各値の由来。機体側の値もここにまとまっている） |
-| `overrides/` / 設定の合成そのもの | `src/daifuku_config_manager/src/daifuku_config_manager/params.py` の冒頭 |
+| `overrides/` / 設定の合成そのもの | `src/daifuku_config_manager/src/daifuku_config_manager/overlay.py`（行き先）と `params.py`（launch 合成） |
 | `launch/` | [`docs/usage/architecture.md`](docs/usage/architecture.md#launchファイルの構成) |
 | `simulator/`（Isaac 版 / pi4_sim 版） | [`simulator/docs/pi4_sim.md`](simulator/docs/pi4_sim.md) を先に、次に [`simulator/README.md`](simulator/README.md) |
 | `docker/` | [`docker/README.md`](docker/README.md)（実機用と開発用の 2 環境） |
-| `src/daifuku_bringup/`（LiDAR・EKF・駆動の launch） | [`docs/setup/lidar.md`](docs/setup/lidar.md)、次に [`docs/usage/architecture.md`](docs/usage/architecture.md#launchファイルの構成) |
+| `src/daifuku_bringup/`（LiDAR ドライバ・EKF・駆動の launch） | [`docs/setup/lidar.md`](docs/setup/lidar.md)、次に [`docs/usage/architecture.md`](docs/usage/architecture.md#launchファイルの構成) |
 | `src/raspicat_driver/` / `tools/image/udev/` | [`src/raspicat_driver/README.md`](src/raspicat_driver/README.md)、次に [`docs/setup/raspberry-pi-4.md`](docs/setup/raspberry-pi-4.md) と [`raspberry-pi-5.md`](docs/setup/raspberry-pi-5.md)（未検証の項目付き） |
 | `src/daifuku_rqt/` | [`src/daifuku_rqt/README.md`](src/daifuku_rqt/README.md)、次に [`docs/usage/control-panel.md`](docs/usage/control-panel.md) |
 | `src/daifuku_waypoint_manager/` / `daifuku_stack/waypoints/` | [`src/daifuku_waypoint_manager/README.md`](src/daifuku_waypoint_manager/README.md) |

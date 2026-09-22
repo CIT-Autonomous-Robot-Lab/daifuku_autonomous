@@ -1,22 +1,30 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Fast DDS transport profile for the Pi host and the docker container.
+  Pi ホストとコンテナが共有する Fast DDS のトランスポート設定。ホストは
+  ~/.bashrc の FASTRTPS_DEFAULT_PROFILES_FILE、コンテナは compose.common.yaml
+  のマウントから読む。
 
-  1) UDP is restricted to loopback and the robot LAN (192.168.1.50).
-     Without the whitelist, participants also announce locators on wlan0
-     (192.168.23.x), which peers cannot reach; the unreachable locators plus
-     UDP buffer pressure made discovery flap (nodes appearing/disappearing).
+  1) UDP を loopback とロボット LAN に絞る。白リストが無いと
+     wlan0 (192.168.23.x) のロケータも広告され、届かないロケータと UDP の
+     バッファ圧でディスカバリが揺れる (ノードが現れたり消えたりする)。
 
-  2) SHM is enabled for same-host traffic. With ~20 participants (nav stack,
-     lidar pipeline, robot driver) forced onto UDP-only, the kernel drowned
-     in per-subscriber sendmsg fan-out (57% sys / load 24 on the Pi4,
-     2026-07-24) and TF stamps lagged 20+ s, aborting every nav goal.
-     Container <-> host SHM requires "ipc: host" in docker/raspberrypi/compose.yaml so
-     /dev/shm is shared. segment_size covers the MID360 point cloud
-     (~640 KB per message at 10 Hz).
+     **この <address> はロボット LAN に居る「自分の」アドレスの一覧で、
+     読む側の host ごとに要る。** Fast DDS はローカルに実在するものだけを
+     使うので、要らない行があっても害は無い。逆に自分のアドレスが 1 つも
+     無いと、useBuiltinTransports=false と組んで UDP が 1 本も張られず、
+     SHM しか残らない —— **エラーも警告も出ないまま同じホストの外が
+     まったく見えなくなる** (`ros2 topic list` が /rosout と
+     /parameter_events だけを返す)。2026-09-03 に .51 の SBC を足して踏んだ。
+     **ロボット LAN に host を足したらここに 1 行足すこと。**
 
-  Used by both the Pi host (FASTRTPS_DEFAULT_PROFILES_FILE in ~/.bashrc)
-  and the docker container (mounted via docker/raspberrypi/compose.yaml).
+     切り分けのときは `ros2 topic list --no-daemon` を使う。ros2 daemon は
+     先に立った環境のまま残るので、環境変数を変えて叩き直しても効かない。
+
+  2) 同一ホスト内は SHM。約 20 参加者を UDP だけに載せると購読者ごとの sendmsg
+     でカーネルが溺れ (Pi 4 で sys 57% / load 24)、TF が 20 秒以上遅れて
+     ナビゲーションのゴールが全部 abort した。**コンテナとホストの間で SHM を
+     使うには compose 側の "ipc: host" が要る** (/dev/shm の共有)。
+     segment_size は MID360 の点群 1 通 (10Hz で約 640KB) を賄う。
 -->
 <profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
   <transport_descriptors>
@@ -30,7 +38,8 @@
       <type>UDPv4</type>
       <interfaceWhiteList>
         <address>127.0.0.1</address>
-        <address>192.168.1.50</address>
+        <address>192.168.1.50</address>  <!-- Raspberry Pi Cat -->
+        <address>192.168.1.51</address>  <!-- NanoPi R3S LTS -->
       </interfaceWhiteList>
     </transport_descriptor>
   </transport_descriptors>

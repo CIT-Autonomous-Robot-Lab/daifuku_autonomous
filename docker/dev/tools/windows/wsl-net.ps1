@@ -1,8 +1,7 @@
-# Switch the WSL2 VM between the robot LAN (bridged) and the default NAT.
-# Bridged puts WSL on 192.168.1.0/24 so DDS reaches the robot, but it needs the
-# external switch's uplink: unplug the USB GbE and WSL loses every network,
-# including DNS (the symptom is "Temporary failure in name resolution").
-# See docs/setup/network.md.
+# WSL2 の VM をロボット LAN (bridged) と既定の NAT とで切り替える。bridged は WSL を
+# 192.168.1.0/24 に置いて DDS を機体まで通すが、**外部スイッチの上流が要る** —
+# USB GbE を抜くと DNS を含めて全部の通信が落ちる ("Temporary failure in name
+# resolution")。docs/setup/network.md。
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
@@ -15,9 +14,8 @@ $ErrorActionPreference = 'Stop'
 $configPath = Join-Path $env:USERPROFILE '.wslconfig'
 if (-not (Test-Path $configPath)) { throw "$configPath not found." }
 
-# The three keys that make up the bridged position. Commenting them out is
-# enough to fall back to NAT; WSL ignores vmSwitch/dhcp outside bridged mode,
-# but leaving them uncommented has bitten mirrored before, so hide all three.
+# bridged を作る 3 つのキー。コメントアウトすれば NAT へ戻る。WSL は bridged の外では
+# vmSwitch / dhcp を無視するが、残したまま mirrored で踏んだことがあるので 3 つとも隠す。
 $keys = 'networkingMode', 'vmSwitch', 'dhcp'
 $lines = Get-Content $configPath
 $isBridged = $lines | Where-Object { $_ -match '^\s*networkingMode\s*=\s*bridged\s*$' }

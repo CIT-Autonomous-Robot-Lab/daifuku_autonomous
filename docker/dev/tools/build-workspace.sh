@@ -11,20 +11,18 @@ source /opt/raspicat2/install/setup.bash
 mkdir -p src
 vcs import . --skip-existing < daifuku_autonomous.repos
 
-# livox_ros_driver2 keeps its ROS 2 manifest and launch files under alternate
-# names in the upstream repository.
+# livox_ros_driver2 は ROS 2 用の manifest と launch を上流で別名に置いている。
 cp src/livox_ros_driver2/package_ROS2.xml src/livox_ros_driver2/package.xml
 rm -rf src/livox_ros_driver2/launch
-# Windows/Podman bind mounts do not support setting every Unix timestamp.
+# Windows/Podman のバインドマウントは一部の Unix タイムスタンプを設定できない。
 mkdir -p src/livox_ros_driver2/launch
 while IFS= read -r -d '' launch_file; do
   target="src/livox_ros_driver2/launch/${launch_file##*/}"
   dd if="${launch_file}" of="${target}" status=none
 done < <(find src/livox_ros_driver2/launch_ROS2 -maxdepth 1 -type f -print0)
 
-# The image removes apt indexes to stay reasonably small. rosdep may still
-# discover source-specific packages (for example libaprutil1-dev), so refresh
-# the index before it installs them.
+# イメージは apt の索引を消してある。rosdep がソース固有のパッケージ
+# (libaprutil1-dev など) を見つけることがあるので、入れる前に索引を取り直す。
 apt-get update
 rosdep install \
   --from-paths \
@@ -36,17 +34,14 @@ rosdep install \
   --rosdistro humble \
   -r -y
 
-# VI packages require the separate ros2_rust toolchain. Navfn is the supported
-# development fallback here and matches the currently working Humble setup.
+# VI のパッケージは ros2_rust のツールチェーンが要るのでここでは建てない
+# (開発ホストの経路計画は navfn)。
 #
-# daifuku_rqt and daifuku_waypoint_manager are built here but deliberately not
-# in the Raspberry Pi image: they need rqt and RViz, which ros:humble-ros-base
-# does not carry. The Pi's build-workspace.sh selects packages by name, so
-# leaving them out of that list is all it takes.
+# **daifuku_rqt と daifuku_waypoint_manager は Pi では建てない** — rqt と RViz が
+# ros:humble-ros-base に無いため。あちらは名前で選ぶので一覧から外すだけでよい。
 #
-# raspimouse_msgs is here without raspicat_driver on purpose: the driver is only
-# ever launched (and never on this side), but joy_teleop.py imports Leds at module
-# scope for the status LEDs, so leaving it out kills joy_teleop at startup.
+# **raspimouse_msgs は raspicat_driver 抜きで要る** — joy_teleop.py が状態 LED の
+# ために Leds をモジュール先頭で import するので、無いと起動時に落ちる。
 colcon build \
   --symlink-install \
   --parallel-workers "${BUILD_JOBS}" \
