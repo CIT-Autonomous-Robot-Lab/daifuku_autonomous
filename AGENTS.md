@@ -1,9 +1,6 @@
 # AGENTS.md
 
-このリポジトリで作業するエージェント（Claude Code / Codex）向けの指針です。**指針の
-実体はこのファイルだけ**で、`CLAUDE.md` は取り込むだけの入口です（2 つに分けていた
-2026-08-08 まで、AGENTS.md が config 統合前で止まったままパッケージ数もパスも嘘に
-なっていました）。
+このリポジトリで作業するエージェント向けの指針です。**指針の実体はこのファイルだけ**です。
 
 ## 概要
 
@@ -35,7 +32,7 @@ Raspberry Pi Cat を ROS 2 Humble / Nav2 で自律移動させる colcon ワー�
 | --- | --- |
 | `daifuku_bringup` | 機体。駆動ドライバ・URDF・cmd_vel の仲裁・ゲームパッド・**LiDAR ドライバ**・**EKF**。`docker compose up` で常駐する。**場所を知らない** |
 | `daifuku_stack` | 自律移動。Nav2 / emcl2 / VI の launch、地図、ウェイポイント、RViz。**点群を `/scan` に変える段**（`scan_pipeline.launch.py`）もここ |
-| `daifuku_config_manager` | 設定の合成規則（`params.py`）と、`site_manager` / `config_sentinel`（設定が書き変わったことを見つける役。**どちらも他を import しない**）。**設定の実体は持たない** |
+| `daifuku_config_manager` | 設定の合成規則（`overlay.py` の行き先検査と `params.py` の launch 合成）と、`site_manager` / `config_sentinel`（設定が書き変わったことを見つける役。**どちらも他パッケージを import しない**）。**設定の実体は持たない** |
 | `daifuku_config` | 設定の実体だけ。`bringup/` と `stack/` と `overrides/` と `site` |
 
 `vcs import` で入るものを直しても本リポジトリのコミットには入らないので、上流を
@@ -108,8 +105,8 @@ symlink になるので、効くのは**ソース側の権限**です。Windows 
   `PackageNotFoundError` になる。
 
 これ以外の挙動の確認は実機か `simulator/` のハーネスで行います。単体で回せるのは
-`simulator/tests/` の 3 つ（`map-to-usd` の出力検算と、地図の `free_thresh` の検算と、
-`corridor-map` の回廊の上下の向きの検算）だけです。
+`simulator/tests/` の 4 つ（`map-to-usd` の出力検算と、地図の `free_thresh` の検算と、
+`corridor-map` の回廊の上下の向きの検算と、ウェイポイント YAML の書式）だけです。
 
 **実機で通すぶんは `tools/checklist/` にあります。** `colcon test` からは走りません
 （人に聞く項も機体が動く項もあるため）。使いかたと番号の意味は `checkall.sh` の冒頭に
@@ -143,6 +140,7 @@ lint は詰め合わせ（`ament_lint_common`）を使わず、自前 7 パッ�
 cd simulator && uv run python tests/verify_usda.py <map.yaml> <world.usda> free
 cd simulator && uv run python tests/verify_map_thresholds.py ../src/daifuku_stack/maps/*/*.yaml
 cd simulator && uv run python tests/verify_corridor_orientation.py
+cd simulator && uv run python tests/verify_waypoints.py
 ```
 
 ```bash
@@ -235,7 +233,7 @@ Docker 越しに叩く形は
   部分木しか読まない**（**同梱の 3 つはいまどれも `daifuku_stack:` しか持たない**。
   2026-08-25 に帯と仰角がそちらへ移ったので、機体側の部分木は空になった）。2 段目がノード名で、同じノード名を宣言している設定ファイル
   （そのパッケージの `src/daifuku_config/` の下のどれか）に重なる。落ちるのは 2 通り:
-  **知らないパッケージ名**（`params.py` の `KNOWN_PACKAGES`。誰も読まない部分木に
+  **知らないパッケージ名**（`overlay.py` の `KNOWN_PACKAGES`。誰も読まない部分木に
   なるため）と、**そのパッケージのどの設定ファイルにも無いノード名**。どちらも
   綴り違いが黙って消えるのを防ぐため。ノード名を持たない
   `sensors/MID360_config.json` だけは上書きできない。
@@ -636,7 +634,7 @@ Docker 越しに叩く形は
 | 触るもの | 先に読む |
 | --- | --- |
 | `src/daifuku_config/` の yaml の値 | [`src/daifuku_config/README.md`](src/daifuku_config/README.md)（合成・override の仕組みと、各値の由来。機体側の値もここにまとまっている） |
-| `overrides/` / 設定の合成そのもの | `src/daifuku_config_manager/src/daifuku_config_manager/params.py` の冒頭 |
+| `overrides/` / 設定の合成そのもの | `src/daifuku_config_manager/src/daifuku_config_manager/overlay.py`（行き先）と `params.py`（launch 合成） |
 | `launch/` | [`docs/usage/architecture.md`](docs/usage/architecture.md#launchファイルの構成) |
 | `simulator/`（Isaac 版 / pi4_sim 版） | [`simulator/docs/pi4_sim.md`](simulator/docs/pi4_sim.md) を先に、次に [`simulator/README.md`](simulator/README.md) |
 | `docker/` | [`docker/README.md`](docker/README.md)（実機用と開発用の 2 環境） |

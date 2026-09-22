@@ -6,9 +6,8 @@
 #   run_case.sh     : fake_robot.py (地図をレイキャストする疑似ロボット) をこの中で起動
 #   nav_container.sh: ロボットとセンサは**コンテナの外** (ホストの Isaac Sim) にいる
 #
-# ただし 2 本は**機械的に同期されていない**。書き出しは共通だったが以降それぞれに
-# 手が入っており、現状 diff は 300 行を超える。片方を直したらもう片方も見ること
-# (共通部の括り出しは未着手)。
+# 起動前処理 (ROS overlay、cleanup、overrides、params overlay、ログ要約) は
+# harness_common.sh。片方を直したら共通部を見ること。
 #
 # したがってここは「nav2 を起動してゴールを 1 回投げる」だけを行う。CPU/メモリの
 # 制約はコンテナに掛かっているので、Isaac 側 (GPU を使う) は制約を受けない。
@@ -35,138 +34,18 @@
 #   CASE=                       ログの識別名
 # set -u は使わない: ROS の setup.bash が未定義変数を参照するため。
 
-source /opt/ros/humble/setup.bash
-[ -f /opt/ros2_rust_ws/install/local_setup.bash ] && source /opt/ros2_rust_ws/install/local_setup.bash
-[ -f /opt/ros_ws/install/setup.bash ] && source /opt/ros_ws/install/setup.bash
-
-PLANNER=${PLANNER:-vi}
-LOCAL_PLANNER=${LOCAL_PLANNER:-auto}
-NAV2=${NAV2:-auto}
-# **既定が emcl2 でないのは、既定の場所 (19f) がそれでは立たないため。**
-# src/daifuku_config/overrides/19f.yaml が vi_planner の localizer を
-# 'belief' (VIOLA) にしているので、localization:=emcl2 だと推定器が 2 つに
-# なり backends.validate_localization が起動時に止める。tsudanuma は
-# 逆に belief を置けない (密ソルバが要り 3.17GB で OOM) ので emcl2 に戻すこと。
-LOCALIZATION=${LOCALIZATION:-vi}
+. "$(dirname "$0")/harness_common.sh"
+source_ros_overlays
+default_nav_env
 LIDAR=${LIDAR:-2d}
 USE_SIM_TIME=${USE_SIM_TIME:-false}
-GOAL_X=${GOAL_X:-4.28}
-GOAL_Y=${GOAL_Y:--2.92}
-GOAL_YAW_DEG=${GOAL_YAW_DEG:--24}
-SETTLE=${SETTLE:-45}
-TIMEOUT=${TIMEOUT:-300}
-CASE=${CASE:-default}
 
-# 前回ケースの残骸を必ず落とす (run_case.sh と同じ理由: 残ったノードが
-# graph を汚して診断を狂わせる。laser_filters のように名前が nav2_ で始まらない
-# ノードが取り残されやすい)。
-cleanup_ros() {
-    pkill -f '/opt/ros/humble/lib/' 2>/dev/null
-    pkill -f '/opt/ros_ws/install/lib/' 2>/dev/null
-    pkill -f 'ros2 launch daifuku_stack' 2>/dev/null
-    pkill -f 'ros2 launch daifuku_bringup' 2>/dev/null
-    sleep 2
-    pkill -9 -f '/opt/ros/humble/lib/' 2>/dev/null
-    pkill -9 -f '/opt/ros_ws/install/lib/' 2>/dev/null
-    sleep 1
-}
 cleanup_ros
-ros2 daemon stop >/dev/null 2>&1
-# **止めたら必ず立て直す。** ros2cli は毎回 127.0.0.1 のデーモンへ繋ぎに行き、
-# 居なければ ECONNREFUSED ですぐ諦める…… のは NAT の話。.wslconfig が
-# networkingMode=mirrored だと Linux の 127.0.0.1 は Windows 側にも向くので、
-# 繋ぎ先が居ないと**握られたまま 2 分待つ**。下の `timeout 5 ros2 topic list` は
-# 全部空を返し、Isaac が正しく喋っていても「トピックが見えない」で exit 4 になる。
-ros2 daemon start >/dev/null 2>&1
-
-SHARE=/opt/ros_ws/install/share/daifuku_stack
-# overrides は daifuku_config の share。**maps/ を持つ daifuku_stack とは置き場が違う**
-# (2026-08-08 まで $SHARE/config/overrides/ を見ていた。設定を src/daifuku_config/ へ出して
-# daifuku_stack がその段を install しなくなった時点から、**どの地図でも overrides:=none
-# に落ちていたはず** — この修正ともども**未検証**。効かせるには一度ビルドが要る)。
-CONFIG_SHARE=/opt/ros_ws/install/share/daifuku_config
-RUN=/tmp/simulator/$CASE
-rm -rf "$RUN"; mkdir -p "$RUN"
-export ROS_LOG_DIR=$RUN/log
-
-MAP_NAME=${MAP_NAME:-19f/map_19f}   # 既定は 19F の地図。maps/ からの相対パス (地図ごとのフォルダを含む)
-MAP=$SHARE/maps/$MAP_NAME.yaml
-if [ ! -f "$MAP" ]; then
-    echo "map not found: $MAP" >&2
-    exit 2
-fi
-
-# パラメータの上書きは launch と同じ経路 (extra_params_file) に載せる。
-# ここで nav2_params 相当を作り直すと src/daifuku_config/stack/nav2/*.yaml の合成を素通りするので、
-# 環境変数で触るキーだけの overlay を書く (run_case.sh と同じ方式)。
-python3 - "$RUN" <<'PY'
-import os, sys, yaml
-run = sys.argv[1]
-overlay = {}
-
-
-def put(node, key, value):
-    overlay.setdefault(node, {}).setdefault("ros__parameters", {})[key] = value
-
-
-solver = os.environ.get("VI_SOLVER", "")
-pub_vf = os.environ.get("VI_PUBLISH_VF", "")
-planner_freq = os.environ.get("PLANNER_EXPECTED_FREQ", "")
-map_scale = os.environ.get("VI_MAP_SCALE", "")
-sink_dir = os.environ.get("VI_COMPACT_SINK_DIR", "")
-bt_timeout = os.environ.get("BT_SERVER_TIMEOUT", "")
-
-# 2026-08-08 の上流の整理で vi_global_planner ノードは消え、広域だけ VI
-# (local_planner:=nav2) も同じ vi_planner を follow: false で立てるようになった。
-# 宛先が 1 つになったので、ここも 1 つだけに書く。
-if solver:
-    put("vi_planner", "solver", solver)
-if pub_vf:
-    # 配信の on/off だった publish_value_function は 2026-08-09 の上流の整理で
-    # value_publish_interval_ms に吸収された (負 = 配信そのものを立てない)。
-    put("vi_planner", "value_publish_interval_ms",
-        500 if pub_vf.lower() == "true" else -1)
-if map_scale:
-    put("vi_planner", "map_scale", int(map_scale))
-if sink_dir:
-    put("vi_planner", "compact_sink_dir", sink_dir)
-if bt_timeout:
-    # bt_navigator の BtActionNode がゴール受理 ack を待つ時間 [ms]。
-    # nav2 既定は 20ms で、CPU 飢餓時はこれを超えて全アクションが即失敗する。
-    put("bt_navigator", "default_server_timeout", int(bt_timeout))
-if planner_freq:
-    # planner_server は達成できない周波数を設定したときだけ実測値を WARN に
-    # 出す。キャリブレーション (実機実測 7.6Hz) はこれを読む。
-    put("planner_server", "expected_planner_frequency", float(planner_freq))
-
-if overlay:
-    out = os.path.join(run, "overlay.yaml")
-    yaml.safe_dump(overlay, open(out, "w"))
-    print(f"PARAMS_OVERLAY {out}")
-PY
-
-# overlay と EXTRA_PARAMS は params.compose が後勝ちで重ねる (カンマ区切り)。
-# ros2 launch は `arg:=` (値が空) を malformed として弾くので、値があるときだけ渡す。
-EXTRA=""
-[ -f "$RUN/overlay.yaml" ] && EXTRA=$RUN/overlay.yaml
-[ -n "${EXTRA_PARAMS:-}" ] && EXTRA="${EXTRA:+$EXTRA,}${EXTRA_PARAMS}"
-
-params_arg=()
-# overrides は**必ず明示的に渡す**。launch の既定は 19f なので、渡さないと
-# MAP_NAME を変えても 19F 用の調整 (emcl2 のリセット閾値など) が載ったままになる。
-# 選ぶのは**地図の入っているフォルダ名 (= 場所の名前)** で、同名の override が
-# あればそれを、無ければ none (= 何も重ねない)。**ファイル名のほうではない** —
-# 2026-08-25 に overrides を場所の名前 (19f) にしたので、map_19f では当たらない。
-if [ -z "${OVERRIDES:-}" ]; then
-    SITE_NAME=$(dirname "$MAP_NAME")
-    if [ -f "$CONFIG_SHARE/overrides/$SITE_NAME.yaml" ]; then
-        OVERRIDES=$SITE_NAME
-    else
-        OVERRIDES=none
-    fi
-fi
-params_arg+=(overrides:="$OVERRIDES")
-[ -n "$EXTRA" ] && params_arg+=(extra_params_file:="$EXTRA")
+restart_ros_daemon
+resolve_map
+setup_run_dir /tmp/simulator
+write_params_overlay
+resolve_params_arg
 
 echo "=== CASE=$CASE planner=$PLANNER local=$LOCAL_PLANNER loc=$LOCALIZATION"
 echo "=== lidar=$LIDAR use_sim_time=$USE_SIM_TIME map=$MAP"
@@ -336,13 +215,7 @@ ros2 launch daifuku_stack navigation.launch.py \
     localization:="$LOCALIZATION" >"$RUN/nav.log" 2>&1 &
 NAV_PID=$!
 
-( while :; do
-    printf '%s load=%s mem=%s\n' "$(date +%T)" \
-        "$(cut -d' ' -f1-3 /proc/loadavg)" \
-        "$(cat /sys/fs/cgroup/memory.current 2>/dev/null)"
-    sleep 1
-  done ) >"$RUN/load.log" 2>&1 &
-MON_PID=$!
+start_load_monitor
 
 # **自己位置の種を撒く。** Isaac はロボットを既知の姿勢
 # (run_isaac_case.sh の START_X / START_Y / START_YAW) にスポーンさせるので、
@@ -374,14 +247,7 @@ kill $MON_PID $NAV_PID $ODOM_PID $RSP_PID 2>/dev/null
 sleep 3
 cleanup_ros
 
-echo "=== 実測 planner 周波数 (キャリブレーション用; 実機 Pi4 の実測は 7.6Hz) ==="
-grep -h -o 'current loop rate is [0-9.]* Hz' "$RUN/nav.log" | tail -3 || true
-
-echo "=== bond / lifecycle ==="
-grep -h -E 'connected with bond|Managed nodes are active|Aborting bringup|Failed to change state|bond' \
-    "$RUN/nav.log" | tail -12 || true
-
-echo "=== KILLED (OOM 等でプロセスが落ちていないか) ==="
+summarize_nav_logs
 grep -h -i -E 'error|killed|terminated|exited with|abort' \
     "$RUN"/nav.log "$RUN"/odom_fusion.log 2>/dev/null | tail -25
 echo "=== peak mem: $(sort -t= -k3 -n "$RUN/load.log" 2>/dev/null | tail -1)"

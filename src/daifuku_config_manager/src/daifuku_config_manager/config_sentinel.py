@@ -49,19 +49,10 @@ import rclpy
 import yaml
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
-from rclpy.qos import QoSDurabilityPolicy, QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
 from std_msgs.msg import String
 
 from . import params
-
-SITE_TOPIC = "/daifuku/site"
-
-LATCHED = QoSProfile(
-    depth=1,
-    history=QoSHistoryPolicy.KEEP_LAST,
-    reliability=QoSReliabilityPolicy.RELIABLE,
-    durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
-)
+from .site_bus import LATCHED, SITE_TOPIC, decode_site
 
 
 class ConfigSentinel(Node):
@@ -126,12 +117,13 @@ class ConfigSentinel(Node):
     # ── 入力 ──────────────────────────────────────────────────────────────
 
     def _on_site(self, msg):
-        try:
-            self._announced = (yaml.safe_load(msg.data) or {}).get("site", "")
-        except yaml.YAMLError:
-            # JSON は YAML の部分集合なので safe_load で読める。読めないものが
-            # 流れてきたら告知の側の問題なので、こちらは黙って前の値を保つ。
+        site = decode_site(msg.data)
+        if site is None:
+            # 壊れた告知は前の値を保つ。読めないものを場所が変わったと見なすと
+            # 立て直しが止まらなくなる。
             self.get_logger().warning(f"{SITE_TOPIC} を読めません: {msg.data!r}")
+            return
+        self._announced = site
 
     def _on_odom(self, msg):
         now = time.monotonic()

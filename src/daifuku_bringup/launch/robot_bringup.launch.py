@@ -386,16 +386,22 @@ def generate_launch_description():
     # 車輪オドメトリと Mid-360 IMU の融合。**ドライバと同じ launch に置くのが要点**で、
     # use_mid360_imu 1 つで「ドライバが TF を止める」と「EKF が TF を出す」が同時に
     # 切り替わる。use_mid360_imu:=false なら向こうで何も立たない。
-    odom_fusion_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(pkg_share, "launch", "odom_fusion.launch.py")
+    #
+    # **GroupAction で囲むこと。** 子が宣言する base_frame / odom_topic /
+    # mid360_ekf_params_file が親へ漏れると、後ろの lidar_bringup の同名引数が
+    # 既定を入れられなくなる。lidar / scan の include と同じ囲い方。
+    odom_fusion_launch = GroupAction([
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(pkg_share, "launch", "odom_fusion.launch.py")
+            ),
+            launch_arguments=[
+                (name, LaunchConfiguration(name))
+                for name in ("use_mid360_imu", "wheel_odom_topic", "use_sim_time",
+                             "overrides", "extra_params_file")
+            ],
         ),
-        launch_arguments=[
-            (name, LaunchConfiguration(name))
-            for name in ("use_mid360_imu", "wheel_odom_topic", "use_sim_time",
-                         "overrides", "extra_params_file")
-        ],
-    )
+    ])
 
     return LaunchDescription([
         DeclareLaunchArgument(

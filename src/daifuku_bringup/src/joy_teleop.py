@@ -93,8 +93,8 @@ activate で戻さないので、lifecycle を回すと次にボタンを押す�
 なる (エラーは出ない)。~/enabled と同じ枝で出しているのはこのため。
 
 **led1 (モータ電源) はドライバが出す /motor_power_state をそのまま映す。** 公式実装
-(driver:=raspimouse) はそれを出さないので、そのときだけ要求の写し (下の
-`_motor_power`) に落ちる — 外から変えられると 1 回ぶんずれるのはその構成のとき。
+(driver:=raspimouse) はそれを出さないので、そのときだけ要求の写し (`MotorPower`)
+に落ちる — 外から変えられると 1 回ぶんずれるのはその構成のとき。
 
 ## teleop 中は「出しっぱなし」にしてある
 
@@ -131,7 +131,6 @@ driver:=raspimouse) はこのキーを持たず、いつ止まるかは**未確�
 入れ替えるモードを持つ機種もある。
 """
 
-import math
 import os
 import sys
 import time
@@ -174,6 +173,9 @@ from joy_buttons import (  # noqa: E402
     TUNE_MOTOR_ON, TUNE_REFUSED, TUNE_TELEOP_OFF, TUNE_TELEOP_ON, TUNE_WAYPOINTS,
     TunePlayer, axis, axis_to_speed, pressed,
 )
+from joy_motor import MotorPower  # noqa: E402
+from joy_patrol import WaypointPatrol  # noqa: E402
+from joy_waypoints import load_waypoint_document  # noqa: E402
 
 # 旋律の音の変わり目を拾う周期 [s]。一番短い音 (60 ms) の 1/6 で、publish するのは
 # 変わり目だけなのでトピックには乗らない。_tick と分けてあるのは、あちらが
@@ -184,74 +186,23 @@ TUNE_PERIOD = 0.01
 def load_waypoints(path):
     """ウェイポイントの YAML を PoseStamped の並びに読む。
 
-    書式は daifuku_waypoint_manager パネルが保存するものと同じ
-    (frame_id + waypoints[].position/orientation)。パネルは RViz プラグインで
-    実機には載らないので、ここでは同じ書式を読むだけの実装を持っている。
-
-    **受け入れる書式はパネルの readYamlFile (waypoint_manager_panel.cpp) と
-    そろえてある。** 片方だけが通す形にすると、手で書いた順路が「実機では走るのに
-    パネルでは開けない」(あるいはその逆) になる。決まりは 3 つ:
-
-      * frame_id は必須。既定を持たせると、書き忘れた順路が黙って map 上の
-        座標として走る (座標系を取り違えると全点が地図の外に出る)
-      * position.z は省略可 (0.0)。接地して走る機体なので、無くても意味が決まる
-      * 有限でない値と、長さが 0 のクォータニオンは弾く。NaN のまま
-        FollowWaypoints へ投げると Nav2 の側で黙って落ちる
-
-    Raises:
-        ValueError: 書式が違うとき。1 点でも欠けていれば読み込みごと失敗させる
-            (黙って飛ばすと、経路の途中が抜けた巡回が静かに走ってしまう)。
+    書式の決まりは joy_waypoints.load_waypoint_document (パネルの
+    readYamlFile と同じ契約)。ここは ROS の型へ載せ替えるだけ。
     """
-    # encoding を明示する。同梱の waypoints_tsudanuma v1.0.yaml は冒頭に日本語の注記を
-    # 持っていて、ロケールが C の環境 (実機のコンテナは LANG を持たない) では
-    # 既定の encoding が ASCII になり、**読み込みごと失敗する**。
-    # daifuku_config_manager/params.py が同じ理由で明示しているのと同じ。
-    with open(path, encoding="utf-8") as handle:
-        document = yaml.safe_load(handle)
-    if not isinstance(document, dict):
-        raise ValueError("top level is not a mapping")
-
-    frame_id = document.get("frame_id")
-    if not frame_id or not isinstance(frame_id, str):
-        raise ValueError("missing or invalid frame_id")
-    entries = document.get("waypoints")
-    if not entries:
-        raise ValueError("no waypoints")
-
+    frame_id, entries = load_waypoint_document(path)
     poses = []
-    for index, entry in enumerate(entries):
-        try:
-            position = entry["position"]
-            orientation = entry["orientation"]
-            pose = PoseStamped()
-            pose.header.frame_id = frame_id
-            pose.pose.position.x = float(position["x"])
-            pose.pose.position.y = float(position["y"])
-            pose.pose.position.z = float(position.get("z", 0.0))
-            pose.pose.orientation.x = float(orientation["x"])
-            pose.pose.orientation.y = float(orientation["y"])
-            pose.pose.orientation.z = float(orientation["z"])
-            pose.pose.orientation.w = float(orientation["w"])
-        except (KeyError, TypeError, ValueError) as exc:
-            raise ValueError("waypoint %d: %s" % (index, exc))
-        _validate_pose(index, pose)
+    for xyz, quat in entries:
+        pose = PoseStamped()
+        pose.header.frame_id = frame_id
+        pose.pose.position.x, pose.pose.position.y, pose.pose.position.z = xyz
+        (
+            pose.pose.orientation.x,
+            pose.pose.orientation.y,
+            pose.pose.orientation.z,
+            pose.pose.orientation.w,
+        ) = quat
         poses.append(pose)
     return frame_id, poses
-
-
-def _validate_pose(index, pose):
-    """有限でない座標と、長さが 0 のクォータニオンを弾く (パネルと同じ判定)。"""
-    position = pose.pose.position
-    quaternion = pose.pose.orientation
-    norm_squared = (
-        quaternion.x ** 2 + quaternion.y ** 2 + quaternion.z ** 2 + quaternion.w ** 2
-    )
-    if not all(math.isfinite(v) for v in (position.x, position.y, position.z)):
-        raise ValueError("waypoint %d: position is not finite" % index)
-    if not math.isfinite(norm_squared) or norm_squared < 1e-12:
-        raise ValueError(
-            "waypoint %d: orientation is not a usable quaternion" % index
-        )
 
 
 class JoyTeleop(Node):
@@ -331,15 +282,11 @@ class JoyTeleop(Node):
         self._leds = None
         self._leds_at = 0.0
         self._warned_stale = False
-        self._goal_handle = None
-        self._goal_pending = False
+        self._patrol = WaypointPatrol()
         self._tune = TunePlayer()
-        # ドライバが状態を出さない構成 (driver:=raspimouse) 用の写し。自分が
-        # 投げた要求だけを数えるので、外から変えられるとずれる。
-        self._motor_power = bool(value("motor_power_start_state"))
-        # ドライバが出す実際の状態。None = まだ一度も来ていない (= 写しを使う)。
-        self._motor_state = None
-        self._motor_pending = False
+        # ドライバが状態を出さない構成 (driver:=raspimouse) 用の写しは MotorPower
+        # が持つ。自分が投げた要求だけを数えるので、外から変えられるとずれる。
+        self._motor = MotorPower(value("motor_power_start_state"))
 
         self._cmd_pub = self.create_publisher(Twist, "cmd_vel_teleop", 10)
         # 状態は遅れて繋いだ購読者にも見せたい (「なぜ動かない」を追うため)。
@@ -589,15 +536,15 @@ class JoyTeleop(Node):
         戻さないため。変化時だけにすると lifecycle を回した先で消えたままになり、
         **エラーは出ない**。
 
-        led1 の出どころは _motor_on (ドライバが出していればその状態、公式実装の
-        ときだけ要求の写し)。
+        led1 の出どころは MotorPower.is_on (ドライバが出していればその状態、
+        公式実装のときだけ要求の写し)。
         """
         if self._leds_pub is None:
             return
         state = (
             self._enabled,                                          # teleop 入
-            self._motor_on(),                                       # モータ電源
-            self._goal_pending or self._goal_handle is not None,    # 巡回中
+            self._motor.is_on(),                                    # モータ電源
+            self._patrol.running(),                                 # 巡回中
             fresh,                                                  # /joy が来ている
         )
         now = time.monotonic()
@@ -618,24 +565,15 @@ class JoyTeleop(Node):
         持っていない。main() が rclpy.spin (単スレッド) だからで、
         MultiThreadedExecutor へ移すならここは非常停止の判断に効く値である。
         """
-        self._motor_state = bool(msg.data)
-
-    def _motor_on(self):
-        """いまモータ電源が入っているか。
-
-        ドライバ (driver:=original) が /motor_power_state を出していればそれが
-        答え。公式実装 (driver:=raspimouse) は出さないので、そのときだけ自分が
-        投げた要求の写しに落ちる (外から変えられると 1 回ぶんずれる)。
-        """
-        return self._motor_power if self._motor_state is None else self._motor_state
+        self._motor.note_driver_state(msg.data)
 
     def _toggle_motor_power(self):
         """モータ電源を入/切する。切るほうは非常停止として使われる。
 
-        いま入っているかは _motor_on から取る。ドライバが状態を出していない
+        いま入っているかは MotorPower.is_on から取る。ドライバが状態を出していない
         構成では自分が投げた要求の写しなので、外から変えられると 1 回ぶんずれる。
         """
-        if self._motor_pending:
+        if self._motor.pending:
             # 前の要求がまだ返っていない。二度押しで往復させない。
             self._refuse("motor power request still in flight", warning=True)
             return
@@ -647,30 +585,29 @@ class JoyTeleop(Node):
             )
             return
 
-        wanted = not self._motor_on()
+        wanted = not self._motor.is_on()
         request = SetBool.Request()
         request.data = wanted
         # 要求を先に投げる。切るほうは非常停止なので、音 (最長 0.41 秒) を
         # ボタンとサービス呼び出しのあいだに挟まない。
-        self._motor_pending = True
+        self._motor.begin_request(wanted)
         future = self._motor_client.call_async(request)
         future.add_done_callback(self._on_motor_power_response)
-        self._motor_power = wanted
         self._play(TUNE_MOTOR_ON if wanted else TUNE_MOTOR_OFF)
         self.get_logger().info("motor power %s" % ("on" if wanted else "off"))
 
     def _on_motor_power_response(self, future):
-        self._motor_pending = False
         try:
             response = future.result()
         except Exception as exc:  # noqa: BLE001 - サービス側の失敗は何でも拾う
             response = None
             self.get_logger().error("motor power call failed: %s" % exc)
         if response is not None and response.success:
+            self._motor.complete_request()
             return
         # 通らなかったのなら数えた側を戻す。戻さないと、写しを使う構成
         # (driver:=raspimouse) で次の長押しが「切る」つもりで「入れる」になる。
-        self._motor_power = not self._motor_power
+        self._motor.revert_request()
         if response is None:
             # 例外の中身は上で出してある。ここは音だけ。
             self._play(TUNE_REFUSED)
@@ -714,8 +651,7 @@ class JoyTeleop(Node):
                 continue
             # 空の goal_info = そのサーバの全ゴール。
             client.call_async(CancelGoal.Request())
-        self._goal_handle = None
-        self._goal_pending = False
+        self._patrol.finished()
 
     # ── ウェイポイント巡回 ──────────────────────────────────────────────
 
@@ -728,7 +664,7 @@ class JoyTeleop(Node):
             )
             return
 
-        if self._goal_pending or self._goal_handle is not None:
+        if self._patrol.running():
             self._refuse(
                 "waypoints already running; hold START to take over first",
                 warning=True,
@@ -770,7 +706,7 @@ class JoyTeleop(Node):
 
         goal = FollowWaypoints.Goal()
         goal.poses = poses
-        self._goal_pending = True
+        self._patrol.mark_sent()
         future = self._follow_client.send_goal_async(goal)
         future.add_done_callback(self._on_goal_response)
         self._play(TUNE_WAYPOINTS)
@@ -793,16 +729,16 @@ class JoyTeleop(Node):
         self._path_pub.publish(path)
 
     def _on_goal_response(self, future):
-        self._goal_pending = False
         handle = future.result()
         if not handle.accepted:
+            self._patrol.rejected()
             self._refuse("waypoint goal rejected")
             return
-        self._goal_handle = handle
+        self._patrol.accepted(handle)
         handle.get_result_async().add_done_callback(self._on_goal_result)
 
     def _on_goal_result(self, future):
-        self._goal_handle = None
+        self._patrol.finished()
         result = future.result()
         missed = list(getattr(result.result, "missed_waypoints", []))
         self.get_logger().info(

@@ -55,17 +55,15 @@ from python_qt_binding.QtWidgets import QDoubleSpinBox
 from python_qt_binding.QtWidgets import QGridLayout
 from python_qt_binding.QtWidgets import QGroupBox
 from python_qt_binding.QtWidgets import QHBoxLayout
-from python_qt_binding.QtWidgets import QHeaderView
 from python_qt_binding.QtWidgets import QLabel
-from python_qt_binding.QtWidgets import QProgressBar
 from python_qt_binding.QtWidgets import QPushButton
-from python_qt_binding.QtWidgets import QTableWidget
-from python_qt_binding.QtWidgets import QTableWidgetItem
 from python_qt_binding.QtWidgets import QVBoxLayout
 from python_qt_binding.QtWidgets import QWidget
 from rclpy.action import ActionClient
 from rqt_gui_py.plugin import Plugin
 from std_srvs.srv import SetBool
+
+from daifuku_rqt.control_groups import StatusGroup
 
 # The panel zeroes cmd_vel after this many seconds of continuous drive even if
 # the operator is still holding the key.  A held arrow key plus a lost focus
@@ -165,7 +163,7 @@ class ControlPanelWidget(QWidget):
         )
         self._rebuild_lifecycle_clients()
 
-        self.diagnostics_received.connect(self._show_diagnostics)
+        self.diagnostics_received.connect(self._status.show_diagnostics)
         self.goal_state_changed.connect(self._show_goal_state)
         self.lifecycle_state_changed.connect(self._show_lifecycle_state)
         self.service_answered.connect(self._service_label.setText)
@@ -185,48 +183,12 @@ class ControlPanelWidget(QWidget):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.addWidget(self._build_status_group())
+        self._status = StatusGroup()
+        layout.addWidget(self._status)
         layout.addWidget(self._build_navigation_group())
         layout.addWidget(self._build_driver_group())
         layout.addWidget(self._build_teleop_group())
         layout.addStretch(1)
-
-    def _build_status_group(self):
-        group = QGroupBox("稼働状況")
-        layout = QVBoxLayout(group)
-
-        self._cpu_bar = QProgressBar()
-        self._cpu_bar.setRange(0, 100)
-        self._cpu_bar.setFormat("CPU %p%")
-        layout.addWidget(self._cpu_bar)
-
-        self._cpu_detail = QLabel("system_monitor を待っています")
-        self._cpu_detail.setWordWrap(True)
-        layout.addWidget(self._cpu_detail)
-
-        self._node_table = QTableWidget(0, 2)
-        self._node_table.setHorizontalHeaderLabels(["プロセス", "CPU"])
-        rows = self._node_table.verticalHeader()
-        rows.setVisible(False)
-        # Two thirds of the style's row height, and twice the box: three times
-        # as many processes fit.  minimumSectionSize is style-derived and would
-        # otherwise clamp the shorter rows straight back, and Fixed keeps
-        # _show_node_table's items from growing them again.
-        rows.setMinimumSectionSize(rows.defaultSectionSize() * 2 // 3)
-        rows.setDefaultSectionSize(rows.defaultSectionSize() * 2 // 3)
-        rows.setSectionResizeMode(QHeaderView.Fixed)
-        self._node_table.horizontalHeader().setStretchLastSection(True)
-        self._node_table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.Stretch
-        )
-        self._node_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        # Fixed, not a maximum: QAbstractScrollArea hands out a 192 px size hint
-        # and the layout's trailing stretch swallows everything above it, so a
-        # raised maximum alone would leave the box at 192 whatever the panel
-        # height.  The old maximum of 160 was reached for the same reason.
-        self._node_table.setFixedHeight(320)
-        layout.addWidget(self._node_table)
-        return group
 
     def _build_navigation_group(self):
         group = QGroupBox("ゴール")
@@ -375,35 +337,6 @@ class ControlPanelWidget(QWidget):
 
     def _on_diagnostics(self, message):
         self.diagnostics_received.emit(message)
-
-    def _show_diagnostics(self, message):
-        for status in message.status:
-            values = dict((kv.key, kv.value) for kv in status.values)
-            if status.name.endswith("CPU"):
-                self._show_cpu(status, values)
-            elif status.name.endswith("Nodes"):
-                self._show_node_table(values)
-
-    def _show_cpu(self, status, values):
-        total = values.get("total", "")
-        try:
-            self._cpu_bar.setValue(int(float(total.rstrip("%"))))
-        except ValueError:
-            pass
-        extras = [status.message]
-        for key in ("loadavg", "temperature"):
-            if key in values:
-                extras.append("%s %s" % (key, values[key]))
-        cores = sorted(k for k in values if k.startswith("cpu"))
-        if cores:
-            extras.append(" ".join("%s %s" % (k, values[k]) for k in cores))
-        self._cpu_detail.setText(" / ".join(extras))
-
-    def _show_node_table(self, values):
-        self._node_table.setRowCount(len(values))
-        for row, key in enumerate(sorted(values)):
-            self._node_table.setItem(row, 0, QTableWidgetItem(key))
-            self._node_table.setItem(row, 1, QTableWidgetItem(values[key]))
 
     # -- navigation --------------------------------------------------------
 

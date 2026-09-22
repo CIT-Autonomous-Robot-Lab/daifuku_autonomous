@@ -33,30 +33,16 @@
   ros2 topic echo /daifuku/site              流れている値
 """
 
-import json
 import os
 
 import rclpy
 from rcl_interfaces.msg import SetParametersResult
 from rclpy.node import Node
 from rclpy.parameter import Parameter
-from rclpy.qos import QoSDurabilityPolicy, QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
 from std_msgs.msg import String
 
 from . import params
-
-# 場所の告知。**絶対名にしてある** — namespace:= を付けた構成でも、機体側と
-# 自律移動側が同じ 1 本を見なければ意味が無い。
-SITE_TOPIC = "/daifuku/site"
-
-# 立ち上がりが前後しても取りこぼさないよう latch する (config_sentinel は
-# あとから上がってくる)。
-LATCHED = QoSProfile(
-    depth=1,
-    history=QoSHistoryPolicy.KEEP_LAST,
-    reliability=QoSReliabilityPolicy.RELIABLE,
-    durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
-)
+from .site_bus import LATCHED, SITE_TOPIC, encode_site
 
 
 def validate(site):
@@ -147,10 +133,7 @@ class SiteManager(Node):
 
     def _publish(self):
         msg = String()
-        msg.data = json.dumps(
-            {"site": self._site, "file": os.path.realpath(self._file)},
-            ensure_ascii=False, sort_keys=True,
-        )
+        msg.data = encode_site(self._site, os.path.realpath(self._file))
         self._pub.publish(msg)
 
     def _on_set(self, parameters):

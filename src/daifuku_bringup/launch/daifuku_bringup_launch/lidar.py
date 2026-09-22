@@ -39,6 +39,7 @@ from ament_index_python.packages import (
 )
 from launch.actions import (
     DeclareLaunchArgument,
+    GroupAction,
     IncludeLaunchDescription,
     SetLaunchConfiguration,
 )
@@ -115,15 +116,23 @@ def include_lidar_bringup(pkg_share):
     overrides / extra_params_file も素通しする。親と同じ overrides で、子が読む
     設定ファイル (urg) も上書きできるようにするため。表に入れずここで足して
     いるのは、親が params.declare_args で先に宣言しているから (二重宣言になる)。
+
+    **GroupAction で囲むこと。** launch_arguments は親と同じ文脈に積まれるので、
+    囲まないと子が宣言する lidar_frame / scan_raw_topic / base_frame が後ろの
+    include まで漏れる。URDF 側が渡す lidar_frame (既定 lidar_link) と
+    Mid-360 の livox_frame が入れ替わると、IMU の TF が消える。何がどう壊れるかは
+    AGENTS.md (IncludeLaunchDescription の項)。scan_pipeline の include と同じ囲い方。
     """
     names = [name for name, _, _ in _shared_arg_specs()]
     names += ["use_sim_time", "overrides", "extra_params_file"]
-    return IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(pkg_share, "launch", "lidar_bringup.launch.py")
+    return GroupAction([
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(pkg_share, "launch", "lidar_bringup.launch.py")
+            ),
+            launch_arguments=[(name, LaunchConfiguration(name)) for name in names],
         ),
-        launch_arguments=[(name, LaunchConfiguration(name)) for name in names],
-    )
+    ])
 
 
 def _resolve_urg_params(context):

@@ -248,6 +248,7 @@ SHARE=/opt/ros_ws/install/share/daifuku_stack
 # run_pi4_sim.ps1 と共通で、nav_container.sh がそこから probe.py を呼ぶ。
 $ENGINE exec "$CONTAINER" bash -lc "mkdir -p /opt/sim"
 $ENGINE cp "$PROJ/container/probe.py" "$CONTAINER:/opt/sim/probe.py"
+$ENGINE cp "$PROJ/container/harness_common.sh" "$CONTAINER:/opt/sim/harness_common.sh"
 $ENGINE cp "$PROJ/container/nav_container.sh" "$CONTAINER:/opt/sim/nav_container.sh"
 # robot_state_publisher には Isaac が読み込んだのと**同じ** URDF を使わせる。
 # 別々に生成すると、リンクのオフセットが食い違っても誰も気づけない。
