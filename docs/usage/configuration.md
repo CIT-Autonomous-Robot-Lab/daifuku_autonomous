@@ -45,7 +45,7 @@
 | `map` | 空（`overrides`の`site: map: navigation:`から導く） | **経路計画**に使う地図YAMLのパス。`/map`で配信し`vi_planner`と`global_costmap`が読む。**空なら重ねた`overrides`の`site: map: navigation:`。** 明示すると同じファイルを指しているかを見て、違えば起動時にエラー（別の場所の帯と`emcl2`の調整を載せたまま走るのを防ぐ）。**地図が決まらないとき（`overrides:=none`、または`site: map:`の無いoverrides）は明示が要り、既定の地図へは落とさずに止まる。** 既定の場所ごと変えるのは`tools/site.sh` |
 | `map_loc` | 空（`overrides`の`site: map: localization:`から導く） | **自己位置推定**に使う地図YAMLのパス。`/map_loc`で配信し`emcl2`が読む。空で宣言も無ければ`map`と同じ地図に落ちる（こちらだけは落とす。1枚で走らせる従来どおりの形なので）。**2枚を別にできるのは`localization:=emcl2`のときだけ**（[自律移動](navigation.md#地図は2枚)） |
 | `params_dir` | `src/daifuku_config/stack/nav2` | 合成するNav2パラメータ断片のディレクトリ |
-| `params_file` | 空（`params_dir`を合成） | Nav2パラメータを1ファイルで与える。指定すると`params_dir`は無視 |
+| `params_file` | 空（`params_dir`を合成） | Nav2パラメータを1ファイルで与える。指定時も`params_dir`の断片を上書き先のノード名の検査に使う |
 | `overrides` | `src/daifuku_config/site`の1行（既定`19f`） | `src/daifuku_config/overrides/<名前>.yaml`を重ねる。カンマ区切りで複数可。**置き換え**なので`tsudanuma`にすると19F用の調整は外れる。何も重ねないなら`overrides:=none`。行き先は**パッケージ名とノード名**で決まる（下）。**同梱の3つはどれも`daifuku_stack:`しか持たないので、この launch を立て直せば全部反映される**（2026-08-25にLiDARの帯も`daifuku_stack`へ移った） |
 | `extra_params_file` | 空（無効） | `overrides`の後に重ねる任意パスのファイル。カンマ区切りで複数可 |
 | `config_watch` | `shutdown` | 起動後に設定ファイルが書き変わったときどうするか。`shutdown`（既定）は大声で言ったうえで**このlaunchを終了する**（`navigation`は人が立てたものなので、上げ直す人は居ません）。`warn`は言うだけ、`off`は見張り（`config_sentinel`）ごと立てない。[日常操作](operations.md#走らせたまま設定を直したとき) |

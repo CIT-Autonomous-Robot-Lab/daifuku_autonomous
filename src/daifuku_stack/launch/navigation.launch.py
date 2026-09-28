@@ -245,7 +245,7 @@ def generate_launch_description():
             default_value="",
             description="nav2 パラメータを 1 ファイルで与える (空なら params_dir の "
                         "断片と src/daifuku_config/stack/vi_planner.yaml を合成する)。"
-                        "指定すると params_dir は無視される。",
+                        "指定時も params_dir の断片を上書き先のノード名の検査に使う。",
         ),
         DeclareLaunchArgument(
             "params_dir",

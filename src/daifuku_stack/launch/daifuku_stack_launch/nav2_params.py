@@ -59,9 +59,10 @@ def fragments_resolver(context):
         # 黙って落とさない。抜けると vi_planner が宣言時の既定だけで上がり、
         # overrides の vi_planner: が「行き先の無いノード名」で落ちる。
         raise RuntimeError(f"Missing parameter fragment: {vi_frag}")
-    fragments = sorted(glob.glob(os.path.join(params_dir, "*.yaml"))) + [vi_frag]
-    if not fragments:
+    nav2_fragments = sorted(glob.glob(os.path.join(params_dir, "*.yaml")))
+    if not nav2_fragments:
         raise RuntimeError(f"No parameter fragments found in {params_dir}")
+    fragments = nav2_fragments + [vi_frag]
 
     merged, owner = {}, {}
     for frag in fragments:
