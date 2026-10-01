@@ -13,6 +13,25 @@ PARAMS_PY="${ROOT}/src/daifuku_config_manager/src/daifuku_config_manager/params.
 
 require "git のワークツリーである" git -C "${ROOT}" rev-parse --is-inside-work-tree
 
+# 機体に依存しない操作は common を直接使う。ドライバ側の入口を使うと、
+# シェルへ入るだけの操作が機体の構成選択に依存する。
+check_host_compose_entrypoints() {
+  local f bad=()
+  for f in control.sh enter-shell.sh; do
+    if [[ ! -f "${ROOT}/tools/${f}" ]] ||
+      ! grep -qE '^[[:space:]]*(COMPOSE_FILE=|compose_init ).*compose\.common\.yaml' \
+        "${ROOT}/tools/${f}"; then
+      bad+=("${f}")
+    fi
+  done
+  ((${#bad[@]} == 0)) || {
+    echo "common を直接使っていない: ${bad[*]}"
+    return 1
+  }
+  echo "control.sh / enter-shell.sh とも compose.common.yaml"
+}
+item "機体に依存しないホスト操作が compose.common.yaml を直接使う" check_host_compose_entrypoints
+
 # ── ライセンスヘッダ ────────────────────────────────────────────────────────
 # ament_copyright は**最初のコメント塊しか見ない**。.hpp の #ifndef や launch 冒頭の
 # 説明コメントの下に置くと、ファイルの中にヘッダがあっても見つからない。だから
