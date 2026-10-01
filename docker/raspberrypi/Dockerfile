@@ -166,6 +166,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       ros-humble-grid-map-msgs \
       ros-humble-joint-state-publisher \
       ros-humble-joy \
+      ros-humble-realsense2-camera \
       ros-humble-robot-state-publisher \
       ros-humble-teleop-twist-joy \
       ros-humble-teleop-twist-keyboard \

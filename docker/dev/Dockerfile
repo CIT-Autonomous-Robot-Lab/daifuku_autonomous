@@ -41,6 +41,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ros-humble-navigation2 \
       ros-humble-pcl-conversions \
       ros-humble-pointcloud-to-laserscan \
+      ros-humble-realsense2-camera \
       ros-humble-robot-localization \
       ros-humble-rosbag2 \
       ros-humble-slam-toolbox \
