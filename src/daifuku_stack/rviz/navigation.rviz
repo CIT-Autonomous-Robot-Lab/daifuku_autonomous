@@ -29,6 +29,8 @@ Panels:
     Splitter Ratio: 0.5
   - Class: daifuku_waypoint_manager/WaypointManagerPanel
     Name: WaypointManagerPanel
+  - Class: initial_pose_preset_panel/InitialPosePresetPanel
+    Name: InitialPosePresetPanel
 Visualization Manager:
   Class: ""
   Displays:

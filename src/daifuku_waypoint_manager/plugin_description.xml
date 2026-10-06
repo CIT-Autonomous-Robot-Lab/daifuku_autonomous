@@ -4,4 +4,9 @@
          base_class_type="rviz_common::Panel">
     <description>Creates, saves, and sends ordered waypoints to Nav2 FollowWaypoints.</description>
   </class>
+  <class name="initial_pose_preset_panel/InitialPosePresetPanel"
+         type="initial_pose_preset_panel::InitialPosePresetPanel"
+         base_class_type="rviz_common::Panel">
+    <description>Stores and publishes named /initialpose presets.</description>
+  </class>
 </library>
