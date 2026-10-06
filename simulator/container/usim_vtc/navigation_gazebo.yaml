@@ -1,0 +1,16 @@
+# Simulation-specific tuning; regular robot and site settings are unchanged.
+daifuku_stack:
+  emcl2:
+    ros__parameters:
+      # Ideal Gazebo rays do not need the hardware profile's 1 m likelihood field.
+      laser_likelihood_max_dist: 0.2
+      # Gazebo publishes world-source odometry rather than noisy wheel encoders.
+      # Keep nonzero motion uncertainty, but do not inject hardware-scale drift
+      # into the sparsely observed, open VTC space.
+      odom_fw_dev_per_fw: 0.01
+      odom_rot_dev_per_fw: 0.01
+      odom_rot_dev_per_rot: 0.01
+  vi_planner:
+    ros__parameters:
+      # Reserve part of the 0.35 m world-truth gate for localization uncertainty.
+      goal_margin_radius: 0.1

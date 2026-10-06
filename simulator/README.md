@@ -1,12 +1,13 @@
 # simulator — nav2 スタックを Pi4 相当の速度でシミュレータ上で回す
 
-**ハーネスは 2 つあり、nav2 側 (コンテナ・cgroup・キャリブレーション) は共通で、
-ロボットとセンサをどこから供給するかだけが違う。**
+**ハーネスは 3 つある。** Isaac 版と pi4_sim 版は Pi4 相当の減速を使い、
+usim VTC 版は減速なしで地図作成から emcl2 + VI standalone の自律移動までを通す。
 
 | | ロボット / センサ | 入口 | ドキュメント |
 |---|---|---|---|
 | **Isaac 版** | Isaac Sim (RTX GPU、ホスト側プロセス) | `scripts/run_isaac_case.sh` | このファイル |
 | **pi4_sim 版** | `container/fake_robot.py` (地図をレイキャストする疑似ロボット) | `scripts/run_pi4_sim.ps1` | [`docs/pi4_sim.md`](docs/pi4_sim.md) |
+| **usim VTC 版** | usim の Gazebo Classic (VTC ワールド、2D LiDAR)。**地図作成 → 自律移動**を通す | `scripts/run_vtc.sh` | 下の「usim VTC 版」 |
 
 pi4_sim 版のほうが先にあり、Pi4 相当の cgroup 値・キャリブレーション
 (navfn 20Hz 設定に対し実機 7.6Hz)・既定のスタート/ゴール座標・`container/probe.py`
@@ -88,18 +89,21 @@ simulator/
 ├── pyproject.toml / uv.lock      # 依存を固定 (isaacsim は extra `isaac`)
 ├── .python-version               # 3.12 — isaacsim 6.0.1 が cp312 のみのため
 ├── src/daifuku_sim/              # ホスト側 (uv / Python 3.12)
+│   ├── vtc/                      # -> daifuku-vtc / daifuku-vtc-video
 │   ├── map_to_usd.py             # -> uv run map-to-usd
 │   ├── rtf_gate.py               # -> uv run rtf-gate
 │   ├── downsample_map.py         # -> uv run downsample-map (コンテナ内でも走る。後述)
 │   ├── isaac_raspicat.py         # -> python.sh か uv run --extra isaac python
 │   └── src/daifuku_config/*.json            # RTX LiDAR プロファイル
 ├── container/                    # コンテナ内 (ROS 2 Humble / Python 3.10 / rclpy)
+│   ├── usim_vtc/                 #   VTC ROS helpers / Dockerfile / DDS profile
 │   ├── nav_container.sh          #   Isaac 版のコンテナ側
 │   ├── run_case.sh               #   pi4_sim 版のコンテナ側 (fake_robot もここが起動)
 │   ├── fake_robot.py             #   疑似ロボット (pi4_sim 版のみ)
 │   ├── probe.py                  #   ゴール投入と計数 (**両版で共有**)
 │   └── fastdds_local.xml         #   実機プロファイルのローカル版
 ├── scripts/                      # ホスト側オーケストレータ
+│   ├── run_vtc.sh / vtc/          #   VTC 入口と診断
 │   ├── run_isaac_case.sh         #   Isaac 版 (Linux / RTX)
 │   ├── run_pi4_sim.ps1           #   pi4_sim 版 (Windows / podman)
 │   └── run_matrix.ps1            #   pi4_sim 版をケース一式まとめて回す
@@ -764,6 +768,114 @@ free の地図で測った値で、しきい値を直すと navfn の問題規�
 違う quota に合わせてしまう（同梱の `map_19f.yaml` は 2026-08-09 に 0.15 = 105k セルへ
 直した）。
 
+## usim VTC 版 — 実 VTC ワールドで地図を作り、その地図で自律移動する
+
+usim (Gazebo Classic) の VTC ワールドを daifuku の `mapping.launch.py` で地図にし、
+その生成地図で emcl2 + value_iteration3 standalone を走らせる。Pi4 の減速は掛けない。
+2026-10-03 の `usim_vtc/runs/vi-emcl2-video-20261003-09/result.json` は **PASS**:
+`NavigateToPose` が SUCCEEDED、world 真値のゴール誤差 **0.146 m <= 0.35 m**。
+提出済み動画は `runs/vtc/value-iteration-emcl2-20261003.mp4`。過去の証跡は移動しない。
+この記録は移設前の実行であり、ソース移設後の実走行確認とは別である。
+移設後も `runs/vtc/post-layout-verification/result.json` で **PASS** を確認した。
+公開 DDS profile API を使った両コンテナで emcl2 + VI が動作し、world 真値の
+ゴール誤差は **0.060 m <= 0.35 m**。usim のテストは 204 passed / 7 skipped、
+daifuku simulator は 82 passed。任意の他エンジン等のスキップは VTC の実走行とは別である。
+
+**入口 (リポジトリルートから):**
+
+```bash
+uv sync --project simulator --inexact
+USIM_ROOT=/path/to/usim bash simulator/scripts/run_vtc.sh --engine podman \
+    --base-image localhost/daifuku-autonomous:humble-amd64
+# console script / module でも同じ入口
+USIM_ROOT=/path/to/usim uv run --project simulator daifuku-vtc --engine podman
+USIM_ROOT=/path/to/usim uv run --project simulator --no-sync python -m daifuku_sim.vtc.run_vtc --help
+# PowerShell: $env:USIM_ROOT='C:\path\to\usim'; uv run --project simulator daifuku-vtc --engine podman
+```
+
+- **`USIM_ROOT` (または `--usim-root`) は必須。** 兄弟 checkout は推測しない。
+  ワールドと Gazebo イメージの build context にだけ使い、ソースの import 先にはしない。
+  `usim` / `usim-gazebo` は `pyproject.toml` の明示依存として導入する。
+  この開発 checkout の依存元は `../../usim` と `../../usim/packages/gazebo`。
+  別の配置ではこの 2 つの uv source を実際の配置へ変更する。
+- ワールドの既定は `$USIM_ROOT/assets/vtc/world.sdf`。欠落・不正 XML・壊れた URI は
+  エンジンを呼ぶ前に exit 2 で止める。
+- 起動はインストール済みの `usim simulate --backend gazebo --stop-on-stdin`。
+  LiDAR は `lidar_link`、`/scan_raw`、10 Hz、720 点、±pi、0.1–10 m。
+  エンジン・イメージ・ネットワーク・DDS profile を CLI 引数で渡す。
+  stdin の `stop` または EOF で usim が自分のコンテナを停止・削除する。
+- DDS は専用 `ROS_DOMAIN_ID` (既定 87)、`rmw_fastrtps_cpp`、UDPv4、`ROS_LOCALHOST_ONLY=0`。
+  既定は実行ごとの owned bridge を両コンテナで共有する。`--network host` は明示指定のみ。
+  ホストは `container/usim_vtc/fastdds_udp.xml` を公開 `fastdds_profile` 引数で渡し、
+  usim が owned container へ read-only staging して `FASTRTPS_DEFAULT_PROFILES_FILE` を設定する。
+  stack 側も同じ XML を Dockerfile で COPY する。ホスト環境の XML パスは推測しない。
+- イメージが無ければ usim の `docker/Dockerfile.gazebo` と本リポジトリの
+  `docker/raspberrypi/Dockerfile` を使う。stack は `container/usim_vtc/Dockerfile` を
+  **リポジトリルートの build context** で作る。毎回キャッシュ付きで rebuild、`--no-build` で再利用。
+  ベースには ROS 2 Rust underlay (`/opt/ros2_rust_ws`、rclrs、nav2_msgs / tf2_msgs Rust bindings、
+  cargo / colcon-ros-cargo) が必要。`docker/dev/Dockerfile` 系は使えない。
+  stack は ROS → Rust underlay → 自前 overlay の順に source する。
+  生成した run / 動画と legacy 証跡は `.dockerignore` で build context から除外する。
+
+**段は直列。Gazebo と world-source odom は mapping から navigation まで同じセッションを保つ。**
+
+| 段 | 中身 |
+|---|---|
+| preflight / runtime | resource checkout・world、続いて engine info。失敗の生出力は detail に記録 |
+| prepare | xacro の URDF と meshes を run 下へ。車輪・固定 LiDAR 鎖を検査。RSP 用 URDF はそのまま保ち、Gazebo 用コピーの plugin 除去は usim が行う |
+| mapping | RSP + mapping.launch.py + survey + map_saver_cli --free 0.15。stack のみ停止 |
+| alignment | 測定した map / odom 姿勢と map→odom の整合性を検査。固定 world goal を map 座標へ変換し、安全な既知自由セルと種を選ぶ |
+| navigation | 新しい stack で localization:=emcl2 planner:=vi local_planner:=vi nav2:=false。最初の /mcl_pose を待ってから /initialpose を送り、NavigateToPose を 1 回 |
+| verdict | SUCCEEDED **かつ独立した world 真値の誤差 <= --tolerance (既定 0.35 m)** のみ PASS |
+
+`origin_seed_supported` は旧 (0,0) 再起動を支持できるかの記録であり、連続セッションは
+大きな map→odom ずれだけでは拒否しない。両 launch は simulated clock、2D LiDAR、
+`lidar_driver:=false overrides:=none config_watch:=off use_rviz:=false`。
+VTC 専用設定は chassis の自己反射を除く LaserScanBoxFilter、emcl2 motion noise 0.01 /
+likelihood 0.2、VI goal_margin_radius 0.1。実機の既定値は変更しない。
+
+駆動ドライバ、Livox、URG、EKF、robot_bringup は立てない。TF の所有者は
+odom→base_footprint が usim diff drive、base_footprint→lidar_link が RSP、
+map→odom が SLAM / emcl2。各段の inputs gate は /clock・/odom・/scan_raw・固定 TF、
+単独の odom publisher / 親、idle な /scan と SLAM を検査してから launch する。
+後始末は自分の UUID 付き stack、usim owned container、owned bridge のみ。
+並行ユーザーのコンテナを差分一括削除しない。
+
+新規 run の既定は **`simulator/runs/vtc/vtc-<時刻>/`**。`src/` へは書かない。
+既存データのある `--run-dir` は新しい UUID 子ディレクトリで保全する。
+`result.json` は status / stage / reason / detail、config、world / robot、
+mapping、alignment、transition、navigation、truth、phases、cleanup、logs を持つ。
+終了コードは 0 PASS / 1 FAIL / 2 入力不正 / 3 BLOCKED。
+
+**録画と動画化:** /camera rendering は `--record-video` のときだけ有効。
+navigation の JSONL と PPM は実際に受信した /mcl_pose・scan・path・cmd_vel・camera を保存する。
+renderer は offline で Pillow とローカル ffmpeg を使い、カメラ画像や自己位置を捏造しない。
+
+```bash
+USIM_ROOT=/path/to/usim uv run --project simulator daifuku-vtc --engine podman \
+    --base-image localhost/daifuku-autonomous:humble-amd64 \
+    --record-video --run-dir simulator/runs/vtc/new-video
+uv run --project simulator daifuku-vtc-video \
+    simulator/runs/vtc/new-video/navigation/recording.jsonl \
+    simulator/runs/vtc/new-video/navigation.mp4 --fps 10 \
+    --transition simulator/runs/vtc/new-video/transition.json \
+    --result simulator/runs/vtc/new-video/result.json
+```
+
+ホスト実装は `src/daifuku_sim/vtc/`、ROS Humble (Python 3.10 ABI) の helpers / Dockerfile /
+XML / YAML は `container/usim_vtc/`。`vtc_contract.py` と pure な `prepare_slam_params.py` は
+ホスト package に置き、Dockerfile が flat ROS helper として明示的に COPY する。
+診断は `scripts/vtc/` (`bridge_probe.py` / `probe_matrix.py` は `--staged` を明示)、
+テストは `tests/vtc/`。ROS helpers をホスト venv に import しない。
+
+```bash
+USIM_ROOT=/path/to/usim uv run --project simulator --no-sync --with pytest python -m pytest -q simulator/tests
+bash -n simulator/scripts/run_vtc.sh simulator/container/usim_vtc/stack.sh
+```
+
+単体テストの成功は実 VTC の PASS とは別。ホストには ROS が無いため、ROS import の
+静的診断はここでは解消できない。過去の spawn timeout 等の証跡も legacy run 下に残す。
+
 ## ファイル
 
 パスは `simulator/` からの相対。
@@ -784,4 +896,12 @@ free の地図で測った値で、しきい値を直すと navfn の問題規�
 | `container/fastdds_local.xml` | — | 実機 DDS プロファイルのローカル版 (SHM + ループバック UDP) |
 | `container/make_fastdds_mirrored.sh` | `bash` (ホスト) | Windows + WSL (`networkingMode=mirrored`) で Isaac とコンテナを繋ぐ DDS プロファイルを吐く。**両側に同じものを渡す**。上の「Isaac と nav2 を繋ぐ」 |
 | `tests/verify_usda.py` | `uv run python tests/...` | 生成 USD を地図グリッドに焼き戻して一致を検算 (主に y 反転の検出) |
+| `scripts/run_vtc.sh` / `src/daifuku_sim/vtc/run_vtc.py` | `bash` / `uv run python` (ホスト) | usim VTC 版オーケストレータ (preflight → イメージ → prepare → mapping → alignment → navigation → `result.json`) |
+| `src/daifuku_sim/vtc/vtc_contract.py` | (import、ホストと stack 共通) | Python 3.10 互換の LiDAR・フレーム・JSON 型・姿勢・エラー契約 |
+| `src/daifuku_sim/vtc/vtc_checks.py` / `src/daifuku_sim/vtc/vtc_map.py` | (import) | ワールド検査・URDF 形状・地図セル・座標変換・判定。ROS 不要 |
+| `src/daifuku_sim/vtc/vtc_runtime.py` / `src/daifuku_sim/vtc/vtc_phases.py` | (import、ホスト) | エンジンと子プロセスの所有権、直列の mapping / navigation 段 |
+| `container/usim_vtc/Dockerfile` | `podman`/`docker build` (ルート文脈) | daifuku 側の Humble 実行環境 (`daifuku_stack`・emcl2・vi_planner・raspicat_description だけをビルド) |
+| `container/usim_vtc/stack.sh` / `container/usim_vtc/vtc_ros.py` | `bash` / `python3` (コンテナ内) | 段ごとの起動 (RSP + launch) と、入力検査・周回・ゴール投入のプローブ |
+| `container/usim_vtc/vtc_probe.py` / `container/usim_vtc/vtc_telemetry.py` | (import、コンテナ内) | ROS 購読・TF・モーターの所有権と機械可読 JSON の型 |
+| `tests/vtc/` | `uv run ... --with pytest pytest` | 上の 2 段の単体テスト (早期失敗・直列性・判定・後始末) |
 | `tests/verify_map_thresholds.py` | `uv run python tests/...` | 地図の `free_thresh` が未観測画素 205 を free に落としていないかを検算。`map_saver_cli` の既定 0.25 だと落ちる |

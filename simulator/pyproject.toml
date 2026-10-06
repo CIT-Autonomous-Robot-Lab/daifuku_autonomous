@@ -10,6 +10,8 @@ dependencies = [
     "pyyaml>=6.0",
     # corridor-map の連結性の検算 (ndimage.label) だけに要る。
     "scipy>=1.10",
+    "usim==0.1.0",
+    "usim-gazebo==0.1.0",
 ]
 
 # Isaac Sim 本体。**既定では入らない** (新規 147 パッケージと大きいため)。
@@ -51,6 +53,8 @@ isaac = [
 prerelease = "explicit"
 
 [project.scripts]
+daifuku-vtc = "daifuku_sim.vtc.run_vtc:main"
+daifuku-vtc-video = "daifuku_sim.vtc.render_video:main"
 map-to-usd = "daifuku_sim.map_to_usd:main"
 rtf-gate = "daifuku_sim.rtf_gate:main"
 # downsample_map は**コンテナの中でも単体スクリプトとして走る** (run_case.sh が
@@ -73,6 +77,8 @@ explicit = true
 
 [tool.uv.sources]
 isaacsim = { index = "nvidia" }
+usim = { path = "../../usim", editable = true }
+usim-gazebo = { path = "../../usim/packages/gazebo", editable = true }
 
 [build-system]
 requires = ["hatchling"]

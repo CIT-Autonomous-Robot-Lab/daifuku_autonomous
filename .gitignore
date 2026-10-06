@@ -9,6 +9,11 @@ docker-dev-*.log
 # run_matrix.ps1 のケース実行ログ (旧 tools/pi4_sim/results/)
 simulator/scripts/results/
 
+# VTC generated maps, recordings, logs and submitted videos.
+simulator/runs/
+# Historical generated evidence from before the VTC package move.
+simulator/usim_vtc/
+
 .venv/
 __pycache__/
 *.pyc
