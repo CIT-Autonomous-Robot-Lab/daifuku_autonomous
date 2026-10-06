@@ -26,7 +26,7 @@
 - [使い方](docs/usage/README.md) — 地図作成・自律移動・日常操作・トラブルシューティング
 - [`src/daifuku_config/README.md`](src/daifuku_config/README.md) — 設定の合成規則と、各値の由来
 - [`docker/README.md`](docker/README.md) — 実機用（`raspberrypi/`）と開発用（`dev/`）の2環境
-- [`simulator/README.md`](simulator/README.md) — 実機の前にPi 4相当の速度で試すハーネス。実機で観測した事象の実測記録は[`simulator/docs/pi4_sim.md`](simulator/docs/pi4_sim.md)
+- [`simulator/README.md`](simulator/README.md) — usim VTC ワールドで地図作成から自律移動まで確認するハーネス。旧 Pi4 ハーネスの実測記録は[`docs/usage/pi4_sim_history.md`](docs/usage/pi4_sim_history.md)
 - [`AGENTS.md`](AGENTS.md) — このリポジトリで作業するエージェント向けの指針
 
 ## ライセンス

@@ -660,7 +660,7 @@ bool WaypointManagerPanel::readYamlFile(
       // z だけは省略可。接地して走る機体なので無くても意味が決まる
       // (joy_waypoints.load_waypoint_document と同じ扱い。片方だけが通す形にすると、
       // 手で書いた順路が「実機では走るのにパネルでは開けない」になる)。
-      // 書式の検算は simulator/tests/verify_waypoints.py。
+      // 書式の検算は tools/maps/verify_waypoints.py。
       pose.pose.position.z = position["z"] ? position["z"].as<double>() : 0.0;
       pose.pose.orientation.x = orientation["x"].as<double>();
       pose.pose.orientation.y = orientation["y"].as<double>();

@@ -1,4 +1,26 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# Copyright 2026 Keita Sekiguchi / nop
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["pyyaml>=6.0"]
+# ///
+# --- How to run ---
+# 1. Install uv: curl -LsSf https://astral.sh/uv/install.sh | sh
+# 2. Run: uv run tools/maps/verify_waypoints.py
+# 3. Or: chmod +x tools/maps/verify_waypoints.py && ./tools/maps/verify_waypoints.py
+# ------------------
 """ウェイポイント YAML の書式を、実機 (joy_teleop) と同じパーサで検算する。
 
 パネル (waypoint_manager_panel.cpp の readYamlFile) と同じ契約:
@@ -10,11 +32,12 @@
 片方だけが通す形にすると、手で書いた順路が「実機では走るのにパネルでは開けない」
 (あるいはその逆) になる。同梱の順路は全部通ること、壊した入力は落ちることが要点。
 
-    cd simulator
-    uv run python tests/verify_waypoints.py
+    uv run tools/maps/verify_waypoints.py
 
 終了コード: 0 = 全部 OK、1 = どれかが契約と食い違う。
 """
+
+from __future__ import annotations
 
 import math
 import sys
@@ -22,9 +45,9 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "src" / "daifuku_bringup" / "src"))
+sys.path.insert(0, str(ROOT))
 
-from joy_waypoints import load_waypoint_document  # noqa: E402
+from src.daifuku_bringup.src.joy_waypoints import load_waypoint_document  # noqa: E402
 
 WAYPOINTS_DIR = ROOT / "src" / "daifuku_stack" / "waypoints"
 

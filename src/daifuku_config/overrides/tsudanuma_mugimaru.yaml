@@ -14,7 +14,7 @@
 
 # ── 地図 (ノードのパラメータではない) ─────────────────────────────────────
 # **どちらも free_thresh 0.2 で、未観測画素 205 が nav 28 / loc 25 セルぶん空きへ化ける**
-# (simulator/tests/verify_map_thresholds.py が NG を出す)。気になるなら地図側を 0.15 へ。
+# (tools/maps/verify_map_thresholds.py が NG を出す)。気になるなら地図側を 0.15 へ。
 site:
   map:
     navigation:   tsudanuma_mugimaru/navigation/tsudanuma-challenge_nav_corridor.yaml  # 経路計画 (/map)。手描きの壁 + 順路から 8.5m の回廊だけ。**順路を変えたら作り直すこと**

@@ -195,7 +195,7 @@ item_warn "順路のトピック名が食い違っていない" check_waypoint_t
 check_waypoint_schema() {
   local py="${ROOT}/src/daifuku_bringup/src/joy_waypoints.py"
   local cpp="${ROOT}/src/daifuku_waypoint_manager/src/waypoint_manager_panel.cpp"
-  local test="${ROOT}/simulator/tests/verify_waypoints.py"
+  local test="${ROOT}/tools/maps/verify_waypoints.py"
   local bad=()
   [[ -f "${py}" ]] || bad+=("joy_waypoints.py が無い")
   grep -q 'load_waypoint_document' "${cpp}" || bad+=("パネルが joy_waypoints を指していない")

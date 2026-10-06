@@ -433,7 +433,7 @@ ros2 launch daifuku_stack navigation.launch.py \
   拠り所がほとんどありません（経路計画とは別の課題です）。
 
 実測値の出どころは`src/daifuku_config/overrides/tsudanuma.yaml`のヘッダ（2026-08-01）と
-`src/daifuku_config/README.md`です。`simulator/docs/pi4_sim.md`にもPi 4相当での
+`src/daifuku_config/README.md`です。`docs/usage/pi4_sim_history.md`にもPi 4相当での
 走行記録がありますが、そちらは`map_scale: 3`＋保守的プーリングだった頃のものなので、
 所要時間もメモリもここの値とは一致しません。
 

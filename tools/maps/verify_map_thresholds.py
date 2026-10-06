@@ -1,4 +1,26 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# Copyright 2026 Keita Sekiguchi / nop
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["numpy>=1.24", "pillow>=10.0", "pyyaml>=6.0"]
+# ///
+# --- How to run ---
+# 1. Install uv: curl -LsSf https://astral.sh/uv/install.sh | sh
+# 2. Run: uv run tools/maps/verify_map_thresholds.py <map.yaml> [...]
+# 3. Or: chmod +x tools/maps/verify_map_thresholds.py && ./tools/maps/verify_map_thresholds.py [ARGS]
+# ------------------
 """地図の yaml と pgm を nav2 と同じ規則で読み、未観測が未観測のままかを検算する。
 
 `map_saver_cli` が書く `free_thresh: 0.25` は、同じ `map_saver_cli` が未観測に使う
@@ -6,13 +28,14 @@
 `unknown_as_obstacle` も costmap の `track_unknown_space` も、未観測セルが存在しない
 ことになるので**エラーも警告も出ないまま効かない**。2026-08-09 まで `map_19f.yaml` が
 これで、free セルが 105,618 のところ 518,809 として解かれていた
-(`simulator/docs/pi4_sim.md` の「1.」)。地図を取り直すたびに戻るので検算する。
+(`docs/usage/pi4_sim_history.md` の「1.」)。地図を取り直すたびに戻るので検算する。
 
-    cd simulator
-    uv run python tests/verify_map_thresholds.py ../src/daifuku_stack/maps/*/*.yaml
+    uv run tools/maps/verify_map_thresholds.py src/daifuku_stack/maps/*/*.yaml
 
 終了コード: 0 = 全部 OK、1 = どれかで未観測が free に化けている。
 """
+
+from __future__ import annotations
 
 import sys
 from pathlib import Path

@@ -151,7 +151,7 @@ mapping)
         --world-goal "${VTC_WORLD_GOAL:?VTC_WORLD_GOAL is required}" \
         --min-known-cells "${VTC_MIN_KNOWN_CELLS:-500}" || exit 11
     # free 0.15 keeps unobserved pixels (205) unknown; map_saver's default 0.25
-    # would turn them free (see simulator/tests/verify_map_thresholds.py).
+    # would turn them free (see tools/maps/verify_map_thresholds.py).
     ros2 run nav2_map_server map_saver_cli -f "$DIR/vtc_map" --fmt pgm \
         --free 0.15 --occ 0.65 \
         --ros-args -p use_sim_time:=true -p save_map_timeout:=20.0 \

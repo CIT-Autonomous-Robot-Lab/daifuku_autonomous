@@ -104,9 +104,9 @@ symlink になるので、効くのは**ソース側の権限**です。Windows 
   share から引くため。依存だけを並べる環境（`colcon test`）で宣言が抜けていると
   `PackageNotFoundError` になる。
 
-これ以外の挙動の確認は実機か `simulator/` のハーネスで行います。単体で回せるのは
-`simulator/tests/` の 4 つ（`map-to-usd` の出力検算と、地図の `free_thresh` の検算と、
-`corridor-map` の回廊の上下の向きの検算と、ウェイポイント YAML の書式）だけです。
+これ以外の挙動の確認は実機か `simulator/` の VTC ハーネスで行います。
+VTC の単体テストは ROS・エンジン不要ですが、成功しても実走行の PASS にはなりません。
+地図と順路の検算は `tools/maps/` の独立スクリプトで、simulator の venv に依存しません。
 
 **実機で通すぶんは `tools/checklist/` にあります。** `colcon test` からは走りません
 （人に聞く項も機体が動く項もあるため）。使いかたと番号の意味は `checkall.sh` の冒頭に
@@ -137,10 +137,10 @@ lint は詰め合わせ（`ament_lint_common`）を使わず、自前 7 パッ�
   のほうを入れてある（`ament_flake8` は `ament_python` 用で、CMake からは走らない）。
 
 ```bash
-cd simulator && uv run python tests/verify_usda.py <map.yaml> <world.usda> free
-cd simulator && uv run python tests/verify_map_thresholds.py ../src/daifuku_stack/maps/*/*.yaml
-cd simulator && uv run python tests/verify_corridor_orientation.py
-cd simulator && uv run python tests/verify_waypoints.py
+uv run tools/maps/verify_usda.py <map.yaml> <world.usda> free
+uv run tools/maps/verify_map_thresholds.py src/daifuku_stack/maps/*/*.yaml
+uv run tools/maps/verify_corridor_orientation.py
+uv run tools/maps/verify_waypoints.py
 ```
 
 ```bash
@@ -283,8 +283,7 @@ Docker 越しに叩く形は
 - **`nav2` の既定は `false` で、そのとき Nav2 の navigation は BT ごと
   立たない。** `planner:=navfn` / `local_planner:=nav2` へ落とすときは
   **`nav2:=auto` を足さないと起動時にエラーで止まる**（`navigate_to_pose` を出す
-  ものが居なくなるため。黙って Nav2 を立て直しはしない）。`simulator/` の
-  ハーネスが `NAV2=auto` を既定にしているのはこれが理由。
+  ものが居なくなるため。黙って Nav2 を立て直しはしない）。
   `nav2:=false` では `vi_planner` が `standalone` モードで
   `navigate_to_pose` と `follow_waypoints` も出すので、`bt_navigator` /
   `behavior_server` / `waypoint_follower` / `smoother_server` が要らなくなる。
@@ -426,7 +425,7 @@ Docker 越しに叩く形は
   2026-08-07 に `true` にしたあと 2026-08-08 に `false` へ戻した。走行中の固まりの
   切り分けで、消える待ちは 19F が 29 秒、津田沼が 87 秒。`tsudanuma_mugimaru` は
   2026-09-02 に `true` へ — 巡回で点ごとに solve を待つのをやめるため。**効くことは
-  simulator/ のハーネスで実測した**（順路 2 点で 2 点目が「先読みから採用 0.04 秒」。
+  旧 Pi4 ハーネスで実測した**（順路 2 点で 2 点目が「先読みから採用 0.04 秒」。
   ただし先読みは **1 スレッド固定**で、間に合うのは「点間の走行 > 先読みの solve」の
   ときだけ。**1 点目は必ず待つ**。数字は `src/daifuku_config/README.md`）。実機は**未検証**で、
   同じ固まりが出たら真っ先にここを戻す）。価値関数が同時に 2 つ生きるので、**密ソルバでは
@@ -448,7 +447,7 @@ Docker 越しに叩く形は
   `tsudanuma-challenge_nav_corridor.pgm` は `nav3_9` から**順路の 8.5m 以内だけを残して
   自由空間を削った**もので、フル solve が 27.95 → 13.07 秒になる（2026-09-02 の実測。
   ただし**測ったのは 2026-09-03 に作り直す前の地図**なので要再測。
-  `uv run corridor-map` で作り直せる）。**だから順路を変えたら地図も作り直すこと** —
+  `uv run tools/maps/corridor_map.py` で作り直せる）。**だから順路を変えたら地図も作り直すこと** —
   新しい点が回廊の外に出ると占有セルに乗るので、**エラーも警告も出ないままゴールが
   出ない**。生成ツールは書き出す前に全点が自由セルに落ちるか確かめて落とすが、
   それは作り直したときしか走らない。**1 点だけ `nav3_9` の時点で壁の中にある**
@@ -461,7 +460,7 @@ Docker 越しに叩く形は
   **最大**として読む）。形も面積もそれらしいままで、順路の点が壁に乗るという形で
   しか現れず、生成時の検算を同じ添字で書くと自分では気づけない（2026-09-02 の
   生成物がこれで、66 点中 22 点が壁の中だった）。見張りは
-  `simulator/tests/verify_corridor_orientation.py`。
+  `tools/maps/verify_corridor_orientation.py`。
 - **`map_scale` を上げても solve は速くならない。** 状態数は scale^2 で減るが、1 手
   （`action_forward_m`）が跨ぐセル数も同じだけ減るので反復が増えて相殺する
   （2026-09-02 に `tsudanuma_mugimaru` で実測: scale 3 は状態数 44% でフル solve
@@ -560,9 +559,9 @@ Docker 越しに叩く形は
   `raspicat` と `ros2` の両サービスへ配っている。**食い違うとエラーも警告も出ないまま
   `/scan` が空になる。** また `navigation` と `mapping` はどちらもこの段を立てるので、
   **2 つを同時に立てると `/scan` の publisher が 2 つになる**（もともと `map→odom` が
-  衝突するので排他だが、段が増えた）。`simulator/` は駆動ドライバが要らないので、
-  `nav_container.sh` / `run_case.sh` が `odom_fusion.launch.py` を直接立て、
-  `lidar:=` / `lidar_driver:=false` は `navigation.launch.py` へ渡している。
+  衝突するので排他だが、段が増えた）。VTC ハーネスでは usim が `/odom` を出すので
+  駆動ドライバ・EKF は立てず、mapping / navigation の両 launch へ
+  `lidar:=2d lidar_driver:=false` を渡している。
 - **`use_mid360_imu` は 1 つの launch に閉じている。** `robot_bringup.launch.py` が
   ドライバと EKF（`odom_fusion.launch.py`）の両方を立てるので、**片方だけ切り替わる
   状態は作れない**。`true`（既定）では `odom→base_footprint` と `/odom` の所有者が EKF
@@ -636,7 +635,7 @@ Docker 越しに叩く形は
 | `src/daifuku_config/` の yaml の値 | [`src/daifuku_config/README.md`](src/daifuku_config/README.md)（合成・override の仕組みと、各値の由来。機体側の値もここにまとまっている） |
 | `overrides/` / 設定の合成そのもの | `src/daifuku_config_manager/src/daifuku_config_manager/overlay.py`（行き先）と `params.py`（launch 合成） |
 | `launch/` | [`docs/usage/architecture.md`](docs/usage/architecture.md#launchファイルの構成) |
-| `simulator/`（Isaac 版 / pi4_sim 版） | [`simulator/docs/pi4_sim.md`](simulator/docs/pi4_sim.md) を先に、次に [`simulator/README.md`](simulator/README.md) |
+| `simulator/`（VTC ハーネス） | [`simulator/README.md`](simulator/README.md) |
 | `docker/` | [`docker/README.md`](docker/README.md)（実機用と開発用の 2 環境） |
 | `src/daifuku_bringup/`（LiDAR ドライバ・EKF・駆動の launch） | [`docs/setup/lidar.md`](docs/setup/lidar.md)、次に [`docs/usage/architecture.md`](docs/usage/architecture.md#launchファイルの構成) |
 | `src/raspicat_driver/` / `tools/image/udev/` | [`src/raspicat_driver/README.md`](src/raspicat_driver/README.md)、次に [`docs/setup/raspberry-pi-4.md`](docs/setup/raspberry-pi-4.md) と [`raspberry-pi-5.md`](docs/setup/raspberry-pi-5.md)（未検証の項目付き） |

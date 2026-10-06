@@ -55,7 +55,7 @@ VI の値は隣の `tsudanuma.yaml` から写して内部解像度ぶんだけ�
 
 `tsudanuma-challenge_{nav,loc}.yaml` はどちらも `free_thresh: 0.196` ではなく `0.2` で、
 未観測画素 205（p=0.196）が nav で 28 セル・loc で 25 セルぶん free/occupied に化ける
-（`simulator/tests/verify_map_thresholds.py` が NG を出す）。上流の値のままに
+（`tools/maps/verify_map_thresholds.py` が NG を出す）。上流の値のままに
 してあるので、使うなら 0.15 へ下げること。
 
 ## 3 枚目 — 順路の回りだけを残した navigation の地図
@@ -65,7 +65,7 @@ VI の値は隣の `tsudanuma.yaml` から写して内部解像度ぶんだけ�
 `site: map: navigation:` はこちらを指しています。
 
 ```
-uv run corridor-map \
+uv run tools/maps/corridor_map.py \
     src/daifuku_stack/maps/tsudanuma_mugimaru/navigation/tsudanuma-challenge_nav.yaml \
     src/daifuku_stack/maps/tsudanuma_mugimaru/navigation/tsudanuma-challenge_nav_corridor.yaml \
     --waypoints src/daifuku_stack/waypoints/waypoints_tsudanuma_mugimaru_v1.0.yaml \
@@ -139,7 +139,7 @@ uv run corridor-map \
 かつてここに「壁の中の 3 点」の表がありましたが、あれもその添字で測ったもので
 **まるごとこの不具合の産物**でした（3 点とも実際には自由セルです。本当に壁の中に
 あるのは上の 1 点だけ）。反転を直すのと対で
-`simulator/tests/verify_corridor_orientation.py` を置いてあります。
+`tools/maps/verify_corridor_orientation.py` を置いてあります。
 
 直した回廊を正しい向きで見て初めて、**回廊が 4 つに分断されていた**ことも
 分かりました（半径 5m では建物を回り込む区間で切れる）。点が自由セルかどうかだけ

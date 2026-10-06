@@ -219,7 +219,7 @@ VIの`unknown_as_obstacle`もコストマップの`track_unknown_space`も、未
 ことになるので**エラーも警告も出ないまま効きません**（19Fの地図では自由セルが実際の
 10.6万に対し51.9万＝4.9倍に膨れ、建物の外まで経路が引けます）。0.196ちょうどではなく
 0.15にするのは、0.196が205のpとほぼ同値で実装によって空き側へ転びうるためです
-（[`simulator/docs/pi4_sim.md`](../../simulator/docs/pi4_sim.md#free_thresh-を下げるときの注意)）。
+（[過去の実測記録](pi4_sim_history.md#free_thresh-を下げるときの注意)）。
 
 `19f`は**場所の名前**（`src/daifuku_config/site`の既定値）で、地図のファイルはその場所の
 `maps/19f/map_19f.yaml`です。別の場所で地図を作るときは`src/daifuku_config/overrides/<場所>.yaml`

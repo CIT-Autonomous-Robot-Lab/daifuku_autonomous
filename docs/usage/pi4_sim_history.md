@@ -1,4 +1,8 @@
-# pi4_sim — Raspberry Pi 4 (4GB) 相当環境のローカル再現ハーネス
+# Pi4 相当環境の過去の実測記録
+
+これは旧 pi4_sim ハーネスの実験記録。記載されたスクリプトと起動方法は廃止済みで、
+現在の入口は [`simulator/README.md`](../../simulator/README.md) の VTC ハーネスだけ。
+以下の数値・コマンド・構成は実験当時のものとして保持する。
 
 実機 (Raspberry Pi Cat / 192.168.1.50) が落ちている間に、「ゴールを送ると
 Aborted になる (`plan=0`)」を手元の Podman で切り分けるための一式。

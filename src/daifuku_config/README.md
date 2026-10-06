@@ -282,12 +282,10 @@ emcl2 も VI も、みなそちらが起動時に読みます。走っている 
 黙って走っていました。存在しない override 名を渡した場合は、選べる名前を並べた
 エラーで止まります。
 
-`simulator/container/nav_container.sh` と `simulator/container/run_case.sh` は、
-`MAP_NAME` と同名の override があればそれを、無ければ `none` を**必ず明示的に**
-渡します（`OVERRIDES=` で上書き可）。既定任せにすると同じ取り違えが起きるためです。
-**参照先は `daifuku_config` の share** で、`maps/` を持つ `daifuku_stack` とは
-置き場が違います（2026-08-08 まで後者の `config/overrides/` を見ていました。設定を
-`src/daifuku_config/` へ出したときにそこは消えているので、**どの地図でも `none` に落ちていました**）。
+VTC ハーネスは生成した地図を使い、`overrides:=none` を**必ず明示的に**
+渡します。実機の場所別設定を生成地図へ混ぜないためです。
+実機の override の**参照先は `daifuku_config` の share** で、
+`maps/` を持つ `daifuku_stack` とは置き場が違います。
 
 ### 何がどこへ行ったかを見る
 
@@ -830,8 +828,8 @@ p90 と p99 の間へ置くと運用上通る範囲に階調を集中させ遠�
   2026-08-04 に `compact_sink_dir` を外して RAM 出力へ変えた（Pi 5 の 8GB が前提）ので、同じ
   648MB が匿名メモリになり、**Pi4 4GB の枠に収まるという話は成り立ちません**（4GB 機で使うなら
   `compact_sink_dir` を戻すこと）。RAM 化後のピークは**未計測**。当時の広域専用ノード
-  `vi_global_planner` の 3.98GB との比較は `simulator/docs/pi4_sim.md`。
-* 一方 **`simulator/` の pi4_sim ハーネスの枠（0.6 コアを stack 全体で共有）では、solve 中に
+  `vi_global_planner` の 3.98GB との比較は `docs/usage/pi4_sim_history.md`。
+* 一方 **旧 pi4_sim ハーネスの枠（0.6 コアを stack 全体で共有）では、solve 中に
   emcl2 まで巻き込んで 900 秒でも `/plan` が出ません**。実機 Pi4 は 4 コアあるので同じには
   なりませんが、`vi_threads: 3` を明示して 1 コアを stack に残すのはそのためです。
 * **`action_forward_m` を既定から変えるので、`value_iteration3` は ec2579d（2026-08-04）
@@ -875,7 +873,7 @@ p90 と p99 の間へ置くと運用上通る範囲に階調を集中させ遠�
 
 ### この地図の solve の実測 (2026-09-02)
 
-`simulator/` のハーネス (`container/run_case.sh` + `fake_robot.py`) で、WP0 →  WP1
+旧 pi4_sim ハーネスで、WP0 → WP1
 (57 m) を走らせて測ったものです。**ホストは amd64 の 4 コア pin (8 GB) で、Pi 5 の値では
 ありません。** 秒数そのものではなく比を見てください。**測ったのは 1 手 0.8 m /
 `safety_radius_penalty: 5` / ±20・±30 度の頃**で、そのあと同じ 2026-09-02 に
@@ -898,7 +896,7 @@ p90 と p99 の間へ置くと運用上通る範囲に階調を集中させ遠�
 tsudanuma は 68.2% が未観測で、それがそのまま障害物扱い (= 解かなくてよい) になって
 いるのに対し、この地図は未観測が 0.05% しかなく、ほぼ全域が通行可として解かれます。
 **そこで 2026-09-02 に、順路から 8.5m の回廊だけを残した navigation の地図を作りました**
-(`tsudanuma-challenge_nav_corridor.pgm`。生成は `uv run corridor-map`、詳細は
+(`tsudanuma-challenge_nav_corridor.pgm`。生成は `uv run tools/maps/corridor_map.py`、詳細は
 [`maps/tsudanuma_mugimaru/README.md`](../daifuku_stack/maps/tsudanuma_mugimaru/README.md))。
 自由空間が 36,801 → 18,144 m² になり、**フル solve は 27.95 → 13.07 秒**
 (tsudanuma の 11.83 秒とほぼ同じ) です。**この地図は順路から導かれるので、順路を

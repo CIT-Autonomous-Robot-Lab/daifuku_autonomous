@@ -1,4 +1,26 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# Copyright 2026 Keita Sekiguchi / nop
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["numpy>=1.24", "pyyaml>=6.0", "scipy>=1.10"]
+# ///
+# --- How to run ---
+# 1. Install uv: curl -LsSf https://astral.sh/uv/install.sh | sh
+# 2. Run: uv run tools/maps/corridor_map.py <in.yaml> <out.yaml> --waypoints <route.yaml>
+# 3. Or: chmod +x tools/maps/corridor_map.py && ./tools/maps/corridor_map.py [ARGS]
+# ------------------
 """順路の回りだけを残して、占有格子地図の**自由空間を削る**。
 
 `vi_planner` の solve 時間を決めているのは状態数ではなく**解くべき自由空間の
@@ -16,8 +38,8 @@
 「回廊」として残し、**その外側の自由セルを占有へ倒します**。元から占有の
 セルはそのまま (手描きの壁は消えません)。
 
-    uv run corridor-map nav.yaml out.yaml \\
-        --waypoints ../src/daifuku_stack/waypoints/waypoints_*_v1.1.yaml \\
+    uv run tools/maps/corridor_map.py nav.yaml out.yaml \\
+        --waypoints src/daifuku_stack/waypoints/waypoints_*_v1.1.yaml \\
         --radius 8.5
 
 **この出力は順路から導かれるので、順路を変えたら作り直しが要ります。** 新しい
@@ -33,6 +55,8 @@
 和で回廊を作るのが安全**です。
 """
 
+from __future__ import annotations
+
 import argparse
 import os
 import sys
@@ -43,7 +67,7 @@ from scipy import ndimage
 
 
 def read_pgm(path):
-    """P5 (バイナリ PGM) を (w, h, bytes) で読む。downsample_map.py と同じ規約。"""
+    """P5 (バイナリ PGM) を幅・高さ・画素配列として読む。"""
     with open(path, "rb") as f:
         data = f.read()
     tokens, i = [], 0

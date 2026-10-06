@@ -1,23 +1,47 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# Copyright 2026 Keita Sekiguchi / nop
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["numpy>=1.24", "pillow>=10.0", "pyyaml>=6.0"]
+# ///
+# --- How to run ---
+# 1. Install uv: curl -LsSf https://astral.sh/uv/install.sh | sh
+# 2. Run: uv run tools/maps/verify_usda.py <map.yaml> <world.usda> free
+# 3. Or: chmod +x tools/maps/verify_usda.py && ./tools/maps/verify_usda.py [ARGS]
+# ------------------
 """map_to_usd が吐いた .usda を地図グリッドへ焼き戻し、元の占有と一致するか検算する。
 
-README の「`map_to_usd.py` は実測検証済み」はこのスクリプトの結果を指す。
 確かめているのは主に **画像行と世界座標の y 反転** で、ここが逆でも USD は正しく
 生成されたように見え、Isaac 上でも壁は立つ。壊れるのは「地図と環境が一致している」
 という前提だけなので、目視では絶対に気づけない。
 
-    cd simulator
-    uv run python tests/verify_usda.py ../src/daifuku_stack/maps/19f/map_19f.yaml /tmp/world.usda free
+    uv run tools/maps/verify_usda.py src/daifuku_stack/maps/19f/map_19f.yaml /tmp/world.usda free
 
 終了コード: 0 = 一致、1 = 不一致。
 """
 
+from __future__ import annotations
+
 import re
 import sys
+from pathlib import Path
 
 import numpy as np
 
-from daifuku_sim.map_to_usd import load_occupancy
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from tools.maps.map_to_usd import load_occupancy  # noqa: E402
 
 
 def main():

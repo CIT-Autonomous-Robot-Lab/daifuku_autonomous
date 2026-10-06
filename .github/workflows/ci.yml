@@ -173,12 +173,9 @@ jobs:
           done
           exit $bad
 
-  # map_to_usd の出力検算。repo で唯一単体で回せる検査 (Isaac は入らない)。
-  simulator:
+  # 地図ツールの検算。simulator や Isaac の導入は不要。
+  map-tools:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: simulator
     steps:
       - uses: actions/checkout@v4
       # setup-uv アクションは使わない。移動する major タグが v7 で止まっていて
@@ -187,10 +184,34 @@ jobs:
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      # --frozen: uv.lock が古いなら黙って解き直さずに落とす。
-      - run: uv sync --frozen
       - name: map_19f を USD にして焼き戻す
         run: |
-          uv run map-to-usd ../src/daifuku_stack/maps/19f/map_19f.yaml -o "$RUNNER_TEMP/world.usda"
-          uv run python tests/verify_usda.py \
-            ../src/daifuku_stack/maps/19f/map_19f.yaml "$RUNNER_TEMP/world.usda" free
+          uv run tools/maps/map_to_usd.py src/daifuku_stack/maps/19f/map_19f.yaml -o "$RUNNER_TEMP/world.usda"
+          uv run tools/maps/verify_usda.py \
+            src/daifuku_stack/maps/19f/map_19f.yaml "$RUNNER_TEMP/world.usda" free
+      - name: 回廊の向きと順路の書式
+        run: |
+          uv run tools/maps/verify_corridor_orientation.py
+          uv run tools/maps/verify_waypoints.py
+
+  simulator:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: daifuku_autonomous/simulator
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: daifuku_autonomous
+      - uses: actions/checkout@v4
+        with:
+          repository: NOPLAB/usim
+          ref: main
+          path: usim
+      - name: uv を入れる
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - run: uv sync --locked
+      - name: VTC 単体テスト
+        run: uv run --locked --with pytest python -m pytest -q tests/vtc
