@@ -18,7 +18,7 @@ RIGHT_WHEEL_JOINT: Final = 'right_wheel_joint'
 
 
 class LidarKwargs(TypedDict):
-    """Keyword arguments of usim's ``GazeboLidarConfig`` (the parallel-task contract)."""
+    """LiDAR settings shared by the usim CLI and ROS helpers."""
 
     link_name: str
     frame_name: str
@@ -175,14 +175,11 @@ class RobotGeometry(TypedDict):
 
 
 class SessionConfig(TypedDict):
-    phase: str
-    usim_root: str
     engine: Literal['podman', 'docker']
     network: str
     image: str
     world: str
     robot: RobotGeometry
-    spawn: PoseJson
     camera_enabled: bool
 
 

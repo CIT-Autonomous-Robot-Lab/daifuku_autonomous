@@ -118,7 +118,7 @@ class SessionFactory:
 
     def __call__(self, config: Path, log: Path, env: dict[str, str]) -> FakeSession:
         data = json.loads(config.read_text(encoding="utf-8"))
-        phase = data["phase"]
+        phase = config.parent.name
         self.networks.append(data['network'])
         assert all(s.stopped for s in self.sessions), "Gazebo sessions overlap"
         assert env["RMW_IMPLEMENTATION"] == "rmw_fastrtps_cpp"

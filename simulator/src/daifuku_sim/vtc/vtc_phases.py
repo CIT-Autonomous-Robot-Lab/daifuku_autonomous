@@ -177,14 +177,11 @@ class WorkflowPhases(Protocol):
             config.write_text(
                 json.dumps(
                     {
-                        'phase': phase,
-                        'usim_root': str(self.usim_root),
                         'engine': self.runtime.engine,
                         'network': self.runtime.network,
                         'image': self.o.usim_image,
                         'world': str(self.world),
                         'robot': self.robot,
-                        'spawn': {'x': 0.0, 'y': 0.0, 'yaw': 0.0},
                         'camera_enabled': self.o.record_video,
                     },
                     indent=2,

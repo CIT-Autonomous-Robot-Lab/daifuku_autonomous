@@ -21,7 +21,7 @@ from usim.runtime_cli import configured
 
 from daifuku_sim.vtc.vtc_checks import robot_geometry
 from daifuku_sim.vtc.vtc_contract import SessionConfig
-from daifuku_sim.vtc.vtc_runtime import STACK, simulation_from_session, simulator_command
+from daifuku_sim.vtc.vtc_runtime import STACK, simulator_command
 from .conftest import RASPICAT_URDF, write_world
 
 
@@ -33,14 +33,11 @@ def test_session_cli_preserves_geometry_lidar_dds_and_camera(
     urdf = tmp_path / 'robot.urdf'
     urdf.write_text(RASPICAT_URDF, encoding='utf-8')
     config: SessionConfig = {
-        'phase': 'mapping',
-        'usim_root': str(tmp_path),
         'world': str(write_world(tmp_path / 'world.sdf')),
         'robot': robot_geometry(urdf),
         'engine': 'podman',
         'network': 'owned-vtc-network',
         'image': 'vtc-test-image',
-        'spawn': {'x': 0.0, 'y': 0.0, 'yaw': 0.0},
         'camera_enabled': record_video,
     }
     # When: the real usim parser consumes the workflow's command.
@@ -48,7 +45,22 @@ def test_session_cli_preserves_geometry_lidar_dds_and_camera(
     args = build_parser().parse_args(command[4:])
     simulation = configured(args)
     # Then: the same public configuration reaches usim with stoppable supervision.
-    assert simulation == simulation_from_session(config)
+    robot = config['robot']
+    assert simulation.world == Path(config['world'])
+    assert simulation.robot_urdf == urdf
+    assert (
+        simulation.base_link, simulation.left_joint, simulation.right_joint,
+        simulation.wheel_radius, simulation.wheel_separation,
+    ) == (
+        robot['base_link'], robot['left_joint'], robot['right_joint'],
+        robot['wheel_radius'], robot['wheel_separation'],
+    )
+    assert simulation.robot_name == 'raspicat'
+    assert simulation.headless is True
+    assert simulation.max_seconds == 0.0
+    assert simulation.camera_enabled is record_video
+    assert (simulation.camera_width, simulation.camera_height) == (640, 360)
+    assert simulation.camera_offset == (0.20, 0.0, 0.40)
     assert (args.backend, args.engine, args.image, args.network) == (
         'gazebo', 'podman', 'vtc-test-image', 'owned-vtc-network',
     )

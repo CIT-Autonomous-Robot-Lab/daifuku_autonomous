@@ -19,7 +19,6 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import IO, Protocol
-from usim.simulation import Ros2Config, SimulationConfig
 from .vtc_contract import LIDAR, SessionConfig
 
 HERE = Path(__file__).resolve().parent
@@ -230,44 +229,22 @@ def start_gazebo_session(config: Path, log: Path, env: dict[str, str]) -> Sessio
     return _SessionProcess(process, stream)
 
 
-def simulation_from_session(config: SessionConfig) -> SimulationConfig:
-    """Adapt Raspicat's measured geometry to the installed usim contract."""
-    robot = config['robot']
-    return SimulationConfig(
-        world=Path(config['world']),
-        robot_urdf=Path(robot['urdf']),
-        robot_name='raspicat',
-        base_link=robot['base_link'],
-        left_joint=robot['left_joint'],
-        right_joint=robot['right_joint'],
-        wheel_radius=robot['wheel_radius'],
-        wheel_separation=robot['wheel_separation'],
-        camera_enabled=config['camera_enabled'],
-        camera_width=640,
-        camera_height=360,
-        camera_offset=(0.20, 0.0, 0.40),
-        headless=True,
-        max_seconds=0.0,
-        ros=Ros2Config(),
-    )
-
-
 def simulator_command(config: SessionConfig) -> list[str]:
-    """Use one CLI configuration for the workflow and retained diagnostic runs."""
-    simulation = simulation_from_session(config)
+    """Pass measured robot geometry and VTC settings to the installed usim CLI."""
+    robot = config['robot']
     command = [sys.executable, '-B', '-m', 'usim.cli', 'simulate',
                '--backend', 'gazebo', '--headless', '--stop-on-stdin']
     values = {
-        'world': simulation.world,
-        'robot-urdf': simulation.robot_urdf,
-        'robot-name': simulation.robot_name,
-        'base-link': simulation.base_link,
-        'left-joint': simulation.left_joint,
-        'right-joint': simulation.right_joint,
-        'wheel-radius': simulation.wheel_radius,
-        'wheel-separation': simulation.wheel_separation,
-        'camera-width': simulation.camera_width,
-        'camera-height': simulation.camera_height,
+        'world': config['world'],
+        'robot-urdf': robot['urdf'],
+        'robot-name': 'raspicat',
+        'base-link': robot['base_link'],
+        'left-joint': robot['left_joint'],
+        'right-joint': robot['right_joint'],
+        'wheel-radius': robot['wheel_radius'],
+        'wheel-separation': robot['wheel_separation'],
+        'camera-width': 640,
+        'camera-height': 360,
         'engine': config['engine'],
         'image': config['image'],
         'network': config['network'],
@@ -279,7 +256,7 @@ def simulator_command(config: SessionConfig) -> list[str]:
         flag = 'link' if name == 'link_name' else 'frame' if name == 'frame_name' else name
         # Equals keeps negative angles from being mistaken for CLI options.
         command.append(f'--lidar-{flag.replace("_", "-")}={value}')
-    command += ['--camera-offset', *(str(value) for value in simulation.camera_offset)]
-    if not simulation.camera_enabled:
+    command += ['--camera-offset', '0.2', '0.0', '0.4']
+    if not config['camera_enabled']:
         command.append('--physics-only')
     return command
