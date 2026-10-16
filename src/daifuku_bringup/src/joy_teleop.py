@@ -25,6 +25,9 @@ robot_bringup.launch.py が joy:=true (既定) のとき joy_node と一緒に�
   * START+BACKを同時に長押し … teleop を切り、保存したウェイポイントの巡回を始める (ピピピ)
   * RB を押している間      … ブースト (上限が linear_max_speed から boost へ上がる)
 
+左スティックで前後・旋回を操作し、右スティックの左右が不感帯を超えたときは
+旋回だけ右を優先する。後退入力中は旋回の向きを反転する。
+
 長押しの時間はどれも hold_seconds (既定 2 秒)。BACK 単独だけ**離した時点**で決まる
 のは joy_buttons.HoldLatch の docstring のとおり。
 
@@ -212,6 +215,7 @@ class JoyTeleop(Node):
 
         self.declare_parameter("axis_linear", 1)
         self.declare_parameter("axis_angular", 0)
+        self.declare_parameter("axis_angular_right", 3)
         self.declare_parameter("deadzone", 0.15)
         self.declare_parameter("linear_min_speed", 0.1)
         self.declare_parameter("linear_max_speed", 0.35)
@@ -245,6 +249,7 @@ class JoyTeleop(Node):
 
         self._axis_linear = int(value("axis_linear"))
         self._axis_angular = int(value("axis_angular"))
+        self._axis_angular_right = int(value("axis_angular_right"))
         self._deadzone = float(value("deadzone"))
         self._linear_min = float(value("linear_min_speed"))
         self._linear_max = float(value("linear_max_speed"))
@@ -457,21 +462,22 @@ class JoyTeleop(Node):
         linear_max = self._linear_boost if boost else self._linear_max
         angular_max = self._angular_boost if boost else self._angular_max
 
+        linear = axis_to_speed(
+            axis(self._axes, self._axis_linear),
+            self._deadzone, self._linear_min, linear_max,
+        )
+        steering = axis(self._axes, self._axis_angular_right)
+        if abs(steering) <= self._deadzone:
+            steering = axis(self._axes, self._axis_angular)
+        angular = axis_to_speed(
+            steering, self._deadzone, self._angular_min, angular_max,
+        )
+        if linear < 0.0:
+            angular = -angular
+
         twist = Twist()
-        twist.linear.x = self._linear_ramp.update(
-            axis_to_speed(
-                axis(self._axes, self._axis_linear),
-                self._deadzone, self._linear_min, linear_max,
-            ),
-            dt,
-        )
-        twist.angular.z = self._angular_ramp.update(
-            axis_to_speed(
-                axis(self._axes, self._axis_angular),
-                self._deadzone, self._angular_min, angular_max,
-            ),
-            dt,
-        )
+        twist.linear.x = self._linear_ramp.update(linear, dt)
+        twist.angular.z = self._angular_ramp.update(angular, dt)
         return twist
 
     def _coast(self, dt):

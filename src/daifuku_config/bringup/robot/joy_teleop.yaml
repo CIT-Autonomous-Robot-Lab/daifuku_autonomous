@@ -5,6 +5,7 @@
 # ボタンと軸の番号は **XInput (X モード)** のもの。DirectInput 側にすると総入れ替えに
 # なるので、合わなければ `ros2 topic echo /joy` で確かめて直すこと (番号違いは
 # **エラーにならず、ただ効かない**)。速度域と操作の意味は ../../../../docs/usage/joystick.md。
+# F710 は背面を X、MODE ランプを消灯にする。点灯中は左スティックと十字キーが入れ替わる。
 
 joy_node:
   ros__parameters:
@@ -16,7 +17,8 @@ joy_node:
 joy_teleop:
   ros__parameters:
     axis_linear: 1          # 既定 1: 前後に使う軸 (左スティックの上下)。上が前進
-    axis_angular: 0         # 既定 0: 旋回に使う軸 (左スティックの左右)。左が左旋回
+    axis_angular: 0         # 既定 0: 左スティックの左右。前進・停止中は左が左旋回、後退入力中は逆
+    axis_angular_right: 3   # 既定 3: 右スティックの左右。不感帯を超えたら左より優先し、後退入力中は逆
     deadzone: 0.15          # 既定 同左: この傾き以下は 0。超えたところで min_speed に飛ぶ
 
     linear_min_speed: 0.1   # 既定 同左 [m/s]: 不感帯を出た直後の速さ。ステップ 91 Hz 相当で、0 に丸められる min_step_frequency (5 Hz) には遠い
