@@ -23,7 +23,7 @@ docker compose up -d
 ```bash
 cd ~/daifuku_autonomous
 tmux new-session -d -s nav -c "$PWD" -n nav
-tmux send-keys -t nav:nav 'docker compose exec ros2 /ros_entrypoint.sh ros2 launch daifuku_stack navigation.launch.py use_sim_time:=false localization:=vi planner:=vi' Enter
+tmux send-keys -t nav:nav 'docker compose exec ros2 /ros_entrypoint.sh ros2 launch daifuku_stack navigation.launch.py use_sim_time:=false localization:=emcl2 planner:=vi' Enter
 
 tmux new-window -t nav -c "$PWD" -n motor
 tmux send-keys -t nav:motor 'bash tools/control.sh motor on'
@@ -36,7 +36,7 @@ tmux attach -t nav
 
 | 窓 | 中身 | 操作 |
 |---|---|---|
-| `nav` | 価値反復プランナ（経路計画・追従・自己位置推定）、地図サーバ | 終了は`Ctrl-C` |
+| `nav` | 価値反復プランナ（経路計画・追従）、emcl2（自己位置推定）、地図サーバ | 終了は`Ctrl-C` |
 | `motor` | モーター電源 | `Enter`で実行。止めるときは同じ窓で`control.sh stop` |
 | `check` | ノードとトピックの確認 | |
 
@@ -90,10 +90,8 @@ Mid-360の搭載高さ（接地面から275mm、2026-08-03実測）なので、�
 価値反復グローバル／ローカルプランナとMid-360が既定構成です。RVizは既定では
 起動しません（実機がheadlessのため。PC側から開きます）。
 
-**自己位置推定は場所で決まります。** 既定の`19f`は2026-08-09から`vi_planner`内蔵の
-推定器（VIOLA）なので`localization:=vi`が要り、`localization:=emcl2`のまま立てると
-**起動時に止まります**（[`localization:=vi`](#localizationviプランナ内蔵の推定器)）。
-`tsudanuma`は今までどおりEMCL2です。
+**自己位置推定は19Fも津田沼もEMCL2です。** `localization:=emcl2`がlaunchの既定で、
+`vi_planner`は`localizer: "external"`のままemcl2の推定姿勢を読みます。
 
 **地図も調整も渡しません。** 走らせる場所は`src/daifuku_config/site`の名前1語（既定は`19f`）で、
 `overrides`はその名前の`src/daifuku_config/overrides/<名前>.yaml`になります。**地図はその
@@ -144,9 +142,8 @@ Nav2の`global_costmap`の`static_layer`——は購読先が`map`固定で、�
 
 **`localization:=vi`（VIOLA）では`/map_loc`を誰も読みません。** `map_server_loc`は
 立って配信しますが、購読するのは`emcl2`だけで、そちらが立たない構成だからです。
-**既定の`19f`がこれ**（`localizer: "belief"`のため`localization:=vi`が要る）なので、
-既定では`/map_loc`は出ているだけで効いていません。地図を2枚に分ける値打ちがあるのは
-`localization:=emcl2`で走らせる場所（`tsudanuma`や`tsudanuma_mugimaru`）です。
+同梱の`19f`・`tsudanuma`・`tsudanuma_mugimaru`はemcl2を使うので、
+いずれも自己位置推定には`/map_loc`を使います。
 
 RVizには`Map (navigation)`と`Map (localization)`の2つの表示があります。**既定でオンなのは
 後者（`/map_loc`）です**——経路計画用の地図は手で壁を描き足したり回廊の外を塗り潰したり
@@ -170,7 +167,7 @@ RVizには`Map (navigation)`と`Map (localization)`の2つの表示がありま�
 
 ```bash
 ros2 launch daifuku_stack navigation.launch.py \
-  use_sim_time:=false localization:=vi
+  use_sim_time:=false localization:=emcl2
 ```
 
 **コマンドはLiDARの構成によらず同じです。** `/scan`を出すのは機体側なので、
@@ -182,7 +179,7 @@ Mid-360でも2D LiDARでもこちらは変わりません。RVizを同じ端末�
 ```bash
 docker compose exec ros2 \
   /ros_entrypoint.sh ros2 launch daifuku_stack navigation.launch.py \
-  use_sim_time:=false localization:=vi
+  use_sim_time:=false localization:=emcl2
 ```
 
 ## 自己位置推定を選ぶ
@@ -206,10 +203,9 @@ ros2 launch daifuku_stack navigation.launch.py \
 （`src/daifuku_config/stack/vi_planner.yaml`）の既定は`external`（＝外部の推定を読む）で、
 そのまま`localization:=vi`を渡すと**起動時に止まります**。
 
-**ただし同梱の`19f`（既定のoverrides）は2026-08-09から`belief`へ上書きしています。**
-つまりこの地図では`localization:=vi`のほうが要り、既定の`localization:=emcl2`のまま
-立てると**起動時に止まります**（下の「逆向きの取り違え」がそれ）。`tsudanuma`は
-この節を持たないので今までどおりemcl2です。**19Fの内蔵推定はまだ実機で確かめていません。**
+**同梱の3地図はいずれも`external`のままです。** 19Fの`belief`上書きも外してあり、
+通常は`localization:=emcl2`で起動します。内蔵推定器を試すときだけ`localizer`を
+下の値へ変更し、`localization:=vi`と組み合わせてください。
 
 | 値 | 中身 |
 | --- | --- |
@@ -222,16 +218,14 @@ ros2 launch daifuku_stack navigation.launch.py \
 判別点を出せるのは`adaptive` / `belief` / `viterbi`の3つ（2026-08-09の上流の更新で
 `adaptive`だけではなくなった）ですが、アウトオブコアの解は単一ゴール専用なので、
 `solver: "frontier2d_sparse_compact"`のまま`true`と書くと起動時に止まります。
-**`19f`は2026-08-09に`solver`を密（`frontier2d_sparse`）へ戻して
-`active_reloc`を`true`にしてあります**——`map_scale: 2`込みで実測655 MBですが、
-`waypoint_prefetch: true`と重なると場が2本で**1.31 GB**になるので、**Pi 4（4 GB）では
-先読みのほうを外してください**（compactの頃は190 MBで済んでいました）。密へ戻す判断は
-[`src/daifuku_config/README.md`](../../src/daifuku_config/README.md)。同じ節で`map_clear_from_scan`（ビームが
-貫通したセルは地図が壁と言っていても開ける）と`qmdp`（最尤の1点ではなくbelief全体で
-行動を選ぶ）も`true`にしてあります。
+19Fではemcl2への切り替えに伴い、`active_reloc`・`map_clear_from_scan`・`qmdp`の
+上書きを外しました。`solver`は密（`frontier2d_sparse`）のまま維持しています。
+`map_scale: 2`込みで実測655 MB、`waypoint_prefetch: true`で場が2本になり
+**1.31 GB**なので、**Pi 4（4 GB）では先読みを外してください**。
+密へ戻した経緯は[`src/daifuku_config/README.md`](../../src/daifuku_config/README.md)にあります。
 
 ```bash
-# 19f (既定の overrides) は localizer: "belief" 済み
+# 試す場所の設定で localizer を adaptive などへ変更した場合のみ
 ros2 launch daifuku_stack navigation.launch.py \
   localization:=vi
 ```

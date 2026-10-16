@@ -159,6 +159,30 @@ check_lidar_include_scoped() {
 }
 item "lidar_bringup の include が GroupAction で囲まれている" check_lidar_include_scoped
 
+# ── 19F の自己位置推定 ──────────────────────────────────────────────────────
+# belief の上書きが戻ると既定の emcl2 と衝突して起動できない (AGENTS.md)。
+check_19f_external_localization() {
+  python3 - "${ROOT}" <<'PY'
+import runpy
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+helpers = runpy.run_path(str(root / "tools/checklist/check_overrides.py"))
+overlay = helpers["_load_overlay"]()
+config = root / "src/daifuku_config"
+params = overlay.load(config / "stack/vi_planner.yaml")
+site = overlay.load(config / "overrides/19f.yaml")["daifuku_stack"]
+overlay.overlay(params, site)
+vi = params["vi_planner"]["ros__parameters"]
+assert vi["localizer"] == "external", "19F の localizer が emcl2 と衝突する"
+assert not any(vi.get(key, False) for key in ("map_clear_from_scan", "qmdp", "active_reloc")), \
+    "19F に内蔵推定器用の上書きが残っている"
+print("19F の VI は外部の推定姿勢を読み、内蔵推定器の機能は無効")
+PY
+}
+item "19F の VI が emcl2 の推定姿勢を使う設定になっている" check_19f_external_localization
+
 # ── 順路のトピック名 ────────────────────────────────────────────────────────
 # パネル (絶対名) と joy_teleop (相対名) と vi_planner の waypoint_topic の 3 か所に
 # あり、1 つだけ変えると**エラーも警告も出ないまま先読みだけが起きなくなる**。

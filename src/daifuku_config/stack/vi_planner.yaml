@@ -122,9 +122,7 @@ vi_planner:
     #   grid            … その 1 レベル版 (要シード、再定位なし)
     #   belief          … 全地図に belief を持つ和積。未シードでも立つが窓が無いぶん重い
     #   viterbi         … 同じ場を min-plus で回す変種。1 観測 183ms で実走行には向かない
-    localizer: "external"        # 既定 同左: 自己位置の出どころ。**localization:=vi のときだけ
-                                 # 上の 4 つから選ぶ**。**既定の overrides (19f) は belief へ
-                                 # 上書きしている**ので、あの地図は localization:=emcl2 では立たない
+    localizer: "external"        # 既定 同左: 自己位置の出どころ。同梱の 3 地図は emcl2 の推定を読む
     #     ▲ 内蔵を選ぶと pose_topic の意味が「連続入力」から**手動シード**へ変わる。launch が
     #       localization:=vi のときだけ initialpose へ向け直す (mcl_pose のままだと 20Hz で
     #       張り直され、**エラーも警告も出ないまま素通しと変わらない**)。**その initialpose は
@@ -139,5 +137,5 @@ vi_planner:
     #       map_clear_from_scan / qmdp / active_reloc は external では読まれないか実質無効
     #       なので**ここには書かない**。active_reloc は**上の solver も密であることが要る** —
     #       アウトオブコアの解は単一ゴール専用なので、compact のまま true にすると起動時に
-    #       止まる (19f がそのために密へ戻している)。
+    #       止まる。
     #

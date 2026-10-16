@@ -269,17 +269,11 @@ Docker 越しに叩く形は
   `publish_tf` は `standalone` / `follow` と同じ launch 専用のキーで、`src/daifuku_config/` に
   書かないこと**（`localizer` は逆に `src/daifuku_config/` にしか無い）。`localization:=vi` では
   `pose_topic` が `initialpose` になり、emcl2 は立たず `map_server` だけが残る。
-  **2026-08-09 から既定の `19f` が `localizer: "belief"` を上書きしているので、
-  この地図では `localization:=vi` のほうが要る** — 引数を足さずに（＝既定の
-  `localization:=emcl2` で）立てると上の 1 つめに当たって起動時に止まる。`active_reloc`
-  と組なので `solver` も密へ戻してあり（compact = アウトオブコアは単一ゴール専用で、
-  そのままだと同じく起動時に止まる）、`map_scale: 2` と `waypoint_prefetch` の
-  1.31GB がそこにぶら下がる。**津田沼は密だと 3.17GB で OOM なのでこの節を持てない。**
-  **この地図で立つのは `localization:=vi planner:=vi nav2:=false` の 1 通りだけになる** —
-  `planner:=navfn` / `local_planner:=nav2` / `nav2:=true` はどれも起動時に落ちる
-  （前 2 つは `nav2:=auto|true` を要求し、それが `localization:=vi` と噛み合わない。
-  `emcl2` へ落とせば今度は `localizer` の側で落ちる）。逃げ道は `overrides:=none` だけで、
-  そちらは emcl2 の対症療法ごと落ちる。
+  **19F も津田沼と同じ emcl2 を使うため、`19f` の overrides に内蔵推定器の
+  `localizer: "belief"` を戻さないこと。** 既定の `localization:=emcl2` と衝突して
+  起動時に止まる。`map_clear_from_scan` / `qmdp` / `active_reloc` の上書きも外してある。
+  19F の密ソルバ・`map_scale: 2`・`waypoint_prefetch` は従来どおりで、場 2 本の
+  1.31GB は変わらない。
 - **`nav2` の既定は `false` で、そのとき Nav2 の navigation は BT ごと
   立たない。** `planner:=navfn` / `local_planner:=nav2` へ落とすときは
   **`nav2:=auto` を足さないと起動時にエラーで止まる**（`navigate_to_pose` を出す
