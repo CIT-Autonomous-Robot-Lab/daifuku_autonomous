@@ -164,7 +164,7 @@ docker compose exec ros2 \
 停止していれば自動的に起動します。
 
 ```bash
-bash tools/shell.sh
+bash tools/enter-shell.sh
 ```
 
 モーター電源、遠隔操作、状態確認は`tools/control.sh`にまとめています。

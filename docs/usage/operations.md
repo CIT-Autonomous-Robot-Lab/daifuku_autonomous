@@ -44,7 +44,7 @@ docker compose exec ros2 \
 起動します。
 
 ```bash
-bash tools/shell.sh
+bash tools/enter-shell.sh
 ```
 
 ## tmuxで作業する

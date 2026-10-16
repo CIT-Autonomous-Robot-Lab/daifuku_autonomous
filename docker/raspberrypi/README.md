@@ -32,7 +32,7 @@ Livox関連ノード、teleopノードを含みます。RVizは含みません�
 | `scripts/build-workspace.sh` | `up`のときにコンテナ内で走る`colcon build`（`/usr/local/bin/build-workspace`） |
 
 `scripts/`はイメージへ入れてコンテナの中で走らせるものです。ホスト側から叩く
-`tools/control.sh`と`tools/shell.sh`は**リポジトリルートの[`tools/`](../../tools)**に
+`tools/control.sh`と`tools/enter-shell.sh`は**リポジトリルートの[`tools/`](../../tools)**に
 あります（`docker compose`は`.env`をカレントディレクトリから読むので、どのみち
 ルートから叩くもの）。
 
@@ -183,12 +183,12 @@ bash tools/control.sh help
 `device_cgroup_rules`でキャラクタデバイス13番を許可しています。コンテナ作成後に
 接続したコントローラも利用できます。
 
-## tools/shell.sh
+## tools/enter-shell.sh
 
 コンテナ内で対話シェルを開きます。ROS 2とワークスペースは読み込み済みです。
 
 ```bash
-bash tools/shell.sh
+bash tools/enter-shell.sh
 ```
 
 ## Fast DDSの設定

@@ -356,7 +356,7 @@ Docker 越しに叩く形は
   **(3)** `compose.common.yaml` を単体で `-f` に渡すと `raspicat` が exit 1 で
   落ちる（どちらのドライバか決まらないまま起動しないための placeholder）。
   ドライバに依存しない `ros2` サービスだけを触る `tools/control.sh` と
-  `tools/shell.sh` は、意図してこちらを直接渡している。**(4)** 並べる順は
+  `tools/enter-shell.sh` は、意図してこちらを直接渡している。**(4)** 並べる順は
   **common が先**。後ろのファイルが前を上書きするので、入れ替えると (3) の
   placeholder が勝って `raspicat` が即死する。**ドライバ側から
   `include: - compose.common.yaml` へ戻さないこと** —— Compose 2.40 は include
