@@ -1,0 +1,22 @@
+{
+  "source_image": "navigation_connected.pgm",
+  "source_sha256": "864a123d42f163edd9f5ccd5827b47c3a757e636f603d7ddc7f0ac6e89812e7a",
+  "output_image": "navigation_reviewed.pgm",
+  "output_sha256": "9275db875d500756e12f23058c27dd50777ea6973a34d474218e5d5056955c56",
+  "manifest_canonical_sha256": "bfc085e78a7e509fb9015d8c07251c1623a3e832026d2d305e892f3ce164eb8b",
+  "ground_support_image": "navigation_observed_ground_mask.png",
+  "edit_mask": "navigation_reviewed_edit_mask.png",
+  "protected_mask": "navigation_reviewed_protected_mask.png",
+  "mask_values": {
+    "unchanged": 0,
+    "transient_occupied_to_free": 1,
+    "pavement_unknown_to_free": 2
+  },
+  "transient_occupied_cells_cleared": 17164,
+  "pavement_unknown_cells_restored": 58451,
+  "free_cells_after": 671298,
+  "occupied_cells_after": 137084,
+  "protected_cells_unchanged": true,
+  "outside_manual_brushes_unchanged": true,
+  "geometry_unchanged": true
+}
