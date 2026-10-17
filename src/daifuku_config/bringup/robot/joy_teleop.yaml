@@ -22,8 +22,8 @@ joy_teleop:
     deadzone: 0.15          # 既定 同左: この傾き以下は 0。超えたところで min_speed に飛ぶ
 
     linear_min_speed: 0.1   # 既定 同左 [m/s]: 不感帯を出た直後の速さ。ステップ 91 Hz 相当で、0 に丸められる min_step_frequency (5 Hz) には遠い
-    linear_max_speed: 0.35  # 既定 同左 [m/s]: 目一杯倒したときの速さ
-    linear_boost_speed: 0.8 # 既定 同左 [m/s]: button_boost を押しているときの上限。ステップ 726 Hz 相当 (max_step_frequency 10000 には遠い)
+    linear_max_speed: 0.5   # 既定 0.35 [m/s]: 目一杯倒したときの速さ。通常時の上限を 0.5 に引き上げる
+    linear_boost_speed: 1.2 # 既定 0.5 [m/s]: button_boost を押しているときの上限。RB ブースト時の上限を 1.2 に引き上げる
     angular_min_speed: 0.3  # 既定 同左 [rad/s]: 旋回の下限。並進と同じ考え方
     angular_max_speed: 1.0  # 既定 同左 [rad/s]: 旋回の上限
     angular_boost_speed: 1.0 # 既定 1.5 [rad/s]: ブースト時の旋回の上限。angular_max_speed と同値なので、**RB を押しても旋回は変わらない** (上がるのは並進だけ)
