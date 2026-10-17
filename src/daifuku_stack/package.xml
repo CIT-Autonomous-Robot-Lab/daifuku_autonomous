@@ -47,11 +47,14 @@
   <exec_depend>slam_toolbox</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
+  <!-- localization_gravity.py publishes the measured roll/pitch correction. -->
+  <exec_depend>tf2_msgs</exec_depend>
   <exec_depend>topic_tools</exec_depend>
 
   <!-- ament_lint_common (詰め合わせ) は使わず、走らせるものだけを名指しする。
        外してあるのは pep257 と C++ の書式 lint で、理由は AGENTS.md。 -->
   <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_cmake_pytest</test_depend>
   <test_depend>ament_cmake_copyright</test_depend>
   <test_depend>ament_cmake_flake8</test_depend>
   <test_depend>ament_cmake_lint_cmake</test_depend>

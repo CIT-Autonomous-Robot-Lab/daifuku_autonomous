@@ -25,6 +25,10 @@ install(PROGRAMS
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(test_elevation_filter test/test_elevation_filter.py
+    ENV ROS_DOMAIN_ID=77 ROS_LOCALHOST_ONLY=1
+  )
 endif()
 
 ament_package()

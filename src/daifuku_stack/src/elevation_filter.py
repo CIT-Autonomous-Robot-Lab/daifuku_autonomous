@@ -59,11 +59,20 @@ _UNBOUNDED_DEG = 89.9
 class ElevationFilter(Node):
     def __init__(self):
         super().__init__("elevation_filter")
+        self._restamp_cloud = self.declare_parameter("restamp_cloud", False).value
         # Declared wide open so this node is a pass-through until a
         # parameter file narrows it. src/daifuku_config/stack/sensors/mid360_elevation.yaml
         # holds the real values.
         min_deg = self.declare_parameter("min_elevation_deg", -90.0).value
         max_deg = self.declare_parameter("max_elevation_deg", 90.0).value
+        self._far_range = self.declare_parameter("far_range_m", 0.0).value
+        far_min_deg = self.declare_parameter("far_min_elevation_deg", min_deg).value
+        if self._far_range < 0 or (self._far_range > 0 and far_min_deg > max_deg):
+            raise RuntimeError("invalid far-range elevation band")
+        self._far_min_slope = (
+            -math.inf if far_min_deg <= -_UNBOUNDED_DEG
+            else math.tan(math.radians(far_min_deg))
+        )
         if min_deg > max_deg:
             raise RuntimeError(
                 "min_elevation_deg (%g) is above max_elevation_deg (%g), "
@@ -85,6 +94,11 @@ class ElevationFilter(Node):
                 30.0 * (self._min_slope or 0.0),
             )
         )
+        if self._far_range > 0:
+            self.get_logger().info(
+                "beyond %.2fm keeping elevations %.2f..%.2f deg"
+                % (self._far_range, far_min_deg, max_deg)
+            )
 
         # Cached per (fields, point_step) so the dtype is built once, not
         # per cloud. The Mid-360 never changes its layout at runtime, but
@@ -150,6 +164,10 @@ class ElevationFilter(Node):
         return self._dtype
 
     def _callback(self, message):
+        # Correct the Livox device clock before pointcloud_to_laserscan looks up TF.
+        # Simulation and bag playback keep their original acquisition timestamps.
+        if self._restamp_cloud:
+            message.header.stamp = self.get_clock().now().to_msg()
         if message.is_bigendian:
             # Reinterpreting the buffer would silently produce garbage
             # coordinates, so pass the cloud through untouched instead.
@@ -170,7 +188,13 @@ class ElevationFilter(Node):
         # NaN coordinates compare false, so they drop out here the same way
         # pointcloud_to_laserscan would drop them.
         keep = np.isfinite(z)
-        if self._min_slope is not None:
+        if self._far_range > 0:
+            floor = np.where(
+                radius > self._far_range, self._far_min_slope,
+                -math.inf if self._min_slope is None else self._min_slope,
+            )
+            keep &= z >= floor * radius
+        elif self._min_slope is not None:
             keep &= z >= self._min_slope * radius
         if self._max_slope is not None:
             keep &= z <= self._max_slope * radius

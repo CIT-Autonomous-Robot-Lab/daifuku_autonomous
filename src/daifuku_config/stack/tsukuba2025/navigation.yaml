@@ -1,0 +1,32 @@
+pointcloud_to_laserscan:
+  ros__parameters:
+    target_frame: base_footprint                # Physical navigation frame.
+    transform_tolerance: 0.1                    # Transform lookup tolerance, seconds.
+    min_height: 0.275                          # Same physical obstacle band as runs.
+    max_height: 5.5                            # Retain nearby overhead obstacle returns.
+    angle_min: -3.141592653589793               # Full circle.
+    angle_max: 3.141592653589793                # Full circle.
+    angle_increment: 0.017453292519943295        #1degree navigation bins.
+    queue_size: 4                              # Same queue as the recorded runs.
+    scan_time: 0.1                             # Projection metadata.
+    range_min: 0.05                            # Actual simulated sensor minimum.
+    range_max: 30.0                            # Actual simulated sensor maximum.
+    use_inf: true                             # Missing returns remain unobserved.
+elevation_filter:
+  ros__parameters:
+    min_elevation_deg: 4.5                     # Keep5degree and higher physical rings.
+    max_elevation_deg: 75.0                    # Same upper elevation bound as runs.
+scan_to_scan_filter_chain:
+  ros__parameters:
+    filter1:
+      name: robot_self_returns
+      type: laser_filters/LaserScanBoxFilter
+      params:
+        box_frame: base_footprint
+        min_x: -0.35
+        max_x: 0.18
+        min_y: -0.18
+        max_y: 0.18
+        min_z: -0.05
+        max_z: 0.25
+        invert: false

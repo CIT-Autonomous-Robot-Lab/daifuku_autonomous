@@ -1,0 +1,7 @@
+image: region-014.pgm
+resolution: 0.2
+origin: [-75.79999999999995, -133.79999999999995, 0]
+negate: 0
+occupied_thresh: 0.65
+free_thresh: 0.196
+mode: trinary

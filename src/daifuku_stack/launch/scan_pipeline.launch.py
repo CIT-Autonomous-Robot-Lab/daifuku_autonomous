@@ -42,6 +42,7 @@ from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.conditions import IfCondition, UnlessCondition
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 # 共通部品はこの launch ディレクトリの直下 (daifuku_stack_launch/) にある。
 _LAUNCH_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -89,7 +90,11 @@ def generate_launch_description():
         output="screen",
         parameters=[
             mid360_elevation_params_file,
-            {"use_sim_time": use_sim_time},
+            {
+                "use_sim_time": use_sim_time,
+                "restamp_cloud": ParameterValue(
+                    LaunchConfiguration("restamp_cloud"), value_type=bool),
+            },
         ],
         remappings=[
             ("cloud_in", "/livox/lidar"),
