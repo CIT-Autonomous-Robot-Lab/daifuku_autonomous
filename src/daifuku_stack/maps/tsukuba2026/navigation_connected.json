@@ -1,0 +1,13 @@
+{
+  "source": "C:\\Users\\nop\\dev\\lab\\daifuku_autonomous\\src\\daifuku_stack\\maps\\tsukuba2026\\navigation_denoised.pgm",
+  "output": "C:\\Users\\nop\\dev\\lab\\daifuku_autonomous\\src\\daifuku_stack\\maps\\tsukuba2026\\navigation_connected.pgm",
+  "source_sha256": "cc46aaf81d1072a86d2efac04169c0cf2846774c863785a4479be02cea553c15",
+  "output_sha256": "864a123d42f163edd9f5ccd5827b47c3a757e636f603d7ddc7f0ac6e89812e7a",
+  "resolution": 0.1,
+  "closing_radius_m": 0.5,
+  "maximum_ground_support_distance_m": 0.3,
+  "added_free_cells": 174174,
+  "free_cells_before": 421509,
+  "free_cells_after": 595683,
+  "occupied_pixels_unchanged": true
+}

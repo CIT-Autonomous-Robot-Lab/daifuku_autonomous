@@ -1,0 +1,61 @@
+{
+  "sources": [
+    {
+      "path": "C:\\Users\\nop\\Downloads\\glim01.ply",
+      "points": 2914091,
+      "sha256": "910b4b7dc14295a667652b030c66650c8d5697fe0505a647034f3f1aabaf1201",
+      "payload_sha256": "378d0402c33b600b14ebd0b3f0b6868811e976bb426a033cf5a34873922992ee",
+      "trailing_zero_bytes_ignored": 0
+    },
+    {
+      "path": "C:\\Users\\nop\\Downloads\\glim01.pcd",
+      "points": 2914091,
+      "sha256": "f6ea677ff20b026be3ad3f7dfc9a8b7927c3752e9771950feece1a7ee6126ab7",
+      "payload_sha256": "378d0402c33b600b14ebd0b3f0b6868811e976bb426a033cf5a34873922992ee",
+      "trailing_zero_bytes_ignored": 3904
+    }
+  ],
+  "resolution": 0.1,
+  "origin": [
+    -76.4,
+    -177.9,
+    0.0
+  ],
+  "width": 3029,
+  "height": 2777,
+  "finite_points": 2914091,
+  "ground_ceiling": 1.0,
+  "ground_cell": 0.5,
+  "ground_tolerance": 0.15,
+  "ground_percentile": 10,
+  "ground_opening_cells": 5,
+  "ground_z_range": [
+    -4.414233207702637,
+    0.9392430186271667
+  ],
+  "supported_ground_cells": 33210,
+  "ground_closing_radius": 0.2,
+  "minimum_obstacle_height": 0.275,
+  "maximum_navigation_height": 2.5,
+  "maximum_localization_height": 5.5,
+  "ray_traced_free_space": false,
+  "maps": {
+    "navigation": {
+      "free": 421509,
+      "occupied": 172626,
+      "unknown": 7817398,
+      "free_components": 16704,
+      "largest_free_component": 279167,
+      "pgm_sha256": "321369780849577f1a3f16329cb8612a20d1f677f0cbb3b86caf36af5d1c618e"
+    },
+    "localization": {
+      "free": 391834,
+      "occupied": 277652,
+      "unknown": 7742047,
+      "free_components": 20111,
+      "largest_free_component": 233846,
+      "pgm_sha256": "b8854f5a9293c655ef47fa89f360dfd000f358386d9d99d877833b9ec2115190"
+    }
+  },
+  "elapsed_seconds": 1.4171579999965616
+}

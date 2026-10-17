@@ -1,0 +1,34 @@
+pointcloud_to_laserscan_loc:
+  ros__parameters:
+    target_frame: localization_gravity          # Same projection frame as emcl2.
+    transform_tolerance: 0.1                    # TF lookup tolerance, seconds.
+    min_height: 0.275                          # Same lower band as the measured-map projection.
+    max_height: 5.5                            # Match localization.pgm's upper surface band.
+    angle_min: -3.141592653589793               # Full circle.
+    angle_max: 3.141592653589793                # Full circle.
+    angle_increment: 0.0017453292519943296       # 0.1 degree, as in the 2025 localization pipeline.
+    queue_size: 4                              # Same bounded point-cloud queue.
+    scan_time: 0.1                             # Projection metadata.
+    range_min: 0.05                            # Discard returns closer than 5cm.
+    range_max: 60.0                            # Initial long-range support, as in 2025.
+    use_inf: true                             # Missing returns remain unobserved.
+scan_filter_loc:
+  ros__parameters:
+    filter1:
+      name: robot_self_returns                # Same self-return rejection as navigation.
+      type: laser_filters/LaserScanBoxFilter  # Same box filter as the 2025 profile.
+      params:
+        box_frame: base_footprint             # Use the physical frame even for gravity-level scans.
+        min_x: -0.35                          # 2025 rear body bound, meters.
+        max_x: 0.18                           # 2025 front body bound, meters.
+        min_y: -0.18                          # 2025 right body bound, meters.
+        max_y: 0.18                           # 2025 left body bound, meters.
+        min_z: -0.05                          # Include the reconstructed scan plane.
+        max_z: 0.25                           # 2025 upper self-return bound, meters.
+        invert: false                        # Remove points inside the box.
+localization_elevation_filter:
+  ros__parameters:
+    min_elevation_deg: 9.5                     # Initial 2025 near-field terrain rejection.
+    max_elevation_deg: 75.0                    # Same upper elevation bound.
+    far_range_m: 30.0                          # Relax only beyond the local-obstacle range.
+    far_min_elevation_deg: 4.5                  # Initial 2025 distant-ring selection.
