@@ -29,6 +29,7 @@ rosdep install \
     src/daifuku_stack \
     src/daifuku_rqt \
     src/emcl2_ros2 \
+    src/emcl3d \
     src/livox_ros_driver2 \
   --ignore-src \
   --rosdistro humble \
@@ -46,7 +47,7 @@ colcon build \
   --symlink-install \
   --parallel-workers "${BUILD_JOBS}" \
   --packages-select daifuku_bringup daifuku_config daifuku_config_manager daifuku_stack \
-                    daifuku_rqt daifuku_waypoint_manager emcl2 livox_ros_driver2 \
+                    daifuku_rqt daifuku_waypoint_manager emcl2 emcl3d livox_ros_driver2 \
                     raspimouse_msgs \
   --cmake-args \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \

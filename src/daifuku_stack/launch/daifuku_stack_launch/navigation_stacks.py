@@ -40,6 +40,8 @@ def assemble(w):
     map_loc_yaml = w.map_loc_yaml
     params_file = w.params_file
     emcl2_params_file = w.emcl2_params_file
+    emcl3d_params_file = w.emcl3d_params_file
+    map_pcd = w.map_pcd
     bond_params_file = w.bond_params_file
     rviz_config = w.rviz_config
     use_sim_time = w.use_sim_time
@@ -50,6 +52,7 @@ def assemble(w):
     use_rviz = w.use_rviz
     use_system_monitor = w.use_system_monitor
     use_emcl2 = w.use_emcl2
+    use_emcl3d = w.use_emcl3d
     use_vi_loc = w.use_vi_loc
     use_own_map_server = w.use_own_map_server
     use_amcl_navfn = w.use_amcl_navfn
@@ -227,8 +230,27 @@ def assemble(w):
                 arguments=["--ros-args", "--log-level", log_level],
                 remappings=emcl2_remappings,
             ),
-            # emcl2 自身はライフサイクルノードではないので、マネージャが見るのは
-            # map_server 2 つだけ。
+            # localization:=emcl3d の推定器。地図は /map_loc ではなく PCD を直に読む
+            # (map_path は resolve_map が site: map: pointcloud: から決めた map_pcd)。
+            # 出力の mcl_pose は emcl2 と同名同型なので、vi_planner の pose_topic は
+            # そのまま。particlecloud を emcl2 と同じ名前へ振って RViz を共用する。
+            Node(
+                condition=IfCondition(use_emcl3d),
+                package="emcl3d",
+                executable="emcl3d_node",
+                name="emcl3d",
+                output="screen",
+                respawn=use_respawn,
+                respawn_delay=2.0,
+                parameters=[
+                    emcl3d_params_file,
+                    {"use_sim_time": use_sim_time, "map_path": map_pcd},
+                ],
+                arguments=["--ros-args", "--log-level", log_level],
+                remappings=remappings + [("particlecloud", "particle_cloud")],
+            ),
+            # emcl2 / emcl3d 自身はライフサイクルノードではないので、マネージャが
+            # 見るのは map_server 2 つだけ。
             Node(
                 package="nav2_lifecycle_manager",
                 executable="lifecycle_manager",
@@ -403,7 +425,7 @@ def assemble(w):
         ],
     )
 
-    # emcl2 / vi + navfn / vi: 自己位置推定を自前で立て、その上に navigation を
+    # emcl2 / emcl3d / vi + navfn / vi: 自己位置推定を自前で立て、その上に navigation を
     # 載せる。localization:=vi では emcl2 のノードだけが抜け、推定は下の
     # standalone_navigation が立てる vi_planner が持つ (nav2:=true との併用は
     # backends.validate_localization が弾くので、間の 2 つの include には来ない)。

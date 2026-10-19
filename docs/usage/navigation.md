@@ -191,7 +191,19 @@ ros2 launch daifuku_stack navigation.launch.py \
   localization:=amcl
 ```
 
-指定可能な値は`emcl2`（別名`emcl`）と`amcl`と`vi`です。
+指定可能な値は`emcl2`（別名`emcl`）と`emcl3d`と`amcl`と`vi`です。
+
+### `localization:=emcl3d`（点群地図での6DoF推定）
+
+emcl2の代わりに外部パッケージ`emcl3d`（`NOPLAB/emcl3d`）を立てます。`/scan`ではなく
+`/livox/lidar`の3D点群をPCDの点群地図と照合し、`map -> odom`と`mcl_pose`を出します
+（`vi_planner`はそのまま`mcl_pose`を読む）。地図は`overrides`の`site: map: pointcloud:`
+（`19f`は`19f/map_19f.pcd`）か`map_pcd:=`で、経路計画用の`/map`は従来どおり2D地図です。
+**PCDの座標が2D地図と揃っていないと、推定は合っていても経路がずれます**（19Fは未検証）。
+
+```bash
+ros2 launch daifuku_stack navigation.launch.py localization:=emcl3d
+```
 
 ### `localization:=vi`（プランナ内蔵の推定器）
 

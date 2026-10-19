@@ -112,6 +112,7 @@ class SystemMonitor(Node):
                 "planner_server",
                 "bt_navigator",
                 "emcl2",
+                "emcl3d",
                 "livox_ros_driver2",
                 "component_container",
             ],

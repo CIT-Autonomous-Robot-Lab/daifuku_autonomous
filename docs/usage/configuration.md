@@ -18,6 +18,7 @@
 | `src/daifuku_config/stack/nav2/*.yaml`、`src/daifuku_config/stack/vi_planner.yaml` | `stack` | Nav2、価値反復プランナ、コストマップ、速度、ゴール判定（起動時に1つへ合成） |
 | `behavior_trees/*.xml` | `stack` | `planner:=vi`用のビヘイビアツリー（起動時に自動で選択）。**`nav2:=true`のときだけ読まれる**（既定では`bt_navigator`が立たない） |
 | `src/daifuku_config/stack/localization/emcl2.yaml` | `stack` | EMCL2のフレーム、初期姿勢、粒子数、オドメトリモデル |
+| `src/daifuku_config/stack/localization/emcl3d.yaml` | `stack` | EMCL3D（`localization:=emcl3d`）のフレーム、入力点群、初期姿勢、粒子数 |
 | `src/daifuku_config/stack/lifecycle_bond.yaml` | `stack` | ライフサイクルマネージャのbondタイムアウト |
 | `src/daifuku_config/stack/mapping/slam_toolbox.yaml` | `stack` | SLAM Toolboxのmapping設定 |
 | `rviz/mapping.rviz` | `stack` | 地図作成用RViz |
@@ -50,8 +51,10 @@
 | `extra_params_file` | 空（無効） | `overrides`の後に重ねる任意パスのファイル。カンマ区切りで複数可 |
 | `config_watch` | `shutdown` | 起動後に設定ファイルが書き変わったときどうするか。`shutdown`（既定）は大声で言ったうえで**このlaunchを終了する**（`navigation`は人が立てたものなので、上げ直す人は居ません）。`warn`は言うだけ、`off`は見張り（`config_sentinel`）ごと立てない。[日常操作](operations.md#走らせたまま設定を直したとき) |
 | `emcl2_params_file` | `src/daifuku_config/stack/localization/emcl2.yaml` | EMCL2パラメータ |
+| `emcl3d_params_file` | `src/daifuku_config/stack/localization/emcl3d.yaml` | EMCL3Dパラメータ |
+| `map_pcd` | 空（`overrides`の`site: map: pointcloud:`から導く） | `localization:=emcl3d`が読む点群地図（PCD）のパス。明示すると宣言と同じファイルかを見る。**`emcl3d`で決まらなければ起動時に止まる**。他の`localization`では読まない |
 | `bond_params_file` | `src/daifuku_config/stack/lifecycle_bond.yaml` | ライフサイクルマネージャのbondタイムアウト |
-| `localization` | `emcl2` | `emcl2` / `emcl` / `amcl` |
+| `localization` | `emcl2` | `emcl2` / `emcl` / `emcl3d` / `amcl` / `vi` |
 | `planner` | `vi` | `vi` / `navfn` |
 | `local_planner` | `auto` | `auto` / `vi` / `nav2` |
 | `nav2` | `false` | Nav2のnavigationノードを立てるか。`false`（既定）では`vi_planner`が`navigate_to_pose`と`follow_waypoints`も出すので、`bt_navigator`・`behavior_server`・`waypoint_follower`・`smoother_server`が立たない。`planner:=navfn`や`local_planner:=nav2`へ落とすときは`auto`か`true`が要る（**付け忘れると起動時にエラーで止まる**） |

@@ -31,6 +31,8 @@
 #                                           vi_planner の navigation_launch.py
 #   localization:=emcl2 + navfn / vi     -> map_server + emcl2 を自前で立て、
 #                                           その上に nav2 / vi の navigation
+#   localization:=emcl3d + navfn / vi    -> emcl2 の代わりに emcl3d (PCD に対する
+#                                           6DoF MCL) を立てる。他は emcl2 と同じ
 #   localization:=vi    + planner:=vi    -> **emcl2 を立てない**。map_server だけ
 #                                           残し、自己位置推定も vi_planner が持つ
 #                                           (上流の VIOLA。publish_tf で map->odom を
@@ -89,6 +91,7 @@ def generate_launch_description():
     # SetParametersFromFile でグループスコープ内の全ノードに注入する。
     default_bond_params = os.path.join(config_root, "lifecycle_bond.yaml")
     default_emcl2_params = os.path.join(config_root, "localization", "emcl2.yaml")
+    default_emcl3d_params = os.path.join(config_root, "localization", "emcl3d.yaml")
     default_rviz_config = os.path.join(pkg_share, "rviz", "navigation.rviz")
 
     bringup_launch = os.path.join(nav2_share, "launch", "bringup_launch.py")
@@ -113,6 +116,8 @@ def generate_launch_description():
     map_loc_yaml = LaunchConfiguration("map_loc")
     params_file = LaunchConfiguration("params_file")
     emcl2_params_file = LaunchConfiguration("emcl2_params_file")
+    emcl3d_params_file = LaunchConfiguration("emcl3d_params_file")
+    map_pcd = LaunchConfiguration("map_pcd")
     bond_params_file = LaunchConfiguration("bond_params_file")
     rviz_config = LaunchConfiguration("rviz_config")
     use_sim_time = LaunchConfiguration("use_sim_time")
@@ -135,7 +140,11 @@ def generate_launch_description():
     use_vi_loc = PythonExpression(["'", localization, "' == 'vi'"])
     # emcl2 と vi は「map_server を自前で立てる」側で同じ。違うのは emcl2 の
     # ノードを立てるかと、vi_planner へ渡す pose_topic / publish_tf だけ。
-    use_own_map_server = PythonExpression([use_emcl2, " or ", use_vi_loc])
+    # emcl3d も同じ側。map_server_loc は立つが誰も購読しない (emcl3d は PCD を直に読む)。
+    use_emcl3d = PythonExpression(["'", localization, "' == 'emcl3d'"])
+    use_own_map_server = PythonExpression(
+        [use_emcl2, " or ", use_emcl3d, " or ", use_vi_loc]
+    )
     use_amcl_navfn = PythonExpression(
         ["'", localization, "' == 'amcl' and '", planner, "' == 'navfn'"]
     )
@@ -181,6 +190,8 @@ def generate_launch_description():
         map_loc_yaml=map_loc_yaml,
         params_file=params_file,
         emcl2_params_file=emcl2_params_file,
+        emcl3d_params_file=emcl3d_params_file,
+        map_pcd=map_pcd,
         bond_params_file=bond_params_file,
         rviz_config=rviz_config,
         use_sim_time=use_sim_time,
@@ -191,6 +202,7 @@ def generate_launch_description():
         use_rviz=use_rviz,
         use_system_monitor=use_system_monitor,
         use_emcl2=use_emcl2,
+        use_emcl3d=use_emcl3d,
         use_vi_loc=use_vi_loc,
         use_own_map_server=use_own_map_server,
         use_amcl_navfn=use_amcl_navfn,
@@ -258,13 +270,27 @@ def generate_launch_description():
         *params.declare_args(),
         params.declare_watch_arg(),
         DeclareLaunchArgument("emcl2_params_file", default_value=default_emcl2_params),
+        DeclareLaunchArgument("emcl3d_params_file", default_value=default_emcl3d_params),
+        DeclareLaunchArgument(
+            "map_pcd",
+            # map:= と同じく既定は空 = overrides の site: map: pointcloud: を読む
+            # (nav2_params.resolve_map)。
+            default_value="",
+            description="localization:=emcl3d が読む点群地図 (PCD、フルパス)。"
+                        "**空 (既定) なら overrides の site: map: pointcloud: が指すもの。"
+                        "** 明示すると overrides の宣言と同じものかを見る。"
+                        "他の localization では読まない。",
+        ),
         DeclareLaunchArgument("bond_params_file", default_value=default_bond_params),
 
         # --- バックエンドの選択 (daifuku_stack_launch/backends.py) ---
         DeclareLaunchArgument(
             "localization",
             default_value="emcl2",
-            description="Localization backend: amcl, emcl2 or vi. vi drops emcl2 and "
+            description="Localization backend: amcl, emcl2, emcl3d or vi. emcl3d "
+                        "replaces emcl2 with 6DoF MCL against the PCD map "
+                        "(map_pcd / site: map: pointcloud:) using /livox/lidar. "
+                        "vi drops emcl2 and "
                         "lets vi_planner localize itself (map_server stays): it "
                         "publishes map->odom and takes pose_topic as a manual seed "
                         "(initialpose), not as a pose input. **Which estimator** is "
@@ -356,7 +382,10 @@ def generate_launch_description():
             kwargs={
                 "package": "daifuku_stack",
                 "config_root": config_root,
-                "targets": ["params_file", "emcl2_params_file", "bond_params_file"],
+                "targets": [
+                    "params_file", "emcl2_params_file", "emcl3d_params_file",
+                    "bond_params_file",
+                ],
                 # params_file だけは src/daifuku_config/stack/nav2/*.yaml と
                 # src/daifuku_config/stack/vi_planner.yaml の合成が土台になる。
                 "base_resolvers": {"params_file": nav2_params.fragments_resolver},

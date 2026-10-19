@@ -83,7 +83,7 @@ MULTIARCH="$(dpkg-architecture -qDEB_HOST_MULTIARCH)"
 colcon build --merge-install --symlink-install \
     --parallel-workers "${BUILD_JOBS}" \
     --packages-select daifuku_bringup daifuku_config daifuku_config_manager daifuku_stack \
-                     emcl2 livox_ros_driver2 \
+                     emcl2 emcl3d livox_ros_driver2 \
                      raspicat_bringup raspicat_description raspicat_driver \
                      raspimouse raspimouse_msgs \
     --cmake-args -DROS_EDITION=ROS2 \

@@ -12,6 +12,7 @@ site:
   map:
     navigation:   19f/map_19f.yaml   # 経路計画 (/map)。vi_planner と global_costmap
     localization: 19f/map_19f.yaml   # 自己位置推定 (/map_loc)。emcl2
+    pointcloud:   19f/map_19f.pcd    # 任意: localization:=emcl3d の点群地図。2026-10-19 に map_19f の座標へ変換済み (元の GLIM 出力から yaw -23.80 度, t=(2.153, -2.231, -0.056)m。床の z は概算)
 
 daifuku_stack:
   # ── 仰角フィルタ ──────────────────────────────────────────────────────────

@@ -15,7 +15,7 @@
 
 navigation.launch.py が扱う 4 つの選択肢:
 
-  localization  : amcl / emcl2 / vi
+  localization  : amcl / emcl2 / emcl3d / vi
   planner       : navfn (nav2 標準) / vi (価値反復)
   local_planner : auto / nav2 / vi
   nav2          : false (既定) / true / auto
@@ -136,12 +136,24 @@ def config_localizer(context):
 def validate_localization(context, *args, effective_nav2=None, **kwargs):
     """localization:= の値と、選んだ推定器を立てられる前提を見る。"""
     selected = value(context, "localization")
-    if selected not in ("amcl", "emcl", "emcl2", "vi"):
+    if selected not in ("amcl", "emcl", "emcl2", "emcl3d", "vi"):
         raise RuntimeError(
             f"Unsupported localization: {selected}\n"
-            "Use localization:=amcl, localization:=emcl2 or localization:=vi "
+            "Use localization:=amcl, localization:=emcl2, localization:=emcl3d "
+            "(6DoF MCL on the PCD map) or localization:=vi "
             "(vi_planner's own estimator; no emcl2)."
         )
+
+    if selected == "emcl3d":
+        try:
+            get_package_prefix("emcl3d")
+        except PackageNotFoundError as exc:
+            raise RuntimeError(
+                "EMCL3D package is not available: emcl3d\n"
+                "Import it (vcs import src < daifuku_autonomous.repos) and build it "
+                "(colcon build --packages-select emcl3d) before launching with "
+                "localization:=emcl3d."
+            ) from exc
 
     if selected in ("emcl", "emcl2"):
         package_name = value(context, "emcl2_package")

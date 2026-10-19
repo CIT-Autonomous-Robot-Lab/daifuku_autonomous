@@ -145,7 +145,7 @@ cd "${WORKSPACE}"
 colcon build --symlink-install \
   --parallel-workers "${BUILD_JOBS}" \
   --packages-select daifuku_bringup daifuku_config daifuku_config_manager daifuku_stack \
-                    daifuku_rqt daifuku_waypoint_manager emcl2 \
+                    daifuku_rqt daifuku_waypoint_manager emcl2 emcl3d \
                     raspicat_driver raspimouse_msgs \
   --cmake-args -DCMAKE_BUILD_TYPE=Release
 
