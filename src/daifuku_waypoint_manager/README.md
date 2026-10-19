@@ -1,6 +1,6 @@
 # daifuku_waypoint_manager
 
-RViz2 上で waypoint を作り、並べ替え・YAML 保存/読込を行い、Nav2 の
+RViz2 上で waypoint を作り、並べ替え・YAML 保存/読込を行い、vi_planner の
 `/follow_waypoints`（`nav2_msgs/action/FollowWaypoints`）へ送るパネルプラグイン。
 
 `nav2_astar` ブランチの `nav2_waypoint_manager` を移植したもの。名前と namespace を
@@ -8,38 +8,17 @@ RViz2 上で waypoint を作り、並べ替え・YAML 保存/読込を行い、N
 
 ## `/navigate_through_poses` は使わない
 
-移植元は `/navigate_through_poses` へ投げていたが、**`daifuku_stack` の既定
-（`planner:=vi`）ではどう転んでも動かない。** VI 系プランナは
-`compute_path_to_pose` しか提供せず、nav2 既定の through_poses BT が要求する
-`compute_path_through_poses` が無いためで、構成によって出かたが 2 通りに分かれる。
-
-* **`nav2:=false`（既定）**: `bt_navigator` 自体が立たないので、`navigate_through_poses`
-  の**サーバがそもそも居ない**。パネルは「サーバがいません」で止まる。
-* **`nav2:=true`**: `navigation.launch.py` が `default_nav_through_poses_bt_xml` を
-  `daifuku_stack/behavior_trees/nav_through_poses_stub.xml`（中身は `AlwaysFailure`）
-  へ差し替えているので、Start を押した瞬間に **ステータス行が `Failed (aborted)` に
-  なり、機体はまったく動かない**。
-
-そこで投げ先は `/follow_waypoints` にしてある。これは 1 点ずつ単発ゴールへ落とす
-だけなので、`planner:=vi` でも `planner:=navfn` でも通る。**受けるノードは構成で
-変わるが、アクションの型と名前は同じ**なので、パネル側の配線は 1 つで足りる。
-
-| | 受けるノード | 停止時間 | 取りこぼしの扱い |
-| --- | --- | --- | --- |
-| `nav2:=false`（既定） | `vi_planner` 自身 | `src/daifuku_config/stack/vi_planner.yaml` の `waypoint_pause_sec`（0.2 s） | 同ファイルの `stop_on_failure: false` |
-| `nav2:=true` | `nav2_waypoint_follower` | `src/daifuku_config/stack/nav2/behaviors.yaml` の `waypoint_pause_duration`（200 ms） | 同ファイルの `stop_on_failure: false` |
-
-代償として **nav2 に「通過点をまとめて 1 本の経路にする」最適化はさせない**（1 点
-ずつ止まって次を計画する）。どちらの構成でも `stop_on_failure: false` なので、途中で
-行けない点があっても巡回は続き、取りこぼし数だけが完了時のステータス行に出る。
+`vi_planner` は `/navigate_through_poses` を提供しないため、
+`/follow_waypoints` へ順路を送ります。停止時間と失敗時の継続は
+`src/daifuku_config/stack/vi_planner.yaml` の `waypoint_pause_sec` と
+`stop_on_failure` で設定します。
 
 ## Pi では建てない
 
 RViz プラグインなので、実機イメージ (`ros:humble-ros-base`) では**ビルドできない**。
 `daifuku_rqt` と同じ扱いで、`docker/raspberrypi/scripts/build-workspace.sh` の
 `SKIP_PACKAGES` から**名前を外さないこと**（外すと `up` のビルドが通らなくなる）。
-建てるのは `docker/dev/`（`humble-desktop-full`）と
-`tools/setup/setup_native_base.sh` の 2 つ。
+ビルドには `docker/dev/`（`humble-desktop-full`）を使います。
 
 ## 使い方
 
@@ -75,9 +54,6 @@ RViz プラグインなので、実機イメージ (`ros:humble-ros-base`) で�
 - サーバが落ちていて、パネルが「巡回中」の表示から抜けた後（下記）
 - `Nav2 Goal` から出した単発ゴール（`navigate_to_pose` 側）
 
-投げ先が 2 つあるのは `nav2:=true` のためでもある。あちらでは `follow_waypoints` の
-下に `navigate_to_pose` の子ゴールがぶら下がるので、`nav2_waypoint_follower` が
-固まっていると**上だけ止めても `bt_navigator` 側が走り続ける**。
 2 秒間投げ直すのは、無線でその 1 発が落ちると**エラーも出ないまま何も止まらない**ため。
 
 裏返しとして、**Cancel は自分が出していない巡回も止める**。取り消しを投げている
@@ -89,8 +65,7 @@ RViz プラグインなので、実機イメージ (`ros:humble-ros-base`) で�
 ## 「巡回中」の表示から抜ける道
 
 表示は `follow_waypoints` の**結果が届くまで**続く。ところが結果は**届かないことが
-ある** — サーバ（`nav2:=false` なら `vi_planner` 自身、`nav2:=true` なら
-`nav2_waypoint_follower`）が巡回の途中や直後に落ちる・立て直される、無線が切れる、
+ある** — `vi_planner` が巡回の途中や直後に落ちる・立て直される、無線が切れる、
 といった場面で、クライアントは待ち続けたまま二度と起こされない。
 
 **戻す合図は人が Cancel を押したこと**にしてある。取り消しを投げ切ってどちらの
@@ -154,18 +129,14 @@ latch して出す。**これは他ノードが読むためのもの**で、い�
 変更と機体からの線の引き直しでは出さない — 走行中に毎秒飛ばすと購読側が並びを
 受け取り直し続けるため。
 
-**ただし、この Path が要るのは `nav2:=true` のときだけである。** 既定の `nav2:=false`
-では `follow_waypoints` を `vi_planner` 自身が受けるので、順路はゴールと同じ経路で
-そのまま届く（このトピックはもう 1 つの入口として残っているだけ）。
+`follow_waypoints` を `vi_planner` 自身が受けるので、順路はゴールにも含まれます。
+このトピックは別の入口として残っています。
 
 `vi_planner` 側はトピック名が `waypoints`。`waypoint_prefetch` は
 `src/daifuku_config/stack/vi_planner.yaml`・ノードの宣言ともに `false` だが、
 **既定の場所である `19f` の overrides が `true` へ上書きしている**ので、引数を何も
-足さずに立てれば先読みは入っている（`tsudanuma` は 2026-08-07 に `true` にしたあと
-2026-08-08 に `false` へ戻した。走行中の固まりの切り分けで、2026-08-04 に断片で反転した
-ときも同じ症状が出ている）。先読みを試すときにこのパネルが出す順路が要るので、ここを
-直すと `planner:=vi` + `nav2:=true` の挙動が変わる。代償（メモリ 2 倍）は上の yaml 側に
-書いてある。
+足さずに立てれば先読みは入っています。先読みは価値関数を2本保持するため、
+メモリ使用量が増えます。
 
 同じものを `daifuku_bringup/src/joy_teleop.py`（START+BACK での巡回開始）も出す。
 **実機のイメージにこのパネルは入らない**ので、機体だけで走らせるときはあちらが

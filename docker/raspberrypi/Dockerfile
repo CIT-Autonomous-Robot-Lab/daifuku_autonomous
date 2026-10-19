@@ -43,7 +43,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       ros-humble-diagnostic-updater \
       ros-humble-laser-filters \
       ros-humble-nav2-bringup \
-      ros-humble-navigation2 \
       ros-humble-pcl-conversions \
       ros-humble-pointcloud-to-laserscan \
       ros-humble-robot-localization \

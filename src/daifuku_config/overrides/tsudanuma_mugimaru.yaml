@@ -2,7 +2,7 @@
 # = 250.0x158.1m) 用の上書き。地図の素性は maps/tsudanuma_mugimaru/README.md、値の由来と
 # 2026-09-02 の solve 実測 (ホストは amd64 4 コア。**下の vi を書き換える前の条件**) は
 # ../README.md。
-#   ros2 launch daifuku_stack navigation.launch.py planner:=vi local_planner:=vi
+#   ros2 launch daifuku_stack navigation.launch.py
 # **地図を 2 枚に分けている唯一の場所**なので localization:=emcl2 でしか立たない
 # (amcl は 2 枚目を渡す口が無く、vi は地図の購読が 1 つ)。
 # **隣の tsudanuma.yaml とは別の地図** (原点も解像度も違うのでウェイポイントは共用できない)。

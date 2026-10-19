@@ -49,10 +49,6 @@ rtmouse が載っていると configure を拒否します（`/proc/modules` と
 | スワップ 2048 MB | 価値反復プランナが 4 GB に収まらないことがある | `provision.sh`（`vm.swappiness=10` も同時に） |
 | Fast DDS プロファイルの指定 | ホストとコンテナで食い違うと片側だけが SHM を使い、通信が静かに止まる | `provision.sh` が `~/.bashrc` へ |
 
-Pi 4 は Ubuntu 22.04 が動くので、ROS 2 Humble のネイティブ環境
-（[`tools/setup/`](../../tools/setup/)、[ネイティブ環境](native.md)）も選べます。
-Pi 5 は 24.04 なので選べません。ただし実運用はコンテナです。
-
 ## `/dev` を丸ごと渡している理由
 
 `compose.common.yaml` の `raspicat` サービスは `/dev` をまるごとマウントし、
@@ -295,5 +291,5 @@ Pi 4 でも Pi 5 でも走らせた実績はまだありません。見る順に
 
 - [`src/daifuku_config/README.md`](../../src/daifuku_config/README.md) — 設定値の由来
 - [`tools/image/README.md`](../../tools/image/README.md) — SD カードの作成
-- [`docker/raspberrypi/README.md`](../../docker/raspberrypi/README.md) — コンテナ構成
+- [Docker環境](docker.md) — コンテナ構成
 - [Raspberry Pi 5 で動かす](raspberry-pi-5.md) — Pi 5 での差分

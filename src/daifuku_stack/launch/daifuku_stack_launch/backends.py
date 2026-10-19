@@ -11,115 +11,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""localization / planner バックエンドの選択と、その起動前チェック。
-
-navigation.launch.py が扱う 4 つの選択肢:
-
-  localization  : amcl / emcl2 / emcl3d / vi
-  planner       : navfn (nav2 標準) / vi (価値反復)
-  local_planner : auto / nav2 / vi
-  nav2          : false (既定) / true / auto
-
-planner:=vi では planner_server の代わりに vi_planner パッケージの
-navigation_launch.py を include する。**立つ VI のノードはどちらの
-local_planner でも vi_planner 1 つ**で、local_planner:=vi なら
-compute_path_to_pose と follow_path の両方を、local_planner:=nav2 なら
-follow: false で compute_path_to_pose だけを提供し、追従は controller_server
-(DWB) が持つ。**2026-08-08 の上流の整理まで後者は vi_global_planner という
-別パッケージだった**（消えたので、設定も検査もノード名 vi_planner に一本化して
-ある）。
-
-nav2:=false (**既定**) はそこからさらに進んで、**Nav2 の navigation を
-BT ごと立てない**。vi_planner が standalone モードで
-navigate_to_pose と follow_waypoints も提供するので、bt_navigator /
-behavior_server / waypoint_follower / smoother_server が丸ごと不要になる。
-残るのは velocity_smoother:=true (既定) のときの velocity_smoother と、
-それを起こすためだけの lifecycle_manager_navigation (管理下 1 ノード) だけ。
-地図を配る map_server と自己位置の emcl2 はそのまま (これらは navigation では
-なく localization 側)。
-
-**localization:=vi** はその emcl2 も外し、自己位置推定まで vi_planner に持たせる
-(上流が 2026-08-09 に足した VIOLA)。map_server は残る — 地図はどちらの推定器も
-/map から読む。どの推定器を使うかは launch ではなく **config の `localizer`** が
-持ち、ここはその値と launch 引数が噛み合っているかだけを見る
-(validate_localization)。
-"""
+"""Localization selection and startup validation for standalone VI navigation."""
 
 from ament_index_python.packages import PackageNotFoundError, get_package_prefix
-from launch.substitutions import PythonExpression
 
 from daifuku_config_manager import value
 from daifuku_config_manager.params import load
-
-
-def resolve_local_planner(planner, local_planner):
-    """local_planner:=auto を実際のバックエンド名へ解決する substitution を作る。
-
-    auto (既定) はグローバルプランナに連動する: planner:=vi なら vi
-    (= vi_planner 1 ノードが両アクションを提供)、それ以外は nav2
-    (vi_planner を follow: false で立てて controller_server が追従)。
-    """
-    return PythonExpression([
-        "'", local_planner, "' if '", local_planner, "' != 'auto' else "
-        "('vi' if '", planner, "' == 'vi' else 'nav2')"
-    ])
-
-
-def resolve_nav2(nav2, planner, effective_local_planner):
-    """nav2:=auto を "true" / "false" へ解決する substitution を作る。
-
-    **既定は auto ではなく false**。素で起動したら Nav2 は立ちません。
-
-    auto は「VI が 1 ノードで全部やれるなら Nav2 は立てない」で、planner:=vi かつ
-    狭域も vi に解決されるときだけ false になります。**planner:=navfn へ落とすときは
-    これが要ります** — 既定のままだと下の validate_nav2 が弾くので。
-
-    Args:
-        effective_local_planner: resolve_local_planner() が返した substitution。
-    """
-    return PythonExpression([
-        "'", nav2, "' if '", nav2, "' != 'auto' else ",
-        "('false' if ('", planner, "' == 'vi' and '", effective_local_planner,
-        "' == 'vi') else 'true')",
-    ])
-
-
-def validate_nav2(context, *args, effective_nav2, effective_local_planner, **kwargs):
-    """nav2:= の値と、false にできる前提を見る。
-
-    nav2:=false は vi_planner の standalone モードそのものなので、
-    vi_planner が立たない構成では成り立たない。ここで弾かないと、
-    navigate_to_pose のサーバが**どこにも居ない**まま起動が通ってしまい、
-    症状は「ゴールを投げても何も起きない」になる (RViz もパネルも
-    「サーバがいません」としか言わない)。
-    """
-    selected = value(context, "nav2")
-    if selected not in ("auto", "true", "false"):
-        raise RuntimeError(
-            f"Unsupported nav2: {selected}\n"
-            "Use nav2:=false (default; vi_planner standalone), nav2:=true "
-            "(bt_navigator + behavior_server + waypoint_follower) or nav2:=auto "
-            "(false when the VI planner can serve everything, true otherwise)."
-        )
-    if effective_nav2.perform(context) != "false":
-        return []
-
-    if effective_local_planner.perform(context) != "vi":
-        # 既定のまま planner:=navfn / local_planner:=nav2 を選んだときにここへ来る。
-        # 黙って nav2 を立て直すことはしない: 「Nav2 は立てないつもりだったのに
-        # 立っていた」は起動ログを 1 行ずつ読むまで気付けないので、要求どおりに
-        # できないなら止める。
-        how = "planner:=navfn" if value(context, "planner") != "vi" else "local_planner:=nav2"
-        raise RuntimeError(
-            f"nav2:=false (the default) cannot be honored with {how}.\n"
-            "navigate_to_pose / follow_waypoints are served by vi_planner itself in "
-            "that mode, and vi_planner is not launched here — nothing would serve "
-            "them.\n"
-            f"Add nav2:=auto to let it follow the planner (recommended when you are "
-            f"falling back to {how}), or nav2:=true to ask for the Nav2 nodes "
-            "explicitly."
-        )
-    return []
 
 
 def config_localizer(context):
@@ -133,7 +30,7 @@ def config_localizer(context):
     return str(got).strip() if got else "external"
 
 
-def validate_localization(context, *args, effective_nav2=None, **kwargs):
+def validate_localization(context, *args, **kwargs):
     """localization:= の値と、選んだ推定器を立てられる前提を見る。"""
     selected = value(context, "localization")
     if selected not in ("amcl", "emcl", "emcl2", "emcl3d", "vi"):
@@ -188,22 +85,6 @@ def validate_localization(context, *args, effective_nav2=None, **kwargs):
             )
         return []
 
-    if value(context, "planner") != "vi":
-        raise RuntimeError(
-            "localization:=vi needs planner:=vi — the estimator lives in vi_planner, "
-            "and planner:=navfn does not launch it."
-        )
-    if effective_nav2 is not None and effective_nav2.perform(context) != "false":
-        # nav2:=true の navigation は vi 版 navigation_launch.py 経由で立つが、
-        # あちらは publish_tf を渡す口を持たない (params_file 頼み)。config に
-        # 書かせると localization:=emcl2 のときに二重配信へ戻るので、この組は
-        # 通さない。
-        raise RuntimeError(
-            "localization:=vi requires nav2:=false (the default).\n"
-            "With the Nav2 stack up, vi_planner is launched through vi_planner's "
-            "navigation_launch.py, which has no way to hand it publish_tf — nobody "
-            "would publish map->odom."
-        )
     if localizer == "external":
         raise RuntimeError(
             "localization:=vi asks vi_planner to localize, but config leaves "
@@ -216,58 +97,14 @@ def validate_localization(context, *args, effective_nav2=None, **kwargs):
     return []
 
 
-def validate_planner(context, *args, **kwargs):
-    """planner:= の値と、vi を選んだ場合のパッケージの有無を見る。"""
-    selected = value(context, "planner")
-    if selected not in ("vi", "navfn"):
+def validate_vi_package(context, *args, **kwargs):
+    """Require the standalone navigation provider before starting nodes."""
+    try:
+        get_package_prefix("vi_planner")
+    except PackageNotFoundError as exc:
         raise RuntimeError(
-            f"Unsupported planner: {selected}\n"
-            "Use planner:=vi (value iteration, vi_planner) or planner:=navfn."
-        )
-    if selected == "vi":
-        try:
-            get_package_prefix("vi_planner")
-        except PackageNotFoundError as exc:
-            raise RuntimeError(
-                "vi_planner package is not available.\n"
-                "Import value_iteration3 (vcs import src < daifuku_autonomous.repos) and "
-                "build it (colcon build --packages-select vi_planner) before launching "
-                "with planner:=vi, or fall back to planner:=navfn."
-            ) from exc
-    return []
-
-
-# かつてここには ``_validate_vi_solver`` があり、**compact ソルバ +
-# global_sweep** を「フィードバックが黙って効かない組み合わせ」として弾いて
-# いた。2026-08-04 に compact も同じフィードバックを持つようになった
-# (sink への書き戻し + タイル修復) ので、その検査は消してある。
-#
-# メモリの上限判定もここではやらない。地図の実寸はノードしか知らないので、
-# ノード側が /proc/meminfo の MemAvailable と突き合わせる (超えたら起動時に
-# エラーで止まり、半分を超えたら警告)。2026-08-09 の上流の整理まではキー
-# ``dense_limit_mb`` だった。
-
-
-def validate_local_planner(context, *args, **kwargs):
-    """local_planner:= の値と、vi を選んだ場合の前提を見る。"""
-    selected = value(context, "local_planner")
-    if selected not in ("auto", "nav2", "vi"):
-        raise RuntimeError(
-            f"Unsupported local_planner: {selected}\n"
-            "Use local_planner:=auto (follow the global planner), "
-            "local_planner:=nav2 (vi_planner with follow: false + controller_server) or "
-            "local_planner:=vi (vi_planner: one node, both actions)."
-        )
-    if selected == "vi" and value(context, "planner") != "vi":
-        # local_planner:=vi は vi 版 navigation_launch.py 経由でのみ効く
-        # (planner:=navfn の標準 navigation_launch.py は local_planner を
-        # 知らない)。
-        raise RuntimeError(
-            "local_planner:=vi requires planner:=vi (it is wired through "
-            "vi_planner's navigation_launch.py)."
-        )
-
-    # パッケージの有無はここでは見ない。**どちらの local_planner でも立つのは
-    # vi_planner 1 つ**になり、それを要求するのは planner:=vi の側なので、
-    # validate_planner の検査で尽きている (上の分岐で planner:=vi は保証済み)。
+            "vi_planner package is not available.\n"
+            "Import value_iteration3 (vcs import src < daifuku_autonomous.repos) and "
+            "build it (colcon build --packages-select vi_planner) before launching."
+        ) from exc
     return []

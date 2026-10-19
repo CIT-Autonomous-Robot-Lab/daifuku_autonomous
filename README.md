@@ -7,9 +7,9 @@
 - 2D LiDARまたはLivox Mid-360に対応
 - SLAM Toolboxによる地図作成
 - EMCL2またはAMCLによる自己位置推定
-- 価値反復プランナ（既定）またはNavFnによる経路計画
+- 価値反復プランナによる経路計画と追従
 - キーボードとジョイスティックによる遠隔操作
-- Docker（ヘッドレス）またはUbuntu 22.04 / ROS 2 Humbleで実行可能
+- Dockerのヘッドレス実行環境とGUI付き開発環境
 
 本体ドライバは自前実装（`driver:=original`、[`src/raspicat_driver`](src/raspicat_driver/README.md)）と公式実装（rtmouse + raspimouse）から選べます。Docker運用の標準は前者で、公式実装はrtmouseが動くRaspberry Pi 4に限られます（[Pi 4](docs/setup/raspberry-pi-4.md) / [Pi 5](docs/setup/raspberry-pi-5.md)）。
 
@@ -26,7 +26,7 @@
 - [使い方](docs/usage/README.md) — 地図作成・自律移動・日常操作・トラブルシューティング
 - [`src/daifuku_config/README.md`](src/daifuku_config/README.md) — 設定の合成規則と、各値の由来
 - [`docker/README.md`](docker/README.md) — 実機用（`raspberrypi/`）と開発用（`dev/`）の2環境
-- [`simulator/README.md`](simulator/README.md) — usim VTC ワールドで地図作成から自律移動まで確認するハーネス。旧 Pi4 ハーネスの実測記録は[`docs/usage/pi4_sim_history.md`](docs/usage/pi4_sim_history.md)
+- [`simulator/README.md`](simulator/README.md) — usim VTC ワールドで地図作成から自律移動まで確認するハーネス
 - [`AGENTS.md`](AGENTS.md) — このリポジトリで作業するエージェント向けの指針
 
 ## ライセンス

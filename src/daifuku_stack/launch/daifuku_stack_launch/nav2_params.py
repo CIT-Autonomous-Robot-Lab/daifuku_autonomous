@@ -40,11 +40,8 @@ def fragments_resolver(context):
     合成する。断片はノード単位で重複しない前提 (src/daifuku_config/README.md) で、重なると
     「どちらが勝つか分からない」ので止める。
 
-    vi_planner だけ nav2/ の外に居るのは、あれが Nav2 のノードではないため。
-    それでも合成に入れるのは、**入れないと効かないから**: 上流の
-    navigation_launch.py は params_file を 1 つしか受け取らないし、overrides が
-    重なれるノード名はこの合成結果 (下の set(merged)) で決まるので、外すと
-    overrides の vi_planner: が「行き先の無いノード名」で起動時に落ちる。
+    VI and the shared Nav2 utilities receive the same composed file so overrides
+    can target either node.
 
     params_file:= を明示したときはそれを土台にするが、**上書きを受けるノード名は
     断片のものを使う**。nav2 のノード宛の節が params_file:= を渡した途端に黙って
@@ -91,11 +88,7 @@ def fragments_resolver(context):
 
 
 # site: map: に書く 2 つの役と、それぞれに対応する launch 引数。
-# **navigation が /map で、localization が /map_loc。** 逆ではないのは、
-# 経路計画側の地図を購読するもののうち 2 つ——上流の vi 版 navigation_launch.py が
-# 立てる vi_planner (nav2:=true のとき) と、nav2 の global_costmap の
-# static_layer——が "map" 決め打ちで、こちらから remap する口が無いため。
-# remap できるのは自分で立てている emcl2 のほうだけなので、そちらを /map_loc へ回す。
+# Navigation reads /map, and external 2D localization reads /map_loc.
 MAP_ROLES = ("navigation", "localization")
 _MAP_ARGS = {"navigation": "map", "localization": "map_loc"}
 # site: map: に書ける 3 つめのキー。localization:=emcl3d が読む PCD の点群地図で、

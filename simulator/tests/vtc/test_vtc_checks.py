@@ -306,10 +306,13 @@ def test_stack_launch_arguments() -> None:
     assert 'prepare_slam_params.py' in script
     assert 'MAPPING_ARGS+=("slam_params_file:=$DIR/slam_toolbox_gazebo.yaml")' in script
     navigation = _bash_array(script, 'NAVIGATION_ARGS')
-    for arg in ('localization:=emcl2', 'planner:=vi', 'local_planner:=vi', 'nav2:=false',
+    for arg in ('localization:=emcl2',
                 'map:=$MAP', 'map_loc:=$MAP', '${COMMON_ARGS[@]}',
                 'extra_params_file:=$HERE/navigation_gazebo.yaml'):
         assert arg in navigation
+    assert not {'planner', 'local_planner', 'nav2'} & {
+        arg.split(':=', 1)[0] for arg in navigation
+    }
     assert 'ros2 launch daifuku_stack mapping.launch.py "${MAPPING_ARGS[@]}"' in script
     assert 'ros2 launch daifuku_stack navigation.launch.py "${NAVIGATION_ARGS[@]}"' in script
     assert '--seed="${VTC_SEED:?VTC_SEED is required}"' in script

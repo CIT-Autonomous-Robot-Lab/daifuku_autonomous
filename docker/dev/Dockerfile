@@ -38,7 +38,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ros-humble-grid-map-msgs \
       ros-humble-laser-filters \
       ros-humble-nav2-bringup \
-      ros-humble-navigation2 \
       ros-humble-pcl-conversions \
       ros-humble-pointcloud-to-laserscan \
       ros-humble-realsense2-camera \
@@ -51,6 +50,53 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       tmux \
       xterm \
     && rm -rf /var/lib/apt/lists/*
+
+# Standalone VI uses the same ROS 2 Rust underlay as the robot image.
+ENV CARGO_HOME=/opt/cargo \
+    RUSTUP_HOME=/opt/rustup \
+    PATH=/opt/cargo/bin:${PATH}
+RUN pip3 install colcon-cargo colcon-ros-cargo \
+    && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+       | sh -s -- -y --profile minimal --no-modify-path \
+    && cargo install --locked cargo-ament-build \
+    && rm -rf /opt/rustup/toolchains/*/share/doc \
+    && chmod -R a+rX /opt/cargo/bin /opt/rustup
+
+WORKDIR /opt/ros2_rust_ws/src
+RUN git clone https://github.com/ros2-rust/ros2_rust.git \
+    && git -C ros2_rust checkout 2c6b92671a65a426aec9c3468c069a551329ca1b \
+    && vcs import < ros2_rust/ros2_rust_humble.repos \
+    && rm -rf ros2
+
+WORKDIR /opt/ros2_rust_ws
+# 中間生成物は同じ層の中で消す (層を分けて消しても実体は前の層に残る)。
+RUN source /opt/ros/${ROS_DISTRO}/setup.bash \
+    && colcon build --merge-install \
+         --parallel-workers 2 \
+         --packages-up-to rclrs \
+    && rm -rf build log
+
+# vi_planner が使うメッセージの Rust バインディングは Humble に無いことがある。
+# 無いものだけソースから建てる (tf2_msgs は 2026-08-09 に publish_tf が入って加わった)。
+RUN pkgs=""; \
+    for spec in "nav2_msgs https://github.com/ros-navigation/navigation2.git" \
+                "tf2_msgs https://github.com/ros2/geometry2.git"; do \
+      set -- ${spec}; \
+      if [[ ! -d "/opt/ros/${ROS_DISTRO}/share/$1/rust" ]]; then \
+        git clone --depth 1 --branch "${ROS_DISTRO}" "$2" "/tmp/$1_src"; \
+        cp -a "/tmp/$1_src/$1" "/opt/ros2_rust_ws/src/$1"; \
+        rm -rf "/tmp/$1_src"; \
+        pkgs="${pkgs} $1"; \
+      fi; \
+    done \
+    && if [[ -n "${pkgs}" ]]; then \
+      source /opt/ros/${ROS_DISTRO}/setup.bash; \
+      source /opt/ros2_rust_ws/install/local_setup.bash; \
+      colcon build --merge-install \
+        --parallel-workers 2 \
+        --packages-select ${pkgs}; \
+    fi \
+    && rm -rf /opt/ros2_rust_ws/build /opt/ros2_rust_ws/log
 
 # MID360 用。マウントしたワークスペースを建てるとき livox_ros_driver2 がリンクする。
 RUN git clone --depth 1 --branch "${LIVOX_SDK2_REF}" \
@@ -83,6 +129,7 @@ RUN /bin/bash -lc 'source /opt/ros/humble/setup.bash \
 
 RUN printf '%s\n' \
       'source /opt/ros/humble/setup.bash' \
+      'source /opt/ros2_rust_ws/install/local_setup.bash' \
       'source /opt/raspicat2/install/setup.bash' \
       >> /root/.bashrc
 

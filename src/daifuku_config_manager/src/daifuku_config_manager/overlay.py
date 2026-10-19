@@ -14,8 +14,7 @@
 
 """overrides の合成と行き先検査。launch も ROS も要らない。
 
-params.py が起動時に使う規則そのもの。tools/checklist と単体テストが
-同じ関数を呼ぶので、sed/awk で YAML を再実装しない。
+params.py が起動時に使う規則そのもの。
 """
 
 import difflib

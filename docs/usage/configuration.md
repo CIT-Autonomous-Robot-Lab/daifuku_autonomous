@@ -2,21 +2,20 @@
 
 ## 主なファイル
 
-**設定の実体はリポジトリルートの`config/`（パッケージ名は`daifuku_config`）に
+**設定の実体は`src/daifuku_config/`（パッケージ名は`daifuku_config`）に
 全部あります。** 1段目の`bringup/`と`stack/`は、どのlaunchが読むか
 （= `overrides/`の1段目、= `config_sentinel`が指紋を取る単位）で分けたものです。
 下の表の「パッケージ」列は、その値を読むlaunchを持つパッケージのことで、
 ファイルの置き場ではありません。
 
-**機体側（`bringup/`）の値を変えたら`docker compose up -d`が要ります。**
-読むのは常駐している`raspicat`サービスなので、navigationを立て直しても変わりません。
+変更の反映手順は[日常操作](operations.md#設定変更を反映する)にまとめています。
+機体側（`bringup/`）の値をnavigationの再起動だけで反映することはできません。
 
 | ファイル | パッケージ | 内容 |
 |---|---|---|
 | `src/daifuku_config/site` | すべて | 走らせる場所の名前を**1語だけ**持つ（コメントも書式も無い）。すべてのlaunchが`overrides`の既定をここから取り、`navigation.launch.py`は`map`の既定もここから導く。書き換えは`ros2 param set /site_manager site <名前>`か`echo <名前> >`、または`tools/site.sh` |
 | `src/daifuku_config/overrides/*.yaml` | すべて | 地図・環境ごとの上書き（`overrides:=`で重ねる）。行き先は**パッケージ名とノード名**で決まるので、この表の`MID360_config.json`以外すべてを上書きできる |
-| `src/daifuku_config/stack/nav2/*.yaml`、`src/daifuku_config/stack/vi_planner.yaml` | `stack` | Nav2、価値反復プランナ、コストマップ、速度、ゴール判定（起動時に1つへ合成） |
-| `behavior_trees/*.xml` | `stack` | `planner:=vi`用のビヘイビアツリー（起動時に自動で選択）。**`nav2:=true`のときだけ読まれる**（既定では`bt_navigator`が立たない） |
+| `src/daifuku_config/stack/nav2/*.yaml`、`src/daifuku_config/stack/vi_planner.yaml` | `stack` | 地図サーバ、AMCL、速度平滑化、価値反復プランナ（起動時に1つへ合成） |
 | `src/daifuku_config/stack/localization/emcl2.yaml` | `stack` | EMCL2のフレーム、初期姿勢、粒子数、オドメトリモデル |
 | `src/daifuku_config/stack/localization/emcl3d.yaml` | `stack` | EMCL3D（`localization:=emcl3d`）のフレーム、入力点群、初期姿勢、粒子数 |
 | `src/daifuku_config/stack/lifecycle_bond.yaml` | `stack` | ライフサイクルマネージャのbondタイムアウト |
@@ -34,7 +33,7 @@
 | `src/daifuku_config/stack/sensors/mid360_scan.yaml` | `stack` | 3D点群から2D LaserScanへの変換 |
 | `src/daifuku_config/stack/sensors/mid360_elevation.yaml` | `stack` | 3D点群の仰角フィルタ（勾配のある床を落とす） |
 
-`config/`の分け方と合成順序、それぞれの値の由来は
+`src/daifuku_config/`の分け方と合成順序、それぞれの値の由来は
 `src/daifuku_config/README.md`に（3パッケージ分まとめて）あります。
 
 ## navigation.launch.py
@@ -43,7 +42,7 @@
 
 | 引数 | 既定値 | 説明 |
 |---|---|---|
-| `map` | 空（`overrides`の`site: map: navigation:`から導く） | **経路計画**に使う地図YAMLのパス。`/map`で配信し`vi_planner`と`global_costmap`が読む。**空なら重ねた`overrides`の`site: map: navigation:`。** 明示すると同じファイルを指しているかを見て、違えば起動時にエラー（別の場所の帯と`emcl2`の調整を載せたまま走るのを防ぐ）。**地図が決まらないとき（`overrides:=none`、または`site: map:`の無いoverrides）は明示が要り、既定の地図へは落とさずに止まる。** 既定の場所ごと変えるのは`tools/site.sh` |
+| `map` | 空（`overrides`の`site: map: navigation:`から導く） | **経路計画**に使う地図YAMLのパス。`/map`で配信し`vi_planner`が読む。**空なら重ねた`overrides`の`site: map: navigation:`。** 明示すると同じファイルを指しているかを見て、違えば起動時にエラー（別の場所の帯と`emcl2`の調整を載せたまま走るのを防ぐ）。**地図が決まらないとき（`overrides:=none`、または`site: map:`の無いoverrides）は明示が要り、既定の地図へは落とさずに止まる。** 既定の場所ごと変えるのは`tools/site.sh` |
 | `map_loc` | 空（`overrides`の`site: map: localization:`から導く） | **自己位置推定**に使う地図YAMLのパス。`/map_loc`で配信し`emcl2`が読む。空で宣言も無ければ`map`と同じ地図に落ちる（こちらだけは落とす。1枚で走らせる従来どおりの形なので）。**2枚を別にできるのは`localization:=emcl2`のときだけ**（[自律移動](navigation.md#地図は2枚)） |
 | `params_dir` | `src/daifuku_config/stack/nav2` | 合成するNav2パラメータ断片のディレクトリ |
 | `params_file` | 空（`params_dir`を合成） | Nav2パラメータを1ファイルで与える。指定時も`params_dir`の断片を上書き先のノード名の検査に使う |
@@ -55,10 +54,7 @@
 | `map_pcd` | 空（`overrides`の`site: map: pointcloud:`から導く） | `localization:=emcl3d`が読む点群地図（PCD）のパス。明示すると宣言と同じファイルかを見る。**`emcl3d`で決まらなければ起動時に止まる**。他の`localization`では読まない |
 | `bond_params_file` | `src/daifuku_config/stack/lifecycle_bond.yaml` | ライフサイクルマネージャのbondタイムアウト |
 | `localization` | `emcl2` | `emcl2` / `emcl` / `emcl3d` / `amcl` / `vi` |
-| `planner` | `vi` | `vi` / `navfn` |
-| `local_planner` | `auto` | `auto` / `vi` / `nav2` |
-| `nav2` | `false` | Nav2のnavigationノードを立てるか。`false`（既定）では`vi_planner`が`navigate_to_pose`と`follow_waypoints`も出すので、`bt_navigator`・`behavior_server`・`waypoint_follower`・`smoother_server`が立たない。`planner:=navfn`や`local_planner:=nav2`へ落とすときは`auto`か`true`が要る（**付け忘れると起動時にエラーで止まる**） |
-| `velocity_smoother` | `true` | `nav2:=false`のときだけ効く。`velocity_smoother`を`vi_planner`と`twist_mux`の間に残すか。`false`にするとnavigation側のlifecycleノードが1つも無くなる |
+| `velocity_smoother` | `true` | `velocity_smoother`を`vi_planner`と`twist_mux`の間に残すか。`false`にするとnavigation側のlifecycleノードが1つも無くなる |
 | `use_rviz` | `false` | RVizを起動するか。実機はheadlessのため既定は`false`で、表示はPC側から開く |
 | `use_system_monitor` | `true` | CPUを`/diagnostics`へ出す`system_monitor`を起動するか。1Hzで`/proc`を読むだけだがDDS参加者が1つ増えるので、ディスカバリの切り分け時は`false`にする |
 | `use_sim_time` | `false` | シミュレーション時刻を使うか |
@@ -66,8 +62,8 @@
 
 このほかに`namespace`、`use_namespace`、`autostart`、`use_respawn`、`log_level`、
 `rviz_config`と、EMCL2のノードを差し替える`emcl2_package` / `emcl2_executable` /
-`emcl2_node_name`があります。**LiDARの引数は1つもありません**（センサーを立てるのは
-`robot_bringup.launch.py`だけです）。全件は次のコマンドで確認できます。
+`emcl2_node_name`があります。**LiDARのドライバ**を立てるのは`robot_bringup.launch.py`だけですが、
+`/scan`を作る段の引数はこのlaunchにもあります。全件は次のコマンドで確認できます。
 
 ```bash
 ros2 launch daifuku_stack navigation.launch.py --show-args
@@ -99,9 +95,9 @@ ros2 launch daifuku_stack mapping.launch.py --show-args
 **LiDARドライバ**（`lidar_bringup.launch.py`）、**EKF**（`odom_fusion.launch.py`）。
 点群を`/scan`に変える段は`navigation` / `mapping`側です（2026-08-25から）。
 `docker/raspberrypi/`環境では`raspicat`サービスがこれを立てるため、通常は直接
-叩きません。**値を変えたら`docker compose up -d`が要ります。**
+叩きません。変更の反映は[日常操作](operations.md#設定変更を反映する)を参照してください。
 
-`navigation.launch.py`と`mapping.launch.py`はセンサーの引数を1つも持ちません。
+`navigation.launch.py`と`mapping.launch.py`は`/scan`を作る段の引数を持ちます。
 
 | 引数 | 既定値 | 説明 |
 |---|---|---|
@@ -131,23 +127,6 @@ lifecycleノードという同じ契約です（`twist_mux:=true`なら購読先
 remapされます）。切り替えの前提と確認手順は
 [Raspberry Pi 4](../setup/raspberry-pi-4.md)と[Raspberry Pi 5](../setup/raspberry-pi-5.md)を
 参照してください。
-
-## Raspberry Pi 4向けの調整値
-
-実機での負荷試験を受けて、次の値を調整しています。いずれもPi 4の制約に合わせたものなので、
-PCなど余裕のある環境では`nav2_bringup`が配る値へ戻して構いません。
-
-| 項目 | 値 | 理由 |
-|---|---|---|
-| `controller_server.controller_frequency` | `10.0` | 20 HzではPi 4のCPUが飽和し、bond心拍の途絶を招いた。最高速0.2 m/s級の車体には10 Hzで十分 |
-| `planner_server.expected_planner_frequency` | `1.0` | `nav2_bringup`が配る`nav2_params.yaml`の20.0に対し、実測は7.6 Hzしか出ずWARNが続いた。ノード既定の1.0へ戻した |
-| `lifecycle_manager_*.bond_timeout` | `60.0` | 非合成起動では8プロセスが同時に立ち上がりloadが10〜19まで上がるため、既定の4秒ではbond形成が間に合わない |
-| `use_composition` | `False` | 合成起動時のディスカバリ不能とbond途絶を回避する |
-
-この表のうち`controller_server`と`planner_server`、`lifecycle_manager_navigation`は
-**`nav2:=true`（または`nav2:=auto` + `planner:=navfn`）のときだけ起動します**。既定の
-`nav2:=false`ではどれも立たないので、値を変えても何も起きません
-（`planner_server`はさらに`planner:=navfn`が要ります）。
 
 ## 自己位置推定の暫定設定
 
@@ -222,11 +201,11 @@ daifuku_stack:              # 自律移動側。変更後は navigation / mappin
 
 実機に合わせて、少なくとも次を確認してください。
 
-- footprintとinflation radius
+- 車体寸法と障害物回避の余裕
 - 最大並進・旋回速度、加速度
-- DWBまたは価値反復ローカルプランナの制御パラメータ
+- 価値反復プランナの制御パラメータ
 - EMCL2 / AMCLのオドメトリノイズモデル
 - LiDAR搭載位置と除外角度
 - ゴール許容誤差
 
-ソルバ、スレッド数、キャッシュ許容差、経路補間間隔、制御周期、局所反復時間などは`src/daifuku_config/stack/vi_planner.yaml`で設定します。同ファイルの節は`vi_planner`の1つだけです（`local_planner:=nav2`の広域専用構成も同じノードを`follow: false`で立てるため。2026-08-08の上流の整理まで、あちらは`vi_global_planner`という別ノードで節も2つありました）。
+ソルバ、スレッド数、キャッシュ許容差、経路補間間隔、制御周期、局所反復時間などは`src/daifuku_config/stack/vi_planner.yaml`で設定します。同ファイルの節は`vi_planner`の1つだけです。

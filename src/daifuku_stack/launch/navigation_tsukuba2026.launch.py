@@ -85,8 +85,8 @@ def generate_launch_description():
                 "mid360_elevation_params_file": navigation,
                 "mid360_scan_params_file": navigation,
                 "scan_filter_params_file": navigation,
-                "localization": "emcl2", "planner": "vi", "local_planner": "vi",
-                "nav2": "false", "use_system_monitor": "false", "use_respawn": "false",
+                "localization": "emcl2",
+                "use_system_monitor": "false", "use_respawn": "false",
             }.items(),
         ),
     ])

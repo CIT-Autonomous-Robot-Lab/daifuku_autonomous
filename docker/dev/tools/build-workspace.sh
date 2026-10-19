@@ -9,6 +9,7 @@ REPOS_FILE="${WS}/daifuku_autonomous.repos"
 
 cd "${WS}"
 source /opt/ros/humble/setup.bash
+source /opt/ros2_rust_ws/install/local_setup.bash
 source /opt/raspicat2/install/setup.bash
 
 mkdir -p src
@@ -75,11 +76,14 @@ if [[ "${online}" == true ]]; then
     -r -y
 fi
 
-# VI (cargo のパッケージ) は ros2_rust のツールチェーンが要るのでここでは建てない
-# (開発ホストの経路計画は navfn)。型で見分けるので名前は書かない。
+# Build CMake/Python first, then the Rust navigation node against that overlay.
 # colcon list の失敗は変数代入で拾う (プロセス置換だと set -e が効かない)。
 pkg_list="$(colcon list --base-paths src)"
 mapfile -t cargo_pkgs < <(awk '$3 ~ /cargo/ {print $1}' <<<"${pkg_list}")
+printf '%s\n' "${cargo_pkgs[@]}" | grep -qx vi_planner || {
+  printf 'vi_planner is missing from colcon list\n' >&2
+  exit 1
+}
 skip_args=()
 if [[ ${#cargo_pkgs[@]} -ne 0 ]]; then
   skip_args=(--packages-skip "${cargo_pkgs[@]}")
@@ -94,5 +98,13 @@ colcon build \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DROS_EDITION=ROS2 \
     -DDISTRO_ROS=humble
+
+source "${WS}/install/local_setup.bash"
+colcon build \
+  --base-paths src \
+  --symlink-install \
+  --parallel-workers "${BUILD_JOBS}" \
+  --packages-select "${cargo_pkgs[@]}" \
+  --cargo-args --release
 
 printf '\nBuild complete. Refresh this shell with:\n  source %s/install/setup.bash\n' "${WS}"

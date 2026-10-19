@@ -51,7 +51,7 @@ joy_teleop:
 
     waypoints_file: ""      # 既定 同左: 巡回する経路。**空なら START+BACK は断る** (既定の順路は無い)。**地図と対で選ぶこと** — 噛み合わないと全点が地図の外に出て、1 点ずつ失敗しながら最後まで進む
 
-    follow_waypoints_action: "follow_waypoints"  # 既定 同左: 巡回のアクション名。受けるのは nav2:=false (既定) では vi_planner、nav2:=true では nav2_waypoint_follower
+    follow_waypoints_action: "follow_waypoints"  # 既定 同左: vi_planner が受ける巡回アクション名
     navigate_to_pose_action: "navigate_to_pose"  # 既定 同左: teleop に入るときに取り消す単発ゴールのほう
     motor_power_service: "motor_power"           # 既定 同左: BACK 単体長押しで叩く本体ドライバのサービス (std_srvs/SetBool)
     motor_power_start_state: false               # 既定 同左: 起動時に電源が入っているとみなすか。**効くのは /motor_power_state が来ないあいだだけ** (自前実装は出すので 1 通目で上書きされる)。公式実装 (driver:=raspimouse) では最後までこちらで、initial_motor_power と合わせる

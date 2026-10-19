@@ -3,7 +3,7 @@
 <package format="3">
   <name>daifuku_stack</name>
   <version>0.1.0</version>
-  <description>Raspberry Pi Cat向けのNav2自律移動設定パッケージ</description>
+  <description>Raspberry Pi Cat向けのVI自律移動設定パッケージ</description>
   <maintainer email="noplab90@gmail.com">Keita Sekiguchi / nop</maintainer>
   <license>Apache-2.0</license>
 
@@ -17,28 +17,20 @@
   <exec_depend>daifuku_config_manager</exec_depend>
   <!-- src/system_monitor.py が /diagnostics に CPU を出す。 -->
   <exec_depend>diagnostic_updater</exec_depend>
-  <exec_depend>dwb_core</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <!-- scan_pipeline.launch.py: 角度フィルタ / 点群 -> スキャン / フィルタ無効時の素通し。 -->
   <exec_depend>laser_filters</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>nav2_amcl</exec_depend>
-  <exec_depend>nav2_behaviors</exec_depend>
   <exec_depend>nav2_bringup</exec_depend>
-  <exec_depend>nav2_bt_navigator</exec_depend>
   <exec_depend>nav2_common</exec_depend>
-  <exec_depend>nav2_controller</exec_depend>
   <exec_depend>nav2_lifecycle_manager</exec_depend>
   <exec_depend>nav2_map_server</exec_depend>
   <!-- navigation.launch.py と RViz が NavigateToPose / FollowWaypoints を扱う。 -->
   <exec_depend>nav2_msgs</exec_depend>
-  <exec_depend>nav2_navfn_planner</exec_depend>
-  <exec_depend>nav2_planner</exec_depend>
   <exec_depend>nav2_rviz_plugins</exec_depend>
-  <exec_depend>nav2_smoother</exec_depend>
   <exec_depend>nav2_velocity_smoother</exec_depend>
-  <exec_depend>nav2_waypoint_follower</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
   <exec_depend>pointcloud_to_laserscan</exec_depend>
   <exec_depend>rclpy</exec_depend>

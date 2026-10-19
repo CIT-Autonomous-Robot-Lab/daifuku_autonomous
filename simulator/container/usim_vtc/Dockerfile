@@ -46,11 +46,11 @@ RUN find /opt/usim_vtc_ws/src/daifuku_config /opt/usim_vtc_ws/src/daifuku_config
         -exec sed -i 's/\r$//' {} + \
     && chmod +x /opt/usim_vtc_ws/src/daifuku_stack/src/*.py
 
-# vi_planner (planner:=vi local_planner:=vi nav2:=false) is an ament_cargo
+# Standalone vi_planner is an ament_cargo
 # package: it needs the ROS 2 Rust underlay docker/raspberrypi/Dockerfile builds at
 # /opt/ros2_rust_ws (rclrs, plus nav2_msgs / tf2_msgs Rust bindings where Humble
-# lacks them) and cargo + colcon-ros-cargo. docker/dev/Dockerfile has none of this,
-# so it is not a valid BASE_IMAGE. Fail here, not at launch time.
+# lacks them) and cargo + colcon-ros-cargo. Fail here, not at launch time, if a
+# supplied BASE_IMAGE omits that underlay.
 RUN test -f /opt/ros2_rust_ws/install/local_setup.bash \
       || { echo "BASE_IMAGE lacks /opt/ros2_rust_ws (build it from docker/raspberrypi/Dockerfile)" >&2; exit 1; } \
     && test -d /opt/ros2_rust_ws/install/share/rclrs \

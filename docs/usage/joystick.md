@@ -8,7 +8,7 @@
 
 ```text
 パッド ─ /joy ─ joy_teleop ─ /cmd_vel_teleop（優先度 10）──┐
-                     ├─ FollowWaypoints ─ vi_planner（nav2:=true なら nav2_waypoint_follower）
+                     ├─ FollowWaypoints ─ vi_planner
                      ├─ /buzzer ─→ ドライバ（音・切り替わった瞬間だけ）
                      ├─ /leds ──→ ドライバ（LED・いまの状態）
                      └← /motor_power_state ← ドライバ（電源の実状態。自前実装だけ）
@@ -127,9 +127,8 @@ rclpyを持ち込んでいないので開発ホストからそのまま呼んで
 にくいからです（巡回中にもう一度押した、`navigation.launch.py`が立っていない、YAMLが
 読めない、ゴールを拒否された、のどれか。理由はログに出ます）。
 
-**1点でも外したら下がりになります。** `/follow_waypoints`を受けるほう（既定の
-`nav2:=false`では`vi_planner`、`nav2:=true`では`nav2_waypoint_follower`）は
-どちらも`stop_on_failure: false`なので、[地図と経路を取り違えて全点が地図の外に出ても
+**1点でも外したら下がりになります。** `/follow_waypoints`を受ける`vi_planner`は
+`stop_on_failure: false`なので、[地図と経路を取り違えて全点が地図の外に出ても
 「成功」で返ってきます](#巡回を始める)。
 上がりが鳴らなければ、そこを疑ってください（外した数はログに出ます）。
 
@@ -191,15 +190,8 @@ teleopに入るとき、走行中のゴールを**取り消します**（`/follo
 **teleop中に新しくゴールを投げると、自律側が勝ってそのまま走り出します**（取り消すのは
 入るときの1回ぶんだけ）。自律に戻すにはSTARTをもう一度2秒押します。
 
-取り消しは1回ではなく2秒（`cancel_window`）のあいだ繰り返します。
-`nav2_waypoint_follower`（`nav2:=true`）は`stop_on_failure: false`なので、
-`navigate_to_pose`側が先に取り消されると「1点失敗した」と見なして**次の点へ新しい
-ゴールを出す**ためです。1回だけだと、それが取り消されずに残ります。
-
-既定の`nav2:=false`ではこの穴はありません。巡回は`vi_planner`の中のループで、
-`navigate_to_pose`のゴールを1点ごとに出し直してはいないので、`/follow_waypoints`の
-取り消し1回で巡回そのものが止まります（取り消しは「1点失敗」ではなく巡回の中断として
-扱われる）。繰り返しても害はないので、`cancel_window`はそのままにしてあります。
+巡回は`vi_planner`の中のループなので、`/follow_waypoints`の取り消しで
+巡回そのものが止まります。`joy_teleop`は`cancel_window`のあいだ取り消しを繰り返します。
 
 teleopを切ったあとは[減速で降りきってから](#速度は刻んで出します加減速)、さらに1秒
 （`stop_tail`）ゼロを出して黙ります。黙るだけだと本体ドライバは最後に受けた速度を保持し
@@ -239,8 +231,7 @@ BACKだけを2秒以上押して**離す**と、本体ドライバの`motor_powe
 
 STARTとBACKを同時に2秒押すと、`waypoints_file`のYAMLを読んで
 [`/follow_waypoints`](navigation.md#waypointを並べて巡回する)へゴールを投げます
-（受けるのは既定の`nav2:=false`では`vi_planner`、`nav2:=true`では
-`nav2_waypoint_follower`。型も名前も同じなのでパッド側の配線は変わりません）。押すたびに
+（受けるのは`vi_planner`）。押すたびに
 読み直すので、`daifuku_waypoint_manager`パネルで保存し直したものがそのまま反映されます
 （再起動は不要）。
 
@@ -251,35 +242,16 @@ STARTとBACKを同時に2秒押すと、`waypoints_file`のYAMLを読んで
 
 **地図と対で選んでください。** `19f`で津田沼の経路を投げると全点が地図の外に出ます。
 それでも`stop_on_failure: false`なので、1点ずつ失敗しながら最後まで進みます。外から
-見える形は構成で変わります。
-
-- 既定の`nav2:=false`では、`vi_planner`が1点ごとに3秒（ノード内の固定値）止まったまま
-  `goal_retry_limit`（3回）投げ直して次へ移ります。**その場で止まったまま
-  何も起きない機体**に見えます。
-- `nav2:=true`では**その場で左に回り続けます** — 経路が引けないので
-  `navigate_to_pose`が失敗し、nav2のrecoveryが`spin`（+1.57 rad = 反時計回り、
-  `max_rotational_vel` 1.0 rad/s）を点の数だけ繰り返すためです。
-  [troubleshooting.md](troubleshooting.md#その場で左に回り続ける)も参照。
-
-どちらも上がりの音は鳴らないので、まずそこで気づけます。
+見えるのは、点ごとに止まったまま`goal_retry_limit`まで投げ直して次へ移る機体です。
+取りこぼした点はログと下がりの音で確認してください。
 
 `navigation.launch.py`が立っていないと押しても始まりません（ログに
 `follow_waypoints action server is not available`が出ます）。走行中にもう一度押しても
 何も起きません。取り消すにはSTARTを2秒押してteleopへ移ります。
 
-ゴールを投げる直前に、順路そのものを`/waypoints`（`nav_msgs/Path`、latch）へも出します。
-**見せるためのものではなく**、`vi_planner`の先読み（`waypoint_prefetch`、
-[navigation.md](navigation.md#次の点を走行中に解いておくwaypoint_prefetch)）へ「いま
-向かっている点の次はどこか」を渡すためのものです。同じものをRVizの
-`daifuku_waypoint_manager`パネルも出しますが、**実機のイメージにパネルは入っていない**
-ので、機体だけで巡回するときはこちらが出どころになります。起動時にYAMLを読めた時点でも
-一度出します。
-
-**これが要るのは`nav2:=true`のときだけです。** 既定の`nav2:=false`では
-`/follow_waypoints`を`vi_planner`自身が受けるので、順路はゴールと同じ経路で届きます。
-`nav2:=true`のときにかぎり、**`waypoints_file`が空だと`/waypoints`は誰も出さないので、
-先読みはエラーも警告も出さないまま働きません**（ただしそのときはSTART+BACK自体が
-断られるので、巡回そのものが始まりません）。
+ゴールを投げる直前と起動時にYAMLを読めた時点で、順路を`/waypoints`
+（`nav_msgs/Path`、latch）へも出します。先読みの順路は`vi_planner`へ渡す
+`/follow_waypoints`のゴールに含まれます。
 
 ## 確かめかた
 

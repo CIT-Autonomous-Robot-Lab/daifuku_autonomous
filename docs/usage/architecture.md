@@ -21,8 +21,8 @@ TF                ─── odom → base_footprint → センサーフレーム
 
 **センサーを立てるのは`daifuku_bringup`だけです。** LiDARの前処理もEKFも
 `robot_bringup.launch.py`が`include`していて、`docker compose up`で常駐します。
-`navigation.launch.py`と`mapping.launch.py`は`/scan`と`/odom`の消費者に徹し、
-センサーの引数を1つも持ちません。**この配置のおかげで、navigationを立て直しても
+`navigation.launch.py`と`mapping.launch.py`は生データを`/scan`へ変える段を持ち、
+`/odom`を読みます。**この配置のおかげで、navigationを立て直しても
 LiDARの初期化待ちは入らず、EKFが再起動して`/odom`が原点へ飛ぶこともありません。**
 
 速度指令は`twist_mux`が優先度で1本に束ねます（`robot_bringup.launch.py`の
@@ -31,7 +31,7 @@ LiDARの初期化待ちは入らず、EKFが再起動して`/odom`が原点へ�
 中継されます。**自律側のほうが上なので、自律走行中は遠隔操作が通りません**
 （手動へ渡すには先にゴールを取り消す）。**優先度は非常停止ではありません**
 （止めるのはモーター電源）。
-配線と設定は[`src/daifuku_config/README.md`](../../src/daifuku_config/README.md#twist_muxyaml-の配線と優先度)。
+配線と設定は[`src/daifuku_config/README.md`](../../src/daifuku_config/README.md#駆動と停止の理由)。
 
 Mid-360は時刻同期がないためスタンプが実時計からずれていきます。`restamp_scan.py`が
 `/scan_mid360_prestamp`を受信時刻で打ち直して`/scan_raw`へ流し、以降は2D LiDARと同じ
@@ -40,14 +40,14 @@ Mid-360は時刻同期がないためスタンプが実時計からずれてい�
 
 ## 自前パッケージの分担
 
-独自のC++ノードは持たず、設定とlaunchとPythonノードだけです。**`daifuku_bringup`と
+機体側と自律移動側で、設定とlaunchの責務を分けます。**`daifuku_bringup`と
 `daifuku_stack`は互いに依存しません**（どちらも`daifuku_config_manager`と
 `daifuku_config`にだけ依存）。
 
 | パッケージ | 持つもの | 立てかた |
 | --- | --- | --- |
 | `daifuku_bringup` | 駆動ドライバ・URDF・`twist_mux`・ゲームパッド・**LiDAR**・**EKF**。`src/`のPythonノード4本 | `docker compose up`で常駐 |
-| `daifuku_stack` | Nav2 / SLAM Toolbox / EMCL2のlaunch、地図、RViz、`behavior_trees/`、`waypoints/`、`src/system_monitor.py`、**点群を`/scan`に変える段**（`scan_pipeline.launch.py`と`src/elevation_filter.py` / `src/restamp_scan.py`） | 人が`navigation` / `mapping`を立てる |
+| `daifuku_stack` | Nav2 / SLAM Toolbox / EMCL2のlaunch、地図、RViz、`waypoints/`、`src/system_monitor.py`、**点群を`/scan`に変える段**（`scan_pipeline.launch.py`と`src/elevation_filter.py` / `src/restamp_scan.py`） | 人が`navigation` / `mapping`を立てる |
 | `daifuku_config_manager` | 設定の合成規則（`params.py`）と`src/`のPythonノード2本。**設定の実体は持ちません** | 上2つのlaunchが立てる（自前の入口は無い） |
 | `daifuku_config` | 設定の実体だけ。`bringup/`・`stack/`・`overrides/*.yaml`と、走らせる場所を1行で持つ`src/daifuku_config/site` | ノードを持たない（`src/`の下でもなく、`src/`と並ぶ`src/daifuku_config/`） |
 
@@ -153,7 +153,7 @@ Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。
 | モジュール | 場所 | 内容 |
 | --- | --- | --- |
 | `params.py` | `daifuku_config_manager` | 設定ファイルへの上書きの合成（土台 → `overrides` → `extra_params_file`）と、`config_sentinel`の起動・停止の配線（`sentinel_actions`）。**すべてのlaunchが使う共有部品** |
-| `backends.py` | `daifuku_stack/launch/daifuku_stack_launch/` | `localization`／`planner`／`local_planner`／`nav2`の解決と起動前チェック |
+| `backends.py` | `daifuku_stack/launch/daifuku_stack_launch/` | `localization`の解決とVI設定の起動前チェック |
 | `nav2_params.py` | `daifuku_stack/launch/daifuku_stack_launch/` | `src/daifuku_config/stack/nav2/*.yaml`と`src/daifuku_config/stack/vi_planner.yaml`の合成と、`overrides`からの`map:=`の決定。`params.py`へ`base_resolvers`で渡す |
 | `lidar.py` | `daifuku_bringup/launch/daifuku_bringup_launch/` | LiDARドライバの共通引数と`lidar_bringup`の`include` |
 | `scan.py` | `daifuku_stack/launch/daifuku_stack_launch/` | `/scan`を作る段の共通引数と`scan_pipeline`の`include` |
@@ -182,7 +182,6 @@ Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。
 - `localization:=vi`: **emcl2を立てず**、`vi_planner`自身が推定する（上流のVIOLA）。
   `map_server`は残る。`map -> odom`を出すのも`vi_planner`（`publish_tf`）で、
   `pose_topic`は`initialpose`＝**手動シード**（RVizの2D Pose Estimate）になる。
-  `planner:=vi`と`nav2:=false`（どちらも既定）が要る
 
 **どの推定器を使うかはlaunchではなく`src/daifuku_config/stack/vi_planner.yaml`の`localizer`**
 （`external`／`grid`／`adaptive`／`belief`／`viterbi`）。launch引数が持つのは
@@ -190,106 +189,25 @@ Pi 4とPi 5の両方に対応し、機種差はチップの同定だけです。
 
 ## 経路計画と追従
 
-`planner:=vi`（既定）:
+`vi_planner`をstandaloneで起動し、経路計画と追従に同じ価値関数を使います。
+`compute_path_to_pose`、`follow_path`、`navigate_to_pose`、`follow_waypoints`を提供し、
+アクション型は`nav2_msgs`なのでRVizや操作パネルからそのまま使えます。
+`navigate_through_poses`は提供しません。複数点の巡回は`follow_waypoints`へ渡します。
 
-- `local_planner:=auto`（既定）では`vi_planner`**1ノード**が`planner_server`と
-  `controller_server`の両方を置き換え、`compute_path_to_pose`と`follow_path`を提供する
-- 静的地図から(x, y, θ)の価値関数を**ゴールにつき1回だけ**全域で解く。経路はその価値
-  関数をロールアウトして求め、追従では同じ価値関数を機体周りのウィンドウ（既定はカプセル、前後2.5 m・横2.0 m）で精密化する
-- ウィンドウへ`/scan`由来のペナルティを加え、貪欲行動を`cmd_vel`として出力する
-- 経路計画と追従は**1本の価値関数を共有する**。追従がウィンドウへ書いたペナルティを
-  全域伝播（`global_sweep`）が広域へ広げるので、避けた障害物が次の
-  `compute_path_to_pose`にも効く。伝播は追従中もバックグラウンドで回り続け、掃くのは
-  **値が動いたところから遷移の届く範囲だけ**（地図の広さには比例しない）。粒度が密は
-  セル、既定のアウトオブコアソルバでは確定出力（sink）のタイル、という違いだけで、
-  更新式も不動点も同じ
-- 同一ゴールへの再計画ではキャッシュを使う（ロールアウトのみ実行する）
-- `local_planner:=nav2`では同じ`vi_planner`を`follow: false`（広域のみ）で立て、追従は
-  Nav2標準`controller_server`が担う。**立つVIのノードはどちらでも1つ**（2026-08-08の
-  上流の整理まで、広域専用は`vi_global_planner`という別パッケージだった）。
-  `map_scale`とアウトオブコアソルバが要る広域地図は、どちらの構成でも扱える
-  （`vi_planner`はロボット近傍のパッチだけを密に起こす）。詳細は
-  [自律移動](navigation.md#広域地図map_tsudanumaで動かす)を参照
+静的地図からゴールごとに価値関数を解き、追従中は`/scan`のペナルティを機体周辺の
+窓へ反映します。`global_sweep`は変化した範囲を広域へ伝播します。投げ直しの上限は
+`goal_retry_limit`で、待機中も止まったままスキャンを取り込んで場を更新します。
+設定と広域地図の注意点は[自律移動](navigation.md#経路計画と追従)を参照してください。
 
-`planner:=navfn`:
+## 共有するNav2ユーティリティ
 
-- Nav2標準の`planner_server`と`NavfnPlanner`を使う
-- `local_planner:=auto`ではNav2標準の`controller_server`とDWBを使う
+地図配信の`nav2_map_server`、AMCL、速度平滑化の`nav2_velocity_smoother`、
+それらを管理する`nav2_lifecycle_manager`は残ります。BT、NavFn、DWB、
+コストマップ、Nav2のbehavior・waypoint followerは起動しません。
+`velocity_smoother:=false`ならnavigation側のsmootherとマネージャも立ちません。
 
-## Nav2を立てない構成（`nav2:=false`）
-
-**`nav2`の既定は`false`で、素で起動するとNav2のnavigation側はBTも
-コントローラも立ちません。** `vi_planner`が`navigate_to_pose`と`follow_waypoints`も
-提供するためです（残るのは`velocity_smoother`とそのマネージャだけ。下記）。
-`planner:=navfn`や`local_planner:=nav2`へ落とすときは`nav2:=auto`が
-要ります（付け忘れると起動時にエラーで止まります）。
-
-アクションの型と名前は`nav2_msgs`のままなので、RVizの`Nav2 Goal`も
-`daifuku_waypoint_manager`も`daifuku_rqt`も`joy_teleop`も、配線は一切変わりません。
-
-立たなくなるもの: `bt_navigator`、`behavior_server`、`smoother_server`、
-`waypoint_follower`、そして`behavior_trees/`の2つの木。残るのは`map_server`
-（自己位置側）と、`velocity_smoother:=true`（既定）なら`velocity_smoother`です。
-`lifecycle_manager_navigation`はそのsmootherを起こすためだけに残り、**管理下は
-1ノードだけ**になります（`velocity_smoother:=false`にするとマネージャごと消えます）。
-`nav2:=true`で従来の構成に戻せます。
-
-読む設定ファイルも減ります。`src/daifuku_config/stack/nav2/`のうち実際に効くのは
-`vi_planner.yaml`と`map_server.yaml`、それに`behaviors.yaml`の`velocity_smoother`の
-節だけです。`bt_navigator.yaml`・`controller_server.yaml`・`costmaps.yaml`と
-`behaviors.yaml`の残り3ノード分は**合成には入るが宛先のノードが立たないので黙って
-無視されます**。同じ意味のキーは`vi_planner.yaml`へ移してあります
-（`stop_on_failure`、`waypoint_pause_sec`）。
-
-### 何が変わるか
-
-BTを挟まなくなることで、VIが損をしていた点が4つ消えます。
-
-| 従来（`nav2:=true`） | `nav2:=false` |
-| --- | --- |
-| BTが`ComputePathToPose`を毎秒呼ぶ。キャッシュヒットでもロールアウトと補間を**共有ロックの中で**回すので、10 Hzの追従ループと毎秒取り合う | ロールアウトはゴールにつき1回だけ。しかも`plan`トピックへの**表示専用**で、走行は方策を1手ずつ引く |
-| ロールアウトが振動（`LoopDetected`）すると`ComputePathToPose`が失敗し、ゴールごと死ぬ | 経路が引けなくても走る。「方策が無い」と「貪欲降下が振動した」は別物なので、後者では走れることが多い |
-| リカバリの`Spin`／`BackUp`は`local_costmap/costmap_raw`を待つので、コストマップの無いVI構成では**必ず失敗**する。動くのは`Wait`だけで、その`Wait`の間は`follow_path`が走っていない＝価値関数が1ミリも動かない | 投げ直しの間に3秒（ノード内の固定値）だけ**止まったまま場を更新する**。スキャンを取り込み続けるので、一度「通れない」と塗った場所のペナルティが半減で消えていく |
-| 巡回の先読み（`waypoint_prefetch`）は`/waypoints`を出すものがいないと**警告も出さずに何もしない** | 順路は`follow_waypoints`のゴールそのものなので、必ず届く |
-
-投げ直しの回数は`goal_retry_limit`（既定3、負で無制限）で、BTの
-`RecoveryNode number_of_retries: 6`の置き換えです。
-
-「Navigation 2」パネルは`navigation.rviz`に**入っていません**。あれは`/waypoints`へ
-MarkerArrayを出し、自前の`WaypointManagerPanel`が同じ名前へ出すPathと型が衝突して、
-**自前パネルと`/waypoints`の表示が出ないまま上がる**ためです（他の表示は揃うので、
-手掛かりはログの1行だけ。AGENTS.md）。自分で足しても
-**ほぼ空になります**。あれはライフサイクル
-マネージャを叩くパネルで、`nav2:=false`で管理下にあるのは`velocity_smoother`
-1つだけ（`velocity_smoother:=false`ならマネージャ自体が居ません）。故障ではあり
-ません。ゴールを出すのは同じ「Nav2 Goal」ツールで、経路は`/plan`にそのまま出ます
-（表示専用で、走行は方策を1手ずつ引きます）。
-
-## Nav2コンポーネント
-
-構成に応じて次を使用します（`nav2:=false`で立つのは最初の3つだけです）。
-
-- `nav2_map_server`: 地図配信
-- `nav2_velocity_smoother`: 速度平滑化（`velocity_smoother:=false`で外せる）
-- `nav2_lifecycle_manager`: ライフサイクル管理（`nav2:=false`では自己位置側の1つと、
-  `velocity_smoother`を起こす1つ）
-- `nav2_bt_navigator`: NavigateToPose等のビヘイビアツリー
-- `nav2_costmap_2d`: ローカル／グローバルコストマップ
-- `nav2_smoother`: 経路平滑化
-- `nav2_behaviors`: Spin、BackUp、Wait等
-- `nav2_waypoint_follower`: 経由地点追従
-
-ローカルコストマップはVoxelLayer + InflationLayer、グローバルコストマップはStaticLayer + ObstacleLayer + InflationLayerを使い、障害物入力は`/scan`です。**VI構成ではどちらも使いません**（`vi_planner`はコストマップを持たず、障害物は価値関数のペナルティとして扱う）。
-
-### プロセス構成
-
-Nav2の各ノードは既定でプロセスを分けて起動します（`use_composition:=False`）。
-Raspberry Pi 4で1プロセスへ合成すると、DDS参加者あたりのエンドポイント数が大きく
-なりすぎて、新規参加者からディスカバリできなくなります。さらにCPU飢餓でライフ
-サイクルマネージャのbond心拍が途絶え、自動シャットダウンする事象が頻発しました。
-あわせて`src/daifuku_config/stack/lifecycle_bond.yaml`でbondのタイムアウトを60秒へ延長しています。
-
-PCなど余裕のある環境では`use_composition:=True`も利用できます。
+RVizの「Nav2 Goal」は使用できます。「Navigation 2」パネルは`/waypoints`へ
+MarkerArrayを出し、自前パネルのPathと型が衝突するため追加しないでください。
 
 ## 外部パッケージ
 

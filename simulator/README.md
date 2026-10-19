@@ -28,7 +28,7 @@ uv run --project simulator --locked daifuku-vtc --help
   `--no-build` で既存イメージを再利用できる。
 - ベースイメージには `docker/raspberrypi/Dockerfile` の ROS 2 Rust underlay
   (`/opt/ros2_rust_ws`、rclrs、nav2_msgs / tf2_msgs の Rust bindings) が必要。
-  `docker/dev/Dockerfile` のイメージは使えない。
+  更新後の `docker/dev/Dockerfile` も同じ underlay を構築する。
 - DDS は実行ごとの専用 bridge、ROS_DOMAIN_ID 87、UDPv4 が既定。
   `--network host` は明示指定のみ。駆動ドライバ・Livox・URG・EKF は立てない。
 
@@ -39,7 +39,7 @@ Gazebo のワールドと odom は mapping から navigation まで同じセッ�
 RSP 用 URDF はそのまま使い、Gazebo 用コピーの plugin 除去は usim に任せる。
 
 mapping は `map_saver_cli --free 0.15` で保存する。
-navigation は `localization:=emcl2 planner:=vi local_planner:=vi nav2:=false`、
+navigation は `localization:=emcl2` と standalone VI を使い、
 両段とも `use_sim_time:=true lidar:=2d lidar_driver:=false overrides:=none config_watch:=off`。
 実機の設定値は変更しない。
 
@@ -76,4 +76,3 @@ bash -n simulator/container/usim_vtc/stack.sh
 ホスト venv と ROS の Python ABI が違うので、ROS helper をホスト package に混ぜない。
 
 地図生成・地図と順路の検算は [`tools/maps/`](../tools/maps/) の独立スクリプト。
-旧 Pi4 ハーネスの実測記録は [`docs/usage/pi4_sim_history.md`](../docs/usage/pi4_sim_history.md) に残す。

@@ -23,7 +23,7 @@ rqt                                          # Plugins > Raspicat > Raspicat Con
 | パネルの操作 | 相手 |
 | --- | --- |
 | 稼働状況 | `/diagnostics`（`daifuku_stack` の `system_monitor` が出す） |
-| ゴール送信・中断 | `navigate_to_pose` アクション（既定の `nav2:=false` では `vi_planner`、`nav2:=true` では `bt_navigator`。型も名前も同じ） |
+| ゴール送信・中断 | `vi_planner` の `navigate_to_pose` アクション |
 | configure / activate / deactivate | `/<ドライバ名>/change_state`、状態表示は `/get_state` を 2 秒ごと |
 | モータ ON/OFF | `/motor_power`（`std_srvs/SetBool`） |
 | teleop | `/cmd_vel_teleop` を 10 Hz で publish（`twist_mux` の優先度 10 側。**自律側の `/cmd_vel`（100）のほうが上なので、自律走行中は通らない** — 先に「中断」でゴールを止めること） |

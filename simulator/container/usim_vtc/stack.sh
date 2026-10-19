@@ -26,7 +26,7 @@ set -o pipefail
 # shellcheck disable=SC1091
 source /opt/ros/humble/setup.bash
 if [[ ! -f /opt/ros2_rust_ws/install/local_setup.bash ]]; then
-    echo "!! /opt/ros2_rust_ws underlay missing: vi_planner (planner:=vi) cannot run" >&2
+    echo "!! /opt/ros2_rust_ws underlay missing: vi_planner cannot run" >&2
     exit 2
 fi
 # shellcheck disable=SC1091
@@ -56,9 +56,6 @@ NAVIGATION_ARGS=(
     "${COMMON_ARGS[@]}"
     use_system_monitor:=false
     localization:=emcl2
-    planner:=vi
-    local_planner:=vi
-    nav2:=false
     "extra_params_file:=$HERE/navigation_gazebo.yaml"
     "map:=$MAP"
     "map_loc:=$MAP"

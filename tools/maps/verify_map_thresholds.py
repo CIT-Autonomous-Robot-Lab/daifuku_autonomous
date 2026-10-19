@@ -25,10 +25,7 @@
 
 `map_saver_cli` が書く `free_thresh: 0.25` は、同じ `map_saver_cli` が未観測に使う
 画素 205 (p=(255-205)/255=0.196) を **free 側に落とす**。そうなると VI の
-`unknown_as_obstacle` も costmap の `track_unknown_space` も、未観測セルが存在しない
-ことになるので**エラーも警告も出ないまま効かない**。2026-08-09 まで `map_19f.yaml` が
-これで、free セルが 105,618 のところ 518,809 として解かれていた
-(`docs/usage/pi4_sim_history.md` の「1.」)。地図を取り直すたびに戻るので検算する。
+`unknown_as_obstacle` が効かなくなる。地図を取り直すたびに検算する。
 
     uv run tools/maps/verify_map_thresholds.py src/daifuku_stack/maps/*/*.yaml
 
