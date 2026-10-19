@@ -325,12 +325,11 @@ Docker 越しに叩く形は
 - `use_composition` の既定 `False` は意図的（Pi 4 でディスカバリ不能 + bond 心拍途絶）。
   `src/daifuku_config/stack/lifecycle_bond.yaml` の `bond_timeout: 60.0` も同じ事情。
 - **`daifuku_rqt` と `daifuku_waypoint_manager` は Pi では建てない。** 実機イメージ
-  (`ros:humble-ros-base`) に rqt と RViz が無いため。両方の `build-workspace.sh` が
-  `--packages-select` で名前を並べているので、Pi 側の一覧に足すと**ビルドが通らなく
-  なる**。逆に `daifuku_bringup` と `daifuku_config_manager` と `daifuku_config` は**両方の
-  一覧に要る**（実機はこの 3 つが無いと機体が上がらない）。一覧は 3 か所
-  ——`docker/raspberrypi/scripts/build-workspace.sh`、`docker/dev/tools/build-workspace.sh`、
-  `tools/setup/setup_native_base.sh`。
+  (`ros:humble-ros-base`) に rqt と RViz が無いため。2 つの `build-workspace.sh` は
+  `src/` を全部建てて除外だけを名指しするので、Pi 側の `SKIP_PACKAGES` から外すと
+  **ビルドが通らなくなる**。逆に `daifuku_bringup` と `daifuku_config_manager` と
+  `daifuku_config` は**どこでも建てる**（実機はこの 3 つが無いと機体が上がらない）。
+  名前で選んでいるのは `tools/setup/setup_native_base.sh` だけで、そちらには並べること。
 - **`docker/raspberrypi/` に `compose.yaml` は無い。** 入口は
   `compose.common.yaml` と本体ドライバ別の `compose.rt.yaml`（公式実装 + rtmouse。
   Pi 4 専用）／`compose.original.yaml`（自前実装。既定、Pi 5 では必須）／

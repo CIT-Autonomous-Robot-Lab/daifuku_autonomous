@@ -4,8 +4,8 @@ Raspberry Pi Cat の操作パネル（rqt プラグイン）。ゴール送信�
 モータ、teleop、CPU 表示を 1 つのウィジェットにまとめたものです。
 
 **PC 側だけで動きます。** 実機の `docker/raspberrypi/` イメージには rqt が入っていないため、
-`docker/raspberrypi/scripts/build-workspace.sh` の `--packages-select` にこのパッケージは
-入れていません（あちらは名前で選ぶので、書かなければ建ちません）。ビルドされるのは
+`docker/raspberrypi/scripts/build-workspace.sh` の `SKIP_PACKAGES` でこのパッケージを
+除外しています（あちらは `src/` を全部建てるので、外すと建てに行って落ちます）。ビルドされるのは
 `docker/dev/` とネイティブ環境です。
 
 ## 起動

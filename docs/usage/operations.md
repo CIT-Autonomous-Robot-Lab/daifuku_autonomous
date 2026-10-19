@@ -169,10 +169,11 @@ docker compose up -d
 ```
 
 `daifuku_autonomous.repos`だけは、この3通りのどれにもきれいには収まりません。外部パッケージの取得は`up`のときの
-`vcs import --skip-existing`なので、リポジトリを新しく足しただけなら`up`で入ります。
-ただしそれが新しいapt依存を連れてくる場合や、`build-workspace.sh`の`--packages-select`へ
-追加が要る場合は`build`からやり直してください。既にある`src/`のリビジョン変更は
-`--skip-existing`で素通りするので、`src/`側で直接チェックアウトを合わせます
+`vcs import`（ネットワークに繋がっているときだけ）なので、リポジトリを新しく足しただけなら`up`で入り、
+中のパッケージも名前を書かずに建ちます。ただしそれが新しいapt依存を連れてくる場合や、Piで建たない
+パッケージを`build-workspace.sh`の`SKIP_PACKAGES`へ足す場合は`build`からやり直してください。
+タグやコミットの変更は次の`up`で反映されますが、ブランチ名のままだと上流へは進まないので、
+`src/`側で直接チェックアウトを合わせます
 （[`docker/raspberrypi/README.md`](../../docker/raspberrypi/README.md)に詳しくあります）。
 
 1行目が効くのは既にあるファイルを直したときだけです。launchやconfigでも、ファイルを

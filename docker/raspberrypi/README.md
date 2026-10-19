@@ -117,26 +117,25 @@ docker compose build --build-arg BUILD_JOBS=1
 `daifuku_autonomous.repos`にしたがって`vcs import`します。したがって特定の
 リビジョンに固定したい場合は、ホスト側の`src/`のチェックアウトを合わせてください。
 
-**`vcs import`は`--skip-existing`付きで、既にあるリポジトリは更新しません。**
-一度cloneしたあとに`daifuku_autonomous.repos`のリビジョンを変えても、古いままの
-チェックアウトがそのままビルドされます（起動時に「そんなパラメータは知らない」
-という顔をして出るので、設定の問題と取り違えやすい）。更新するときは各リポジトリで
-明示的に合わせてください。
+**ネットワークに繋がっていれば、`up`のたびに`vcs import`します**（`--skip-existing`は
+付けません）。`daifuku_autonomous.repos`のタグやコミットを変えれば次の`up`で
+チェックアウトも動きます。ただし**versionがブランチ名のときは、ローカルのブランチを
+checkoutするだけで上流へは進めません**（vcstoolの仕様）。古いままのチェックアウトは
+起動時に「そんなパラメータは知らない」という顔をして出るので、設定の問題と取り違え
+やすい。ブランチを進めるときは各リポジトリで明示的に合わせてください。
 
 ```bash
 git -C src/value_iteration3 fetch origin && git -C src/value_iteration3 merge --ff-only origin/main
 ```
 
-**そのうえで、`src/`が揃っているときは`vcs import`をそもそも呼びません。**
-`--skip-existing`はチェックアウトを動かさないだけで、URLの一致する既存リポジトリにも
-`git fetch`まで走ります。つまり呼ぶ限りネットワークが要り、Wi-Fiのないところでは
-`Could not resolve host`で`docker compose up`ごと止まります（`set -e`）。
-`--skip-existing`が付いている以上fetchしても作業ツリーは変わらないので、呼ばないことと
-結果は同じです。したがって一度取り込んであればオフラインでも`up`できます。
-足りないものがあるときだけ`vcs import`し、それでも埋まらなければ足りない
-リポジトリ名を並べて止まります（黙って進めるとcolconが「そんなパッケージは無い」と
-いう無関係な顔で落ちるため）。何も取り込んでいない環境では、最初の1回だけ
-ネットワークが要ります。
+**繋がっているかは、reposの先頭のリモートへの`git ls-remote`で決めます。**
+`vcs import`は既存リポジトリにも`git fetch`を走らせるので、Wi-Fiのないところで呼ぶと
+`Could not resolve host`で落ちます。繋がらなければ呼ばずに手元のチェックアウトで
+建てるので、一度取り込んであればオフラインでも`up`できます。`vcs import`自体が
+失敗したとき（手を入れたリポジトリでcheckoutが衝突したなど）も警告を出して進みます。
+どちらの場合も、足りないリポジトリがあれば名前を並べて止まります（黙って進めると
+colconが「そんなパッケージは無い」という無関係な顔で落ちるため）。何も取り込んで
+いない環境では、最初の1回だけネットワークが要ります。
 
 ビルド成果物は名前付きボリューム`autonomous-build` / `autonomous-install` /
 `autonomous-log`に入ります。作り直したいときは次のようにします。

@@ -164,7 +164,7 @@ ros2 action info /follow_waypoints   # Action servers: 1 (/vi_planner) が正
 ```
 
 navigationが立っているのに0なら、**`src/value_iteration3`のチェックアウトが古い**のが
-本命です。`vcs import`は`--skip-existing`なので、上流を更新しても既にあるクローンは
+本命です。`vcs import`はversionがブランチ名だと上流へ進めないので、上流を更新しても既にあるクローンは
 そのまま残ります（[`docker/raspberrypi/README.md`](../../docker/raspberrypi/README.md)）。
 `standalone`を知らない`vi_planner`は`compute_path_to_pose`と`follow_path`しか出さず、
 **知らないパラメータを渡されてもエラーにはならない**ので、起動しているように見えます。

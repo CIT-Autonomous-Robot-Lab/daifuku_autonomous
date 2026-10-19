@@ -37,7 +37,7 @@ RViz2 上で waypoint を作り、並べ替え・YAML 保存/読込を行い、N
 
 RViz プラグインなので、実機イメージ (`ros:humble-ros-base`) では**ビルドできない**。
 `daifuku_rqt` と同じ扱いで、`docker/raspberrypi/scripts/build-workspace.sh` の
-`--packages-select` に**名前を足さないこと**（足すとイメージのビルドが通らなくなる）。
+`SKIP_PACKAGES` から**名前を外さないこと**（外すと `up` のビルドが通らなくなる）。
 建てるのは `docker/dev/`（`humble-desktop-full`）と
 `tools/setup/setup_native_base.sh` の 2 つ。
 
