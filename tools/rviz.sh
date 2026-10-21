@@ -27,8 +27,10 @@ esac
 source /opt/ros/humble/setup.bash
 
 # パネルが無いと navigation.rviz は起動時に読めない (Panels に名指しがある)。
-if [[ ! -f "${WS}/install/setup.bash" ]]; then
-  echo "building ${PANEL##*/} into ${WS} (first run only)"
+if [[ ! -f "${WS}/install/setup.bash" || \
+  "${PANEL}/src/initial_pose_preset_panel.cpp" -nt \
+  "${WS}/install/daifuku_waypoint_manager/lib/libdaifuku_waypoint_manager.so" ]]; then
+  echo "building ${PANEL##*/} into ${WS}"
   mkdir -p "${WS}"
   # colcon は cwd に log/ を掘る。/mnt/c だと掘れないので ext4 側で回す。
   (cd "${WS}" && colcon --log-base "${WS}/log" build --paths "${PANEL}" \
