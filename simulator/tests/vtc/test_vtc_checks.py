@@ -163,7 +163,7 @@ def test_seed_snapping_rejects_a_disconnected_free_component(tmp_path: Path) -> 
 
 
 def test_gazebo_slam_profile_preserves_daifuku_mapping_parameters(tmp_path: Path) -> None:
-    source = STACK.parents[2] / 'src' / 'daifuku_config' / 'stack' / 'mapping' / 'slam_toolbox.yaml'
+    source = STACK.parents[1] / 'src' / 'daifuku_config' / 'stack' / 'mapping' / 'slam_toolbox.yaml'
     destination = tmp_path / 'slam_toolbox_gazebo.yaml'
     prepare_slam_profile(source, destination)
     expected = yaml.safe_load(source.read_text(encoding='utf-8'))
@@ -318,6 +318,23 @@ def test_stack_launch_arguments() -> None:
     assert '--seed="${VTC_SEED:?VTC_SEED is required}"' in script
     assert '--goal="${VTC_GOAL:?VTC_GOAL is required}"' in script
     assert '--wait-nav2' not in script
+
+
+def test_container_copy_sources_exist_in_repository_context() -> None:
+    # Given: the stack Dockerfile is built from the repository root.
+    repository = STACK.parents[1]
+    dockerfile = (STACK / 'Dockerfile').read_text(encoding='utf-8')
+    # When: Docker resolves each COPY source, including wildcard patterns.
+    sources = [
+        source
+        for line in dockerfile.splitlines()
+        if line.startswith('COPY ')
+        for source in shlex.split(line)[1:-1]
+    ]
+    # Then: every source exists at its declared repository-relative path.
+    assert sources
+    for source in sources:
+        assert list(repository.glob(source)), source
 
 
 def test_vi_planner_rust_underlay_is_required_and_sourced() -> None:

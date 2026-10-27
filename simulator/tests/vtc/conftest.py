@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-STACK = Path(__file__).resolve().parents[2] / 'container' / 'usim_vtc'
+STACK = Path(__file__).resolve().parents[3] / 'docker' / 'simulator'
 
 RASPICAT_URDF = """<?xml version="1.0"?>
 <robot name="raspicat_on_gazebo">

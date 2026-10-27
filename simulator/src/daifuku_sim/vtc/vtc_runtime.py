@@ -24,7 +24,7 @@ from .vtc_contract import LIDAR, SessionConfig
 HERE = Path(__file__).resolve().parent
 SIMULATOR = HERE.parents[2]
 REPO = SIMULATOR.parent
-STACK = SIMULATOR / 'container' / 'usim_vtc'
+STACK = REPO / 'docker' / 'simulator'
 SCHEMA = 'daifuku-usim-vtc/1'
 EXIT_PASS, EXIT_FAIL, EXIT_USAGE, EXIT_BLOCKED = 0, 1, 2, 3
 CONTAINER_PREFIX = 'daifuku-usim-vtc-'

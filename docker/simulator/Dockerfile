@@ -2,7 +2,7 @@
 #
 # Built by daifuku_sim.vtc.run_vtc from the **repository root** context:
 #
-#   <engine> build -f simulator/container/usim_vtc/Dockerfile \
+#   <engine> build -f docker/simulator/Dockerfile \
 #       --build-arg BASE_IMAGE=daifuku-autonomous:humble -t daifuku-usim-vtc-stack:local .
 #
 # BASE_IMAGE is docker/raspberrypi/Dockerfile (apt deps, rosdep of every repo in
@@ -74,9 +74,9 @@ RUN source /opt/ros/humble/setup.bash \
     && vcs export --exact src > /opt/usim_vtc/sources.repos \
     && chmod -R a+rX /opt/usim_vtc_ws /opt/usim_vtc
 
-COPY simulator/container/usim_vtc/stack.sh simulator/container/usim_vtc/*.py /opt/usim_vtc/
-COPY simulator/container/usim_vtc/*.yaml /opt/usim_vtc/
-COPY simulator/container/usim_vtc/fastdds_udp.xml /opt/usim_vtc/
+COPY docker/simulator/stack.sh docker/simulator/*.py /opt/usim_vtc/
+COPY docker/simulator/*.yaml /opt/usim_vtc/
+COPY docker/simulator/fastdds_udp.xml /opt/usim_vtc/
 COPY simulator/src/daifuku_sim/vtc/prepare_slam_params.py /opt/usim_vtc/
 COPY simulator/src/daifuku_sim/vtc/vtc_contract.py /opt/usim_vtc/
 RUN sed -i 's/\r$//' /opt/usim_vtc/stack.sh /opt/usim_vtc/vtc_ros.py \

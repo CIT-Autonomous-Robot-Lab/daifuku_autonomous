@@ -17,8 +17,8 @@ dependencies = [
 requires-dist = [
     { name = "pillow", specifier = ">=10.0" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "usim", editable = "../../usim" },
-    { name = "usim-gazebo", editable = "../../usim/packages/gazebo" },
+    { name = "usim", git = "https://github.com/NOPLAB/usim.git?rev=94c53d5eac10b4fd4ad49600ba47466c9f62f09b" },
+    { name = "usim-gazebo", git = "https://github.com/NOPLAB/usim.git?subdirectory=packages%2Fgazebo&rev=94c53d5eac10b4fd4ad49600ba47466c9f62f09b" },
 ]
 
 [[package]]
@@ -108,40 +108,12 @@ wheels = [
 [[package]]
 name = "usim"
 version = "0.1.0"
-source = { editable = "../../usim" }
-
-[package.metadata]
-requires-dist = [
-    { name = "numpy", marker = "extra == 'pipeline'", specifier = "==1.26.4" },
-    { name = "open3d", marker = "extra == 'pipeline'", specifier = "==0.19.0" },
-    { name = "scipy", marker = "extra == 'pipeline'", specifier = "==1.15.3" },
-    { name = "usd-core", marker = "extra == 'pipeline'", specifier = "==25.5.1" },
-    { name = "usim-gazebo", marker = "extra == 'gazebo'", editable = "../../usim/packages/gazebo" },
-    { name = "usim-genesis", extras = ["native"], marker = "extra == 'genesis'", editable = "../../usim/packages/genesis" },
-    { name = "usim-isaacsim", extras = ["native"], marker = "extra == 'isaac'", editable = "../../usim/packages/isaacsim" },
-    { name = "usim-isaacsim", extras = ["usd"], marker = "extra == 'usd'", editable = "../../usim/packages/isaacsim" },
-    { name = "usim-maniskill", extras = ["native"], marker = "extra == 'maniskill'", editable = "../../usim/packages/maniskill" },
-]
-provides-extras = ["genesis", "maniskill", "gazebo", "usd", "isaac", "pipeline"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "numpy", specifier = ">=1.26,<3" },
-    { name = "pytest", specifier = ">=9.1,<10" },
-    { name = "ruff", specifier = "==0.16.9" },
-    { name = "usim-gazebo", editable = "../../usim/packages/gazebo" },
-    { name = "usim-genesis", editable = "../../usim/packages/genesis" },
-    { name = "usim-isaacsim", editable = "../../usim/packages/isaacsim" },
-    { name = "usim-maniskill", editable = "../../usim/packages/maniskill" },
-]
+source = { git = "https://github.com/NOPLAB/usim.git?rev=94c53d5eac10b4fd4ad49600ba47466c9f62f09b#94c53d5eac10b4fd4ad49600ba47466c9f62f09b" }
 
 [[package]]
 name = "usim-gazebo"
 version = "0.1.0"
-source = { editable = "../../usim/packages/gazebo" }
+source = { git = "https://github.com/NOPLAB/usim.git?subdirectory=packages%2Fgazebo&rev=94c53d5eac10b4fd4ad49600ba47466c9f62f09b#94c53d5eac10b4fd4ad49600ba47466c9f62f09b" }
 dependencies = [
     { name = "usim" },
 ]
-
-[package.metadata]
-requires-dist = [{ name = "usim", editable = "../../usim" }]

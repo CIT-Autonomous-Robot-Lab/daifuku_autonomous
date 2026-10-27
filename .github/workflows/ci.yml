@@ -203,11 +203,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: daifuku_autonomous
-      - uses: actions/checkout@v4
-        with:
-          repository: NOPLAB/usim
-          ref: main
-          path: usim
       - name: uv を入れる
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh

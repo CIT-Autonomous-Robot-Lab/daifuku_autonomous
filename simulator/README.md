@@ -6,9 +6,11 @@ daifuku の SLAM で地図を作ってから、その地図で emcl2 + VI standa
 
 ## 起動
 
-開発時は、このリポジトリと `usim` を同じ親ディレクトリに置く。
-`pyproject.toml` は `../../usim` と `../../usim/packages/gazebo` を明示的な依存元にしている。
-別の配置ではこの 2 つの uv source を変更する。
+Python 依存の `usim` と `usim-gazebo` は、`pyproject.toml` で
+`https://github.com/NOPLAB/usim.git` のコミット
+`94c53d5eac10b4fd4ad49600ba47466c9f62f09b` に固定している。
+ワールドと build context 用には、別途このコミットの usim checkout を用意し、
+`USIM_ROOT` で指定する。配置は任意で、Python のローカルパス依存にはしない。
 
 リポジトリルートから:
 
@@ -68,11 +70,11 @@ uv run --project simulator --locked daifuku-vtc-video \
 
 ```bash
 uv run --project simulator --locked --with pytest python -m pytest -q simulator/tests/vtc
-bash -n simulator/container/usim_vtc/stack.sh
+bash -n docker/simulator/stack.sh
 ```
 
 単体テストの成功は実 VTC の PASS とは別。
-ホスト側は `src/daifuku_sim/vtc/`、ROS Humble 用 helper と設定は `container/usim_vtc/` に置く。
+ホスト側は `simulator/src/daifuku_sim/vtc/`、ROS Humble 用 helper と設定は `docker/simulator/` に置く。
 ホスト venv と ROS の Python ABI が違うので、ROS helper をホスト package に混ぜない。
 
 地図生成・地図と順路の検算は [`tools/maps/`](../tools/maps/) の独立スクリプト。
