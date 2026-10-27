@@ -6,6 +6,16 @@ RViz2 上で waypoint を作り、並べ替え・YAML 保存/読込を行い、v
 `nav2_astar` ブランチの `nav2_waypoint_manager` を移植したもの。名前と namespace を
 `daifuku_*` にそろえてある。
 
+## 初期姿勢プリセット
+
+`navigation.rviz` には `initial_pose_preset_panel/InitialPosePresetPanel` も設定済みです。
+**2D Pose Estimate** で `/initialpose` を指定し、名前を入れて **Add Current** で保存、
+**Apply** で再送します。**Add Robot Pose** は現在の `map → base_link` TF を保存します。
+保存先は RViz を動かす PC のユーザー設定ディレクトリです。**Open YAML** と
+**Save As...** でファイルを選べます。選んだパスを次回も使うには RViz の設定を保存します。
+
+移植元: [initial_pose_preset_panel](https://github.com/CIT-Autonomous-Robot-Lab/daifuku_autonomous_nav2/tree/main/src/initial_pose_preset_panel)（Apache-2.0）。
+
 ## `/navigate_through_poses` は使わない
 
 `vi_planner` は `/navigate_through_poses` を提供しないため、

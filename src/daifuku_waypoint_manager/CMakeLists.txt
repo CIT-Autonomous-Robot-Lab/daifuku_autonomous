@@ -14,6 +14,8 @@ find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(rviz_common REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(yaml-cpp REQUIRED)
 
@@ -23,7 +25,9 @@ set(CMAKE_AUTOMOC ON)
 
 add_library(${PROJECT_NAME} SHARED
   include/daifuku_waypoint_manager/waypoint_manager_panel.hpp
+  include/daifuku_waypoint_manager/initial_pose_preset_panel.hpp
   src/waypoint_manager_panel.cpp
+  src/initial_pose_preset_panel.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC
@@ -40,6 +44,8 @@ ament_target_dependencies(${PROJECT_NAME}
   rclcpp
   rclcpp_action
   rviz_common
+  tf2
+  tf2_ros
   visualization_msgs
 )
 target_link_libraries(${PROJECT_NAME} yaml-cpp Qt5::Widgets)
