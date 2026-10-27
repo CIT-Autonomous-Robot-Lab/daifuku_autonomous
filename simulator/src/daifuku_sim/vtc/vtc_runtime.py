@@ -18,8 +18,11 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import IO, Protocol
+from typing import IO, Protocol, TYPE_CHECKING
 from .vtc_contract import LIDAR, SessionConfig
+
+if TYPE_CHECKING:
+    from ..wslg import WslgDisplay
 
 HERE = Path(__file__).resolve().parent
 SIMULATOR = HERE.parents[2]
@@ -217,9 +220,40 @@ class _SessionProcess:
 def start_gazebo_session(config: Path, log: Path, env: dict[str, str]) -> Session:
     """Run the installed usim CLI; usim owns simulator startup and cancellation."""
     data: SessionConfig = json.loads(config.read_text(encoding='utf-8'))
+    if (sys.platform == 'win32' and data['engine'] == 'docker' and not data['headless']
+            and not env.get('DISPLAY', os.environ.get('DISPLAY'))):
+        from ..wslg import WslgDisplay
+
+        display = WslgDisplay(data['image'], data['network'])
+        try:
+            session = _start_session(simulator_command(data), log, {**env, 'DISPLAY': display.display})
+        except OSError:
+            display.close()
+            raise
+        return _DisplaySession(session, display)
+    return _start_session(simulator_command(data), log, env)
+
+
+class _DisplaySession:
+    """Stop the simulator before releasing its owned display connection."""
+
+    def __init__(self, session: Session, display: WslgDisplay) -> None:
+        self.session, self.display = session, display
+
+    def poll(self) -> int | None:
+        return self.session.poll()
+
+    def stop(self, timeout: float) -> int:
+        try:
+            return self.session.stop(timeout)
+        finally:
+            self.display.close()
+
+
+def _start_session(command: list[str], log: Path, env: dict[str, str]) -> Session:
     stream = log.open('w', encoding='utf-8')
     process = subprocess.Popen(
-        simulator_command(data),
+        command,
         stdin=subprocess.PIPE,
         stdout=stream,
         stderr=subprocess.STDOUT,
@@ -233,7 +267,9 @@ def simulator_command(config: SessionConfig) -> list[str]:
     """Pass measured robot geometry and VTC settings to the installed usim CLI."""
     robot = config['robot']
     command = [sys.executable, '-B', '-m', 'usim.cli', 'simulate',
-               '--backend', 'gazebo', '--headless', '--stop-on-stdin']
+               '--backend', 'gazebo', '--stop-on-stdin']
+    if config['headless']:
+        command.append('--headless')
     values = {
         'world': config['world'],
         'robot-urdf': robot['urdf'],

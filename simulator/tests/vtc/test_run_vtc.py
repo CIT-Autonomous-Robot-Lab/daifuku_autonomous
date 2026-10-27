@@ -191,15 +191,19 @@ def test_host_network_is_explicit_and_not_owned(tmp_path, usim_root) -> None:
 
 
 @pytest.mark.parametrize('record', [False, True])
-def test_gazebo_camera_is_enabled_only_for_video(tmp_path, usim_root, record) -> None:
+@pytest.mark.parametrize('headless', [False, True])
+def test_gazebo_camera_is_enabled_only_for_video(tmp_path, usim_root, record, headless) -> None:
     # Given: the regular workflow or an explicitly requested camera recording.
     extra = ('--record-video',) if record else ()
+    if headless:
+        extra += ('--headless',)
     flow, _, _, _ = workflow(tmp_path, usim_root, ALL_OK, extra=extra)
     # When: the workflow starts the actual simulator session configuration.
     assert flow.run() == run_vtc.EXIT_PASS
     session = json.loads((tmp_path / 'run' / 'mapping' / 'session.json').read_text())
     # Then: only video recording pays the rendering cost.
     assert session['camera_enabled'] is record
+    assert session['headless'] is headless
 
 
 def test_container_runtime_passes_shared_network_to_stack(tmp_path, monkeypatch) -> None:

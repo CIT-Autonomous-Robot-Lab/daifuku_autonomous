@@ -235,6 +235,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help='reuse an existing stack image instead of rebuilding it')
     parser.add_argument('--record-video', action='store_true',
                         help='enable Gazebo RGB rendering for the recorded navigation video')
+    parser.add_argument('--headless', action='store_true',
+                        help='run without the Gazebo GUI (default: show the GUI)')
     parser.add_argument('--run-dir', type=Path,
                         default=SIMULATOR / 'runs' / 'vtc' / _dt.datetime.now().strftime('vtc-%Y%m%d-%H%M%S-%f'))
     parser.add_argument('--ros-domain-id', type=int, default=87, choices=range(0, 102), metavar='0..101')

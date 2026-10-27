@@ -189,6 +189,7 @@ class WorkflowPhases(Protocol):
                         'world': str(self.world),
                         'robot': self.robot,
                         'camera_enabled': self.o.record_video,
+                        'headless': self.o.headless,
                     },
                     indent=2,
                 ),

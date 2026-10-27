@@ -181,6 +181,7 @@ class SessionConfig(TypedDict):
     world: str
     robot: RobotGeometry
     camera_enabled: bool
+    headless: bool
 
 
 class Alignment(TypedDict):

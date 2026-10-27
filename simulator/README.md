@@ -6,6 +6,11 @@ daifuku の SLAM で地図を作ってから、その地図で emcl2 + VI standa
 
 ## 起動
 
+通常起動では Gazebo GUI を表示する。GUI が不要な実行環境では `daifuku-vtc --headless` を指定する。
+Windows + Docker Desktop では、`DISPLAY` が未設定なら WSLg への表示接続を自動作成し、
+シミュレータ終了時に片付ける。ポートはホストへ公開しない。
+それ以外の環境では X11 の `DISPLAY` と、コンテナから表示先への接続が必要。
+
 Python 依存の `usim` と `usim-gazebo` は、`pyproject.toml` で
 `https://github.com/NOPLAB/usim.git` のコミット
 `a7d97a9542f8939e6e7b80e8c901ab9eff229148` に固定している。
