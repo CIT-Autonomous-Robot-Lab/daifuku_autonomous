@@ -9,14 +9,20 @@ daifuku の SLAM で地図を作ってから、その地図で emcl2 + VI standa
 Python 依存の `usim` と `usim-gazebo` は、`pyproject.toml` で
 `https://github.com/NOPLAB/usim.git` のコミット
 `94c53d5eac10b4fd4ad49600ba47466c9f62f09b` に固定している。
-ワールドと build context 用には、別途このコミットの usim checkout を用意し、
-`USIM_ROOT` で指定する。配置は任意で、Python のローカルパス依存にはしない。
+`--usim-root` と `USIM_ROOT` は不要。インストール済み usim の Git コミット情報から、
+ワールドと build context 用の checkout を `.venv/share/daifuku-vtc/<コミット>/` に
+初回だけ自動取得する。実際の配置は実行中の仮想環境に従う。
+VTC ワールドは Git に含まれない生成物なので、初回起動時に usim の既存ツールで
+固定版の上流 FBX をサイズ・SHA256 検証付きで取得し、選択した Podman / Docker 上の
+固定 Blender イメージで CPU 変換する。以後は同じコミットの生成済み資産を再利用する。
+Python の import 先は uv がインストールしたパッケージのままとし、uv 内部のキャッシュ
+配置や隣の usim checkout には依存しない。
 
 リポジトリルートから:
 
 ```bash
 uv sync --project simulator --locked --inexact
-USIM_ROOT=/path/to/usim uv run --project simulator --locked daifuku-vtc \
+uv run --project simulator --locked daifuku-vtc \
     --engine podman --base-image localhost/daifuku-autonomous:humble-amd64
 uv run --project simulator --locked daifuku-vtc --help
 ```
@@ -24,8 +30,10 @@ uv run --project simulator --locked daifuku-vtc --help
 `--inexact` は既存 venv の追加パッケージを保全する。
 完全に最小の環境が必要なら、空の `UV_PROJECT_ENVIRONMENT` を指定して `uv sync --project simulator --locked` を使う。
 
-- `USIM_ROOT` または `--usim-root` は必須。ワールドとイメージの build context に使い、
-  Python の import 先にはしない。既定のワールドは `$USIM_ROOT/assets/vtc/world.sdf`。
+- Git と Podman または Docker が必要。初回の資産準備にはネットワーク接続も必要。
+- `USIM_ROOT` または `--usim-root` は、既存 checkout を使う場合だけ指定する。
+  その場合は従来どおり `<checkout>/assets/vtc/world.sdf` を使い、自動生成しない。
+  `--world` で独自の SDF を指定した場合も VTC ワールドの自動生成を省く。
 - Podman または Docker が必要。stack イメージはリポジトリルートを build context として毎回再構築する。
   `--no-build` で既存イメージを再利用できる。
 - ベースイメージには `docker/raspberrypi/Dockerfile` の ROS 2 Rust underlay
@@ -36,7 +44,7 @@ uv run --project simulator --locked daifuku-vtc --help
 
 ## 実行と判定
 
-prepare → mapping → alignment → navigation を直列に実行する。
+資産準備 → prepare → mapping → alignment → navigation を直列に実行する。
 Gazebo のワールドと odom は mapping から navigation まで同じセッションを保つ。
 RSP 用 URDF はそのまま使い、Gazebo 用コピーの plugin 除去は usim に任せる。
 
@@ -57,7 +65,7 @@ navigation は `localization:=emcl2` と standalone VI を使い、
 `--record-video` のときだけ Gazebo のカメラを有効にする。動画化にはローカルの ffmpeg が必要。
 
 ```bash
-USIM_ROOT=/path/to/usim uv run --project simulator --locked daifuku-vtc \
+uv run --project simulator --locked daifuku-vtc \
     --engine podman --record-video --run-dir simulator/runs/vtc/new-video
 uv run --project simulator --locked daifuku-vtc-video \
     simulator/runs/vtc/new-video/navigation/recording.jsonl \

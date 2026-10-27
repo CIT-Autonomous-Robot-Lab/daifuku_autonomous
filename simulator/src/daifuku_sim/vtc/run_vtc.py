@@ -6,8 +6,9 @@ here imports ROS. The sequence is strictly serial so the two ``/scan``
 pipelines (mapping and navigation both include ``scan_pipeline.launch.py``)
 never run at the same time:
 
-    preflight  USIM_ROOT, VTC world (malformed -> exit 2 before any engine call)
+    preflight  installed usim Git resources or explicit USIM_ROOT; validate supplied world
     runtime    ``<engine> info``
+    world      download verified VTC sources and convert once when using automatic assets
     images     usim Gazebo image, daifuku runtime base, VTC stack image
     prepare    stack container: plain Raspicat URDF + meshes -> geometry
     mapping    usim Gazebo session + stack container (RSP + mapping.launch.py
@@ -166,6 +167,7 @@ class Workflow(WorkflowPhases):
             for stage in (
                 self.preflight,
                 self.check_runtime,
+                self.prepare_world,
                 self.images,
                 self.prepare,
                 self.mapping,
@@ -218,8 +220,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     env_root = os.environ.get('USIM_ROOT')
     parser.add_argument('--usim-root', type=Path, default=Path(env_root) if env_root else None,
-                        help='explicit usim checkout (default: $USIM_ROOT; required)')
-    parser.add_argument('--world', type=Path, help='SDF world (default: $USIM_ROOT/assets/vtc/world.sdf)')
+                        help='optional asset checkout override (default: $USIM_ROOT or automatic venv assets)')
+    parser.add_argument('--world', type=Path, help='SDF override (default: automatically prepared VTC world)')
     parser.add_argument('--engine', choices=('podman', 'docker'),
                         default=os.environ.get('VTC_ENGINE', 'podman'))
     parser.add_argument('--usim-image', default='usim-gazebo:local')

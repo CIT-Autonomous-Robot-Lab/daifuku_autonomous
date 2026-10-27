@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from daifuku_sim.vtc import run_vtc
+from daifuku_sim.vtc import vtc_phases
 from .conftest import RASPICAT_URDF, write_map, write_world
 
 from .vtc_test_support import (ALL_OK, mapping_ok, navigation_result, result_of, workflow)
@@ -39,12 +40,51 @@ def test_missing_world_path_is_named(tmp_path, usim_root) -> None:
     assert str(missing) in result_of(tmp_path)['reason']
 
 
-def test_usim_root_is_required(tmp_path, monkeypatch) -> None:
+def test_missing_usim_root_uses_automatic_assets(tmp_path, monkeypatch, usim_root) -> None:
+    # Given: neither the command line nor the environment supplies a checkout.
     monkeypatch.delenv('USIM_ROOT', raising=False)
+    monkeypatch.setattr(vtc_phases, 'default_usim_root', lambda: usim_root)
     flow, runtime, _, _ = workflow(tmp_path, None, ALL_OK)
-    assert flow.run() == run_vtc.EXIT_USAGE
-    assert runtime.calls == []
-    assert 'USIM_ROOT is required' in result_of(tmp_path)['reason']
+    # When: the workflow resolves its installed dependency's resource checkout.
+    assert flow.run() == run_vtc.EXIT_PASS
+    # Then: all normal phases run using the resolved path, which is recorded.
+    assert flow.usim_root == usim_root
+    assert result_of(tmp_path)['config']['usim_root'] == str(usim_root)
+    assert ('available',) in runtime.calls
+
+
+def test_automatic_world_is_prepared_only_after_runtime_is_available(
+    tmp_path, monkeypatch, usim_root,
+) -> None:
+    # Given: an automatic checkout exists but has no generated VTC world.
+    monkeypatch.delenv('USIM_ROOT', raising=False)
+    monkeypatch.setattr(vtc_phases, 'default_usim_root', lambda: usim_root)
+    (usim_root / 'assets' / 'vtc' / 'world.sdf').unlink()
+    flow, runtime, _, _ = workflow(tmp_path, None, ALL_OK)
+    calls = []
+
+    def prepare(root, engine):
+        assert runtime.calls[0] == ('available',)
+        calls.append((root, engine))
+        write_world(root / 'assets' / 'vtc' / 'world.sdf')
+
+    monkeypatch.setattr(vtc_phases, 'prepare_default_world', prepare)
+    # When: the normal workflow starts.
+    assert flow.run() == run_vtc.EXIT_PASS
+    # Then: generation runs once and its actual world is validated.
+    assert calls == [(usim_root, 'podman')]
+    assert result_of(tmp_path)['world']['file_uris'] == 1
+
+
+def test_environment_checkout_still_overrides_automatic_assets(
+    tmp_path, monkeypatch, usim_root,
+) -> None:
+    # Given: an existing checkout is explicitly selected through the environment.
+    monkeypatch.setenv('USIM_ROOT', str(usim_root))
+    flow, _, _, _ = workflow(tmp_path, None, ALL_OK)
+    # When / Then: it remains usable without automatic download or conversion.
+    assert flow.run() == run_vtc.EXIT_PASS
+    assert flow.usim_root == usim_root
 
 
 def test_invalid_asset_checkout_fails_before_engine_calls(tmp_path) -> None:

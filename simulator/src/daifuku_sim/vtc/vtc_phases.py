@@ -20,6 +20,7 @@ import time
 from pathlib import Path
 from typing import Callable, Literal, Protocol, overload
 from . import vtc_checks as checks
+from .vtc_assets import default_usim_root, prepare_default_world
 from .vtc_contract import Mapping, Navigation, Phase, RunResult, RobotGeometry
 from .vtc_map import nearest_safe_seed_cell
 from .vtc_runtime import (CONTAINER_PREFIX, EXIT_BLOCKED, EXIT_FAIL, EXIT_PASS, EXIT_USAGE, FASTDDS_TRANSPORTS, STACK, MAP_RELATIVE, REPO, RMW, URDF_RELATIVE, Runtime, Session, Stop)
@@ -73,25 +74,30 @@ class WorkflowPhases(Protocol):
     def preflight(self) -> None:
         usim_root = self.o.usim_root
         if usim_root is None:
-            raise Stop(
-                'FAIL',
-                'preflight',
-                'USIM_ROOT is required: set the USIM_ROOT environment variable or pass '
-                '--usim-root to an explicit usim checkout (no sibling checkout is inferred)',
-                EXIT_USAGE,
-            )
+            usim_root = default_usim_root()
         usim_root = usim_root.resolve()
         if not (usim_root / 'docker' / 'Dockerfile.gazebo').is_file():
             raise Stop(
                 'FAIL', 'preflight', f'USIM_ROOT is not a usim checkout: {usim_root}', EXIT_USAGE
             )
         self.usim_root = usim_root
+        self.result['config']['usim_root'] = str(usim_root)
         world = (self.o.world or usim_root / 'assets' / 'vtc' / 'world.sdf').resolve()
+        self.world = world
+        if self.o.usim_root is None and self.o.world is None and not world.exists():
+            return
         try:
             self.result['world'] = checks.validate_world(world)
         except checks.CheckError as error:
             raise Stop('FAIL', 'preflight', f'malformed VTC world: {error}', EXIT_USAGE) from error
-        self.world = world
+
+    def prepare_world(self) -> None:
+        if self.o.usim_root is None and self.o.world is None and not self.world.exists():
+            prepare_default_world(self.usim_root, self.o.engine)
+            try:
+                self.result['world'] = checks.validate_world(self.world)
+            except checks.CheckError as error:
+                raise Stop('FAIL', 'preflight', f'malformed VTC world: {error}', EXIT_USAGE) from error
 
     def images(self) -> None:
         logs = self.run_dir / 'images'
