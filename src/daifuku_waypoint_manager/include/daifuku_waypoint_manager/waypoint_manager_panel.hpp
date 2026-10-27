@@ -60,6 +60,8 @@ private Q_SLOTS:
   void loadYaml();
   void startFollowing();
   void cancelFollowing();
+  void toggleStop();
+  void resumeFollowing();
   void sendCancelBurst();
   void selectionChanged();
   void setStatus(const QString & status);
@@ -104,13 +106,23 @@ private:
   void updateButtons();
   void addClickedPoint(const geometry_msgs::msg::PointStamped & point);
   void addClickedPose(const geometry_msgs::msg::PoseStamped & pose);
+  // next_index_ から次の停止点 (無ければ最後の点) までを 1 つのゴールとして送る。
+  void sendSegment();
+  // 停止点で止まっている状態を捨てる。並びが変わると next_index_ が別の点を指すため。
+  void clearPause();
   bool readYamlFile(const QString & filename, std::vector<geometry_msgs::msg::PoseStamped> * poses,
-                    std::string * frame_id, QString * error) const;
+                    std::vector<bool> * stops, std::string * frame_id, QString * error) const;
   bool writeYamlFile(const QString & filename, QString * error) const;
   QString formatWaypoint(int index, const geometry_msgs::msg::PoseStamped & pose) const;
 
   std::string frame_id_{"map"};
   std::vector<geometry_msgs::msg::PoseStamped> waypoints_;
+  // waypoints_ と同じ並び。true の点に着いたら巡回を止め、Resume を待つ。
+  std::vector<bool> stop_flags_;
+  // 次に送る区間の先頭。0 より大きいあいだは停止点で止まっている (Resume が押せる)。
+  size_t next_index_{0};
+  // いま送っている区間の末尾 (含む)。
+  size_t segment_end_{0};
   rclcpp::Node::SharedPtr node_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_publisher_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_publisher_;
@@ -154,6 +166,7 @@ private:
   QLabel * status_label_{nullptr};
   QPushButton * start_button_{nullptr};
   QPushButton * cancel_button_{nullptr};
+  QPushButton * resume_button_{nullptr};
 };
 
 }  // namespace daifuku_waypoint_manager
