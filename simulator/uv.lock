@@ -24,8 +24,8 @@ requires-dist = [
     { name = "filelock", specifier = ">=3.16" },
     { name = "pillow", specifier = ">=10.0" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "usim", git = "https://github.com/NOPLAB/usim.git?rev=94c53d5eac10b4fd4ad49600ba47466c9f62f09b" },
-    { name = "usim-gazebo", git = "https://github.com/NOPLAB/usim.git?subdirectory=packages%2Fgazebo&rev=94c53d5eac10b4fd4ad49600ba47466c9f62f09b" },
+    { name = "usim", git = "https://github.com/NOPLAB/usim.git?rev=a7d97a9542f8939e6e7b80e8c901ab9eff229148" },
+    { name = "usim-gazebo", git = "https://github.com/NOPLAB/usim.git?subdirectory=packages%2Fgazebo&rev=a7d97a9542f8939e6e7b80e8c901ab9eff229148" },
 ]
 
 [[package]]
@@ -139,12 +139,12 @@ wheels = [
 [[package]]
 name = "usim"
 version = "0.1.0"
-source = { git = "https://github.com/NOPLAB/usim.git?rev=94c53d5eac10b4fd4ad49600ba47466c9f62f09b#94c53d5eac10b4fd4ad49600ba47466c9f62f09b" }
+source = { git = "https://github.com/NOPLAB/usim.git?rev=a7d97a9542f8939e6e7b80e8c901ab9eff229148#a7d97a9542f8939e6e7b80e8c901ab9eff229148" }
 
 [[package]]
 name = "usim-gazebo"
 version = "0.1.0"
-source = { git = "https://github.com/NOPLAB/usim.git?subdirectory=packages%2Fgazebo&rev=94c53d5eac10b4fd4ad49600ba47466c9f62f09b#94c53d5eac10b4fd4ad49600ba47466c9f62f09b" }
+source = { git = "https://github.com/NOPLAB/usim.git?subdirectory=packages%2Fgazebo&rev=a7d97a9542f8939e6e7b80e8c901ab9eff229148#a7d97a9542f8939e6e7b80e8c901ab9eff229148" }
 dependencies = [
     { name = "usim" },
 ]

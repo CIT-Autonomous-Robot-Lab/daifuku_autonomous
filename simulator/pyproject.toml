@@ -16,8 +16,8 @@ dependencies = [
 daifuku-vtc = "daifuku_sim.vtc.run_vtc:main"
 daifuku-vtc-video = "daifuku_sim.vtc.render_video:main"
 [tool.uv.sources]
-usim = { git = "https://github.com/NOPLAB/usim.git", rev = "94c53d5eac10b4fd4ad49600ba47466c9f62f09b" }
-usim-gazebo = { git = "https://github.com/NOPLAB/usim.git", rev = "94c53d5eac10b4fd4ad49600ba47466c9f62f09b", subdirectory = "packages/gazebo" }
+usim = { git = "https://github.com/NOPLAB/usim.git", rev = "a7d97a9542f8939e6e7b80e8c901ab9eff229148" }
+usim-gazebo = { git = "https://github.com/NOPLAB/usim.git", rev = "a7d97a9542f8939e6e7b80e8c901ab9eff229148", subdirectory = "packages/gazebo" }
 
 [build-system]
 requires = ["hatchling"]

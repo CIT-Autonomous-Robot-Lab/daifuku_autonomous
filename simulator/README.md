@@ -8,7 +8,7 @@ daifuku の SLAM で地図を作ってから、その地図で emcl2 + VI standa
 
 Python 依存の `usim` と `usim-gazebo` は、`pyproject.toml` で
 `https://github.com/NOPLAB/usim.git` のコミット
-`94c53d5eac10b4fd4ad49600ba47466c9f62f09b` に固定している。
+`a7d97a9542f8939e6e7b80e8c901ab9eff229148` に固定している。
 `--usim-root` と `USIM_ROOT` は不要。インストール済み usim の Git コミット情報から、
 ワールドと build context 用の checkout を `.venv/share/daifuku-vtc/<コミット>/` に
 初回だけ自動取得する。実際の配置は実行中の仮想環境に従う。
