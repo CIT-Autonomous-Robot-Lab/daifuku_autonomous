@@ -193,7 +193,7 @@ def navigation_result(status: int = 4, final: tuple[float, float] = (0.0, -1.0),
 
 
 def options(tmp_path: Path, usim_root: Path | None, *extra: str):
-    args = ['--run-dir', str(tmp_path / 'run'), *extra]
+    args = ['--run-dir', str(tmp_path / 'run'), '--engine', 'podman', *extra]
     if usim_root is not None:
         args += ['--usim-root', str(usim_root)]
     return run_vtc.parse_args(args)

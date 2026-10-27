@@ -17,6 +17,23 @@ from .vtc_test_support import (ALL_OK, mapping_ok, navigation_result, result_of,
 # --------------------------------------------------------------------------- early failures
 
 
+@pytest.mark.parametrize('environment,explicit,expected', [
+    (None, None, 'docker'),
+    ('podman', None, 'podman'),
+    ('podman', 'docker', 'docker'),
+])
+def test_engine_default_and_explicit_overrides(monkeypatch, environment, explicit, expected) -> None:
+    # Given: no engine selection, an environment override, or an explicit argument.
+    monkeypatch.delenv('VTC_ENGINE', raising=False)
+    if environment is not None:
+        monkeypatch.setenv('VTC_ENGINE', environment)
+    arguments = [] if explicit is None else ['--engine', explicit]
+    # When: the real CLI parses the selected inputs.
+    options = run_vtc.parse_args(arguments)
+    # Then: Docker is the default; explicit choices retain their precedence.
+    assert options.engine == expected
+
+
 @pytest.mark.parametrize(
     'body',
     ['<sdf><world name="a"/><world name="b"/></sdf>', 'not xml at all', '<sdf><world><uri>gone.dae</uri></world></sdf>'],

@@ -223,7 +223,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help='optional asset checkout override (default: $USIM_ROOT or automatic venv assets)')
     parser.add_argument('--world', type=Path, help='SDF override (default: automatically prepared VTC world)')
     parser.add_argument('--engine', choices=('podman', 'docker'),
-                        default=os.environ.get('VTC_ENGINE', 'podman'))
+                        default=os.environ.get('VTC_ENGINE', 'docker'),
+                        help='container engine (default: Docker; VTC_ENGINE overrides it)')
     parser.add_argument('--usim-image', default='usim-gazebo:local')
     parser.add_argument('--network', choices=('bridge', 'host'), default='bridge',
                         help='owned bridge shared by stack and simulator (default); host is opt-in')

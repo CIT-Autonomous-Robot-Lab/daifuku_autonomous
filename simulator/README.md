@@ -22,15 +22,16 @@ Python の import 先は uv がインストールしたパッケージのまま�
 
 ```bash
 uv sync --project simulator --locked --inexact
-uv run --project simulator --locked daifuku-vtc \
-    --engine podman --base-image localhost/daifuku-autonomous:humble-amd64
+uv run --project simulator --locked daifuku-vtc
 uv run --project simulator --locked daifuku-vtc --help
 ```
 
 `--inexact` は既存 venv の追加パッケージを保全する。
 完全に最小の環境が必要なら、空の `UV_PROJECT_ENVIRONMENT` を指定して `uv sync --project simulator --locked` を使う。
 
-- Git と Podman または Docker が必要。初回の資産準備にはネットワーク接続も必要。
+- Git と起動済みの Docker が必要。既定のコンテナエンジンは Docker。
+  Podman を使う場合は `--engine podman` または `VTC_ENGINE=podman` を明示する。
+  初回の資産準備にはネットワーク接続も必要。
 - `USIM_ROOT` または `--usim-root` は、既存 checkout を使う場合だけ指定する。
   その場合は従来どおり `<checkout>/assets/vtc/world.sdf` を使い、自動生成しない。
   `--world` で独自の SDF を指定した場合も VTC ワールドの自動生成を省く。
@@ -66,7 +67,7 @@ navigation は `localization:=emcl2` と standalone VI を使い、
 
 ```bash
 uv run --project simulator --locked daifuku-vtc \
-    --engine podman --record-video --run-dir simulator/runs/vtc/new-video
+    --record-video --run-dir simulator/runs/vtc/new-video
 uv run --project simulator --locked daifuku-vtc-video \
     simulator/runs/vtc/new-video/navigation/recording.jsonl \
     simulator/runs/vtc/new-video/navigation.mp4 --fps 10 \
