@@ -51,6 +51,8 @@ RUN find /opt/usim_vtc_ws/src/daifuku_config /opt/usim_vtc_ws/src/daifuku_config
 # /opt/ros2_rust_ws (rclrs, plus nav2_msgs / tf2_msgs Rust bindings where Humble
 # lacks them) and cargo + colcon-ros-cargo. Fail here, not at launch time, if a
 # supplied BASE_IMAGE omits that underlay.
+# Humble's nav2_msgs can ship Rust sources without the rust_packages marker
+# colcon-ros-cargo uses for dependency discovery. Register only existing crates.
 RUN test -f /opt/ros2_rust_ws/install/local_setup.bash \
       || { echo "BASE_IMAGE lacks /opt/ros2_rust_ws (build it from docker/raspberrypi/Dockerfile)" >&2; exit 1; } \
     && test -d /opt/ros2_rust_ws/install/share/rclrs \
@@ -58,7 +60,16 @@ RUN test -f /opt/ros2_rust_ws/install/local_setup.bash \
     && command -v cargo >/dev/null \
       || { echo "BASE_IMAGE has no cargo on PATH" >&2; exit 1; } \
     && for msg in nav2_msgs tf2_msgs; do \
-         test -d "/opt/ros/humble/share/${msg}/rust" -o -d "/opt/ros2_rust_ws/install/share/${msg}/rust" \
+         found=; \
+         for prefix in /opt/ros2_rust_ws/install /opt/ros/humble; do \
+           if test -f "${prefix}/share/${msg}/rust/Cargo.toml"; then \
+             mkdir -p "${prefix}/share/ament_index/resource_index/rust_packages"; \
+             touch "${prefix}/share/ament_index/resource_index/rust_packages/${msg}"; \
+             found=1; \
+             break; \
+           fi; \
+         done; \
+         test -n "${found}" \
            || { echo "no Rust binding for ${msg} in /opt/ros or /opt/ros2_rust_ws" >&2; exit 1; }; \
        done
 
