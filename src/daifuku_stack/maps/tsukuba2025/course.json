@@ -2942,16 +2942,42 @@
   "artifact_role": "Portable route and rolling-map metadata; not a completed-run claim",
   "runtime_course_completed": false,
   "latest_run": {
-    "attempt": 21,
+    "attempt": 25,
+    "status": "FAIL",
     "accepted_indices": [
       0,
-      51
+      122
     ],
-    "failed_candidate": 52,
-    "physical_error_m": 0.6164575155195638
+    "failed_candidate": 123,
+    "error": "Course goal 123 deadline exceeded",
+    "driven_distance_m": 2053.325113998297,
+    "real_time_factor": 0.9999985598860166,
+    "recorded_camera_frames": 38619
   },
   "runtime_world_requirement": {
     "world": "runtime-world.usda",
     "repository_relative": "simulator/runs/vtc/isaac-course-20261016/course-2025/frontage-model-v3/runtime-world.usda"
+  },
+  "terrain_hazards": {
+    "method": "native triangle gradient above0.3 plus one0.2m body-clearance raster cell",
+    "bounds_m": [
+      [
+        -7,
+        -74
+      ],
+      [
+        -5,
+        -68
+      ]
+    ],
+    "steep_facets": 46,
+    "new_obstacle_cells": 28,
+    "source_navigation": "course-2025/navigation.pgm",
+    "evidence": "simulator/runs/vtc/isaac-course-20261016/attempt-25-2025/diagnostic-clearance123.json",
+    "source_geometry_modified": false,
+    "old_obstacle_cells_cleared": 0,
+    "official_goals_changed": 0,
+    "all_goals_free_and_connected": true,
+    "validation": "Two diagnostic runs passed authentic goals123 and124, including the failed full-run approach XY/yaw; not a full-course completion"
   }
 }

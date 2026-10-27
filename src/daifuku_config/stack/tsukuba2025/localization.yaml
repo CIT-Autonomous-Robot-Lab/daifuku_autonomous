@@ -10,7 +10,7 @@ pointcloud_to_laserscan_loc:
     queue_size: 4                              # Same queue as the recorded runs.
     scan_time: 0.1                             # Projection metadata, not clock control.
     range_min: 0.05                            # Actual simulated sensor minimum.
-    range_max: 60.0                            # Real returns beyond the empty30m region.
+    range_max: 100.0                           # Real returns across the empty60m region.
     use_inf: true                             # Missing returns remain unobserved.
 scan_filter_loc:
   ros__parameters:
@@ -32,3 +32,5 @@ localization_elevation_filter:
     max_elevation_deg: 75.0                    # Same upper angle bound.
     far_range_m: 30.0                          # Keep the original near-field selection.
     far_min_elevation_deg: 4.5                  # Beyond30m retain the physical5degree ring.
+    distant_range_m: 60.0                      # Preserve the near and middle bands.
+    distant_min_elevation_deg: 1.25              # Beyond60m retain the physical1.5degree ring.

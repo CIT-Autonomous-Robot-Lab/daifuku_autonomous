@@ -73,6 +73,18 @@ class ElevationFilter(Node):
             -math.inf if far_min_deg <= -_UNBOUNDED_DEG
             else math.tan(math.radians(far_min_deg))
         )
+        self._distant_range = self.declare_parameter("distant_range_m", 0.0).value
+        distant_min_deg = self.declare_parameter(
+            "distant_min_elevation_deg", far_min_deg).value
+        if (not math.isfinite(self._distant_range) or self._distant_range < 0
+                or (self._distant_range > 0 and (
+                    self._far_range <= 0 or self._distant_range <= self._far_range
+                    or not math.isfinite(distant_min_deg) or distant_min_deg > max_deg))):
+            raise RuntimeError("invalid distant-range elevation band")
+        self._distant_min_slope = (
+            -math.inf if distant_min_deg <= -_UNBOUNDED_DEG
+            else math.tan(math.radians(distant_min_deg))
+        )
         if min_deg > max_deg:
             raise RuntimeError(
                 "min_elevation_deg (%g) is above max_elevation_deg (%g), "
@@ -98,6 +110,11 @@ class ElevationFilter(Node):
             self.get_logger().info(
                 "beyond %.2fm keeping elevations %.2f..%.2f deg"
                 % (self._far_range, far_min_deg, max_deg)
+            )
+        if self._distant_range > 0:
+            self.get_logger().info(
+                "beyond %.2fm keeping elevations %.2f..%.2f deg"
+                % (self._distant_range, distant_min_deg, max_deg)
             )
 
         # Cached per (fields, point_step) so the dtype is built once, not
@@ -193,6 +210,10 @@ class ElevationFilter(Node):
                 radius > self._far_range, self._far_min_slope,
                 -math.inf if self._min_slope is None else self._min_slope,
             )
+            if self._distant_range > 0:
+                floor = np.where(
+                    radius > self._distant_range, self._distant_min_slope, floor,
+                )
             keep &= z >= floor * radius
         elif self._min_slope is not None:
             keep &= z >= self._min_slope * radius
