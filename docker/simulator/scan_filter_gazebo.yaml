@@ -1,0 +1,16 @@
+# Gazebo ray sensors see the Raspicat chassis behind its front-mounted URG.
+# Remove only returns inside the robot's physical footprint, not nearby walls.
+scan_to_scan_filter_chain:
+  ros__parameters:
+    filter1:
+      name: robot_self_returns
+      type: laser_filters/LaserScanBoxFilter
+      params:
+        box_frame: base_footprint
+        min_x: -0.35
+        max_x: 0.18
+        min_y: -0.18
+        max_y: 0.18
+        min_z: -0.05
+        max_z: 0.25
+        invert: false

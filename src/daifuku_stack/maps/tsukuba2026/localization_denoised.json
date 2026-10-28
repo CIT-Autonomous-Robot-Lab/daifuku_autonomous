@@ -1,0 +1,15 @@
+{
+  "source": "C:\\Users\\nop\\dev\\lab\\daifuku_autonomous\\src\\daifuku_stack\\maps\\tsukuba2026\\localization.pgm",
+  "output": "C:\\Users\\nop\\dev\\lab\\daifuku_autonomous\\src\\daifuku_stack\\maps\\tsukuba2026\\localization_denoised.pgm",
+  "source_sha256": "b8854f5a9293c655ef47fa89f360dfd000f358386d9d99d877833b9ec2115190",
+  "output_sha256": "f40d98a1332264a2bfa384fa51111588dda55afdf185fec9a5daab81b8aa32b6",
+  "width": 3029,
+  "height": 2777,
+  "occupied_threshold": 0.65,
+  "min_component_cells": 9,
+  "connectivity": 8,
+  "replacement_value": 205,
+  "component_count": 13668,
+  "removed_component_count": 12169,
+  "removed_cell_count": 21920
+}

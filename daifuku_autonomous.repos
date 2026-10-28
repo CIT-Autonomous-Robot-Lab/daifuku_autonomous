@@ -7,6 +7,10 @@ repositories:
     type: git
     url: https://github.com/CIT-Autonomous-Robot-Lab/emcl2_ros2.git
     version: main
+  src/emcl3d:
+    type: git
+    url: https://github.com/NOPLAB/emcl3d.git
+    version: main
   src/value_iteration3:
     type: git
     url: https://github.com/NOPLAB/value_iteration3.git

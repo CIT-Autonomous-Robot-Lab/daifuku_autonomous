@@ -11,25 +11,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""navigation.launch.py が組む localization / planner スタック。
-
-引数の宣言と合成・検証は向こうに残し、ここは「どのノードを並べるか」だけを持つ。
-amcl+navfn は上流 bringup をそのまま include するので stack_prelude (bond 注入)
-を通らない。揃えると上流の引数既定を壊す。
-"""
+"""Localization utilities and standalone VI navigation nodes."""
 
 from launch.actions import GroupAction, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
-from launch_ros.actions import Node, PushRosNamespace, SetParameter, SetParametersFromFile
+from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node, PushRosNamespace, SetParametersFromFile
 from launch_ros.descriptions import ParameterFile, ParameterValue
-from launch_ros.substitutions import FindPackageShare
 from nav2_common.launch import RewrittenYaml
 
 
 def assemble(w):
-    """3 系統のスタックと system_monitor / RViz を返す。
+    """自己位置推定と VI、system_monitor / RViz を返す。
 
     w は generate_launch_description が積んだ LaunchConfiguration と条件。
     ネストしたヘルパが閉包で見ていた名前を、属性として渡している。
@@ -40,6 +34,8 @@ def assemble(w):
     map_loc_yaml = w.map_loc_yaml
     params_file = w.params_file
     emcl2_params_file = w.emcl2_params_file
+    emcl3d_params_file = w.emcl3d_params_file
+    map_pcd = w.map_pcd
     bond_params_file = w.bond_params_file
     rviz_config = w.rviz_config
     use_sim_time = w.use_sim_time
@@ -50,31 +46,20 @@ def assemble(w):
     use_rviz = w.use_rviz
     use_system_monitor = w.use_system_monitor
     use_emcl2 = w.use_emcl2
+    use_emcl3d = w.use_emcl3d
     use_vi_loc = w.use_vi_loc
     use_own_map_server = w.use_own_map_server
-    use_amcl_navfn = w.use_amcl_navfn
-    use_amcl_vi = w.use_amcl_vi
-    use_navfn = w.use_navfn
-    use_vi = w.use_vi
-    effective_local_planner = w.effective_local_planner
-    use_nav2 = w.use_nav2
-    use_standalone = w.use_standalone
+    use_amcl = w.use_amcl
     use_smoother = w.use_smoother
     vi_cmd_vel_topic = w.vi_cmd_vel_topic
     own_pose_topic = w.own_pose_topic
-    bringup_launch = w.bringup_launch
-    navigation_launch = w.navigation_launch
     localization_launch = w.localization_launch
-    vi_navigation_launch = w.vi_navigation_launch
 
     remappings = [("/tf", "tf"), ("/tf_static", "tf_static")]
     emcl2_remappings = remappings + [
         ("particlecloud", "particle_cloud"),
         ("global_localization", "reinitialize_global_localization"),
-        # **自己位置推定だけが /map_loc を読む。** emcl2 は相対名 "map" を購読する
-        # (emcl2_node.cpp) ので、こちらで振り替えられる。/map のほうは経路計画用の
-        # 地図で、上流の vi 版 navigation_launch.py と global_costmap が決め打ちで
-        # 見にいく先 (どちらもこちらから remap できない)。
+        # Localization uses /map_loc; VI navigation uses /map.
         ("map", "map_loc"),
     ]
 
@@ -104,69 +89,14 @@ def assemble(w):
         allow_substs=True,
     )
 
-    def vi_behavior_tree_params():
-        """planner:=vi のときだけ BT を差し替える。
-
-        planner:=vi では planner_server (と local_planner:=vi なら controller_server) を
-        起動しないため、nav2 既定の BT が要求する compute_path_through_poses アクションと
-        */clear_entirely_*_costmap サービスが存在せず、bt_navigator が on_configure で
-        例外を投げて bringup 全体が止まる。nav2 1.1.20 には Iron 以降の `navigators`
-        パラメータが無く through_poses を無効化できないので、木そのものを VI 用
-        (behavior_trees/) に差し替える。
-
-        これらのキーは合成される断片のどこにも無いので SetParameter (グループ全体への
-        注入) で足りる。逆に params_file に**ある**キーは SetParameter /
-        SetParametersFromFile では上書きできない (launch_ros は global params を先に、
-        ノード個別の parameters= を後に渡すため、後勝ちでノード側が勝つ)。
-        extra_params_file の上書きが効かないのはこれが理由なので、あちらは
-        params.compose で params_file 自体をマージして解決する。
-        """
-        bt_dir = PathJoinSubstitution([FindPackageShare("daifuku_stack"), "behavior_trees"])
-        return GroupAction(
-            # nav2:=false では bt_navigator を立てないので、差し替える木も無い。
-            condition=IfCondition(PythonExpression([use_vi, " and ", use_nav2])),
-            scoped=False,
-            actions=[
-                SetParameter(
-                    "default_nav_to_pose_bt_xml",
-                    PathJoinSubstitution([bt_dir, "navigate_to_pose_vi.xml"]),
-                ),
-                SetParameter(
-                    "default_nav_through_poses_bt_xml",
-                    PathJoinSubstitution([bt_dir, "nav_through_poses_stub.xml"]),
-                ),
-            ],
-        )
-
     def stack_prelude():
-        """自前で組むスタック (amcl+vi / emcl2) に共通する頭。
-
-        名前空間、bond タイムアウト、VI 用 BT、use_composition:=True のときの
-        コンポーネントコンテナ。以降のノードと include はこのスコープに入る。
-        """
+        """Apply the namespace and lifecycle bond settings."""
         return [
             PushRosNamespace(
                 condition=IfCondition(use_namespace),
                 namespace=namespace,
             ),
             SetParametersFromFile(bond_params_file),
-            vi_behavior_tree_params(),
-            Node(
-                # nav2:=false では中身が 1 つも入らない (vi_planner は composable
-                # ではない) ので、空のコンテナを立てない。
-                condition=IfCondition(
-                    PythonExpression(
-                        ["'", use_composition, "'.lower() in ('true', '1') and ", use_nav2]
-                    )
-                ),
-                name="nav2_container",
-                package="rclcpp_components",
-                executable="component_container_isolated",
-                parameters=[configured_nav2_params, {"autostart": autostart}],
-                arguments=["--ros-args", "--log-level", log_level],
-                remappings=remappings,
-                output="screen",
-            ),
         ]
 
     def own_localization_nodes():
@@ -227,8 +157,27 @@ def assemble(w):
                 arguments=["--ros-args", "--log-level", log_level],
                 remappings=emcl2_remappings,
             ),
-            # emcl2 自身はライフサイクルノードではないので、マネージャが見るのは
-            # map_server 2 つだけ。
+            # localization:=emcl3d の推定器。地図は /map_loc ではなく PCD を直に読む
+            # (map_path は resolve_map が site: map: pointcloud: から決めた map_pcd)。
+            # 出力の mcl_pose は emcl2 と同名同型なので、vi_planner の pose_topic は
+            # そのまま。particlecloud を emcl2 と同じ名前へ振って RViz を共用する。
+            Node(
+                condition=IfCondition(use_emcl3d),
+                package="emcl3d",
+                executable="emcl3d_node",
+                name="emcl3d",
+                output="screen",
+                respawn=use_respawn,
+                respawn_delay=2.0,
+                parameters=[
+                    emcl3d_params_file,
+                    {"use_sim_time": use_sim_time, "map_path": map_pcd},
+                ],
+                arguments=["--ros-args", "--log-level", log_level],
+                remappings=remappings + [("particlecloud", "particle_cloud")],
+            ),
+            # emcl2 / emcl3d 自身はライフサイクルノードではないので、マネージャが
+            # 見るのは map_server 2 つだけ。
             Node(
                 package="nav2_lifecycle_manager",
                 executable="lifecycle_manager",
@@ -243,51 +192,8 @@ def assemble(w):
             ),
         ]
 
-    def navigation_include(source, pose_topic=None, condition=None):
-        """navigation 側 (planner / controller / bt_navigator ...) を include する。
-
-        source が nav2 の navigation_launch.py なら標準構成、vi 版なら
-        planner_server の代わりに価値反復プランナが立つ。pose_topic は vi 版だけが
-        受ける引数で、どの自己位置推定の出力を追うかを渡す。
-        """
-        launch_arguments = {
-            "namespace": namespace,
-            "use_sim_time": use_sim_time,
-            "params_file": params_file,
-            "autostart": autostart,
-            "use_composition": use_composition,
-            "use_respawn": use_respawn,
-            "container_name": "nav2_container",
-            "log_level": log_level,
-        }
-        if pose_topic is not None:
-            launch_arguments["pose_topic"] = pose_topic
-            launch_arguments["local_planner"] = effective_local_planner
-        return IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(source),
-            condition=condition,
-            launch_arguments=launch_arguments.items(),
-        )
-
     def standalone_navigation(pose_topic):
-        """nav2:=false: vi_planner 1 ノードだけで navigation を組む。
-
-        vi_planner の navigation_launch.py を include する代わりに
-        vi_planner を直接立てる。あちらは Nav2 のスタック (bt_navigator /
-        behavior_server / waypoint_follower / smoother_server / velocity_smoother
-        + lifecycle_manager) を組む launch なので、Nav2 を立てないならもう
-        通り道が無い。
-
-        `standalone: true` がノード側の切り替えで、これが navigate_to_pose と
-        follow_waypoints を生やす。**params_file 側でこのキーを立ててはいけない** —
-        Nav2 構成のときに立っていると navigate_to_pose のサーバが bt_navigator と
-        2 つになり、クライアントは先に見つけたほうへ繋ぐ (どちらに繋がったかは
-        どこにも出ない)。だからここ、launch 引数と 1 対 1 の場所で渡す。
-
-        velocity_smoother は残せるようにしてある (既定 true)。VI の cmd_vel は
-        10Hz の離散な行動そのもので、Nav2 構成ではこれを通してから車輪へ送って
-        いた。外すのは 1 引数だが、加減速の当たりが変わるので既定は据え置き。
-        """
+        """Start VI and optionally smooth its velocity commands."""
         smoother_nodes = [
             Node(
                 condition=IfCondition(use_smoother),
@@ -322,7 +228,6 @@ def assemble(w):
             ),
         ]
         return GroupAction(
-            condition=IfCondition(use_standalone),
             actions=[
                 Node(
                     package="vi_planner",
@@ -336,6 +241,7 @@ def assemble(w):
                         {
                             "use_sim_time": use_sim_time,
                             "standalone": True,
+                            "follow": True,
                             "pose_topic": pose_topic,
                             "scan_topic": "scan",
                             # map->odom を出すのは localization:=vi のときだけ。
@@ -353,34 +259,20 @@ def assemble(w):
             ],
         )
 
-    # スタック
-    # amcl + navfn: nav2 標準の bringup がそのまま使える。
-    # **amcl の 2 つは地図が 1 枚**。上流の localization_launch.py が自前で
-    # map_server を立てるので map_loc:= を渡す口が無く、渡しているのは経路計画側の
-    # 地図 (map:=) のほう。site: map: の 2 行が別の地図を指しているときは
-    # nav2_params.resolve_map が起動時に落とすので、ここへは同じ地図しか来ない。
-    amcl_navfn_stack = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(bringup_launch),
-        condition=IfCondition(use_amcl_navfn),
-        launch_arguments={
-            "namespace": namespace,
-            "use_namespace": use_namespace,
-            "slam": "False",
-            "map": map_yaml,
-            "use_sim_time": use_sim_time,
-            "params_file": params_file,
-            "autostart": autostart,
-            "use_composition": use_composition,
-            "use_respawn": use_respawn,
-            "log_level": log_level,
-        }.items(),
-    )
-
-    # amcl + vi: 標準 bringup は planner_server 込みなので、localization と
-    # vi 版 navigation を個別に include する。
-    amcl_vi_stack = GroupAction(
-        condition=IfCondition(use_amcl_vi),
+    # AMCL keeps its map server and optional component container.
+    amcl_stack = GroupAction(
+        condition=IfCondition(use_amcl),
         actions=stack_prelude() + [
+            Node(
+                condition=IfCondition(use_composition),
+                name="nav2_container",
+                package="rclcpp_components",
+                executable="component_container_isolated",
+                parameters=[configured_nav2_params, {"autostart": autostart}],
+                arguments=["--ros-args", "--log-level", log_level],
+                remappings=remappings,
+                output="screen",
+            ),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(localization_launch),
                 launch_arguments={
@@ -394,28 +286,14 @@ def assemble(w):
                     "container_name": "nav2_container",
                 }.items(),
             ),
-            navigation_include(
-                vi_navigation_launch,
-                pose_topic="amcl_pose",
-                condition=IfCondition(use_nav2),
-            ),
             standalone_navigation("amcl_pose"),
         ],
     )
 
-    # emcl2 / vi + navfn / vi: 自己位置推定を自前で立て、その上に navigation を
-    # 載せる。localization:=vi では emcl2 のノードだけが抜け、推定は下の
-    # standalone_navigation が立てる vi_planner が持つ (nav2:=true との併用は
-    # backends.validate_localization が弾くので、間の 2 つの include には来ない)。
+    # emcl2 / emcl3d / VIOLA use our map servers.
     own_localization_stack = GroupAction(
         condition=IfCondition(use_own_map_server),
         actions=stack_prelude() + own_localization_nodes() + [
-            navigation_include(navigation_launch, condition=IfCondition(use_navfn)),
-            navigation_include(
-                vi_navigation_launch,
-                pose_topic="mcl_pose",
-                condition=IfCondition(PythonExpression([use_vi, " and ", use_nav2])),
-            ),
             standalone_navigation(own_pose_topic),
         ],
     )
@@ -445,8 +323,7 @@ def assemble(w):
     )
 
     return [
-        amcl_navfn_stack,
-        amcl_vi_stack,
+        amcl_stack,
         own_localization_stack,
         system_monitor,
         rviz,

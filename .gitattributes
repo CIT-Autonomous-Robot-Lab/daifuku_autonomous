@@ -1,5 +1,6 @@
 * text=auto
 Dockerfile text eol=lf
+*.py text eol=lf
 *.sh text eol=lf
 *.yaml text eol=lf
 *.yml text eol=lf
@@ -11,3 +12,5 @@ src/daifuku_config/site text eol=lf
 # 205 で埋まる）ので `text=auto` の判定が **テキスト側に転び**、画素値 10/13 が
 # 改行として書き換えられうる。名指しでバイナリにしておく。
 *.pgm binary
+# 点群地図の pcd は ASCII ヘッダのあとに DATA binary が続く。判定に任せず名指しでバイナリ。
+*.pcd binary

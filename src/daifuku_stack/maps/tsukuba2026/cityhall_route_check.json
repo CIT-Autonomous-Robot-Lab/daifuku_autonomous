@@ -1,0 +1,71 @@
+{
+  "map_image": "navigation_cityhall.pgm",
+  "map_sha256": "aab0e66d3039bad5485a494e21cece2d85ad61ced416477ae9f4ff0eb9efe029",
+  "full_map_image": "navigation_reviewed.pgm",
+  "full_map_sha256": "9275db875d500756e12f23058c27dd50777ea6973a34d474218e5d5056955c56",
+  "physical_driving_tested": false,
+  "controller_ready_loop_verified": false,
+  "footprint_base_frame_m": [[0.10, 0.21], [0.10, -0.21], [-0.35, -0.21], [-0.35, 0.21]],
+  "footprint_padding_m": 0.01,
+  "planner_resolution_m": 0.1,
+  "downsample_policy": "conservative",
+  "unknown_is_blocked": true,
+  "geometric_reference": {
+    "file": "cityhall_loop_reference.json",
+    "closed_differential_drive_loop_exists": true,
+    "length_m": 465.1029796189021,
+    "winding_number": -1.0,
+    "primitive_count": 146,
+    "extra_clearance_beyond_padding_m": 0.03,
+    "includes_lateral_motion": false,
+    "rotations_about_actual_base_frame": true,
+    "continuous_swept_body_checked": true,
+    "regression_test": "tools/maps/tests/test_tsukuba2026_route.py",
+    "scope": "Static geometric feasibility, not VI-policy rollout or controller tracking."
+  },
+  "vi_planning_only": {
+    "runtime_image_id": "e0f46fbdcba06506d40d745d1295771da6a132799a7c205ccef5bf87fac0f952",
+    "runtime_source_revision": "f20fab684d0f97ad50c46759468432457905d6b9",
+    "nonzero_drive_commands": 0,
+    "goal_margin_radius_m": 0.45,
+    "action_translation_m": 0.15,
+    "safety_radius_penalty": 1,
+    "prefix_at_goal_margin_theta_deg_18": {
+      "successful_legs": 6,
+      "returned_poses": 122,
+      "body_check_samples": 753,
+      "body_collision_samples": 0,
+      "full_loop": false
+    },
+    "continued_at_goal_margin_theta_deg_18": {
+      "successful_legs": 13,
+      "body_collision_samples": 71,
+      "failed_leg_zero_based": 13,
+      "error": "policy rollout failed: LoopDetected",
+      "full_loop_succeeded": false
+    },
+    "isolated_rotation_regression": {
+      "start_xy_yaw_rad": [149.725, -64.425, 3.141592653589793],
+      "goal_xy_yaw_rad": [149.725, -64.425, 2.356194490192345],
+      "at_margin_18": {
+        "succeeded": false,
+        "cycle_heading_cells": [25, 19],
+        "final_heading_cells": [20, 21, 22, 23, 24]
+      },
+      "at_margin_24": {
+        "succeeded": true,
+        "returned_poses": 3,
+        "full_loop": false
+      }
+    },
+    "remaining_issue": "VI action success does not guarantee swept-body clearance. A safe full VI loop remains unverified; the final angle-margin change only resolves the isolated rotation."
+  },
+  "coarse_grid_diagnostic": {
+    "resolution_m": 0.2,
+    "southeast_occupied_cell_centres_xy_m": [[142.9, -83.8], [143.5, -84.2]],
+    "shortest_cell_box_gap_m": 0.44721359549997064,
+    "full_loop_padded_body_clearance_upper_bound_m": 0.0036067977499790183,
+    "source_obstacle_heights_m": [[0.33269625902175903, 0.3710910677909851], [0.29143667221069336]],
+    "manual_classification": "Low measured returns, not established moving-object traces. Retained; native-resolution planning selected instead."
+  }
+}

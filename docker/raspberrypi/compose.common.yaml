@@ -1,20 +1,10 @@
-# 本体ドライバに依存しない部分。**単体では起動しない** (下の raspicat が
-# placeholder で exit 1)。**common を先に**、ドライバ側 (compose.rt.yaml /
-# compose.original.yaml) を後ろに重ねて渡すこと。選ぶのはリポジトリルートの
-# .env の COMPOSE_FILE (.env.example)。
-#
-# プロジェクト名は固定する。名前付きボリュームがこれを接頭辞に持つので、
-# ディレクトリを動かすと colcon のキャッシュが別ボリュームに化ける。**入口 2 つで
-# 同じ名前にしてあるので、rt と original を行き来してもキャッシュは同じ**。
+# .env の COMPOSE_FILE で common を先、ドライバ側を後に重ねること。
+# 単体では raspicat の placeholder が exit 1 になる。
+# ドライバ変更やディレクトリ移動でキャッシュを失わないようプロジェクト名を固定する。
 name: daifuku-autonomous
 
-# ソースはイメージに焼かずマウントする。イメージが持つのは apt 依存と
-# ツールチェーンだけなので、launch / config を直しただけなら何もしなくてよく
-# (--symlink-install)、C++ / Rust は `up` で差分ビルド、apt は `build` からやり直し。
-
 services:
-  # ビルドして終了するワンショット。**restart を書かないこと** — 正常終了でも
-  # 上げ直すので、ビルドが終わるたびに次が始まって止まらなくなる。
+  # restart を付けると正常終了のたびにビルドし直すので、付けないこと。
   workspace-build:
     build:
       context: ../..
@@ -28,17 +18,13 @@ services:
       HOME: /tmp
       ROS_HOME: /tmp/ros
       ROS_LOG_DIR: /tmp/ros/log
-      # colcon の並列数。既定 4 = Pi 4 の全コア。**イメージのビルドには効かない**
-      # (build.args に渡していない。渡すと下げた瞬間に層が全部作り直しになる)。
+      # colcon の並列数。イメージのキャッシュを壊さないよう build.args には渡さない。
       BUILD_JOBS: ${BUILD_JOBS:-4}
-      # 1 パッケージの中の make / cargo の並列数。**--parallel-workers とは別物**で、
-      # colcon はこちらに -j を渡さないので、絞らないと nproc 分の g++ が同時に立つ。
-      # emcl2 は 1 パッケージだけで RAM 2GB を食い潰す (RAM 2GB の SBC で実測)。
+      # colcon はパッケージ内の並列数を制限しないため、make / cargo も絞って OOM を防ぐ。
       MAKEFLAGS: -j${BUILD_JOBS:-4}
       CARGO_BUILD_JOBS: ${BUILD_JOBS:-4}
-      # cargo を crates.io へ出さないか。**ゲートウェイの無い機体では true が要る**
-      # — index を引けないと vi_planner が落ち、set -e で up ごと止まる。新しい
-      # クレートを足したときだけ wlan0 を上げて false へ (.env.example)。
+      # ゲートウェイの無い機体では true にしないと index 取得に失敗して up が止まる。
+      # 新しいクレートを足すときはネット接続して false にする。
       CARGO_NET_OFFLINE: ${CARGO_NET_OFFLINE:-false}
     volumes:
       - ../../src:/opt/ros_ws/src
@@ -56,20 +42,15 @@ services:
     stdin_open: true
     tty: true
     command: ["sleep", "infinity"]
-    # PID 1 を tini にする。`sleep` は子を wait しないので、引き取った docker exec
-    # の木が **ゾンビとして永久に溜まる**。生きたまま残る木は entrypoint.sh が止める。
+    # sleep が回収しない孤児のゾンビを tini で回収する。生きた残骸は entrypoint.sh が止める。
     init: true
-    # Pi の再起動でも上がる。**デーモンが上げ直すときは depends_on が効かない**
-    # (各コンテナが独立に上がる)。install/ が名前付きボリュームに残るのでそれで
-    # 動くが、`down -v` の直後だけは `docker compose up -d` を人手で 1 回通すこと。
+    # デーモンの再起動では depends_on が効かず、前回の install/ で動く。
+    # down -v の後は docker compose up -d を通してから再起動すること。
     restart: unless-stopped
     network_mode: host
-    # /dev/shm をホストと共有して Fast DDS の SHM を通す。UDP だけで約 20 参加者へ
-    # 配ると Pi 4 のカーネルが飽和し (sys 57% / load 24)、TF が 20 秒以上遅れる。
+    # SHM を共有し、UDP のみで配信したときの Pi 4 の飽和と TF 遅延を防ぐ。
     ipc: host
-    # ホストの ROS プロセス (ubuntu, 1000) と同じ uid で回す。SHM セグメントは 0644
-    # なので、root と非 root が混ざると互いのポートを開けず、**Fast DDS 2.6 は UDP へ
-    # 落ちないまま**ホスト -> コンテナのトピックが黙って止まる。
+    # SHM は 0644。ホストと uid が違うと Fast DDS 2.6 は UDP にも落ちず通信が止まる。
     user: "1000:1000"
     environment:
       HOME: /tmp
@@ -78,25 +59,16 @@ services:
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-90}
       ROS_LOCALHOST_ONLY: "0"
       RMW_IMPLEMENTATION: rmw_fastrtps_cpp
-      # DDS を lo/eth0 に絞り、届かない wlan0 のロケータを広告させない
-      # (負荷時にディスカバリが揺れる)。
+      # 届かない wlan0 のロケータ広告によるディスカバリの揺れを防ぐ。
       FASTRTPS_DEFAULT_PROFILES_FILE: /etc/fastdds/udp_whitelist.xml
-      # **USE_MID360_IMU はここには要らない** (EKF を立てるのは raspicat 側だけ)。
-      # **LIDAR / LIDAR_DRIVER は両サービスに要る** — /scan を作る段が navigation /
-      # mapping 側に居るので、2 つの launch が「どの LiDAR か」を知る。**食い違うと
-      # エラーも警告も出ないまま /scan が空になる。**
-      # 場所 (overrides と map) も要らない。どちらの launch も
-      # src/daifuku_config/site をファイルとして読む (書き換えは tools/site.sh)。
+      # raspicat 側と揃えないと navigation / mapping の /scan 生成が黙って空になる。
       LIDAR: ${LIDAR:-mid360}
       LIDAR_DRIVER: ${LIDAR_DRIVER:-true}
     volumes:
       - ./fastdds_udp_whitelist.xml:/etc/fastdds/udp_whitelist.xml:ro
-      # 入力デバイス。cgroup 規則は、生成時に居なかったマイナー番号のコントローラを
-      # 後から挿しても通すため。**joy_node が居るのは raspicat サービス**のほう。
+      # cgroup 規則で後挿しのマイナー番号も許可する。joy_node は raspicat 側。
       - /dev/input:/dev/input:ro
-      # ソースと成果物。**src/ は workspace-build と同じものを見せること** —
-      # --symlink-install した install/ は src/ への symlink を含むので、
-      # 忘れるとリンク切れで launch も config も見えなくなる。
+      # install/ の symlink が切れないよう workspace-build と同じ src/ を見せる。
       - ../../src:/opt/ros_ws/src
       - ../../daifuku_autonomous.repos:/opt/ros_ws/daifuku_autonomous.repos:ro
       - autonomous-build:/opt/ros_ws/build
@@ -105,14 +77,9 @@ services:
     device_cgroup_rules:
       - "c 13:* r"
 
-  # 機体まるごと。**駆動ドライバ + robot_state_publisher + LiDAR ドライバ + EKF。**
-  # navigation と別サービスなのは、ros2 を立て直しても /odom の累積と LiDAR の
-  # 初期化を巻き込まないため。**点群を /scan に変える段はここには居ない**
-  # (navigation / mapping 側。おかげで地図を変えても raspicat は立て直さなくてよい)。
-  #
-  # 裏返しに、**ドライバが finalized まで落ちると launch ごと終了し、LiDAR も一緒に
-  # 上がり直す** (robot_bringup.launch.py の register_shutting_down_transition)。
-  # driver:=raspimouse のときだけ、rtmouse がホストで insmod 済みであることが要る。
+  # navigation の再起動で /odom と LiDAR の初期化を巻き込まないよう機体を分離する。
+  # ドライバが finalized になると LiDAR・EKF ごと上がり直す。
+  # /scan 生成は navigation / mapping 側。raspimouse はホストの rtmouse が必要。
   raspicat:
     image: daifuku-autonomous:humble
     container_name: daifuku-raspicat
@@ -121,8 +88,7 @@ services:
         condition: service_completed_successfully
     stdin_open: true
     tty: true
-    # **本物の command はドライバ側の 2 ファイルが持つ。** 素通りするとどちらの
-    # ドライバで走っているか分からないまま上がるので、分かる形で落とす。
+    # ドライバ側の command を重ね忘れたら、未選択のまま起動せず落とす。
     command:
       - /bin/sh
       - -c
@@ -130,17 +96,15 @@ services:
         echo 'compose.common.yaml を直接起動しないこと。
         compose.rt.yaml か compose.original.yaml を使う (.env の COMPOSE_FILE)。' >&2;
         exit 1
-    # ros2 側と同じ理由 (PID 1 の ros2 launch は引き取った孤児を回収しない)。
+    # ros2 launch が回収しない孤児のゾンビを tini で回収する。
     init: true
     # install/ が名前付きボリュームに残るので、単独で先に上がっても前回の成果物が見える。
     restart: unless-stopped
     network_mode: host
     ipc: host
     user: "1000:1000"
-    # joy_node が掴む /dev/input/event* は root:input 0660 なので uid 1000 では
-    # 開けない (下の /dev 丸渡しと cgroup 規則は POSIX の権限には効かない)。
-    # 足りないと **エラーも警告も出ないまま /joy に publisher が立たない**。
-    # 995 はホストの input グループ (`getent group input`)。違えば INPUT_GID で渡す。
+    # root:input 0660 の event* を開くためホストの input GID が必要（違えば INPUT_GID）。
+    # /dev と cgroup 規則だけでは権限が足りず、/joy が黙って出なくなる。
     group_add:
       - "${INPUT_GID:-995}"
     environment:
@@ -151,8 +115,7 @@ services:
       ROS_LOCALHOST_ONLY: "0"
       RMW_IMPLEMENTATION: rmw_fastrtps_cpp
       FASTRTPS_DEFAULT_PROFILES_FILE: /etc/fastdds/udp_whitelist.xml
-      # Mid-360 の IMU 融合。**ここ 1 か所だけが読む** (robot_bringup.launch.py が
-      # ドライバと EKF の両方を立てるので、片方だけという状態は作れない)。
+      # ドライバの配線と EKF の起動を robot_bringup が同じ値で切り替える。
       USE_MID360_IMU: ${USE_MID360_IMU:-true}
     volumes:
       - ./fastdds_udp_whitelist.xml:/etc/fastdds/udp_whitelist.xml:ro
@@ -161,12 +124,9 @@ services:
       - autonomous-build:/opt/ros_ws/build
       - autonomous-install:/opt/ros_ws/install
       - autonomous-log:/opt/ros_ws/log
-      # rtmouse は insmod のたびに char デバイスのメジャー番号を動的に取る
-      # (実測 497-506)。**メジャー固定の devices: / device_cgroup_rules は、再読込や
-      # リブートで古い番号を焼き付けたまま静かにモータ・エンコーダを掴めなくなる**
-      # (use_pulse_counters: true では「odom が動かない」という別の顔で出る)。
-      # なので /dev を丸ごと渡す — char デバイスについてはほぼ privileged 相当。
-      # 狭めるなら rtmouse 側でメジャー番号を固定してここに列挙すること。
+      # rtmouse のメジャー番号は insmod ごとに変わるため /dev 全体を渡す。
+      # 固定の devices / cgroup 規則では再起動後にモータ・エンコーダを掴めなくなる。
+      # char デバイスはほぼ privileged 相当。狭めるなら rtmouse 側で番号を固定すること。
       - /dev:/dev
     device_cgroup_rules:
       - "c *:* rwm"

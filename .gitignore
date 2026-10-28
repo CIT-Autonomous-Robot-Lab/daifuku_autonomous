@@ -6,14 +6,20 @@ log/
 
 docker-dev-*.log
 
-# run_matrix.ps1 のケース実行ログ (旧 tools/pi4_sim/results/)
+# 旧 Pi4 ハーネスの実行ログ (保全する証跡)
 simulator/scripts/results/
+
+# VTC generated maps, recordings, logs and submitted videos.
+simulator/runs/
+# Historical generated evidence from before the VTC package move.
+simulator/usim_vtc/
 
 .venv/
 __pycache__/
 *.pyc
 
 src/emcl2_ros2/
+src/emcl3d/
 src/livox_ros_driver2/
 src/value_iteration3/
 

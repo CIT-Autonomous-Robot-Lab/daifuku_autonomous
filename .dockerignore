@@ -11,3 +11,5 @@ src/raspimouse2
 **/__pycache__
 **/*.pyc
 **/.venv
+simulator/runs
+simulator/usim_vtc

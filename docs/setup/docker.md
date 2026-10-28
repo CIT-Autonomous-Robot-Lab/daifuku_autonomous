@@ -2,7 +2,7 @@
 
 `docker/raspberrypi/`は、Raspberry Piを含む`arm64`環境と`amd64`環境向けの軽量な実行環境です。ROS 2 Humble、Nav2、SLAM Toolbox、EMCL2、価値反復プランナ、Livox関連ノード、速度指令の仲裁（`twist_mux`）、ゲームパッド（`joy`）、teleopノード（`teleop_twist_keyboard`、`teleop_twist_joy`）を含みます。イメージはヘッドレスで、RVizは含みません。
 
-ディレクトリ内の各ファイルの役割は[`docker/raspberrypi/README.md`](../../docker/raspberrypi/README.md)にまとめています。
+共通のentrypointとCompose補助処理は[`docker/common/`](../../docker/common)にあります。
 
 ## 必要なもの
 
@@ -82,6 +82,20 @@ $env:BUILD_JOBS = "1"
 docker compose up -d
 ```
 
+## Composeの構成
+
+`COMPOSE_FILE`は`compose.common.yaml`を先に、ドライバ別ファイルを後に並べます。
+逆順ではcommonのplaceholderが勝ち、`raspicat`がexit 1で止まります。
+ドライバ側からcommonを`include`するとサービス上書きが競合するので、2ファイルを重ねます。
+
+- `compose.original.yaml`: 自前ドライバ。既定で、Pi 5では必須
+- `compose.rt.yaml`: rtmouseを使う公式ドライバ。Pi 4専用
+- `compose.none.yaml`: 本体ドライバを立てず`workspace-build`と`ros2`を使う環境
+
+どの入口もプロジェクト名は`daifuku-autonomous`で、名前付きボリュームを共有します。
+`Dockerfile`は依存とツールチェーン、`scripts/build-workspace.sh`はコンテナ内の
+ビルド、`fastdds_udp_whitelist.xml`はDDSの設定です。
+
 ## 本体ドライバを選ぶ
 
 `raspicat`サービスが立てる本体ドライバは、リポジトリルートの`.env`の`COMPOSE_FILE`で
@@ -98,11 +112,8 @@ sed -i 's|^COMPOSE_FILE=.*|COMPOSE_FILE=docker/raspberrypi/compose.common.yaml:d
 docker compose up -d
 ```
 
-`.env`にはもう1つ、**2つのサービスにまたがる設定**があります。`USE_MID360_IMU`
-（既定`true`）で、Mid-360のIMUと車輪オドメトリをEKFで融合するかどうかです。
-`odom -> base_footprint`と`/odom`の所有者が`raspicat`側から`ros2`側へ移る切り替えなので、
-**両方が同時に変わらないと壊れます**（片方だけだと配信元が二重になり、エラーも警告も
-出ないまま自己位置が壊れます）。launch引数ではなく環境変数で配っているのはこのためです。
+`.env`の`USE_MID360_IMU`（既定`true`）は、同じ`robot_bringup.launch.py`が
+立てるドライバとEKFの両方へ効きます。
 
 ```bash
 sed -i 's|^#*USE_MID360_IMU=.*|USE_MID360_IMU=false|' .env
@@ -115,8 +126,9 @@ docker compose up -d    # 環境変数は起動時に読まれるのでコンテ
 bootのタイミングになりました）は[LiDARとオドメトリ](lidar.md#imuと車輪オドメトリ)。
 
 もう1つ`LIDAR`（既定`mid360`。`2d`はraspicatのURG）があり、`raspicat`サービスの
-`lidar:=`へ展開されます。**LiDARを立てるのもこのサービスだけ**なので、
-`navigation.launch.py`や`mapping.launch.py`へ`lidar:=`を渡しても何も起きません。
+`lidar:=`と、自律移動・地図作成側の`/scan`を作る段へ展開されます。
+**ドライバを立てるのは`raspicat`だけ**ですが、`navigation` / `mapping`側も
+同じ`LIDAR`と`LIDAR_DRIVER`を読むので、両側を揃えてください。
 
 ```bash
 sed -i 's|^#*LIDAR=.*|LIDAR=2d|' .env
@@ -126,7 +138,7 @@ docker compose up -d
 **`.env`は2つ読まれ、値は合成されます。** リポジトリルートのものと、
 `docker/raspberrypi/.env`（`provision.sh`が`ROS_DOMAIN_ID`と`BUILD_JOBS`を書いて生成する）
 の両方で、**同じキーが両方にあるとあちらが勝ちます**。`COMPOSE_FILE`だけはルート側でしか
-効きません（[`docker/raspberrypi/README.md`](../../docker/raspberrypi/README.md#起動)）。
+効きません。
 
 `compose.original.yaml`のほうは`raspicat`サービスに`driver:=original`を渡し、
 `/sys/class/pwm`まわりのマウントを足します。Pi 5では必須、Pi 4では任意です。Pi 4で自前実装を選ぶときはrtmouseを載せないでください。
@@ -164,7 +176,7 @@ docker compose exec ros2 \
 停止していれば自動的に起動します。
 
 ```bash
-bash tools/shell.sh
+bash tools/enter-shell.sh
 ```
 
 モーター電源、遠隔操作、状態確認は`tools/control.sh`にまとめています。
@@ -176,7 +188,24 @@ bash tools/control.sh teleop keyboard
 
 サブコマンドと環境変数の一覧は[日常操作と確認](../usage/operations.md#controlshで操作する)を参照してください。
 
-`src/`はまるごとコンテナへマウントされ、`colcon build --symlink-install`が`install/`から`src/`へsymlinkを張ります。したがってホストで変更したlaunch、config、maps、rvizはビルドすら要らずノードの再起動だけで反映され、コンテナで保存した地図もホストに残ります。C++やRustのコードを変更した場合は`docker compose up`で差分ビルドされます。`docker compose build`からやり直すのは、aptの依存、`Dockerfile`、`package.xml`の依存を変更したときと、`docker/common/entrypoint.sh`または`docker/raspberrypi/scripts/build-workspace.sh`を変更したときです（後者2つはイメージへコピーされます）。
+設定・ソースの変更を反映する手順は[日常操作](../usage/operations.md#設定変更を反映する)を参照してください。
+
+## 外部ソースと再起動
+
+実行時に使う外部ソースはホスト側の`src/`です。`workspace-build`はネットワークに
+繋がっていれば`daifuku_autonomous.repos`に従って`vcs import`します。オフラインや
+import失敗時は既存のチェックアウトを使い、足りないリポジトリがあれば名前を出して止まります。
+最初の取り込みにはネットワークが必要です。タグ・コミットの変更は次の`up`で反映されますが、
+ブランチ名はローカルのcheckoutだけなので、上流へ進めるには明示的な更新が必要です。
+
+```bash
+git -C src/value_iteration3 fetch origin && git -C src/value_iteration3 merge --ff-only origin/main
+```
+
+`ros2`と`raspicat`は`restart: unless-stopped`でPiの再起動後も戻りますが、
+そのとき`workspace-build`は走らず、ボリューム内の前回の成果物を使います。
+C++やRustの変更は`docker compose up -d`を人手で通してください。
+`stop`したサービスは止まったままで、`down`した場合は次に`up`が必要です。
 
 ## 動作確認
 

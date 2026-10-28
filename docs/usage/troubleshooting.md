@@ -149,9 +149,8 @@ ls -l /dev/shm | head
 
 ## Waypointパネルが`/follow_waypoints action server is unavailable`と出す
 
-ゴールが送られる前に止まっているので、サーバ側が居ません。既定（`nav2:=false`）で
-`/follow_waypoints`を出すのは**`vi_planner`だけ**（`nav2:=true`なら
-`nav2_waypoint_follower`）で、どちらも`navigation.launch.py`が立てます。
+ゴールが送られる前に止まっているので、サーバ側が居ません。
+`/follow_waypoints`を出すのは**`vi_planner`だけ**で、`navigation.launch.py`が立てます。
 `robot_bringup.launch.py`だけでは出ません。
 
 **`ros2 action list`では判別できません。** あれはクライアントしか居ない名前も出すので、
@@ -164,11 +163,11 @@ ros2 action info /follow_waypoints   # Action servers: 1 (/vi_planner) が正
 ```
 
 navigationが立っているのに0なら、**`src/value_iteration3`のチェックアウトが古い**のが
-本命です。`vcs import`は`--skip-existing`なので、上流を更新しても既にあるクローンは
-そのまま残ります（[`docker/raspberrypi/README.md`](../../docker/raspberrypi/README.md)）。
+本命です。`vcs import`はversionがブランチ名だと上流へ進めないので、上流を更新しても既にあるクローンは
+そのまま残ります（[Docker環境](../setup/docker.md#外部ソースと再起動)）。
 `standalone`を知らない`vi_planner`は`compute_path_to_pose`と`follow_path`しか出さず、
 **知らないパラメータを渡されてもエラーにはならない**ので、起動しているように見えます。
-`nav2:=false`では`nav2_waypoint_follower`も立たないため、両方居ない状態になります。
+代わりのアクションサーバは立たないため、巡回できません。
 確かめるのは起動ログの`actions=`の行です。
 
 ```
@@ -183,73 +182,18 @@ git -C src/value_iteration3 pull   # 実機の側で。ホストの作業用ク�
 docker compose up -d               # 差分ビルド。リポジトリルートから叩くこと
 ```
 
-## Waypointパネルの「Start」が即座に`Failed (aborted)`になる
+## 古いWaypointパネルから巡回できない
 
-押した瞬間にステータス行が変わり、機体はまったく動かず、経路計算のログも出ない場合
-です。**いまのパネルは`/follow_waypoints`へ送るので、この症状が出るなら古いプラグインが
-`install/`に残っています。** 移植元は`/navigate_through_poses`へ投げていて、
-`planner:=vi`（既定）ではその行動木が常に失敗するスタブ
-（`daifuku_stack/behavior_trees/nav_through_poses_stub.xml`）に差し替わるためです。VI系
-プランナは`compute_path_to_pose`しか提供せず、nav2既定の行動木が要求する
-`compute_path_through_poses`が無いのがおおもとの理由です。
-
-RVizを起動しているコンテナで`daifuku_waypoint_manager`を建て直してください。
+現在のパネルは`/follow_waypoints`へ送ります。古いプラグインが
+`/navigate_through_poses`へ送っている場合、そのサーバは存在しません。
+RVizを起動している開発コンテナで`daifuku_waypoint_manager`を建て直してください。
 
 ```bash
-ros2 action list | grep -E 'follow_waypoints|navigate_through_poses'
-ros2 node info /vi_planner       # nav2:=true なら /waypoint_follower
+ros2 action info /follow_waypoints
+ros2 node info /vi_planner
 ```
 
-既定（`nav2:=false`）では`navigate_through_poses`は**スタブですらなく、サーバが
-そもそも居ません**。パネルやクライアントは「サーバがいません」で止まるので、
-黙ってABORTEDになる上の症状は`nav2:=true`のときだけ起こります。
-
-数秒動いてから中断する場合は別件です。TFの遅延（下の「TFが20秒以上遅れて…」）か、
-Pi 4のCPU飽和によるゴール受理ackの取りこぼし（`nav2:=true`のときの`bt_navigator`の
-`default_server_timeout`）を疑ってください。
-
-## その場で左に回り続ける
-
-**これは`nav2:=true`のときだけ起こります。** 既定の`nav2:=false`では
-`behavior_server`が立たず、`spin`というリカバリ自体が存在しません（代わりに
-`vi_planner`が止まったまま場を更新して投げ直します。
-[architecture.md](architecture.md#nav2を立てない構成nav2false)）。この節の
-「経路がそもそも引けていない」の切り分けはどちらの構成でも同じように使えます。
-
-自律走行のつもりが前へ進まず、その場で反時計回りにぐるぐる回り続ける場合です。
-**これは故障ではなくnav2のrecoveryです。** `spin`は`+1.57 rad`（反時計回り）を
-`max_rotational_vel`（`src/daifuku_config/stack/nav2/behaviors.yaml`、1.0 rad/s）で回すので、失敗した
-ゴールの数だけ左回りが繰り返されます。
-
-```bash
-ros2 topic echo /rosout --field msg | grep -E 'Running spin|Turning|Goal failed'
-ros2 topic echo /compute_path_to_pose/_action/status --once | grep -c 'status: 6'
-```
-
-`Turning 1.57 for spin behavior.`が繰り返し出て、`compute_path_to_pose`が軒並み
-`status: 6`（ABORTED）なら、**経路がそもそも引けていません**。まず疑うのは地図と
-ゴールの噛み合わせです。
-
-```bash
-ros2 topic echo /map --once --no-arr          # width/height/resolution/origin
-ros2 topic echo /rosout --field msg | grep 'Begin navigating'
-```
-
-`Begin navigating … to (x, y)`の座標が
-`origin`〜`origin + [width, height] × resolution`の外なら、地図の外へ投げています。
-巡回中なら順路が地図と対になっていません（[joystick.md](joystick.md#巡回を始める)）。
-`stop_on_failure: false`なので1点ずつ失敗しながら最後まで進み、**そのあいだずっと
-左回りが続きます**。
-
-止めるのはモータ電源です。**RVizの「Navigation 2」パネルの`Reset`を押しては
-いけません**（同梱の`navigation.rviz`にこのパネルは入っていません。自分で足したときの話です）。
-ライフサイクルマネージャは逆順に停止するので、先に`velocity_smoother`が落ち、
-`waypoint_follower`の停止で（走りっぱなしのコールバックを待って）固まります。すると
-`behavior_server`だけがactiveのまま残り、**`spin`は`velocity_smoother`を経由せず
-`/cmd_vel`へ直接出すので、回転だけが止まらなくなります**。この状態は
-`ros2 lifecycle get /velocity_smoother`が`inactive [2]`、
-`/lifecycle_manager_navigation/is_active`が無応答、で見分けられます。抜けるには
-`navigation.launch.py`を立て直してください。
+ゴールを受けてから中断する場合は、TFの遅延と地図・ゴール座標の不一致を確認します。
 
 ## `Aborting bringup`でNav2が落ちる
 
@@ -463,7 +407,7 @@ vi_planner: global propagation running for 6.0s (412 tiles done, 27 queued) # 2�
 
 単位は密（`frontier2d_sparse`）なら`cells`、compact（`frontier2d_sparse_compact`）なら`tiles`です。行そのものはどちらの経路でも同じです（2026-08-20の上流の更新まで、下の進捗はcompactでしか出ませんでした）。
 
-後者も出ないなら伝播が回っていません。`global_sweep`と、`planner:=vi`側の`solver`を確認してください（詳細は[`src/daifuku_config/README.md`](../../src/daifuku_config/README.md#効いているか確かめる)）。
+後者も出ないなら伝播が回っていません。`global_sweep`と`vi_planner`の`solver`を確認してください（詳細は[`src/daifuku_config/README.md`](../../src/daifuku_config/README.md#追従窓と全域伝播)）。
 
 ## ログを確認する
 

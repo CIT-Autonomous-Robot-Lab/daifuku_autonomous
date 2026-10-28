@@ -23,7 +23,7 @@ docker compose up -d
 ```bash
 cd ~/daifuku_autonomous
 tmux new-session -d -s nav -c "$PWD" -n nav
-tmux send-keys -t nav:nav 'docker compose exec ros2 /ros_entrypoint.sh ros2 launch daifuku_stack navigation.launch.py use_sim_time:=false localization:=vi planner:=vi' Enter
+tmux send-keys -t nav:nav 'docker compose exec ros2 /ros_entrypoint.sh ros2 launch daifuku_stack navigation.launch.py use_sim_time:=false localization:=emcl2' Enter
 
 tmux new-window -t nav -c "$PWD" -n motor
 tmux send-keys -t nav:motor 'bash tools/control.sh motor on'
@@ -36,7 +36,7 @@ tmux attach -t nav
 
 | 窓 | 中身 | 操作 |
 |---|---|---|
-| `nav` | 価値反復プランナ（経路計画・追従・自己位置推定）、地図サーバ | 終了は`Ctrl-C` |
+| `nav` | 価値反復プランナ（経路計画・追従）、emcl2（自己位置推定）、地図サーバ | 終了は`Ctrl-C` |
 | `motor` | モーター電源 | `Enter`で実行。止めるときは同じ窓で`control.sh stop` |
 | `check` | ノードとトピックの確認 | |
 
@@ -90,10 +90,8 @@ Mid-360の搭載高さ（接地面から275mm、2026-08-03実測）なので、�
 価値反復グローバル／ローカルプランナとMid-360が既定構成です。RVizは既定では
 起動しません（実機がheadlessのため。PC側から開きます）。
 
-**自己位置推定は場所で決まります。** 既定の`19f`は2026-08-09から`vi_planner`内蔵の
-推定器（VIOLA）なので`localization:=vi`が要り、`localization:=emcl2`のまま立てると
-**起動時に止まります**（[`localization:=vi`](#localizationviプランナ内蔵の推定器)）。
-`tsudanuma`は今までどおりEMCL2です。
+**自己位置推定は19Fも津田沼もEMCL2です。** `localization:=emcl2`がlaunchの既定で、
+`vi_planner`は`localizer: "external"`のままemcl2の推定姿勢を読みます。
 
 **地図も調整も渡しません。** 走らせる場所は`src/daifuku_config/site`の名前1語（既定は`19f`）で、
 `overrides`はその名前の`src/daifuku_config/overrides/<名前>.yaml`になります。**地図はその
@@ -124,14 +122,10 @@ LiDARの帯もこの launch 側が読みます）
 
 | 役 | トピック | ノード | 読むもの | launch引数 |
 |---|---|---|---|---|
-| `navigation` | `/map` | `map_server` | `vi_planner`、`global_costmap`の`static_layer` | `map:=` |
+| `navigation` | `/map` | `map_server` | `vi_planner` | `map:=` |
 | `localization` | `/map_loc` | `map_server_loc` | `emcl2` | `map_loc:=` |
 
-**`/map`が経路計画側なのは逆に見えますが、意図的です。** 経路計画側の購読者のうち
-2つ——`nav2:=true`のときに上流のvi版`navigation_launch.py`が立てる`vi_planner`と、
-Nav2の`global_costmap`の`static_layer`——は購読先が`map`固定で、こちらからremapする
-口がありません。remapできるのは自分で立てている`emcl2`だけなので、そちらを`/map_loc`へ
-回しています。
+経路計画用の`/map`は`vi_planner`、自己位置推定用の`/map_loc`は`emcl2`が読みます。
 
 **同じ地図で走らせるときも2行とも書きます。** 片方だけ書けるようにすると、書き忘れが
 もう一方の地図で黙って走る形になるためです（起動時にエラーで止まります）。同梱の
@@ -144,9 +138,8 @@ Nav2の`global_costmap`の`static_layer`——は購読先が`map`固定で、�
 
 **`localization:=vi`（VIOLA）では`/map_loc`を誰も読みません。** `map_server_loc`は
 立って配信しますが、購読するのは`emcl2`だけで、そちらが立たない構成だからです。
-**既定の`19f`がこれ**（`localizer: "belief"`のため`localization:=vi`が要る）なので、
-既定では`/map_loc`は出ているだけで効いていません。地図を2枚に分ける値打ちがあるのは
-`localization:=emcl2`で走らせる場所（`tsudanuma`や`tsudanuma_mugimaru`）です。
+同梱の`19f`・`tsudanuma`・`tsudanuma_mugimaru`はemcl2を使うので、
+いずれも自己位置推定には`/map_loc`を使います。
 
 RVizには`Map (navigation)`と`Map (localization)`の2つの表示があります。**既定でオンなのは
 後者（`/map_loc`）です**——経路計画用の地図は手で壁を描き足したり回廊の外を塗り潰したり
@@ -170,7 +163,7 @@ RVizには`Map (navigation)`と`Map (localization)`の2つの表示がありま�
 
 ```bash
 ros2 launch daifuku_stack navigation.launch.py \
-  use_sim_time:=false localization:=vi
+  use_sim_time:=false localization:=emcl2
 ```
 
 **コマンドはLiDARの構成によらず同じです。** `/scan`を出すのは機体側なので、
@@ -182,7 +175,7 @@ Mid-360でも2D LiDARでもこちらは変わりません。RVizを同じ端末�
 ```bash
 docker compose exec ros2 \
   /ros_entrypoint.sh ros2 launch daifuku_stack navigation.launch.py \
-  use_sim_time:=false localization:=vi
+  use_sim_time:=false localization:=emcl2
 ```
 
 ## 自己位置推定を選ぶ
@@ -194,22 +187,33 @@ ros2 launch daifuku_stack navigation.launch.py \
   localization:=amcl
 ```
 
-指定可能な値は`emcl2`（別名`emcl`）と`amcl`と`vi`です。
+指定可能な値は`emcl2`（別名`emcl`）と`emcl3d`と`amcl`と`vi`です。
+
+### `localization:=emcl3d`（点群地図での6DoF推定）
+
+emcl2の代わりに外部パッケージ`emcl3d`（`NOPLAB/emcl3d`）を立てます。`/scan`ではなく
+`/livox/lidar`の3D点群をPCDの点群地図と照合し、`map -> odom`と`mcl_pose`を出します
+（`vi_planner`はそのまま`mcl_pose`を読む）。地図は`overrides`の`site: map: pointcloud:`
+（`19f`は`19f/map_19f.pcd`）か`map_pcd:=`で、経路計画用の`/map`は従来どおり2D地図です。
+**PCDの座標が2D地図と揃っていないと、推定は合っていても経路がずれます**（19Fは未検証）。
+
+```bash
+ros2 launch daifuku_stack navigation.launch.py localization:=emcl3d
+```
 
 ### `localization:=vi`（プランナ内蔵の推定器）
 
 `vi_planner`は2026-08-09の上流の更新から自己位置推定も持ちます（VIOLA）。これに
 切り替えると**emcl2を立てず**、`map -> odom`も`vi_planner`が出します（`map_server`は
-残ります）。`planner:=vi`と`nav2:=false`——どちらも既定——が要ります。
+残ります）。
 
 **使うかどうかはこの引数、どれを使うかは`localizer`**です。断片
 （`src/daifuku_config/stack/vi_planner.yaml`）の既定は`external`（＝外部の推定を読む）で、
 そのまま`localization:=vi`を渡すと**起動時に止まります**。
 
-**ただし同梱の`19f`（既定のoverrides）は2026-08-09から`belief`へ上書きしています。**
-つまりこの地図では`localization:=vi`のほうが要り、既定の`localization:=emcl2`のまま
-立てると**起動時に止まります**（下の「逆向きの取り違え」がそれ）。`tsudanuma`は
-この節を持たないので今までどおりemcl2です。**19Fの内蔵推定はまだ実機で確かめていません。**
+**同梱の3地図はいずれも`external`のままです。** 19Fの`belief`上書きも外してあり、
+通常は`localization:=emcl2`で起動します。内蔵推定器を試すときだけ`localizer`を
+下の値へ変更し、`localization:=vi`と組み合わせてください。
 
 | 値 | 中身 |
 | --- | --- |
@@ -222,16 +226,14 @@ ros2 launch daifuku_stack navigation.launch.py \
 判別点を出せるのは`adaptive` / `belief` / `viterbi`の3つ（2026-08-09の上流の更新で
 `adaptive`だけではなくなった）ですが、アウトオブコアの解は単一ゴール専用なので、
 `solver: "frontier2d_sparse_compact"`のまま`true`と書くと起動時に止まります。
-**`19f`は2026-08-09に`solver`を密（`frontier2d_sparse`）へ戻して
-`active_reloc`を`true`にしてあります**——`map_scale: 2`込みで実測655 MBですが、
-`waypoint_prefetch: true`と重なると場が2本で**1.31 GB**になるので、**Pi 4（4 GB）では
-先読みのほうを外してください**（compactの頃は190 MBで済んでいました）。密へ戻す判断は
-[`src/daifuku_config/README.md`](../../src/daifuku_config/README.md)。同じ節で`map_clear_from_scan`（ビームが
-貫通したセルは地図が壁と言っていても開ける）と`qmdp`（最尤の1点ではなくbelief全体で
-行動を選ぶ）も`true`にしてあります。
+19Fではemcl2への切り替えに伴い、`active_reloc`・`map_clear_from_scan`・`qmdp`の
+上書きを外しました。`solver`は密（`frontier2d_sparse`）のまま維持しています。
+`map_scale: 2`込みで実測655 MB、`waypoint_prefetch: true`で場が2本になり
+**1.31 GB**なので、**Pi 4（4 GB）では先読みを外してください**。
+密へ戻した経緯は[`src/daifuku_config/README.md`](../../src/daifuku_config/README.md)にあります。
 
 ```bash
-# 19f (既定の overrides) は localizer: "belief" 済み
+# 試す場所の設定で localizer を adaptive などへ変更した場合のみ
 ros2 launch daifuku_stack navigation.launch.py \
   localization:=vi
 ```
@@ -246,75 +248,24 @@ beliefを張り直すためです（`adaptive`と`belief`は未シードでも�
 （`mcl_pose`）が20 Hzの手動シードとして読まれて、**エラーも警告も出ないまま自己位置
 だけが壊れる**ためです。
 
-## プランナを選ぶ
+## 経路計画と追従
 
-既定の`planner:=vi`は価値反復プランナを使います。`local_planner`も既定（`auto`）では`vi`になり、`vi_planner`1ノードが1本の価値関数で経路計画と経路追従の両方を担います。価値反復の計算はゴールごとに1回だけです。
+`vi_planner`をstandaloneで起動し、1本の価値関数で経路計画と追従を担います。
+`navigate_to_pose`と`follow_waypoints`も同じノードが提供します。
+BTやNav2のコントローラは立てず、NavFn・DWBへの切り替え引数もありません。
 
-NavFnとNav2 DWBへ切り替える場合:
-
-```bash
-ros2 launch daifuku_stack navigation.launch.py \
-  planner:=navfn nav2:=auto
-```
-
-グローバルは価値反復のまま、ローカルだけDWBへ変更する場合:
+速度平滑化は`velocity_smoother`と`lifecycle_manager_navigation`が担います。
+`velocity_smoother:=false`なら両方を外し、VIが直接`cmd_vel`を出します。
+地図サーバ、AMCL、ライフサイクル管理などの共有ユーティリティは引き続き使います。
 
 ```bash
-ros2 launch daifuku_stack navigation.launch.py \
-  planner:=vi local_planner:=nav2 nav2:=auto
-```
-
-**どちらも`nav2:=auto`が要ります。** `nav2`の既定は`false`＝Nav2を立てない
-（次節）で、これらの構成では`navigate_to_pose`を出すものが居なくなるため、
-付け忘れると**起動時にエラーで止まります**（黙ってNav2を立て直したりはしません）。
-`nav2:=auto`はプランナに連動して`true`/`false`を選び、`nav2:=true`は明示的に
-Nav2を立てます。
-
-`local_planner:=auto`（既定）は、`planner:=vi`なら`vi`、`planner:=navfn`なら`nav2`を選びます。
-
-### Nav2を立てるかどうか（`nav2:=false`が既定）
-
-**素で起動するとNav2のBTもコントローラも立ちません。**
-`vi_planner`が`navigate_to_pose`と`follow_waypoints`も提供するので、
-`bt_navigator`・`behavior_server`・`smoother_server`・`waypoint_follower`が
-不要になります。残るのは`velocity_smoother`と、それを起こすためだけの
-`lifecycle_manager_navigation`（管理下は1ノード）で、`velocity_smoother:=false`に
-するとどちらも消えます。アクション型は`nav2_msgs`のままなので、
-RVizの「Nav2 Goal」もパネルもパッドも、操作は何も変わりません。
-
-```bash
-# 何も付けなければ Nav2 抜き（vi_planner 1 ノード）
 ros2 launch daifuku_stack navigation.launch.py
-ros2 launch daifuku_stack navigation.launch.py \
-  nav2:=true                     # 従来どおりBTを挟む構成に戻す
-ros2 launch daifuku_stack navigation.launch.py \
-  velocity_smoother:=false       # 残る唯一のlifecycleノードも外す
+ros2 launch daifuku_stack navigation.launch.py velocity_smoother:=false
 ```
 
-`nav2:=false`が成り立つのは`planner:=vi`かつ狭域も`vi`に解決されるときだけです。
-`planner:=navfn`や`local_planner:=nav2`と組み合わせると`navigate_to_pose`を出す
-ものが居なくなるので、**起動時にエラーで止まります**（`nav2:=auto`か`nav2:=true`を
-足してください。前節）。黙ってNav2を立て直さないのは、「立てないつもりだったのに
-立っていた」が起動ログを1行ずつ読むまで気付けないためです。
-
-BTを外すと、VIが損をしていた点が消えます。**毎秒の再計画が無くなり**（BTは
-`ComputePathToPose`を1 Hzで呼び、キャッシュヒットでもロールアウトを共有ロックの中で
-回していました。10 Hzの追従ループはそれと毎秒取り合っていました）、**経路が引けなくても
-ゴールが死ななくなり**（ロールアウトの振動＝`LoopDetected`は「方策が無い」とは別物です）、
-**投げ直しの待ちに意味が出ます**。最後のが一番効きます — BTの`Wait`のあいだは
-`follow_path`が走っていないので価値関数が1ミリも動かず、待っても状況が変わりません。
-`nav2:=false`では投げ直しの前に3秒（2026-08-09の上流の整理でノード内の固定値になりました。
-それまでは`goal_retry_settle_sec`）のあいだ**止まったままスキャンを取り込み続ける**ので、一度「通れない」と塗った場所のペナルティが実際に薄れていきます。
-投げ直しの上限は`goal_retry_limit`（既定3、負で無制限）です。
-
-読む設定ファイルも減ります。効くのは`src/daifuku_config/stack/vi_planner.yaml`と`map_server.yaml`、
-`src/daifuku_config/stack/localization/emcl2.yaml`、それに`behaviors.yaml`の`velocity_smoother`の節だけです。
-`bt_navigator.yaml`・`controller_server.yaml`・`costmaps.yaml`と`behaviors.yaml`の
-残り3ノード分、`behavior_trees/`は**合成には入るが宛先の
-ノードが立たないので黙って無視されます**。`behaviors.yaml`の`waypoint_follower`にあった
-`stop_on_failure`と`waypoint_pause_duration`に当たるものは`vi_planner.yaml`の
-`stop_on_failure`と`waypoint_pause_sec`です。詳しくは
-[architecture.md](architecture.md#nav2を立てない構成nav2false)。
+投げ直しの前には3秒止まったままスキャンを取り込んで場を更新します。
+上限は`src/daifuku_config/stack/vi_planner.yaml`の`goal_retry_limit`です。
+巡回の`stop_on_failure`と`waypoint_pause_sec`も同じファイルで設定します。
 
 `vi_planner`は既定でアウトオブコアソルバ（`frontier2d_sparse_compact`）で解きます。
 状態配列を確保せず、確定した価値関数と方策だけを12バイト/状態で持つので、地図が
@@ -326,7 +277,7 @@ BTを外すと、VIが損をしていた点が消えます。**毎秒の再計�
 実時間は起動ログの`global propagation settled in ...`に出ます。
 
 `19f`では`map_scale: 2`でプランナ内部だけを0.10 m/セルに粗くしています（地図、
-コストマップ、自己位置推定は0.05 mのままです）。**この地図は2026-08-09に密ソルバ
+自己位置推定は0.05 mのままです）。**この地図は2026-08-09に密ソルバ
 （`frontier2d_sparse`）へ戻したので、`map_scale: 2`はいまは必須です**——`active_reloc`が
 アウトオブコアを受け付けないためで、密は状態1つあたり80バイト要り、scale 1では2.53 GBに
 なります（scale 2の実測655 MB。マシンの`MemAvailable`を
@@ -344,7 +295,7 @@ BTを外すと、VIが損をしていた点が消えます。**毎秒の再計�
 `src/daifuku_config/overrides/tsudanuma.yaml`を`overrides:=tsudanuma`で重ねると、プランナ内部だけが
 0.25 m/セル（`map_scale: 5`、1178×800×60＝5650万状態）に粗くなり、状態配列を確保しない
 アウトオブコアソルバ（`frontier2d_sparse_compact`）へ切り替わります。確定した価値関数と方策
-（実測648 MB）はRAMに置かれます。地図サーバ、コストマップ、自己位置推定は0.05 mのままです。
+（実測648 MB）はRAMに置かれます。地図サーバと自己位置推定は0.05 mのままです。
 
 置き場を決めるのは`compact_sink_dir`と`compact_ram_limit_mb`で、**判定は明示指定が
 無条件に優先**です。`compact_sink_dir`が空でなければそのディレクトリへmmapし、上限は
@@ -356,17 +307,12 @@ BTを外すと、VIが損をしていた点が消えます。**毎秒の再計�
 
 ```bash
 tools/site.sh tsudanuma   # 場所を切り替える
-ros2 launch daifuku_stack navigation.launch.py \
-  planner:=vi
+ros2 launch daifuku_stack navigation.launch.py
 ```
 
-`local_planner`は既定の`auto`（`planner:=vi`なので`vi`）でも`nav2`でも動きます。どちらも同じ
-`vi_planner`で、`map_scale`もアウトオブコア経路も同じだからです（`nav2`は`follow: false`）。`vi_planner`の
-狭域追従だけは密な状態配列を必要とします。ただし全域ではなく、ロボット近傍のパッチだけを
-確定出力（sink）から起こして回します（追従の窓＋遷移到達距離＋余裕。
-0.25 mセルで27×27×60≒2.5 MB）。**実寸は2026-08-20から起動ログの
-`vi_planner: follow patch ...`にMBで出ます**——窓の寸法の2乗で効くので、`local_xy_range`や
-`local_shape`を触ったらここを見てください（止める門はありません）。
+`vi_planner`の狭域追従は、全域ではなくロボット近傍のパッチだけを
+確定出力（sink）から起こします。実寸は起動ログの`vi_planner: follow patch ...`に
+MBで出るので、`local_xy_range`や`local_shape`を変更したら確認してください。
 
 狭域→広域のフィードバック（`global_sweep`）もこの地図で効きます。compactでは共有場が
 状態配列ではなくmmapの確定出力なので、伝播の粒度がセルではなく
@@ -383,18 +329,6 @@ compactでも同じです（2026-08-20の上流の更新まで、密だけが地
 2026-08-20から同じ行が出ます）。長すぎるようなら`global_sweep_duty`（既定25 %）を上げますが、**上限を決めているのはCPUではなく追従ループと共有するMutex**です
 （[`src/daifuku_config/README.md`](../../src/daifuku_config/README.md)の`global_sweep`の節）。
 
-NavFnとDWBで動かす場合、`tsudanuma`の価値反復向け設定は要りません。ただし
-`overrides:=none`はEMCL2の調整も一緒に落とすので、**ふつうは場所を切り替えたまま
-`planner:=navfn`だけを渡してください**（VI向けの節は`vi_planner`宛で、
-それらが立たない構成では宛先が無いだけです）。どうしても何も重ねたくないときは
-`map:=`を自分で渡します——`overrides:=none`は場所を名乗らないので、地図を導けません。
-
-```bash
-tools/site.sh tsudanuma
-ros2 launch daifuku_stack navigation.launch.py \
-  planner:=navfn
-```
-
 注意点:
 
 - `map_scale: 5`は単独では効きません。`downsample_policy: optimistic`（ブロック内にfreeが
@@ -404,10 +338,7 @@ ros2 launch daifuku_stack navigation.launch.py \
 - 保守的プーリング（障害物優先。`downsample_policy`の既定）だと通路のセル幅が価値反復の
   遷移分布（約2セル幅）を下回り、`map_scale`が4以上で波がゴール近傍から広がりません。
   楽観側は通路を細らせない代わりに、自由セルの境界が壁へ寄ります。
-- 実測のfootprint（420×450 mm、外接円0.408 m）と`inflation_radius` 0.55 mで実際に通れるかは、
-  経路ごとに確認してください。`map_scale: 5`で解けることを確かめた当時のコストマップは
-  `robot_radius: 0.22`（`nav2_bringup`のyamlのまま）だったため、実機の条件はこれより
-  厳しくなります。
+- 車体寸法と障害物回避の余裕が実際の経路で足りるか確認してください。
 - ピークRSSは`vi_planner`で実測1.60 GB（うちsinkのmmapが648 MB）です。
   `map_scale: 3`＋保守的プーリングだった頃の広域専用ノード`vi_global_planner`の3.98 GBから
   下がり、Raspberry Pi 4の4 GBに収まります（そのノードは2026-08-08の上流の整理で消え、
@@ -421,21 +352,12 @@ ros2 launch daifuku_stack navigation.launch.py \
   （0.6コア、`vi_threads: 3`）で回した実測では、solveとロールアウトに87〜89秒かかりました。
   返した経路は398姿勢で、結果はSUCCEEDEDです。同じゴールへの再計画はキャッシュヒットで
   即座に返ります。
-- 同じ0.6コアの枠にBT込みで通すと、solveがCPUを占めてEMCL2まで道連れにし、900秒経っても
-  `/plan`が出ませんでした（BTはsolveを待たずリカバリを繰り返してABORTします）。実機のPi 4は
-  4コアあるので同じにはならないはずですが、**実機での通し確認はまだ取れていません**。
-
-- `bt_navigator`の`wait_for_service_timeout`は60秒にしてあります。`planner:=vi`では
-  プランナが`/map`を受け取ってから`compute_path_to_pose`を作るため、Nav2既定の1秒では
-  間に合わずbringupが失敗します。
 - この地図は68.2%が未観測セルで、占有セルは0.4%しかありません。EMCL2やAMCLの
   スキャンマッチングは占有セルの尤度場に依存するため、現状では自己位置推定の
   拠り所がほとんどありません（経路計画とは別の課題です）。
 
-実測値の出どころは`src/daifuku_config/overrides/tsudanuma.yaml`のヘッダ（2026-08-01）と
-`src/daifuku_config/README.md`です。`simulator/docs/pi4_sim.md`にもPi 4相当での
-走行記録がありますが、そちらは`map_scale: 3`＋保守的プーリングだった頃のものなので、
-所要時間もメモリもここの値とは一致しません。
+実測値の出どころは`src/daifuku_config/overrides/tsudanuma.yaml`のヘッダと
+[`src/daifuku_config/README.md`](../../src/daifuku_config/README.md)です。
 
 ## ゴールを指定する
 
@@ -474,16 +396,14 @@ RVizを立て直したあと、「Nav2 Goal」の単発ゴール——もこれ�
 RVizのFixed Frameとwaypointの`frame_id`が一致している必要があります。ずれていると
 追加も追加読み込みも拒否され、パネルのステータス行にだけ理由が出ます。
 
-点と点のあいだではいったん止まります。停止時間は既定（`nav2:=false`）では
-`src/daifuku_config/stack/vi_planner.yaml`の`waypoint_pause_sec`（0.2秒。この間も価値関数の更新は
-続きます）、`nav2:=true`では`src/daifuku_config/stack/nav2/behaviors.yaml`の`waypoint_pause_duration`
-（200 ms）です。行けない点があっても巡回は続き、完了時に取りこぼした点数がステータス行に
-出ます（`stop_on_failure: false`。これも構成ごとに置き場が違い、既定では
-`vi_planner.yaml`の側です）。
+点と点のあいだの停止時間は`src/daifuku_config/stack/vi_planner.yaml`の
+`waypoint_pause_sec`で設定します。この間も価値関数の更新は続きます。
+`stop_on_failure: false`なら行けない点があっても巡回を続け、完了時に取りこぼした点数が
+ステータス行に出ます。
 
 ### 次の点を走行中に解いておく（`waypoint_prefetch`）
 
-`planner:=vi`では、上の「いったん止まる」がポーズ時間だけでは済みません。VIは
+上の「いったん止まる」がポーズ時間だけでは済みません。VIは
 ゴールごとに価値関数を解き直すので、**点が変わるたびに丸ごと1回のsolveが入り、その
 間ずっと機体が止まっています**（実測で19Fが29秒、津田沼が87秒）。
 
@@ -502,11 +422,8 @@ vi_planner: prefetched the value function for (12.30, -4.50) in 31.20s
 vi_planner: path with 412 poses in 0.34s (solved_now=true, iters=0, prefetched)
 ```
 
-既定の`nav2:=false`では、順路は`/follow_waypoints`のゴールそのものが先読みへ渡ります。
-`nav2:=true`だけは違い、順路を`/waypoints`（`nav_msgs/Path`、latch）へ出す
-`daifuku_waypoint_manager`のパネルか`joy_teleop`（START+BACK）を通った巡回でしか
-効きません。そちらで`/follow_waypoints`へ直接投げた場合と単発ゴールは順路が無いので
-対象外で、そのときも**エラーは出ません**。効いているかは上のログで判断してください。
+順路は`/follow_waypoints`のゴールそのものが先読みへ渡ります。
+効いているかは上のログで判断してください。
 
 有効なぶん代償も常時払います。価値関数が同時に2つ生きるので、場も2つ要ります。
 密ソルバではメモリがそのまま2倍です。compactでsinkがディスクへ出るのは
@@ -579,13 +496,13 @@ compactだった頃のものです）。前進量とペナルティを下げて�
 
 ## 価値反復の表示
 
-`planner:=vi`では、新しいゴールの最初の計算で地図全体を解くため、地図サイズにより数秒から数十秒かかる場合があります。同じゴールへの再計画は価値関数キャッシュにより高速です。
+新しいゴールの最初の計算で地図全体を解くため、地図サイズにより数秒から数十秒かかる場合があります。同じゴールへの再計画は価値関数キャッシュにより高速です。
 
 `rviz/navigation.rviz`には次のOccupancyGrid表示があります。
 
 - `/value_function`: 価値関数のθ=0スライス。計算途中も既定500 ms間隔で更新
 - `/local_window_value`: 機体周りの追従ウィンドウ（既定はカプセル、前後2.5 m・横2.0 m）の値。スキャン由来のペナルティと局所反復をリアルタイムに表示
-  （`local_planner:=vi`のときのみ）。**2026-08-20から窓の形がそのまま見えます**——`local_shape`で
+  **2026-08-20から窓の形がそのまま見えます**——`local_shape`で
   矩形以外にすると、形の外は未知（-1）で出るためです
 - `/belief`: VIOLAの自己位置belief（`localization:=vi`かつ`localizer`が`external`以外のときのみ）。**既定では表示オフ**——未収束のbeliefは自由空間ほぼ全域が非ゼロで、最前面に0.9の濃さで塗ると地図も価値関数も隠れるため。見るときはDisplaysでチェックを入れる
 

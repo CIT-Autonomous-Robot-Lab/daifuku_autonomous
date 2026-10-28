@@ -1,0 +1,36 @@
+pointcloud_to_laserscan_loc:
+  ros__parameters:
+    target_frame: localization_gravity          # Colocated leveled sensor projection.
+    transform_tolerance: 0.1                    # Transform lookup tolerance, seconds.
+    min_height: 0.275                          # Exclude returns below the sensor.
+    max_height: 5.5                            # Preserve the validated side-surface band.
+    angle_min: -3.141592653589793               # Full circle.
+    angle_max: 3.141592653589793                # Full circle.
+    angle_increment: 0.0017453292519943296       #0.1degree bins retain upward rings.
+    queue_size: 4                              # Same queue as the recorded runs.
+    scan_time: 0.1                             # Projection metadata, not clock control.
+    range_min: 0.05                            # Actual simulated sensor minimum.
+    range_max: 100.0                           # Real returns across the empty60m region.
+    use_inf: true                             # Missing returns remain unobserved.
+scan_filter_loc:
+  ros__parameters:
+    filter1:
+      name: robot_self_returns
+      type: laser_filters/LaserScanBoxFilter
+      params:
+        box_frame: base_footprint
+        min_x: -0.35
+        max_x: 0.18
+        min_y: -0.18
+        max_y: 0.18
+        min_z: -0.05
+        max_z: 0.25
+        invert: false
+localization_elevation_filter:
+  ros__parameters:
+    min_elevation_deg: 9.5                     # Reject near terrain returns.
+    max_elevation_deg: 75.0                    # Same upper angle bound.
+    far_range_m: 30.0                          # Keep the original near-field selection.
+    far_min_elevation_deg: 4.5                  # Beyond30m retain the physical5degree ring.
+    distant_range_m: 60.0                      # Preserve the near and middle bands.
+    distant_min_elevation_deg: 1.25              # Beyond60m retain the physical1.5degree ring.

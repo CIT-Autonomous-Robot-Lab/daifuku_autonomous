@@ -1,0 +1,31 @@
+{
+  "source_image": "navigation_reviewed.pgm",
+  "source_sha256": "9275db875d500756e12f23058c27dd50777ea6973a34d474218e5d5056955c56",
+  "output_image": "navigation_cityhall.pgm",
+  "output_sha256": "aab0e66d3039bad5485a494e21cece2d85ad61ced416477ae9f4ff0eb9efe029",
+  "source_image_crop_xywh": [
+    714,
+    648,
+    1800,
+    1550
+  ],
+  "width": 1800,
+  "height": 1550,
+  "resolution": 0.1,
+  "origin": [
+    -5.0,
+    -120.0,
+    0.0
+  ],
+  "world_bounds_xyxy_m": [
+    -5.0,
+    -120.0,
+    175.0,
+    35.0
+  ],
+  "free_cells_after": 616466,
+  "occupied_cells_after": 112937,
+  "pixel_values_changed": 0,
+  "coordinate_frame_preserved": "GLIM world XY; YAML origin compensates the crop.",
+  "compact_output_bytes_at_60_headings": 2008800000
+}

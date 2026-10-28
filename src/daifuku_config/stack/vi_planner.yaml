@@ -5,14 +5,8 @@
 # action_forward_m と、追従の窓の 4 つ (local_shape / local_xy_range /
 # local_xy_range_lat / local_shape_ratio_max)。localizer も書いてあるが値は既定と同じで、
 # 「どの推定器を使うか」を持つ唯一の場所なので空欄にせず明示してある。
-# **ノードは 1 つだけ**で、立ち方は launch が選ぶ: local_planner:=vi が広域 + 追従、
-# :=nav2 が広域だけ (follow: false)、nav2:=false (この構成の既定) は standalone で
-# navigate_to_pose と follow_waypoints も出す。**follow / standalone / publish_tf は
-# launch が渡すのでここに書かないこと** (下の各キーの ▲)。nav2:=false で丸ごと読まれ
-# なくなる断片 (nav2/{bt_navigator,controller_server,costmaps}.yaml と behavior_trees/)
-# は ../README.md。
-
-# ── local_planner:=vi: 統合プランナ (planner_server + controller_server 置換) ──
+# vi_planner is always standalone and serves navigation and waypoint actions.
+# follow / standalone / publish_tf are launch-owned; do not configure them here.
 vi_planner:
   ros__parameters:
     use_sim_time: false
@@ -59,10 +53,10 @@ vi_planner:
     # dwa_horizon_s: 1.0          # dwa・mppi の前方シミュレーション時間 [s]
     # dwa_lethal_penalty: 2.0     # 既定 2.0 [PROB_BASE 倍]: 軌道の途中で margin 帯を踏む候補を棄却する。0 で「壁を掠める」旧挙動へ戻る。dwa 専用なのでいまはどの地図でも効いていない
     # mppi_samples: 256           # mppi のサンプル本数。候補数 (dwa 7x11) と温度・ノイズは 2026-08-09 にキーごと消えてノード内の const になった (書いても読まれない)
-    # ── スタンドアロン (nav2:=false のときだけ効く。standalone は launch が渡す) ──
-    goal_retry_limit: 3           # 既定 3: 追従が失敗したときにゴールを投げ直す上限 (負で無制限)。BT の RecoveryNode number_of_retries: 6 の置き換え。投げ直す前に止まって場を更新する 3 秒はノード内の const (goal_retry_settle_sec は 2026-08-09 にキーごと消えた)
-    stop_on_failure: false        # 既定 false: follow_waypoints で 1 点失敗したら残りを諦めるか。nav2 構成の nav2/behaviors.yaml の waypoint_follower の同名キーと同義で、**nav2:=false ではあちらは読まれない**
-    waypoint_pause_sec: 0.2       # 既定 0.2 [s]: 1 点に着いてから次の点へ向かうまで。あちらの waypoint_pause_duration: 200 [ms] と同義。この間も場は更新し続ける
+    # ── スタンドアロン (standalone は launch が渡す) ──
+    goal_retry_limit: 3           # 既定 3: 追従が失敗したときにゴールを投げ直す上限 (負で無制限)。投げ直す前に止まって場を更新する 3 秒はノード内の const (goal_retry_settle_sec は 2026-08-09 にキーごと消えた)
+    stop_on_failure: false        # 既定 false: follow_waypoints で 1 点失敗したら残りを諦めるか
+    waypoint_pause_sec: 0.2       # 既定 0.2 [s]: 1 点に着いてから次の点へ向かうまで。この間も場は更新し続ける
     # ── 狭域 → 広域のフィードバック (共有価値関数の全域伝播。仕組みと実測は ../README.md) ──
     global_sweep: true            # 既定 true: 全域伝播 (値が動いた範囲だけの能動集合。粒度は密がセル、compact がタイル) を回すか。切ると狭域が「通れない」と判断しても広域は塞がった通路を指し続ける
     # ▲ 掃きの配分は global_sweep_duty [%] 1 つにまとまった (既定 25 のまま未設定)。
@@ -94,10 +88,7 @@ vi_planner:
     #   (tsudanuma_mugimaru が据え切りだけ ±60 で、2026-09-03 の実機でその場で回り続けた)。
 
     # ── 未設定 (既定のまま) ──
-    # standalone: false           # navigate_to_pose と follow_waypoints も自分で出すか。
-    #     ▲ **ここに書かないこと** — 渡すのは launch (nav2:= の解決結果)。ここで真にすると
-    #       Nav2 構成のときに navigate_to_pose のサーバが bt_navigator と 2 つになり、
-    #       どちらへ繋がったかは**ログにも `ros2 action list` にも出ない**。
+    # standalone / follow are always true, set by navigation.launch.py.
     # map_scale: 1                # プランナ内部で地図を粗くする倍率 (1 = /map のまま)。実例は ../overrides/ の 3 地図とも
     # downsample_policy: "conservative"  # map_scale > 1 のときの縮小方針 (障害物優先。optimistic は free 優先)
     # compact_sink_dir: ""        # compact 解の置き場 ("" = RAM)。追従が置き直しのたびに読むので遅い先だと制御周期に響く。同梱の 3 地図はどれも空 (Pi 5 の 8GB 前提)。**4GB 機で使うなら実ディスクを指すこと** (指定すると無条件に勝ち、compact_ram_limit_mb は一切読まれない)
@@ -122,9 +113,7 @@ vi_planner:
     #   grid            … その 1 レベル版 (要シード、再定位なし)
     #   belief          … 全地図に belief を持つ和積。未シードでも立つが窓が無いぶん重い
     #   viterbi         … 同じ場を min-plus で回す変種。1 観測 183ms で実走行には向かない
-    localizer: "external"        # 既定 同左: 自己位置の出どころ。**localization:=vi のときだけ
-                                 # 上の 4 つから選ぶ**。**既定の overrides (19f) は belief へ
-                                 # 上書きしている**ので、あの地図は localization:=emcl2 では立たない
+    localizer: "external"        # 既定 同左: 自己位置の出どころ。同梱の 3 地図は emcl2 の推定を読む
     #     ▲ 内蔵を選ぶと pose_topic の意味が「連続入力」から**手動シード**へ変わる。launch が
     #       localization:=vi のときだけ initialpose へ向け直す (mcl_pose のままだと 20Hz で
     #       張り直され、**エラーも警告も出ないまま素通しと変わらない**)。**その initialpose は
@@ -139,5 +128,5 @@ vi_planner:
     #       map_clear_from_scan / qmdp / active_reloc は external では読まれないか実質無効
     #       なので**ここには書かない**。active_reloc は**上の solver も密であることが要る** —
     #       アウトオブコアの解は単一ゴール専用なので、compact のまま true にすると起動時に
-    #       止まる (19f がそのために密へ戻している)。
+    #       止まる。
     #

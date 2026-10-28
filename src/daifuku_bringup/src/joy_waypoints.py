@@ -28,7 +28,7 @@
   * 有限でない値と、長さが 0 のクォータニオンは弾く。NaN のまま
     FollowWaypoints へ投げると Nav2 の側で黙って落ちる
 
-ここを直したらパネル側も直すこと。検算は simulator/tests/verify_waypoints.py。
+ここを直したらパネル側も直すこと。検算は tools/maps/verify_waypoints.py。
 """
 
 import math

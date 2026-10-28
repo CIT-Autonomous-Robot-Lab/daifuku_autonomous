@@ -40,11 +40,8 @@ def fragments_resolver(context):
     合成する。断片はノード単位で重複しない前提 (src/daifuku_config/README.md) で、重なると
     「どちらが勝つか分からない」ので止める。
 
-    vi_planner だけ nav2/ の外に居るのは、あれが Nav2 のノードではないため。
-    それでも合成に入れるのは、**入れないと効かないから**: 上流の
-    navigation_launch.py は params_file を 1 つしか受け取らないし、overrides が
-    重なれるノード名はこの合成結果 (下の set(merged)) で決まるので、外すと
-    overrides の vi_planner: が「行き先の無いノード名」で起動時に落ちる。
+    VI and the shared Nav2 utilities receive the same composed file so overrides
+    can target either node.
 
     params_file:= を明示したときはそれを土台にするが、**上書きを受けるノード名は
     断片のものを使う**。nav2 のノード宛の節が params_file:= を渡した途端に黙って
@@ -59,9 +56,10 @@ def fragments_resolver(context):
         # 黙って落とさない。抜けると vi_planner が宣言時の既定だけで上がり、
         # overrides の vi_planner: が「行き先の無いノード名」で落ちる。
         raise RuntimeError(f"Missing parameter fragment: {vi_frag}")
-    fragments = sorted(glob.glob(os.path.join(params_dir, "*.yaml"))) + [vi_frag]
-    if not fragments:
+    nav2_fragments = sorted(glob.glob(os.path.join(params_dir, "*.yaml")))
+    if not nav2_fragments:
         raise RuntimeError(f"No parameter fragments found in {params_dir}")
+    fragments = nav2_fragments + [vi_frag]
 
     merged, owner = {}, {}
     for frag in fragments:
@@ -90,13 +88,13 @@ def fragments_resolver(context):
 
 
 # site: map: に書く 2 つの役と、それぞれに対応する launch 引数。
-# **navigation が /map で、localization が /map_loc。** 逆ではないのは、
-# 経路計画側の地図を購読するもののうち 2 つ——上流の vi 版 navigation_launch.py が
-# 立てる vi_planner (nav2:=true のとき) と、nav2 の global_costmap の
-# static_layer——が "map" 決め打ちで、こちらから remap する口が無いため。
-# remap できるのは自分で立てている emcl2 のほうだけなので、そちらを /map_loc へ回す。
+# Navigation reads /map, and external 2D localization reads /map_loc.
 MAP_ROLES = ("navigation", "localization")
 _MAP_ARGS = {"navigation": "map", "localization": "map_loc"}
+# site: map: に書ける 3 つめのキー。localization:=emcl3d が読む PCD の点群地図で、
+# **それ以外の構成では読まないので任意** (2D の 2 枚と違って書き忘れが黙って走る
+# 相手が居ない)。emcl3d を選んだのに決まらなければ resolve_map が落とす。
+POINTCLOUD_KEY = "pointcloud"
 
 _MAP_EXAMPLE = (
     "  site:\n"
@@ -139,12 +137,14 @@ def declared_maps(context):
             "2026-08-25 から役ごとに 2 枚書きます。\n" + _MAP_EXAMPLE
             + "同じ地図で走らせるときも 2 行とも書いてください。"
         )
-    unknown = sorted(k for k in declared if k not in MAP_ROLES)
+    unknown = sorted(k for k in declared if k not in MAP_ROLES + (POINTCLOUD_KEY,))
     if unknown:
         raise RuntimeError(
             f"overrides:{site} の site: map: に知らない役があります: "
             f"{', '.join(unknown)}\n"
-            f"書けるのは {' / '.join(MAP_ROLES)} の 2 つだけです。\n" + _MAP_EXAMPLE
+            f"書けるのは {' / '.join(MAP_ROLES)} の 2 つと、任意の "
+            f"{POINTCLOUD_KEY} (localization:=emcl3d の PCD) だけです。\n"
+            + _MAP_EXAMPLE
         )
     missing = [r for r in MAP_ROLES if not str(declared.get(r) or "").strip()]
     if missing:
@@ -249,10 +249,14 @@ def resolve_map(context, *args, **kwargs):
     #     立てるので、2 枚目を渡す口が無い。
     #   localization:=vi (VIOLA) … vi_planner の地図の購読が 1 つしかないので、
     #     経路計画と自己位置推定が同じ地図を見る。
+    selected = value(context, "localization")
+    if selected == "emcl3d":
+        actions += _resolve_pointcloud(context, site)
+
+    # emcl3d は /map_loc を読まない (PCD を直に読む) ので、2 枚が別でも害は無い。
     if os.path.realpath(resolved["navigation"]) != os.path.realpath(
             resolved["localization"]):
-        selected = value(context, "localization")
-        if selected not in ("emcl", "emcl2"):
+        if selected not in ("emcl", "emcl2", "emcl3d"):
             raise RuntimeError(
                 "navigation と localization に別の地図を指しているので、"
                 f"localization:={selected} では走れません。\n"
@@ -266,3 +270,49 @@ def resolve_map(context, *args, **kwargs):
             )
 
     return actions
+
+
+def _resolve_pointcloud(context, site):
+    """localization:=emcl3d の map_pcd:= を決める (resolve_map から呼ぶ)。
+
+    2D の地図と同じ規則: 既定は overrides の `site: map: pointcloud:`、明示したら
+    それと同じものかを見る。**決まらなければ止める** — 別の場所の点群で 6DoF の
+    推定を始めると、2D より派手に飛ぶ。
+    """
+    declared = (site_meta(context).get("map") or {}).get(POINTCLOUD_KEY)
+    want = _map_path(declared) if str(declared or "").strip() else ""
+    explicit = value(context, "map_pcd")
+
+    if explicit:
+        if want and os.path.realpath(explicit) != os.path.realpath(want):
+            raise RuntimeError(
+                "map_pcd:= と overrides:= が食い違っています。\n"
+                f"  map_pcd:=          {explicit}\n"
+                f"  overrides:{site} の site: map: {POINTCLOUD_KEY}: -> {want}\n"
+                "ふつうは map_pcd:= を渡さない (overrides が持っています)。"
+                "対にしないと分かっていてやるなら overrides:=none を添える。"
+            )
+        path = explicit
+    elif want:
+        path = want
+    else:
+        raise RuntimeError(
+            "localization:=emcl3d が読む点群地図 (PCD) が決まりません。\n"
+            + (f"overrides:{site} の site: map: に {POINTCLOUD_KEY}: がありません。\n"
+               if site else "overrides:=none なので、場所から地図を導けません。\n")
+            + f"overrides の site: map: に {POINTCLOUD_KEY}: 19f/map_19f.pcd のように"
+            "書くか、map_pcd:= を明示してください。"
+        )
+
+    if not os.path.isfile(path):
+        raise RuntimeError(
+            f"PCD map does not exist: {path}\n"
+            f"site: map: {POINTCLOUD_KEY}: は daifuku_stack の maps/ からの相対パス"
+            "(19f/map_19f.pcd のように拡張子まで書く) か、絶対パスです。"
+        )
+    return [
+        LogInfo(msg=f"map_pcd: {path}"
+                    + ("" if explicit else f" (overrides:{site} の site: map: "
+                                           f"{POINTCLOUD_KEY}: から)")),
+        SetLaunchConfiguration("map_pcd", path),
+    ]

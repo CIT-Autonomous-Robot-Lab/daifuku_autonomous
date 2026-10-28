@@ -48,10 +48,7 @@ constexpr char kMarkerTopic[] = "/waypoint_markers";
 // そろえてある。片方だけ変えると先読みが黙って効かなくなる。
 constexpr char kWaypointPathTopic[] = "/waypoints";
 constexpr char kActionName[] = "/follow_waypoints";
-// 取り消しは単発ゴール側にも投げる。**nav2:=true では follow_waypoints の下に
-// navigate_to_pose の子ゴールがぶら下がる**ので、waypoint_follower が固まって
-// いると上だけ止めても bt_navigator 側が走り続ける。nav2:=false でも、Nav2 Goal
-// から出した単発ゴールがここで止まる。
+// 単発ゴールも巡回と一緒に取り消す。
 constexpr char kNavigateActionName[] = "/navigate_to_pose";
 // action の裏にあるキャンセルサービス。空の goal_info = そのサーバの全ゴール。
 constexpr char kCancelServiceSuffix[] = "/_action/cancel_goal";
@@ -660,7 +657,7 @@ bool WaypointManagerPanel::readYamlFile(
       // z だけは省略可。接地して走る機体なので無くても意味が決まる
       // (joy_waypoints.load_waypoint_document と同じ扱い。片方だけが通す形にすると、
       // 手で書いた順路が「実機では走るのにパネルでは開けない」になる)。
-      // 書式の検算は simulator/tests/verify_waypoints.py。
+      // 書式の検算は tools/maps/verify_waypoints.py。
       pose.pose.position.z = position["z"] ? position["z"].as<double>() : 0.0;
       pose.pose.orientation.x = orientation["x"].as<double>();
       pose.pose.orientation.y = orientation["y"].as<double>();

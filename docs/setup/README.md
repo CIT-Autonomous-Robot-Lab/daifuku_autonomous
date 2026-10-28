@@ -8,10 +8,9 @@ Raspberry Pi CatとナビゲーションPCを同じROS 2ネットワークへ接
 | 環境 | 向いている用途 | 手順 |
 |---|---|---|
 | `docker/raspberrypi/` | Raspberry Piやサーバーでの軽量・ヘッドレス実行 | [Docker環境](docker.md) |
-| Ubuntu 22.04 + ROS 2 Humble | RVizを含む通常の開発・実行 | [ネイティブ環境](native.md) |
 | `docker/dev/` | Raspberry Pi Cat公式のPC環境とGUIをそろえた開発 | [GUI付き開発コンテナ](development-container.md) |
 
-`docker/raspberrypi/`のイメージにはRVizが入っていません。RVizを使う場合はネイティブ環境または`docker/dev/`を利用してください。
+`docker/raspberrypi/`のイメージにはRVizが入っていません。RVizを使う場合は`docker/dev/`を利用してください。
 
 Raspberry Pi 4 / 5のSDカードを一から用意する場合は、[`tools/image/`](../../tools/image/README.md)の
 `create_image.py`でOSイメージの書き込みと初期設定をまとめて行えます。Docker、rtmouseカーネル
@@ -70,16 +69,5 @@ ros2 run tf2_ros tf2_echo odom base_footprint
 
 Mid-360 + IMU構成では`/wheel/odom`と`/odom`の両方が`raspicat`サービス側から出ます
 （ドライバが前者、同じlaunchが立てるEKFが後者）。`/odom`のpublisherは1つが正です。
-
-**一通り確かめるなら`tools/checklist/`があります。** 静的検査からナビゲーションまでを
-段階順（安全なものが先、機体が動くものが最後）に並べたもので、機体が動く項は必ず事前に
-確認を求めます。
-
-```bash
-tools/checklist/checkall.sh --list     # 何が走るかだけ見る
-tools/checklist/checkall.sh            # 機体は動かさない範囲を全部
-```
-
-`--armed`や項の絞り込みを含む使いかたは`checkall.sh`の冒頭にあります。
 
 準備ができたら[利用ガイド](../usage/README.md)へ進んでください。

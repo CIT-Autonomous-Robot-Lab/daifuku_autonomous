@@ -108,10 +108,10 @@ class SystemMonitor(Node):
             "watch",
             [
                 "vi_planner",
-                "controller_server",
-                "planner_server",
-                "bt_navigator",
+                "velocity_smoother",
+                "amcl",
                 "emcl2",
+                "emcl3d",
                 "livox_ros_driver2",
                 "component_container",
             ],

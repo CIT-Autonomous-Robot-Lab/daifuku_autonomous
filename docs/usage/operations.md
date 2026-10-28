@@ -20,17 +20,6 @@ ros2 topic hz /imu/mid360
 ros2 topic hz /wheel/odom
 ```
 
-一通り順番に確かめるなら`tools/checklist/`を使います。段階順（静的検査から
-ナビゲーションまで）に並んでいて、機体が動く項は必ず事前に確認を求めます。
-
-```bash
-tools/checklist/checkall.sh --list          # 何が走るかだけ見る
-tools/checklist/checkall.sh                 # 機体は動かさない範囲を全部
-tools/checklist/checkall.sh --only 0401     # LiDARだけ
-```
-
-`--armed`（機体が動く項も走らせる）を含む使いかたは`checkall.sh`の冒頭にあります。
-
 ## Dockerでコマンドを実行する
 
 ```bash
@@ -44,7 +33,7 @@ docker compose exec ros2 \
 起動します。
 
 ```bash
-bash tools/shell.sh
+bash tools/enter-shell.sh
 ```
 
 ## tmuxで作業する
@@ -148,15 +137,19 @@ TELEOP_LINEAR_SPEED=0.1 bash tools/control.sh teleop keyboard
 
 | 変更したもの | やること |
 |---|---|
-| `src/daifuku_stack`配下のlaunch、behavior_trees、maps、rviz、src | 何もしない。`--symlink-install`なのでノードを再起動するだけで反映される |
-| `src/daifuku_config/stack/`の**値**（`nav2/`・`localization/`・`mapping/`・`sensors/`・`lifecycle_bond.yaml`）と`src/daifuku_config/overrides/`の**値** | 同じく再ビルドは不要。ただし**走らせたまま直すと`config_sentinel`がそのlaunchを終了します**（下）。**LiDARの帯（`sensors/`）もこちら側です** — 2026-08-25に`bringup/`から移りました |
+| `src/daifuku_stack`配下のlaunch、maps、rviz、src | 何もしない。`--symlink-install`なのでノードを再起動するだけで反映される |
+| `src/daifuku_config/stack/`の**値**（`nav2/`・`vi_planner.yaml`・`localization/`・`mapping/`・`sensors/`・`lifecycle_bond.yaml`）と`src/daifuku_config/overrides/`の**値** | 同じく再ビルドは不要。ただし**走らせたまま直すと`config_sentinel`がそのlaunchを終了します**（下）。**LiDARの帯（`sensors/`）もこちら側です** — 2026-08-25に`bringup/`から移りました |
 | `src/daifuku_config/bringup/`（EKF・ドライバ・`MID360_config.json`）の**値** | 再ビルドは不要だが、読むのは常駐している`raspicat`サービスなので立て直しが要る。**`config_sentinel`が変化に気づいて自分で上がり直します**（機体が止まっていて、その設定でも立つときだけ。`config_watch:=warn`で止められる）。コメントだけの変更には反応しません |
-| `src/daifuku_bringup`配下のlaunchと`src/`のPython | 再ビルドは不要だが、**`config_sentinel`は気づきません**（見張っているのは`src/daifuku_config/`の`*.yaml`だけ）。`docker compose up -d`で自分で立て直す |
+| `src/daifuku_bringup`配下のlaunchと`src/`のPython | 再ビルドは不要だが、**`config_sentinel`は気づきません**（見張っているのは`src/daifuku_config/`の`*.yaml`だけ）。`docker compose restart raspicat`で自分で立て直す |
 | `src/daifuku_config/overrides/`に**ファイルを新しく足した** | 一度ビルドを通す（`install/`のsymlinkはビルド時にしか張られないので、足しただけでは`overrides:=`の一覧に出てこない）。そのあと`docker compose up -d` |
 | `src/daifuku_config/site`（走らせる場所） | `ros2 param set /site_manager site <名前>`、または`echo <名前> > src/daifuku_config/site`。**`tools/site.sh <名前>`**はその選び分けをやる便利口（下）。反映は`navigation` / `mapping`の立て直しだけで、**機体は触りません** |
 | `src/raspicat_driver`のPython | 何もしない。ただし`setup.py`の`entry_points`を増やしたときはビルドが要る |
 | C++やRustのコード、`CMakeLists.txt`、外部パッケージのソース | `docker compose up`で差分ビルドする |
-| aptの依存、`Dockerfile`、`package.xml`の依存、`docker/`配下のスクリプト | `docker compose build`からやり直す |
+| aptの依存、`Dockerfile`、`package.xml`の依存、イメージへコピーする`docker/`配下のスクリプト | `docker compose build`からやり直す |
+
+開発コンテナでは、上の差分ビルドに当たる操作をコンテナ内の`build-autonomous`へ
+読み替えます。イメージの変更は`docker/dev/tools/linux/up.sh`または
+`docker/dev/tools/windows/up.ps1`で再ビルドし、コンテナを作り直します。
 
 aptパッケージを足したときにイメージを焼き直すのは、`rosdep`をイメージのビルド時にしか
 回さないからです（`build-workspace.sh`が`up`のたびに`rosdep`を回すと、ネットワークが要る
@@ -169,11 +162,12 @@ docker compose up -d
 ```
 
 `daifuku_autonomous.repos`だけは、この3通りのどれにもきれいには収まりません。外部パッケージの取得は`up`のときの
-`vcs import --skip-existing`なので、リポジトリを新しく足しただけなら`up`で入ります。
-ただしそれが新しいapt依存を連れてくる場合や、`build-workspace.sh`の`--packages-select`へ
-追加が要る場合は`build`からやり直してください。既にある`src/`のリビジョン変更は
-`--skip-existing`で素通りするので、`src/`側で直接チェックアウトを合わせます
-（[`docker/raspberrypi/README.md`](../../docker/raspberrypi/README.md)に詳しくあります）。
+`vcs import`（ネットワークに繋がっているときだけ）なので、リポジトリを新しく足しただけなら`up`で入り、
+中のパッケージも名前を書かずに建ちます。ただしそれが新しいapt依存を連れてくる場合や、Piで建たない
+パッケージを`build-workspace.sh`の`SKIP_PACKAGES`へ足す場合は`build`からやり直してください。
+タグやコミットの変更は次の`up`で反映されますが、ブランチ名のままだと上流へは進まないので、
+`src/`側で直接チェックアウトを合わせます
+（[Docker環境](../setup/docker.md#外部ソースと再起動)に詳しくあります）。
 
 1行目が効くのは既にあるファイルを直したときだけです。launchやconfigでも、ファイルを
 新しく足したときは`docker compose up`が要ります。`install/`のsymlinkはビルド時に

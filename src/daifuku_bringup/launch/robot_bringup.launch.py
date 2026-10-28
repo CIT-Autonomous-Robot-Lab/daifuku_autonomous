@@ -11,47 +11,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# 機体の起動。**docker compose up で立つのはこれ**（raspicat サービス）。
+# raspicat サービスで常駐する機体の起動。LiDAR と EKF もここに置き、
+# navigation の再起動で /odom の原点や LiDAR の初期化を巻き込まない。
+# ドライバが finalized になるとセンサを含む launch 全体が終了する。
+# 場所依存の /scan 生成は daifuku_stack/scan_pipeline.launch.py が担う。
 #
-# 「機体としてのロボット」を丸ごと持つ: 駆動ドライバ、URDF/TF、cmd_vel の仲裁、
-# ゲームパッド、**LiDAR ドライバ**、**オドメトリ融合**。
-#
-#   include lidar_bringup.launch.py   LiDAR -> /livox/lidar, /livox/imu (or /scan_raw)
-#   include odom_fusion.launch.py     車輪 + IMU -> /odom, odom -> base_footprint
-#
-# LiDAR と EKF をここに置いてあるのは、navigation を立て直すたびに EKF が再起動して
-# /odom が原点へ飛んだり LiDAR の初期化を待たされたりするのを避けるため。
-# **ドライバが finalized まで落ちるとこの launch ごと終了する**ので、駆動の障害は
-# センサも道連れにする (下の register_shutting_down_transition。詳細は AGENTS.md)。
-#
-# **点群を /scan に変える段はここには無い** (2026-08-25 に daifuku_stack の
-# scan_pipeline.launch.py へ出した)。あの段だけが場所ごとに変わる値 (帯と仰角) を
-# 持っていて、そのせいで常駐しているこちらが src/daifuku_config/site を読む形に
-# なっていた。出したので、**機体は場所を知らない**。
-#
-# 上流 raspicat_ros の raspicat.launch.py 相当だが、raspimouse ノードを自前で
-# 立てている (上流の parameters= に勝てないため。src/daifuku_config/bringup/robot/raspicat.yaml
-# のコメント)。
-#
-# 自前化のついでに urg_node 関連は落としてある (LiDAR はどちらの構成でも
-# lidar_bringup.launch.py が扱う)。robot_state_publisher / joint_state_publisher は
-# パラメータ競合が無いので上流の launch をそのまま include する。
-#
-# driver:= で公式実装と自前実装のどちらを立てるか選ぶ。どちらも同じ契約 (cmd_vel を
-# 購読し、odom と odom -> base_footprint TF を出し、motor_power サービスを持つ
-# lifecycle ノード) を満たすので、この launch から下だけが入れ替わる。
-#
-#   raspimouse (既定) … 公式実装。rtmouse がホストで insmod されている前提
-#                       (/dev/rt* が要る)ので Pi 4 のみ。
-#   original          … 自前実装 (raspicat_driver)。PWM・gpiochip・I2C をユーザ空間
-#                       から直接叩く。Pi 5 は rtmouse が動かないのでこちらしか選べない。
-#
-# rtmouse と original の排他、twist_mux:= (既定 true) の仲裁と joy:= (既定 true) の
-# 行き先、use_mid360_imu:= (既定 true) が odom の担当を EKF へ譲ることと、その EKF を
-# 立てるのもこの launch (odom_fusion.launch.py を include する) であることは、
-# どれも他のファイルと組で決まるので AGENTS.md「ファイルをまたぐ約束ごと」に集約して
-# ある。操作は docs/usage/joystick.md と src/joy_teleop.py、Pi ごとの注意は
-# docs/setup/raspberry-pi-4.md と raspberry-pi-5.md。
+# 上流の parameters= に勝てないため駆動ノードは直接立て、URDF は上流を include する。
+# raspimouse は rtmouse 入りの Pi 4 専用。Pi 5 は original を使うこと。
+# rtmouse と original の排他など、ファイル間の制約は AGENTS.md を参照。
 
 import os
 import sys
@@ -77,7 +44,6 @@ from launch_ros.events import lifecycle
 
 from lifecycle_msgs.msg import Transition
 
-# 共通部品はこの launch ディレクトリの直下 (daifuku_bringup_launch/) にある。
 _LAUNCH_DIR = os.path.dirname(os.path.realpath(__file__))
 if _LAUNCH_DIR not in sys.path:
     sys.path.insert(0, _LAUNCH_DIR)
@@ -240,8 +206,7 @@ def launch_setup(context, *args, **kwargs):
         )
     node_name, package, executable, default_params_name = DRIVERS[driver]
 
-    # overrides を重ねる。行き先はノード名で決まるので、driver:= で選ばなかった
-    # ほうの節 (raspimouse: / raspicat_driver:) は自動的に外れる。
+    # 選んだドライバのノード名に対応する overrides だけを重ねる。
     params_file, override_logs = _params_file(
         context, "params_file", default_params_name
     )
@@ -254,20 +219,13 @@ def launch_setup(context, *args, **kwargs):
             raise RuntimeError("model:= は driver:=original のときだけ指定できます。")
         parameters.append({"model": model})
 
-    # 仲裁を挟むときだけ、ドライバの購読先を仲裁の出力へ振り替える。両ドライバとも
-    # 相対名の "cmd_vel" で購読している (raspimouse_component.cpp / raspicat_driver の
-    # node.py) ので、この remap で両方に効く。
+    # 両ドライバとも相対名 cmd_vel を購読するので、仲裁の出力へ remap できる。
     mux_actions, mux_logs = _twist_mux(context)
     remappings = [("cmd_vel", MUXED_CMD_VEL)] if mux_actions else []
 
-    # use_mid360_imu:=true では odom -> base_footprint の所有者が EKF に移る。
-    # ドライバは車輪の生値を wheel_odom_topic へ出すだけの立場になるので、
-    # トピックを振り替えたうえで TF を止める。**止め方がドライバで違う**:
-    # 自前実装には publish_tf があるが、公式実装 (raspimouse) には無いので
-    # ノードの /tf を捨て先へ remap する (あちらが出す TF はこれだけ)。
-    #
-    # EKF を立てるのは同じ launch が include する odom_fusion.launch.py で、同じ
-    # use_mid360_imu を見る。**片方だけ true という状態は作れない。**
+    # EKF に odom と TF を任せるため、車輪の生値を分けてドライバの TF を止める。
+    # raspimouse には publish_tf が無いので /tf を捨て先へ remap する。
+    # EKF の起動も同じ use_mid360_imu で切り替える。
     if is_true(context, "use_mid360_imu"):
         remappings.append(
             ("odom", LaunchConfiguration("wheel_odom_topic").perform(context))
@@ -319,10 +277,7 @@ def launch_setup(context, *args, **kwargs):
         )
     )
 
-    # 今どこで走らせるかを ROS から読み書きできるようにする。**立てるのはここ
-    # 1 つだけ** — navigation 側にも置くと、2 つのノードが同じ src/daifuku_config/site を
-    # 書きに行く。機体は docker compose で常駐しているので、人が navigation を
-    # 立てていないあいだも `ros2 param set /site_manager site <名前>` が通る。
+    # site の書き手が競合しないよう、site_manager は常駐するここだけで立てる。
     site_manager = Node(
         package="daifuku_config_manager",
         executable="site_manager",
@@ -330,17 +285,8 @@ def launch_setup(context, *args, **kwargs):
         output="screen",
     )
 
-    # 起動後に設定が書き変わったら言い、追随してよければこの launch を落とす。
-    # **落ちたあと上げ直すのは compose の restart: unless-stopped**（この launch は
-    # raspicat サービスの PID 1）。ドライバが finalized で落ちたときと同じ経路で、
-    # LiDAR も EKF も一緒に上がり直す。
-    #
-    # **場所は見ない (watch_site=False)。** 2026-08-25 に /scan を作る段が
-    # daifuku_stack へ移ってから、機体には場所ごとに変わる設定が 1 つも無い。
-    # 見たままにすると `tools/site.sh` のたびに常駐している機体が上がり直す
-    # (読む値は無いのに、駆動も LiDAR も EKF も止まって上がり直す)。
-    # bringup 自身の設定 (raspicat.yaml / twist_mux.yaml / mid360_ekf.yaml) の
-    # 書き換えはこれまでどおり見る。
+    # 設定変更で終了した後は Compose が LiDAR・EKF ごと再起動する。
+    # 場所依存の設定は無いので site は見ず、場所変更による不要な機体再起動を防ぐ。
     sentinel = params.sentinel_actions(
         context, package="daifuku_bringup",
         config_root=params.config_root("daifuku_bringup"),
@@ -365,12 +311,8 @@ def generate_launch_description():
     urdf_lidar_frame = LaunchConfiguration("urdf_lidar_frame")
     use_joint_state_publisher = LaunchConfiguration("use_joint_state_publisher")
 
-    # URDF / TF ツリー。上流のものをそのまま使う (競合するパラメータが無い)。
-    #
-    # **GroupAction で囲むこと。** ここで渡す上流の引数名 `lidar_frame` は
-    # lidar_bringup.launch.py が Mid-360 用に宣言している名前とぶつかっていて、
-    # 素で並べると向こうの既定 (livox_frame) が入らず、IMU の TF が消える。
-    # 何がどう壊れるかは AGENTS.md (IncludeLaunchDescription の項)。
+    # lidar_frame が後続の LiDAR include へ漏れると livox_frame が上書きされ、
+    # IMU の TF が消えるため GroupAction で隔離する（詳細は AGENTS.md）。
     robot_state_publisher_launch = GroupAction([
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
@@ -383,13 +325,8 @@ def generate_launch_description():
         ),
     ])
 
-    # 車輪オドメトリと Mid-360 IMU の融合。**ドライバと同じ launch に置くのが要点**で、
-    # use_mid360_imu 1 つで「ドライバが TF を止める」と「EKF が TF を出す」が同時に
-    # 切り替わる。use_mid360_imu:=false なら向こうで何も立たない。
-    #
-    # **GroupAction で囲むこと。** 子が宣言する base_frame / odom_topic /
-    # mid360_ekf_params_file が親へ漏れると、後ろの lidar_bringup の同名引数が
-    # 既定を入れられなくなる。lidar / scan の include と同じ囲い方。
+    # 子の base_frame / odom_topic / mid360_ekf_params_file が後続の
+    # LiDAR include の既定を上書きしないよう、GroupAction で隔離する。
     odom_fusion_launch = GroupAction([
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
@@ -452,8 +389,6 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             "use_mid360_imu",
-            # 既定は環境変数から取る。Compose が .env の 1 行を raspicat と ros2 の
-            # 両サービスへ配るので、2 つの launch を人手で揃えなくてよくなる。
             default_value=env_bool_default("USE_MID360_IMU", "true"),
             description="Mid-360 の IMU 融合に合わせた配線にするか。true にすると "
                         "ドライバは車輪オドメトリを wheel_odom_topic へ出し、"
@@ -475,15 +410,9 @@ def generate_launch_description():
         ),
         *params.declare_args(),
         params.declare_watch_arg(),
-        # LiDAR ドライバの引数 (lidar / lidar_driver / mid360_config /
-        # publish_lidar_tf / lidar_x..yaw / urg_*)。daifuku_bringup_launch/lidar.py。
         *lidar_common.declare_shared_args(),
         DeclareLaunchArgument("use_sim_time", default_value="false"),
-        # URDF が持つ 2D LiDAR のリンク名 (上流 raspicat_description)。
-        # **lidar_bringup.launch.py の lidar_frame (Mid-360 の livox_frame) とは
-        # 別物。** ここで名前を分けているのは人が読むためだけで、漏れを止めて
-        # いるのは上の GroupAction のほう (上流へ渡すときの名前は lidar_frame の
-        # ままなので、囲まないと名前を分けても同じことが起きる)。
+        # URDF の 2D LiDAR リンク。Mid-360 の lidar_frame とは別物。
         DeclareLaunchArgument("urdf_lidar_frame", default_value="lidar_link"),
         DeclareLaunchArgument("use_joint_state_publisher", default_value="True"),
 

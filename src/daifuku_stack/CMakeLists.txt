@@ -8,7 +8,7 @@ find_package(ament_cmake REQUIRED)
 # 実機で中身を読む・単体で叩くための控えなので、消しても起動は壊れない。
 # launch/daifuku_stack_launch/ を import すると launch/ の下に __pycache__ が
 # できる。install には要らないので落とす。
-install(DIRECTORY behavior_trees launch maps rviz src waypoints
+install(DIRECTORY launch maps rviz src waypoints
   DESTINATION share/${PROJECT_NAME}
   PATTERN "__pycache__" EXCLUDE
 )
@@ -25,6 +25,10 @@ install(PROGRAMS
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(test_elevation_filter test/test_elevation_filter.py
+    ENV ROS_DOMAIN_ID=77 ROS_LOCALHOST_ONLY=1
+  )
 endif()
 
 ament_package()

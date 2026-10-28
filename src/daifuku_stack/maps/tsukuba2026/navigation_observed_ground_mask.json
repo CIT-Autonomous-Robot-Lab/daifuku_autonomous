@@ -1,0 +1,12 @@
+{
+  "cloud_payload_sha256": "378d0402c33b600b14ebd0b3f0b6868811e976bb426a033cf5a34873922992ee",
+  "original_ground_tolerance_m": 0.15,
+  "reviewed_low_surface_tolerance_m": 0.275,
+  "ground_ceiling_world_z_m": 1.0,
+  "closing_radius_m": 0.0,
+  "obstacle_precedence": true,
+  "source_occupied_cells_used_as_support": 0,
+  "existing_free_support_cells": 595683,
+  "extra_observed_low_surface_support_cells": 4058,
+  "scope": "support mask only; used exclusively inside manually reviewed pavement strokes"
+}

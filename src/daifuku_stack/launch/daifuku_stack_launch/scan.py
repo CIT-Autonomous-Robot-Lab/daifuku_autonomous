@@ -72,6 +72,9 @@ def _arg_specs():
         # overrides/ の側。
         ("elevation_filter", "true",
          "点群を仰角で切るか (勾配の床を落とす。lidar:=mid360 のときだけ効く)。"),
+        ("restamp_cloud", "false",
+         "仰角フィルタで点群の時刻を受信時刻へ直すか。TF 投影より前に効く。"
+         "つくばの実機構成で有効。シミュレータ・バッグでは false。"),
         ("mid360_elevation_params_file", os.path.join(sensors, "mid360_elevation.yaml"),
          "仰角フィルタの設定 (点群を pointcloud_to_laserscan へ渡す前に切る)。"),
         ("mid360_scan_params_file", os.path.join(sensors, "mid360_scan.yaml"),

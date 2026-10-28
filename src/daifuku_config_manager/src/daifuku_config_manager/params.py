@@ -146,7 +146,7 @@ DEFAULT_OVERRIDES_ORIGIN = (
 )
 
 # CONFIG_DIRS / KNOWN_PACKAGES / RESERVED_SECTIONS は overlay.py。
-# 検査と checklist が同じ定義を見るために、合成の規則と一緒に置いてある。
+# 検査が同じ定義を見るために、合成の規則と一緒に置いてある。
 
 # config_sentinel が「設定が変わったので立て直したい」と言うときの終了コード。
 #

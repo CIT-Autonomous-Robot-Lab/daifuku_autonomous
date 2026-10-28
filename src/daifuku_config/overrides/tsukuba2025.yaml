@@ -1,0 +1,39 @@
+# Tsukuba Challenge 2025 / native VTC simulation candidate, not a completed run.
+# Use daifuku_stack navigation_tsukuba2025.launch.py for the two independent scan pipelines.
+# Attempt34 passed original54-57,92-94,122-124 at1Hz; full lap pending.
+site:
+  map:
+    navigation: tsukuba2025/regions/region-000.yaml  # Initial120m rolling window.
+    localization: tsukuba2025/localization.yaml    # Full806.4m side-surface prior.
+
+daifuku_stack:
+  emcl2:
+    ros__parameters:
+      base_frame_id: localization_gravity       # Run profile: roll/pitch corrected.
+      footprint_frame_id: localization_gravity  # Same colocated frame, no XY shift.
+      laser_likelihood_max_dist: 0.2            # Run profile: two0.15m support cells.
+      alpha_threshold: 0.0                     # Upward rays invalidate opacity reset.
+      odom_fw_dev_per_fw: 0.01                  # Nonzero physical odometry noise.
+      odom_rot_dev_per_fw: 0.01                 # Nonzero physical odometry noise.
+      odom_rot_dev_per_rot: 0.01                # Nonzero physical odometry noise.
+  vi_planner:
+    ros__parameters:
+      solver: frontier2d_sparse_compact         # User selection: compact implementation.
+      map_scale: 1                              # Keep the0.2m navigation grid.
+      goal_margin_radius: 0.3                   # Arrival cells; not cache tolerance.
+      value_publish_interval_ms: -1             # Disable value-grid publication.
+      vi_threads: 4                             # Foreground solve worker count.
+      waypoint_prefetch: true                   # Actual prefetch enabled in runs.
+      waypoint_prefetch_threads: 1              # Background prefetch worker count.
+      stop_on_failure: true                     # Do not silently skip waypoints.
+      waypoint_pause_sec: 0.0                   # Continue to the prefetched goal.
+      follow_controller: greedy                 # User selection: discrete-action tracking.
+      # Execute the modeled displacement before selecting another greedy action.
+      control_frequency: 1.0
+      action_forward_m: [0.3, -0.2, 0.0, 0.2, 0.0, 0.2]  # Existing six actions.
+      # Adjacent heading-cell transitions avoid skipped-bin greedy reversals.
+      action_rotation_deg: [0.0, 0.0, -6.0, -6.0, 6.0, 6.0]
+  velocity_smoother:
+    ros__parameters:
+      max_velocity: [0.8, 0.0, 1.0]              # Same limits as the recorded runs.
+      velocity_timeout: 1.5                    # Longer than the1s greedy command interval.

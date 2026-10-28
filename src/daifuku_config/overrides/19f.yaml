@@ -1,11 +1,10 @@
 # 19f.yaml — 19F (915x577 @0.05m = 45.8x28.9m) 用の上書き。
 # 「断片」= 重ねる先の設定ファイルの値 (stack/sensors/, stack/nav2/, stack/localization/)。
 # 値の由来・実測・経緯は ../README.md、仰角フィルタは docs/setup/lidar.md。
-# **立つのは 1 通りだけ** (下の localizer: belief のため):
-#   ros2 launch daifuku_stack navigation.launch.py localization:=vi
+# 自己位置推定は津田沼と同じ emcl2 (launch の既定)。VI は外部の推定姿勢を読む。
+#   ros2 launch daifuku_stack navigation.launch.py localization:=emcl2
 # **3 ファイルはキーの集合をそろえてある** (「断片同値」の行は消しても挙動は変わらない)。
-# 例外は 2 つ — 内蔵推定器の 4 つは密ソルバが要るので津田沼に置けない、8 手の行動は
-# 津田沼の 2 地図だけ (屋内で 1 手 0.8m は曲がりきれない見込み。未検証)。
+# 8 手の行動は津田沼の 2 地図だけ (屋内で 1 手 0.8m は曲がりきれない見込み。未検証)。
 
 # ── 地図 (ノードのパラメータではない) ─────────────────────────────────────
 # navigation の map:= / map_loc:= の既定。maps/ からの相対パス。**2 行とも書くこと**。
@@ -13,6 +12,7 @@ site:
   map:
     navigation:   19f/map_19f.yaml   # 経路計画 (/map)。vi_planner と global_costmap
     localization: 19f/map_19f.yaml   # 自己位置推定 (/map_loc)。emcl2
+    pointcloud:   19f/map_19f.pcd    # 任意: localization:=emcl3d の点群地図。2026-10-19 に map_19f の座標へ変換済み (元の GLIM 出力から yaw -23.80 度, t=(2.153, -2.231, -0.056)m。床の z は概算)
 
 daifuku_stack:
   # ── 仰角フィルタ ──────────────────────────────────────────────────────────
@@ -45,7 +45,7 @@ daifuku_stack:
   # map_scale は**プランナ内部だけ**の解像度 (/map・コストマップ・emcl2 は 0.05m のまま)。
   vi_planner:
     ros__parameters:
-      solver: "frontier2d_sparse"          # 断片 frontier2d_sparse_compact: 下の active_reloc がアウトオブコアを受け付けない。scale 2 で 655MB (実測)
+      solver: "frontier2d_sparse"          # 断片 frontier2d_sparse_compact: 旧 active_reloc 用に密へ戻した設定を維持。scale 2 で 655MB (実測)
       map_scale: 2                         # 既定 1: 内部だけ 0.10m/cell (794 万状態)。solve を軽くするため
       downsample_policy: "conservative"    # 既定同値: scale 2 なら通路は片側 0.05m しか細らない (楽観が要るのは scale >= 4)
       action_forward_m: [0.5, -0.2, 0.0, 0.5, 0.0, 0.5]  # 断片同値 (6 手)。これ以上は velocity_smoother の上限で頭打ち
@@ -57,13 +57,6 @@ daifuku_stack:
       early_start: true                    # 断片 false: 方策が繋がった時点で solve を打ち切る。密なので効く。ログの cut short / truncated で見る (未検証)
       waypoint_prefetch: true              # 断片 false: 点あたり 29 秒の停止が消える代わりに場が 2 本 (655MB x2 = 1.31GB) + 1 コア。**Pi 4 (4GB) では外すこと**
       follow_controller: "greedy"          # 既定同値: dwa は 2026-08-20 の左それの切り分けで戻した (目印として明示)。壁際が通れないなら dwa_lethal_penalty: 0.0
-
-      # ── 内蔵推定器 (VIOLA) ──────────────────────────────────────────────────
-      # **この 4 つがあるあいだ localization:=vi でしか立たない。全部未検証。**
-      localizer: "belief"                  # 断片 external: 全地図に belief を持つ和積。未シードでも立ち上がる代わりに重い。scan_quality_gate (ノード既定 0.25) も効き出す
-      map_clear_from_scan: true            # 既定 false: 貫通したセルは地図が壁と言っていても開ける (28% 貫通を走行側でも凌ぐ)
-      qmdp: true                           # 既定 false: 最尤の 1 点ではなく belief 全体で行動を選ぶ
-      active_reloc: true                   # 既定 false: ロストしたら判別できる地点へ寄って戻る。**上の solver が密であることが要る**
 
 # ── ここで上書きしていないもの (要るとしたらこの順で疑う) ────────────────────
 #   emcl2.range_threshold … 貫通と見なす角度幅 [rad]。上げるほど緩む。

@@ -1,0 +1,7 @@
+image: region-012.pgm
+resolution: 0.2
+origin: [-26.999999999999943, -188.2, 0]
+negate: 0
+occupied_thresh: 0.65
+free_thresh: 0.196
+mode: trinary

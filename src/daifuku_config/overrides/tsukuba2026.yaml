@@ -1,0 +1,37 @@
+# GLIM measured map. The coordinate system is not the VTC2025 course frame.
+# Use navigation_tsukuba2026.launch.py for independent localization/navigation scans.
+site:
+  map:
+    navigation: tsukuba2026/navigation_cityhall.yaml  # /map: native-resolution reviewed city-hall extent.
+    localization: tsukuba2026/localization_denoised.yaml  # /map_loc: surfaces up to 5.5m.
+
+daifuku_stack:
+  emcl2:
+    ros__parameters:
+      base_frame_id: localization_gravity       # Same frame as the localization projection.
+      footprint_frame_id: localization_gravity  # Colocated with base_footprint.
+      laser_likelihood_max_dist: 0.2            # Two 0.1m cells of wall support.
+      alpha_threshold: 0.0                     # Match the upward-ray pipeline used in 2025.
+      odom_fw_dev_per_fw: 0.01                  # Initial profile from 2025; not field-tuned.
+      odom_rot_dev_per_fw: 0.01                 # Initial profile from 2025; not field-tuned.
+      odom_rot_dev_per_rot: 0.01                # Initial profile from 2025; not field-tuned.
+  vi_planner:
+    ros__parameters:
+      solver: frontier2d_sparse_compact         # Bounded-memory planner for the measured city-hall extent.
+      map_scale: 1                              # Keep measured passage widths; 2x2 pooling pinches the loop.
+      downsample_policy: conservative           # Preserve occupied/unknown boundaries.
+      safety_radius_penalty: 1                  # 30 caused converged greedy rollouts to oscillate.
+      goal_margin_radius: 0.45                  # Keep a multi-cell final region for sampled transitions.
+      goal_margin_theta: 24.0                   # Include a heading-cell guard at floating-point boundaries.
+      goal_tolerance_xy: 0.05                   # Do not reuse a goal across short reference-route moves.
+      value_publish_interval_ms: -1             # Disable the full value-field visualization.
+      early_start: true                         # Return once the route is solved; bound far-field work.
+      vi_threads: 4                             # Same foreground worker count as 2025.
+      waypoint_prefetch: false                  # Avoid a second full-map value function.
+      stop_on_failure: true                     # Do not skip failed route points.
+      waypoint_pause_sec: 0.0                   # No artificial pause between route points.
+      follow_controller: greedy                 # Keep the user's discrete-action controller.
+      action_forward_m: [0.15, -0.15, 0.0, 0.15, 0.0, 0.15]  # 1.5 native cells; symmetric forward/back.
+  velocity_smoother:
+    ros__parameters:
+      max_velocity: [0.8, 0.0, 1.0]              # Same upper limits as the 2025 profile.

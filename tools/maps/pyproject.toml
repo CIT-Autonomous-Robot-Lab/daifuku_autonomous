@@ -1,0 +1,11 @@
+[project]
+name = "daifuku-map-tools"
+version = "0.1.0"
+description = "CPU tools for measured point clouds and ROS occupancy maps"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=1.24",
+  "pillow>=10.0",
+  "pyyaml>=6.0",
+  "scipy>=1.10",
+]

@@ -1,0 +1,193 @@
+{
+  "source_image": "navigation_connected.pgm",
+  "source_sha256": "864a123d42f163edd9f5ccd5827b47c3a757e636f603d7ddc7f0ac6e89812e7a",
+  "localization_preserved_sha256": "f40d98a1332264a2bfa384fa51111588dda55afdf185fec9a5daab81b8aa32b6",
+  "frame": "GLIM map XY, metres; image rows run down",
+  "resolution": 0.1,
+  "origin": [-76.4, -177.9, 0.0],
+  "maximum_source_ground_distance_m": 1.2,
+  "maximum_pavement_support_distance_m": 1.2,
+  "ground_support_image": "navigation_observed_ground_mask.png",
+  "review": {
+    "reference": "../tsukuba2025/localization.yaml",
+    "method": "Manually selected trace strokes; protect fixed objects. The 2025 model is a geometric reference, not deletion ground truth.",
+    "pavement_support": "Retain original ground plus directly observed low-surface returns up to the 0.275m obstacle band. Only unknown cells inside reviewed pavement strokes may be interpolated; occupied structures take precedence.",
+    "height_evidence": {
+      "east_arc": {"xy_bounds": [86.0, 87.8, -1.0, 3.0], "height_05_50_95_m": [0.341, 1.118, 1.668], "fraction_above_2_5m": 0.0},
+      "north_arc": {"xy_bounds": [81.0, 84.0, 7.2, 8.7], "height_05_50_95_m": [0.351, 1.202, 1.662], "fraction_above_2_5m": 0.0},
+      "south_bend": {"xy_bounds": [96.0, 101.0, -12.0, -10.7], "height_05_50_95_m": [0.355, 1.125, 1.655], "fraction_above_2_5m": 0.0},
+      "south_walkway_patch": {"pq_bounds": [49, 51, -98.2, -97.3], "pq_rotation_degrees": 6.56, "height_05_50_95_m": [0.448, 1.295, 1.582], "fraction_above_2_5m": 0.0},
+      "fixed_south_column": {"pq_bounds": [52.9, 53.7, -97.2, -96], "height_05_50_95_m": [0.443, 3.425, 8.381]},
+      "fixed_south_low_boundary": {"pq_bounds": [54, 57, -98.9, -98.5], "height_05_50_95_m": [0.290, 0.498, 0.726]},
+      "northwest_vertical_trace": {"xy_bounds": [29, 31.5, -23, -20], "points": 218, "height_05_50_95_m": [0.390, 1.144, 1.648], "fraction_above_2_5m": 0.0}
+    },
+    "interpretation": "Repeated low body-height ribbons are consistent with moving people or moving sensor-carrier returns; fixed walls and trees continue higher.",
+    "evidence_limit": "The source contains XYZI, not timestamps. Motion is a manual geometric inference, not time-resolved object tracking."
+  },
+  "clear_transient_traces": [
+    {
+      "id": "north_plaza_outer_trace",
+      "width_m": 2.8,
+      "points": [[24, 1.0], [30, 2.1], [40, 3.0], [52, 3.0], [63, 3.6], [69, 3.3], [73, 4.5], [76, 7.2], [79, 8.6], [82.5, 8.0], [85, 6.0], [86.5, 2.0], [87.8, -2.5], [89.2, -7.1], [91.5, -10.0], [95, -11.4], [100, -11.7], [107, -10.7]]
+    },
+    {
+      "id": "north_plaza_inner_return",
+      "width_m": 2.8,
+      "points": [[61, -8.2], [67, -7.6], [72, -6.5], [77, -5.8], [81, -4.5], [83.2, -2.6], [83.6, 0], [83, 2.7], [81.5, 4.1], [78.5, 5.3], [76.5, 5.7]]
+    },
+    {
+      "id": "north_plaza_parallel_trace",
+      "width_m": 2.6,
+      "points": [[24, -0.5], [30, 0.8], [40, 1.5], [52, 2], [57, 2.3], [62, 5.6], [66, 7.6], [72, 8.7], [79, 9], [85, 7.5]]
+    },
+    {
+      "id": "north_arc_parallel_descent",
+      "width_m": 2.0,
+      "points": [[85.5, 1], [85.7, -3], [86.5, -7.5], [88.5, -10.5], [92, -12.2], [97, -12.2], [101, -11.3]]
+    },
+    {
+      "id": "northeast_plaza_trace",
+      "width_m": 1.8,
+      "points": [[107, -10.7], [111, -11.2], [117, -13.4], [124, -16], [130, -16], [134, -15.5], [137.5, -14.5], [138.7, -18.5]]
+    },
+    {
+      "id": "south_walkway_low_transient_patches",
+      "width_m": 1.1,
+      "points": [[57.865, -91.790], [92.636, -87.792]]
+    },
+    {
+      "id": "northwest_vertical_body_trace",
+      "width_m": 2.0,
+      "points": [[30.6, -20], [31.2, -24], [32.0, -28], [32.8, -32]]
+    },
+    {
+      "id": "northwest_diagonal_body_trace",
+      "width_m": 1.6,
+      "points": [[33.1, -20], [33.5, -22], [34.0, -23.5], [34.8, -24.8], [35.7, -25.5], [35.8, -26.5]]
+    }
+  ],
+  "restore_pavement": [
+    {
+      "id": "north_reviewed_connected_walkway",
+      "width_m": 2.4,
+      "selection": "Ground-only connector visually reviewed against the measured map; all occupied cells and fixed keep regions remain authoritative.",
+      "points": [
+        [34.9, -29.0], [35.1, -28.8], [35.1, -27.8], [35.3, -27.8], [35.3, -27.0],
+        [35.7, -26.6], [37.1, -26.6], [37.1, -25.8], [37.7, -25.2], [39.9, -25.2],
+        [39.9, -22.0], [40.5, -21.4], [40.5, -19.6], [41.1, -19.4], [41.1, -18.0],
+        [41.5, -17.8], [41.5, -17.2], [41.9, -16.8], [42.7, -16.6], [42.7, -14.0],
+        [47.3, -14.0], [47.3, -11.8], [49.1, -11.8], [49.5, -12.4], [54.7, -12.4],
+        [54.7, -11.6], [55.1, -11.2], [56.7, -10.8], [56.7, -10.6], [57.3, -10.6],
+        [57.3, -10.4], [57.9, -10.4], [57.9, -10.2], [58.5, -10.2], [58.5, -10.0],
+        [59.1, -10.0], [59.1, -9.8], [59.9, -9.8], [60.1, -9.6], [60.1, -5.4],
+        [59.9, -5.4], [59.9, -3.8], [59.3, -3.6], [59.3, -1.8], [59.7, -1.8],
+        [59.9, -1.4], [60.9, -1.4], [60.9, -1.2], [63.3, -1.2], [63.3, -0.2],
+        [63.7, 0.2], [64.1, 0.2], [64.3, 0.6], [71.3, 0.6], [71.5, 1.2],
+        [72.1, 1.8], [72.9, 1.8], [72.9, 2.2], [73.3, 2.6], [74.5, 2.6],
+        [74.5, 2.4], [75.1, 2.4], [75.3, 2.0], [79.7, 2.0], [80.3, 1.4],
+        [80.3, -1.4], [81.1, -1.4], [81.7, -2.0], [81.7, -3.6], [83.5, -3.6],
+        [83.9, -4.0], [83.9, -9.6], [84.5, -9.6], [84.7, -10.0], [87.9, -10.0],
+        [88.3, -10.4], [88.3, -11.0], [89.3, -11.0], [89.3, -11.2], [110.5, -11.2],
+        [110.5, -11.4], [111.5, -11.4], [111.9, -11.8], [112.1, -13.0], [113.3, -13.2],
+        [113.7, -13.6], [113.7, -14.0], [116.1, -14.2], [116.7, -14.8], [119.9, -14.8],
+        [120.3, -15.2], [120.9, -15.2], [121.3, -15.8], [133.9, -15.8], [134.3, -15.4],
+        [136.1, -15.4], [136.5, -15.0], [137.3, -15.0], [137.5, -15.4], [138.1, -15.4]
+      ]
+    },
+    {
+      "id": "west_observed_pavement",
+      "width_m": 6.0,
+      "points": [[35, -29], [35.2, -40], [35.7, -50], [36.5, -64], [38.4, -78], [40, -90], [43, -94]]
+    },
+    {
+      "id": "south_inner_observed_pavement",
+      "width_m": 2.2,
+      "points": [[43, -94], [49, -92], [64, -90.5], [80, -88.5], [96, -86.7], [112, -84.7], [128, -83], [143, -82.7]]
+    },
+    {
+      "id": "south_outer_observed_pavement",
+      "width_m": 2.6,
+      "points": [[43, -95], [50, -94], [65, -92.3], [80, -90.6], [96, -88.8], [112, -87], [129, -85.1], [143, -83.5]]
+    },
+    {
+      "id": "east_observed_pavement",
+      "width_m": 6.0,
+      "points": [[143, -82.7], [143.8, -70], [142.2, -57], [140.7, -44], [142.5, -30], [141, -20], [138.5, -15]]
+    },
+    {
+      "id": "north_plaza_trace_pavement",
+      "width_m": 3.0,
+      "points": [[24, 1], [30, 2.1], [40, 3], [52, 3], [63, 3.6], [69, 3.3], [73, 4.5], [76, 7.2], [79, 8.6], [82.5, 8], [85, 6], [86.5, 2], [87.8, -2.5], [89.2, -7.1], [91.5, -10], [95, -11.4], [100, -11.7], [107, -10.7]]
+    },
+    {
+      "id": "northeast_observed_pavement",
+      "width_m": 2.6,
+      "points": [[107, -10.7], [111, -11.2], [117, -13.4], [124, -16], [130, -16], [134, -15.5], [137.5, -14.5], [138.7, -18.5]]
+    }
+  ],
+  "loop_anchors_xy": [[35, -29], [36.5, -64], [43, -94], [93, -88], [143, -82.7], [140.2, -57], [138.5, -15], [87, -1]],
+  "protected_polygons": [
+    {
+      "id": "cityhall_main_walls_and_interior",
+      "padding_m": 0.6,
+      "points": [[39.36, -32.87], [132.96, -22.11], [139.62, -80.03], [46.02, -90.80]]
+    },
+    {
+      "id": "northwest_benches_and_planters",
+      "padding_m": 0.3,
+      "points": [[30, -10], [52, -10], [52, -2], [30, -2]]
+    },
+    {
+      "id": "northeast_fixed_terrace",
+      "padding_m": 0.3,
+      "points": [[132, -31], [137, -31], [137, -17], [132, -17]]
+    },
+    {
+      "id": "south_fixed_column_1",
+      "padding_m": 0.1,
+      "points": [[63.482, -90.742], [64.674, -90.605], [64.457, -88.717], [63.265, -88.854]]
+    },
+    {
+      "id": "south_fixed_column_2",
+      "padding_m": 0.1,
+      "points": [[70.734, -89.908], [71.927, -89.771], [71.710, -87.883], [70.517, -88.020]]
+    },
+    {
+      "id": "south_fixed_column_3",
+      "padding_m": 0.1,
+      "points": [[77.987, -89.074], [79.179, -88.937], [78.962, -87.049], [77.770, -87.186]]
+    },
+    {
+      "id": "south_fixed_column_4",
+      "padding_m": 0.1,
+      "points": [[85.239, -88.240], [86.431, -88.103], [86.214, -86.215], [85.022, -86.352]]
+    },
+    {
+      "id": "northwest_frontage_low_fixed_structure",
+      "padding_m": 0.1,
+      "points": [[36, -29.6], [41, -29], [41, -27.1], [36, -28.2]]
+    }
+  ],
+  "protected_circles": [
+    {"id": "northwest_tree", "xy": [27.0, 4.5], "radius_m": 1.8},
+    {"id": "north_row_tree_1", "xy": [39.4, 7.4], "radius_m": 1.5},
+    {"id": "north_row_tree_2", "xy": [48.4, 9.0], "radius_m": 1.5},
+    {"id": "north_row_tree_3", "xy": [56.6, 10.8], "radius_m": 1.8},
+    {"id": "north_row_tree_4", "xy": [70.0, 11.1], "radius_m": 1.9},
+    {"id": "north_row_post", "xy": [78.5, 10.5], "radius_m": 0.9},
+    {"id": "inner_arc_tree", "xy": [75.0, -2.1], "radius_m": 3.6},
+    {"id": "front_middle_tree", "xy": [80.0, -13.4], "radius_m": 3.5},
+    {"id": "east_arc_tree", "xy": [94.8, -5.0], "radius_m": 3.5},
+    {"id": "northeast_tree", "xy": [102.4, 0.8], "radius_m": 3.6},
+    {"id": "east_front_tree", "xy": [124.0, -6.0], "radius_m": 4.0},
+    {"id": "front_west_tree", "xy": [60.0, -20.0], "radius_m": 5.0},
+    {"id": "front_east_tree", "xy": [99.0, -19.2], "radius_m": 2.4},
+    {"id": "northwest_low_fixed_fixture", "xy": [29.0, -25.6], "radius_m": 0.65},
+    {"id": "northwest_isolated_high_return", "xy": [33.95, -26.65], "radius_m": 0.45}
+  ],
+  "protected_lines": [
+    {"id": "front_low_fixed_barrier", "width_m": 1.2, "points": [[36.5, -29.8], [83.2, -22.7]]},
+    {"id": "southwest_low_fixed_boundary", "width_m": 0.45, "points": [[43.409, -88.621], [44.128, -94.880], [57.242, -93.372]]},
+    {"id": "south_low_fixed_boundary", "width_m": 0.45, "points": [[61.434, -92.185], [91.635, -88.712]]}
+  ]
+}

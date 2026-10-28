@@ -1,0 +1,32 @@
+pointcloud_to_laserscan:
+  ros__parameters:
+    target_frame: base_footprint                # Physical ground-relative obstacle projection.
+    transform_tolerance: 0.1                    # TF lookup tolerance, seconds.
+    min_height: 0.275                          # Same lower band as the measured-map projection.
+    max_height: 2.5                            # Match navigation.pgm's ground-relative upper band.
+    angle_min: -3.141592653589793               # Full circle.
+    angle_max: 3.141592653589793                # Full circle.
+    angle_increment: 0.017453292519943295        # 1 degree, as in the 2025 navigation pipeline.
+    queue_size: 4                              # Same bounded point-cloud queue.
+    scan_time: 0.1                             # Projection metadata, not the sensor's clock.
+    range_min: 0.05                            # Discard returns closer than 5cm.
+    range_max: 30.0                            # Initial local-obstacle range, as in 2025.
+    use_inf: true                             # Missing returns remain unobserved.
+elevation_filter:
+  ros__parameters:
+    min_elevation_deg: 4.5                     # Initial 2025 terrain-rejection band.
+    max_elevation_deg: 75.0                    # Initial 2025 upper elevation bound.
+scan_to_scan_filter_chain:
+  ros__parameters:
+    filter1:
+      name: robot_self_returns                # Remove the measured robot-body return box.
+      type: laser_filters/LaserScanBoxFilter  # Same box filter as the 2025 profile.
+      params:
+        box_frame: base_footprint             # Box coordinates are relative to the physical base.
+        min_x: -0.35                          # 2025 rear body bound, meters.
+        max_x: 0.18                           # 2025 front body bound, meters.
+        min_y: -0.18                          # 2025 right body bound, meters.
+        max_y: 0.18                           # 2025 left body bound, meters.
+        min_z: -0.05                          # Include the reconstructed scan plane.
+        max_z: 0.25                           # 2025 upper self-return bound, meters.
+        invert: false                        # Remove points inside the box.

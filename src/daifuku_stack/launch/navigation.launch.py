@@ -23,28 +23,8 @@
 # 置いていた 2026-08-25 までは、常駐している機体が src/daifuku_config/site を読む
 # ことになっていて、地図を変えるたびに `docker compose restart raspicat` が要った。
 #
-# 選べる組み合わせは 4 通り (localization x planner)。どれを選んでも RViz
-# (use_rviz:=true のとき) は共通で、違うのはその下のスタックだけ。
-#
-#   localization:=amcl  + planner:=navfn -> nav2 の bringup_launch.py をそのまま
-#   localization:=amcl  + planner:=vi    -> nav2 の localization_launch.py +
-#                                           vi_planner の navigation_launch.py
-#   localization:=emcl2 + navfn / vi     -> map_server + emcl2 を自前で立て、
-#                                           その上に nav2 / vi の navigation
-#   localization:=vi    + planner:=vi    -> **emcl2 を立てない**。map_server だけ
-#                                           残し、自己位置推定も vi_planner が持つ
-#                                           (上流の VIOLA。publish_tf で map->odom を
-#                                           出し、pose_topic は initialpose = 手動シード)
-#
-# emcl2 は nav2 のノードではないので、標準の bringup には乗らない。map_server と
-# lifecycle_manager_localization をここで立てているのはそのため。
-#
-# **どの推定器を使うかは config の `localizer`** で、この引数は「内蔵を使うか」
-# だけを決める。2 か所に分かれるので、噛み合わなければ backends.validate_localization
-# が起動時に止める (どちらの向きも、通すと自己位置だけが静かに壊れる)。
-#
-# その navigation を **Nav2 抜き**で組むのが nav2:=false で、これが**既定**。
-# 何が立たなくなるかは AGENTS.md、何が変わるかは docs/usage/architecture.md。
+# Navigation is always provided by standalone vi_planner. Localization may use
+# AMCL, emcl2, emcl3d, or VIOLA; validate_localization checks the VI config.
 #
 # パラメータの合成規則は daifuku_config_manager/params.py と src/daifuku_config/README.md、
 # バックエンドの選択規則は daifuku_stack_launch/backends.py、ノードの並べは
@@ -62,10 +42,8 @@ from launch.actions import (
 )
 from launch.substitutions import (
     LaunchConfiguration,
-    PathJoinSubstitution,
     PythonExpression,
 )
-from launch_ros.substitutions import FindPackageShare
 
 from ament_index_python.packages import get_package_share_directory
 
@@ -89,21 +67,10 @@ def generate_launch_description():
     # SetParametersFromFile でグループスコープ内の全ノードに注入する。
     default_bond_params = os.path.join(config_root, "lifecycle_bond.yaml")
     default_emcl2_params = os.path.join(config_root, "localization", "emcl2.yaml")
+    default_emcl3d_params = os.path.join(config_root, "localization", "emcl3d.yaml")
     default_rviz_config = os.path.join(pkg_share, "rviz", "navigation.rviz")
 
-    bringup_launch = os.path.join(nav2_share, "launch", "bringup_launch.py")
-    navigation_launch = os.path.join(nav2_share, "launch", "navigation_launch.py")
     localization_launch = os.path.join(nav2_share, "launch", "localization_launch.py")
-    # planner:=vi 用: planner_server の代わりに価値反復プランナを起動する
-    # navigation_launch.py の vi 版 (vi_planner パッケージが提供。2026-08-08 の上流の
-    # 整理で vi_global_planner パッケージごと消え、こちらへ移った)。**どちらの
-    # local_planner でも立つノードは vi_planner 1 つ**で、local_planner:=vi なら両
-    # アクション、local_planner:=nav2 なら follow: false (広域のみ) + controller_server。
-    # vi_planner 未インストールでも planner:=navfn で起動できるよう、パス解決は
-    # include 実行時 (条件成立時) まで遅延させる。
-    vi_navigation_launch = PathJoinSubstitution(
-        [FindPackageShare("vi_planner"), "launch", "navigation_launch.py"]
-    )
 
     namespace = LaunchConfiguration("namespace")
     use_namespace = LaunchConfiguration("use_namespace")
@@ -113,6 +80,8 @@ def generate_launch_description():
     map_loc_yaml = LaunchConfiguration("map_loc")
     params_file = LaunchConfiguration("params_file")
     emcl2_params_file = LaunchConfiguration("emcl2_params_file")
+    emcl3d_params_file = LaunchConfiguration("emcl3d_params_file")
+    map_pcd = LaunchConfiguration("map_pcd")
     bond_params_file = LaunchConfiguration("bond_params_file")
     rviz_config = LaunchConfiguration("rviz_config")
     use_sim_time = LaunchConfiguration("use_sim_time")
@@ -123,9 +92,6 @@ def generate_launch_description():
     use_rviz = LaunchConfiguration("use_rviz")
     use_system_monitor = LaunchConfiguration("use_system_monitor")
     localization = LaunchConfiguration("localization")
-    planner = LaunchConfiguration("planner")
-    local_planner = LaunchConfiguration("local_planner")
-    nav2 = LaunchConfiguration("nav2")
     use_velocity_smoother = LaunchConfiguration("velocity_smoother")
 
     # どのスタックを立てるかの条件
@@ -135,29 +101,14 @@ def generate_launch_description():
     use_vi_loc = PythonExpression(["'", localization, "' == 'vi'"])
     # emcl2 と vi は「map_server を自前で立てる」側で同じ。違うのは emcl2 の
     # ノードを立てるかと、vi_planner へ渡す pose_topic / publish_tf だけ。
-    use_own_map_server = PythonExpression([use_emcl2, " or ", use_vi_loc])
-    use_amcl_navfn = PythonExpression(
-        ["'", localization, "' == 'amcl' and '", planner, "' == 'navfn'"]
+    # emcl3d も同じ側。map_server_loc は立つが誰も購読しない (emcl3d は PCD を直に読む)。
+    use_emcl3d = PythonExpression(["'", localization, "' == 'emcl3d'"])
+    use_own_map_server = PythonExpression(
+        [use_emcl2, " or ", use_emcl3d, " or ", use_vi_loc]
     )
-    use_amcl_vi = PythonExpression(
-        ["'", localization, "' == 'amcl' and '", planner, "' == 'vi'"]
-    )
-    # emcl2 スタックの中で navigation をどちらにするか。
-    use_navfn = PythonExpression(["'", planner, "' == 'navfn'"])
-    use_vi = PythonExpression(["'", planner, "' == 'vi'"])
-    effective_local_planner = backends.resolve_local_planner(planner, local_planner)
-    # Nav2 のノードを立てるか ("true" / "false")。**既定は false**。
-    # auto は「VI が 1 ノードで全部やれるなら立てない」で、planner:=navfn へ
-    # 落とすときに要る (既定のままだと backends.validate_nav2 が弾く)。
-    effective_nav2 = backends.resolve_nav2(nav2, planner, effective_local_planner)
-    use_nav2 = PythonExpression(["'", effective_nav2, "' == 'true'"])
-    # vi_planner 1 ノード構成 (Nav2 抜き)。
-    use_standalone = PythonExpression(["'", effective_nav2, "' != 'true'"])
-    # standalone で velocity_smoother を挟むか。挟むなら vi_planner の cmd_vel は
-    # cmd_vel_nav へ (Nav2 構成と同じ配線)、挟まないなら cmd_vel をそのまま出す。
-    # **どちらでも twist_mux から先は変わらない**。
+    use_amcl = PythonExpression(["'", localization, "' == 'amcl'"])
     use_smoother = PythonExpression(
-        [use_standalone, " and '", use_velocity_smoother, "'.lower() in ('true', '1')"]
+        ["'", use_velocity_smoother, "'.lower() in ('true', '1')"]
     )
     # vi_planner の cmd_vel の行き先。挟むなら velocity_smoother の入力
     # (cmd_vel_nav)、挟まないなら twist_mux の入力 (cmd_vel) へ直接。
@@ -181,6 +132,8 @@ def generate_launch_description():
         map_loc_yaml=map_loc_yaml,
         params_file=params_file,
         emcl2_params_file=emcl2_params_file,
+        emcl3d_params_file=emcl3d_params_file,
+        map_pcd=map_pcd,
         bond_params_file=bond_params_file,
         rviz_config=rviz_config,
         use_sim_time=use_sim_time,
@@ -191,22 +144,14 @@ def generate_launch_description():
         use_rviz=use_rviz,
         use_system_monitor=use_system_monitor,
         use_emcl2=use_emcl2,
+        use_emcl3d=use_emcl3d,
         use_vi_loc=use_vi_loc,
         use_own_map_server=use_own_map_server,
-        use_amcl_navfn=use_amcl_navfn,
-        use_amcl_vi=use_amcl_vi,
-        use_navfn=use_navfn,
-        use_vi=use_vi,
-        effective_local_planner=effective_local_planner,
-        use_nav2=use_nav2,
-        use_standalone=use_standalone,
+        use_amcl=use_amcl,
         use_smoother=use_smoother,
         vi_cmd_vel_topic=vi_cmd_vel_topic,
         own_pose_topic=own_pose_topic,
-        bringup_launch=bringup_launch,
-        navigation_launch=navigation_launch,
         localization_launch=localization_launch,
-        vi_navigation_launch=vi_navigation_launch,
     ))
 
     # 起動引数
@@ -221,7 +166,7 @@ def generate_launch_description():
             # 宣言と同じものを指しているかを見て、違えば起動時に止める。
             default_value="",
             description="**経路計画**に使う地図の yaml (フルパス)。/map で配信し、"
-                        "vi_planner と global_costmap が読む。**空 (既定) なら "
+                        "vi_planner が読む。**空 (既定) なら "
                         "overrides の site: map: navigation: が指すもの。** 明示"
                         "すると overrides の宣言と同じものかを見る (違えば起動時に"
                         "エラー)。場所ごと変えるのは ros2 param set /site_manager site "
@@ -245,7 +190,7 @@ def generate_launch_description():
             default_value="",
             description="nav2 パラメータを 1 ファイルで与える (空なら params_dir の "
                         "断片と src/daifuku_config/stack/vi_planner.yaml を合成する)。"
-                        "指定すると params_dir は無視される。",
+                        "指定時も params_dir の断片を上書き先のノード名の検査に使う。",
         ),
         DeclareLaunchArgument(
             "params_dir",
@@ -258,58 +203,42 @@ def generate_launch_description():
         *params.declare_args(),
         params.declare_watch_arg(),
         DeclareLaunchArgument("emcl2_params_file", default_value=default_emcl2_params),
+        DeclareLaunchArgument("emcl3d_params_file", default_value=default_emcl3d_params),
+        DeclareLaunchArgument(
+            "map_pcd",
+            # map:= と同じく既定は空 = overrides の site: map: pointcloud: を読む
+            # (nav2_params.resolve_map)。
+            default_value="",
+            description="localization:=emcl3d が読む点群地図 (PCD、フルパス)。"
+                        "**空 (既定) なら overrides の site: map: pointcloud: が指すもの。"
+                        "** 明示すると overrides の宣言と同じものかを見る。"
+                        "他の localization では読まない。",
+        ),
         DeclareLaunchArgument("bond_params_file", default_value=default_bond_params),
 
         # --- バックエンドの選択 (daifuku_stack_launch/backends.py) ---
         DeclareLaunchArgument(
             "localization",
             default_value="emcl2",
-            description="Localization backend: amcl, emcl2 or vi. vi drops emcl2 and "
+            description="Localization backend: amcl, emcl2, emcl3d or vi. emcl3d "
+                        "replaces emcl2 with 6DoF MCL against the PCD map "
+                        "(map_pcd / site: map: pointcloud:) using /livox/lidar. "
+                        "vi drops emcl2 and "
                         "lets vi_planner localize itself (map_server stays): it "
                         "publishes map->odom and takes pose_topic as a manual seed "
                         "(initialpose), not as a pose input. **Which estimator** is "
                         "config's business — set localizer: in "
                         "src/daifuku_config/stack/vi_planner.yaml (or an overrides file) to "
                         "adaptive / grid / belief / viterbi; leaving it external here "
-                        "stops the launch. Needs planner:=vi and nav2:=false.",
+                        "stops the launch.",
         ),
         DeclareLaunchArgument("emcl2_package", default_value="emcl2"),
         DeclareLaunchArgument("emcl2_executable", default_value="emcl2_node"),
         DeclareLaunchArgument("emcl2_node_name", default_value="emcl2"),
         DeclareLaunchArgument(
-            "planner",
-            default_value="vi",
-            description="Global planner backend: vi (value iteration) or navfn.",
-        ),
-        DeclareLaunchArgument(
-            "local_planner",
-            default_value="auto",
-            description="Local planner backend: auto (follow the global planner: "
-                        "planner:=vi -> vi, otherwise nav2), vi (vi_planner — one "
-                        "node serving compute_path_to_pose and follow_path from a "
-                        "single value function; requires planner:=vi) or nav2 "
-                        "(the same vi_planner with follow: false + controller_server/DWB, "
-                        "the wiring "
-                        "needed for maps that use map_scale / the compact solver).",
-        ),
-        DeclareLaunchArgument(
-            "nav2",
-            default_value="false",
-            description="Bring up the Nav2 navigation nodes? false (default) runs "
-                        "vi_planner standalone: it serves navigate_to_pose and "
-                        "follow_waypoints itself, so bt_navigator, behavior_server, "
-                        "waypoint_follower, smoother_server and "
-                        "lifecycle_manager_navigation are not launched. The action "
-                        "types stay nav2_msgs, so RViz and the panels are unchanged. "
-                        "true brings the Nav2 stack up. auto follows the planner "
-                        "(false only when planner:=vi resolves the local planner to "
-                        "vi, true otherwise) — needed when falling back to "
-                        "planner:=navfn, which the default would otherwise reject.",
-        ),
-        DeclareLaunchArgument(
             "velocity_smoother",
             default_value="true",
-            description="nav2:=false only: keep nav2_velocity_smoother between "
+            description="Keep nav2_velocity_smoother between "
                         "vi_planner and twist_mux (cmd_vel_nav -> cmd_vel). false "
                         "publishes cmd_vel directly, which removes the last "
                         "lifecycle-managed node from the navigation side.",
@@ -356,7 +285,10 @@ def generate_launch_description():
             kwargs={
                 "package": "daifuku_stack",
                 "config_root": config_root,
-                "targets": ["params_file", "emcl2_params_file", "bond_params_file"],
+                "targets": [
+                    "params_file", "emcl2_params_file", "emcl3d_params_file",
+                    "bond_params_file",
+                ],
                 # params_file だけは src/daifuku_config/stack/nav2/*.yaml と
                 # src/daifuku_config/stack/vi_planner.yaml の合成が土台になる。
                 "base_resolvers": {"params_file": nav2_params.fragments_resolver},
@@ -374,22 +306,8 @@ def generate_launch_description():
             kwargs={"package": "daifuku_stack", "config_root": config_root},
         ),
         # **compose の後**に置くこと。localizer は合成後の params_file から読む。
-        OpaqueFunction(
-            function=backends.validate_localization,
-            kwargs={"effective_nav2": effective_nav2},
-        ),
-        OpaqueFunction(function=backends.validate_planner),
-        OpaqueFunction(
-            function=backends.validate_local_planner,
-            kwargs={"effective_local_planner": effective_local_planner},
-        ),
-        OpaqueFunction(
-            function=backends.validate_nav2,
-            kwargs={
-                "effective_nav2": effective_nav2,
-                "effective_local_planner": effective_local_planner,
-            },
-        ),
+        OpaqueFunction(function=backends.validate_localization),
+        OpaqueFunction(function=backends.validate_vi_package),
 
         # /scan を作る。**機体側 (robot_bringup) が出すのはセンサそのままの点群まで**
         # で、帯と仰角は場所で変わるのでこちら側に居る。mapping.launch.py も同じ段を
