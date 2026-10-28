@@ -13,7 +13,7 @@
 
 """公開入口が場所と機能の接続を決める。"""
 
-from daifuku_bringup_launch import composition
+from daifuku_bringup_launch import composition, navigation_args
 from daifuku_config import params
 from launch import LaunchContext
 from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription
@@ -34,7 +34,9 @@ def test_fixed_site_ignores_global_site_and_environment(monkeypatch, tmp_path):
     # Given: the global default names a different location.
     monkeypatch.setenv("OVERRIDES", "tsukuba2026")
     monkeypatch.setattr(params, "config_root", lambda package: str(tmp_path))
-    monkeypatch.setattr(composition, "get_package_share_directory", lambda package: str(tmp_path))
+    monkeypatch.setattr(
+        navigation_args, "get_package_share_directory", lambda package: str(tmp_path),
+    )
     # When: the 19F public entry declares its arguments.
     context = LaunchContext()
     for action in composition.generate_navigation("19f").entities:
@@ -49,12 +51,15 @@ def test_dual_scan_uses_isolated_topics_and_localization_frame(monkeypatch, tmp_
     monkeypatch.setattr(params, "config_root", lambda package: str(tmp_path))
     monkeypatch.setattr(params, "site_meta", lambda context: {})
     monkeypatch.setattr(composition, "get_package_share_directory", lambda package: str(tmp_path))
+    monkeypatch.setattr(
+        navigation_args, "get_package_share_directory", lambda package: str(tmp_path),
+    )
     context = LaunchContext()
     for action in composition.generate_navigation("tsukuba2025").entities:
         if isinstance(action, DeclareLaunchArgument):
             action.execute(context)
     # When: the composition builds include actions, before any process is started.
-    actions = composition._prepare(context, site="tsukuba2025")
+    actions = composition._assemble_navigation(context, site="tsukuba2025")
     includes = [child for action in actions if isinstance(action, GroupAction)
                 for child in action.get_sub_entities()
                 if isinstance(child, IncludeLaunchDescription)]
@@ -69,3 +74,33 @@ def test_dual_scan_uses_isolated_topics_and_localization_frame(monkeypatch, tmp_
     assert scan["scan_raw_topic"] == "/scan_loc_raw"
     assert scan["filtered_cloud_topic"] == "/livox/lidar_localization"
     assert scan["restamp_scan"] == "false"
+
+
+@pytest.mark.parametrize("site", [None, *params.available_overrides()])
+@pytest.mark.parametrize("use_sim_time", ["true", "false"])
+@pytest.mark.parametrize("driver_default", ["true", "false"])
+def test_scan_defaults_follow_clock_and_driver_selection(
+    monkeypatch, site, use_sim_time, driver_default,
+):
+    # Given: a selected site, environment defaults and an explicit clock argument.
+    monkeypatch.setenv("LIDAR", "urg")
+    monkeypatch.setenv("LIDAR_DRIVER", driver_default)
+    context = LaunchContext()
+    context.launch_configurations["use_sim_time"] = use_sim_time
+    # When: declarations evaluate their dependencies in launch order.
+    for action in composition.generate_navigation(site).entities:
+        if isinstance(action, DeclareLaunchArgument):
+            action.execute(context)
+    selected = context.launch_configurations
+    # Then: split scans keep the leveled frame and disable default drivers in simulation.
+    separate_scan = site in ("tsukuba2025", "tsukuba2026")
+    driver_enabled = driver_default == "true" and not (
+        separate_scan and use_sim_time == "true"
+    )
+    assert selected["lidar"] == ("mid360" if separate_scan else "urg")
+    assert (selected["lidar_driver"].lower() == "true") == driver_enabled
+    assert (selected["leveling"] == "true") == separate_scan
+    assert (selected["use_system_monitor"] == "true") == (not separate_scan)
+    assert (selected["restamp_cloud"].lower() == "true") == (
+        separate_scan and driver_enabled and use_sim_time == "false"
+    )

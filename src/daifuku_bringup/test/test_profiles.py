@@ -32,7 +32,7 @@ def test_installed_site_composes_its_maps_and_one_watcher(site):
             action.execute(context)
     # When: real composition, map checks and fingerprint generation run without processes.
     generated = []
-    for action in composition._prepare(context, site=site):
+    for action in composition._assemble_navigation(context, site=site):
         if isinstance(action, OpaqueFunction):
             results = action.execute(context) or []
             generated.extend(results)

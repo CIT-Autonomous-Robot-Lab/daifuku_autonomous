@@ -16,18 +16,27 @@ import glob
 import os
 
 from ament_index_python.packages import get_package_share_directory
-from daifuku_config import env_default, params, value
+from daifuku_config import params, value
 from daifuku_navigation_launch import nav2_params
 from launch import LaunchContext, LaunchDescription
 from launch.actions import (
-    DeclareLaunchArgument, GroupAction, IncludeLaunchDescription, OpaqueFunction,
+    GroupAction, IncludeLaunchDescription, OpaqueFunction,
 )
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration as LC, PythonExpression
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.actions import SetParametersFromFile
 from launch_ros.descriptions import ParameterValue
+
+from .navigation_args import (
+    LOCALIZATION_PARAMETER_ARGUMENTS,
+    NAVIGATION_PARAMETER_ARGUMENTS,
+    SCAN_PARAMETER_ARGUMENTS,
+    declare_navigation_arguments,
+    uses_separate_localization_scan,
+)
+from .scan_composition import localization_scan_arguments, navigation_scan_arguments
 
 
 def include_component(package, launch_file, arguments):
@@ -62,138 +71,109 @@ def validate_site(context: LaunchContext, *, site: str | None):
     return []
 
 
-def _prepare(context: LaunchContext, *, site: str | None):
-    """入力ファイルを記録してから、地図・設定・機能を順に組み立てる。"""
-    validate_site(context, site=site)
-    nav_root = params.config_root("daifuku_navigation")
-    loc_root = params.config_root("daifuku_localization")
-    nav_files = ["params_file", "bond_params_file"]
-    loc_files = ["amcl_params_file", "emcl2_params_file", "emcl3d_params_file"]
-    scan_files = ["mid360_elevation_params_file", "mid360_scan_params_file",
-                  "scan_filter_params_file"]
-    files = [value(context, name) for name in nav_files + loc_files + scan_files
+def _source_parameter_files(
+    context: LaunchContext, navigation_root: str, *, separate_localization_scan: bool,
+) -> list[str]:
+    """合成が引数を書き換える前に、監視する元ファイルを確定する。"""
+    names = (
+        NAVIGATION_PARAMETER_ARGUMENTS + LOCALIZATION_PARAMETER_ARGUMENTS
+        + SCAN_PARAMETER_ARGUMENTS
+    )
+    files = [value(context, name) for name in names
              if value(context, name)]
     files += sorted(glob.glob(os.path.join(value(context, "params_dir"), "*.yaml")))
-    files.append(os.path.join(nav_root, "vi_planner.yaml"))
-    dual = site in ("tsukuba2025", "tsukuba2026")
-    if dual:
+    files.append(os.path.join(navigation_root, "vi_planner.yaml"))
+    if separate_localization_scan:
         files.append(value(context, "localization_scan_params_file"))
+    return files
+
+
+def _assemble_navigation(context: LaunchContext, *, site: str | None):
+    """場所の検査、設定合成、地図解決、監視、機能接続の順に実行する。"""
+    validate_site(context, site=site)
+    separate_localization_scan = uses_separate_localization_scan(site)
+    navigation_root = params.config_root("daifuku_navigation")
+    localization_root = params.config_root("daifuku_localization")
+    source_files = _source_parameter_files(
+        context, navigation_root, separate_localization_scan=separate_localization_scan,
+    )
+
     common_names = [
         "namespace", "use_namespace", "use_sim_time", "autostart",
         "use_respawn", "log_level", "overrides", "extra_params_file",
         "localization", "emcl2_package",
     ]
-    common = {name: LC(name) for name in common_names}
-    navigation = common | {name: LC(name) for name in [
+    common: dict[str, str | LaunchConfiguration] = {
+        name: LaunchConfiguration(name) for name in common_names
+    }
+    navigation = common | {name: LaunchConfiguration(name) for name in [
         "map", "params_file", "params_dir", "bond_params_file", "velocity_smoother",
     ]}
-    localization = common | {name: LC(name) for name in loc_files + [
+    localization_names = LOCALIZATION_PARAMETER_ARGUMENTS + (
         "map_loc", "map_pcd", "emcl2_executable", "emcl2_node_name", "leveling",
-    ]}
-    localization["localization_scan_topic"] = "/scan_loc" if dual else "/scan"
-    scan = {name: LC(name) for name in scan_files + [
-        "use_sim_time", "overrides", "extra_params_file", "lidar", "lidar_driver",
-        "elevation_filter", "restamp_cloud", "scan_filter_enabled",
-    ]}
-    actions = [
+    )
+    localization = common | {
+        name: LaunchConfiguration(name) for name in localization_names
+    }
+    localization["localization_scan_topic"] = (
+        "/scan_loc" if separate_localization_scan else "/scan"
+    )
+    scan_pipelines = [
+        include_component(
+            "daifuku_perception", "scan_pipeline.launch.py", navigation_scan_arguments(),
+        ),
+    ]
+    if separate_localization_scan:
+        scan_pipelines.append(include_component(
+            "daifuku_perception", "scan_pipeline.launch.py", localization_scan_arguments(),
+        ))
+
+    # 合成をここで呼ばず Action として並べ、後続の解決と include に更新済み引数を渡す。
+    return [
         OpaqueFunction(function=params.compose, kwargs={
-            "package": "daifuku_navigation", "config_root": nav_root,
-            "targets": nav_files,
+            "package": "daifuku_navigation", "config_root": navigation_root,
+            "targets": list(NAVIGATION_PARAMETER_ARGUMENTS),
             "base_resolvers": {"params_file": nav2_params.fragments_resolver},
         }),
         OpaqueFunction(function=params.compose, kwargs={
-            "package": "daifuku_localization", "config_root": loc_root,
-            "targets": loc_files,
+            "package": "daifuku_localization", "config_root": localization_root,
+            "targets": list(LOCALIZATION_PARAMETER_ARGUMENTS),
         }),
         OpaqueFunction(function=nav2_params.resolve_map),
         OpaqueFunction(function=params.sentinel_actions, kwargs={
-            "package": "daifuku_navigation", "config_root": nav_root,
+            "package": "daifuku_navigation", "config_root": navigation_root,
             "packages": ["daifuku_perception", "daifuku_localization", "daifuku_navigation"],
-            "files": files, "watch_site": False,
+            "files": source_files, "watch_site": False,
         }),
-        include_component("daifuku_perception", "scan_pipeline.launch.py", scan),
-    ]
-    if dual:
-        profile = LC("localization_scan_params_file")
-        actions.append(include_component("daifuku_perception", "scan_pipeline.launch.py", scan | {
-            "mid360_elevation_params_file": profile, "mid360_scan_params_file": profile,
-            "scan_filter_params_file": profile,
-            "elevation_filter_name": "localization_elevation_filter",
-            "projection_name": "pointcloud_to_laserscan_loc",
-            "scan_filter_name": "scan_filter_loc",
-            "filtered_cloud_topic": "/livox/lidar_localization",
-            "scan_raw_topic": "/scan_loc_raw", "scan_topic": "/scan_loc",
-            "scan_prestamp_topic": "/scan_loc_mid360",
-            "restamp_scan": "false", "base_frame": "localization_gravity",
-        }))
-    actions += [
+        *scan_pipelines,
         GroupAction([
-            SetParametersFromFile(LC("bond_params_file")),
+            SetParametersFromFile(LaunchConfiguration("bond_params_file")),
             include_component("daifuku_localization", "localization.launch.py", localization),
         ]),
         include_component("daifuku_navigation", "navigation.launch.py", navigation),
         Node(package="daifuku_bringup", executable="system_monitor.py", name="system_monitor",
-             condition=IfCondition(LC("use_system_monitor")), namespace=LC("namespace"),
+             condition=IfCondition(LaunchConfiguration("use_system_monitor")),
+             namespace=LaunchConfiguration("namespace"),
              output="screen", parameters=[{
-                 "use_sim_time": ParameterValue(LC("use_sim_time"), value_type=bool),
+                 "use_sim_time": ParameterValue(
+                     LaunchConfiguration("use_sim_time"), value_type=bool,
+                 ),
              }]),
-        Node(package="rviz2", executable="rviz2", name="rviz2", namespace=LC("namespace"),
-             condition=IfCondition(LC("use_rviz")), output="screen",
-             arguments=["-d", LC("rviz_config")], parameters=[{
-                 "use_sim_time": ParameterValue(LC("use_sim_time"), value_type=bool),
+        Node(package="rviz2", executable="rviz2", name="rviz2",
+             namespace=LaunchConfiguration("namespace"),
+             condition=IfCondition(LaunchConfiguration("use_rviz")), output="screen",
+             arguments=["-d", LaunchConfiguration("rviz_config")], parameters=[{
+                 "use_sim_time": ParameterValue(
+                     LaunchConfiguration("use_sim_time"), value_type=bool,
+                 ),
              }]),
     ]
-    return actions
 
 
 def generate_navigation(site: str | None) -> LaunchDescription:
     """指定した場所、または明示した外部地図だけを起動する。"""
-    nav = params.config_root("daifuku_navigation")
-    loc = params.config_root("daifuku_localization")
-    perception = params.config_root("daifuku_perception")
-    share = get_package_share_directory("daifuku_bringup")
-    config = get_package_share_directory("daifuku_config")
-    dual = site in ("tsukuba2025", "tsukuba2026")
-    defaults = {
-        "overrides": site or "none", "extra_params_file": "", "map": "", "map_loc": "",
-        "map_pcd": "", "namespace": "", "use_namespace": "false",
-        "use_sim_time": "false", "autostart": "true", "use_respawn": "false",
-        "log_level": "info", "use_rviz": "false",
-        "use_system_monitor": "false" if dual else "true",
-        "rviz_config": os.path.join(share, "rviz", "navigation.rviz"),
-        "params_file": "", "params_dir": os.path.join(nav, "nav2"),
-        "bond_params_file": os.path.join(nav, "lifecycle_bond.yaml"),
-        "amcl_params_file": os.path.join(loc, "amcl.yaml"),
-        "emcl2_params_file": os.path.join(loc, "emcl2.yaml"),
-        "emcl3d_params_file": os.path.join(loc, "emcl3d.yaml"),
-        "localization": "emcl2", "emcl2_package": "emcl2",
-        "emcl2_executable": "emcl2_node", "emcl2_node_name": "emcl2",
-        "velocity_smoother": "true", "leveling": "true" if dual else "false",
-        "lidar": "mid360" if dual else env_default("LIDAR", "mid360"),
-        "lidar_driver": env_default("LIDAR_DRIVER", "true"),
-        "elevation_filter": "true", "restamp_cloud": "false", "scan_filter_enabled": "true",
-        "mid360_elevation_params_file": os.path.join(perception, "mid360_elevation.yaml"),
-        "mid360_scan_params_file": os.path.join(perception, "mid360_scan.yaml"),
-        "scan_filter_params_file": os.path.join(perception, "scan_filter.yaml"),
-    }
-    if dual:
-        directory = os.path.join(config, "sites", site)
-        for name in ("mid360_elevation_params_file", "mid360_scan_params_file",
-                     "scan_filter_params_file"):
-            defaults[name] = os.path.join(directory, "navigation_scan.yaml")
-        defaults["localization_scan_params_file"] = os.path.join(
-            directory, "localization_scan.yaml")
-        defaults["lidar_driver"] = PythonExpression([
-            "'false' if '", LC("use_sim_time"), "'.lower() in ('true', '1') else '",
-            env_default("LIDAR_DRIVER", "true"), "'",
-        ])
-        defaults["restamp_cloud"] = PythonExpression([
-            "'", LC("lidar_driver"), "'.lower() in ('true', '1') and '",
-            LC("use_sim_time"), "'.lower() not in ('true', '1')",
-        ])
     return LaunchDescription([
-        *[DeclareLaunchArgument(name, default_value=default)
-          for name, default in defaults.items()],
+        *declare_navigation_arguments(site),
         params.declare_watch_arg(),
-        OpaqueFunction(function=_prepare, kwargs={"site": site}),
+        OpaqueFunction(function=_assemble_navigation, kwargs={"site": site}),
     ])
