@@ -44,7 +44,7 @@ jobs:
     env:
       ROS_DOMAIN_ID: "77"
       ROS_LOCALHOST_ONLY: "1"
-      PACKAGES: daifuku_config daifuku_maps daifuku_perception daifuku_localization daifuku_navigation daifuku_mapping daifuku_robot daifuku_bringup
+      PACKAGES: daifuku_config daifuku_maps daifuku_perception daifuku_localization daifuku_navigation daifuku_mapping raspicat_driver daifuku_robot daifuku_bringup
     steps:
       - uses: actions/checkout@v4
       - name: 構成テストの依存を入れる

@@ -13,8 +13,8 @@
 # /opt/ros_ws in the base cannot shadow the current checkout.
 #
 # The composition and functional packages are built with emcl2, vi_planner and
-# raspicat_description. The robot composition is installed as a dependency of
-# bringup, but stack.sh never starts it or any real hardware driver.
+# raspicat_description. The robot composition and its Python driver dependency
+# are installed for bringup, but stack.sh never starts real hardware nodes.
 ARG BASE_IMAGE=daifuku-autonomous:humble
 FROM ${BASE_IMAGE}
 
@@ -38,6 +38,7 @@ RUN cd /opt/usim_vtc_ws && vcs import . < /opt/usim_vtc/vtc_stack.repos
 COPY src/daifuku_config /opt/usim_vtc_ws/src/daifuku_config
 COPY src/daifuku_bringup /opt/usim_vtc_ws/src/daifuku_bringup
 COPY src/daifuku_robot /opt/usim_vtc_ws/src/daifuku_robot
+COPY src/raspicat_driver /opt/usim_vtc_ws/src/raspicat_driver
 COPY src/daifuku_perception /opt/usim_vtc_ws/src/daifuku_perception
 COPY src/daifuku_localization /opt/usim_vtc_ws/src/daifuku_localization
 COPY src/daifuku_navigation /opt/usim_vtc_ws/src/daifuku_navigation
@@ -80,7 +81,7 @@ RUN source /opt/ros/humble/setup.bash \
     && source /opt/ros2_rust_ws/install/local_setup.bash \
     && cd /opt/usim_vtc_ws \
     && colcon build --parallel-workers "${BUILD_JOBS}" \
-         --packages-select daifuku_config daifuku_bringup daifuku_robot \
+         --packages-select daifuku_config daifuku_bringup raspicat_driver daifuku_robot \
                            daifuku_perception daifuku_localization daifuku_navigation \
                            daifuku_mapping daifuku_maps \
                            emcl2 raspicat_description vi_planner \

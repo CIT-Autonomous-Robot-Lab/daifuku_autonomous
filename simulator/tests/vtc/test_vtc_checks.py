@@ -362,5 +362,5 @@ def test_stack_never_starts_hardware_bringup() -> None:
     assert sorted(w for w in build if w != '\\') == sorted(
         ['daifuku_config', 'daifuku_bringup', 'daifuku_robot', 'daifuku_perception',
          'daifuku_localization', 'daifuku_navigation', 'daifuku_mapping', 'daifuku_maps',
-         'emcl2', 'raspicat_description', 'vi_planner']
+         'raspicat_driver', 'emcl2', 'raspicat_description', 'vi_planner']
     )
