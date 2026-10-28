@@ -1,6 +1,6 @@
 # ROS 2 Humble runtime for the usim VTC workflow (daifuku side only).
 #
-# Built by daifuku_sim.vtc.run_vtc from the **repository root** context:
+# Built by daifuku_sim.vtc.workflow from the **repository root** context:
 #
 #   <engine> build -f docker/simulator/Dockerfile \
 #       --build-arg BASE_IMAGE=daifuku-autonomous:humble -t daifuku-usim-vtc-stack:local .
@@ -89,7 +89,7 @@ COPY docker/simulator/stack.sh docker/simulator/*.py /opt/usim_vtc/
 COPY docker/simulator/*.yaml /opt/usim_vtc/
 COPY docker/simulator/fastdds_udp.xml /opt/usim_vtc/
 COPY simulator/src/daifuku_sim/vtc/prepare_slam_params.py /opt/usim_vtc/
-COPY simulator/src/daifuku_sim/vtc/vtc_contract.py /opt/usim_vtc/
+COPY simulator/src/daifuku_sim/vtc/contract.py /opt/usim_vtc/vtc_contract.py
 RUN sed -i 's/\r$//' /opt/usim_vtc/stack.sh /opt/usim_vtc/vtc_ros.py \
     && chmod 0755 /opt/usim_vtc/stack.sh /opt/usim_vtc/vtc_ros.py \
     && python3 -m py_compile /opt/usim_vtc/*.py \

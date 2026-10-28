@@ -12,9 +12,9 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from urllib.parse import unquote
 
-from .vtc_map import OccupancyMap, check_goal_cell, nearest_safe_goal_cell
+from .map import OccupancyMap, check_goal_cell, nearest_safe_goal_cell
 
-from .vtc_contract import (
+from .contract import (
     Alignment, BASE_FRAME, CheckError, LEFT_WHEEL_JOINT, LIDAR_FRAME,
     LIDAR as LIDAR_KWARGS, Navigation, Pose2D, PoseJson, RIGHT_WHEEL_JOINT,
     RobotGeometry, TruthResult, WorldInfo, parse_pose, parse_waypoints,

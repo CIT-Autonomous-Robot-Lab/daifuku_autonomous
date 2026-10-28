@@ -1,4 +1,16 @@
-#!/usr/bin/env python3
+# Copyright 2026 Keita Sekiguchi / nop
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """Map the usim VTC world with daifuku, then navigate daifuku on that saved map.
 
 Host-side orchestrator (Python 3.12, the ``simulator`` uv project). Nothing
@@ -27,21 +39,18 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
-import math
-import os
 import subprocess
-import sys
-import time
 import traceback
 import uuid
 from pathlib import Path
 from typing import Callable, Literal, overload
-from .vtc_contract import Mapping, Navigation, RunResult
-from .vtc_runtime import (CONTAINER_PREFIX, EXIT_BLOCKED, EXIT_FAIL, EXIT_PASS, EXIT_USAGE, FASTDDS_TRANSPORTS, SIMULATOR, RMW, SCHEMA, ContainerRuntime, Runtime, Session, Stop, start_gazebo_session)
-from .vtc_phases import WorkflowPhases
+from .contract import Mapping, Navigation, RunResult
+from ..runtime import Runtime, Session
+from .runtime import (EXIT_BLOCKED, EXIT_FAIL, EXIT_PASS, FASTDDS_TRANSPORTS, SIMULATOR, RMW, SCHEMA, Stop, start_gazebo_session)
+from .phases import WorkflowPhases
 
 
-from . import vtc_checks as checks
+from . import checks
 
 
 # --------------------------------------------------------------------------- workflow
@@ -198,82 +207,3 @@ class Workflow(WorkflowPhases):
             self.result['logs'] = self._logs()
             (self.run_dir / 'result.json').write_text(json.dumps(self.result, indent=2), encoding='utf-8')
         return code
-
-
-# --------------------------------------------------------------------------- CLI
-
-
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-
-    def pose(text: str) -> checks.Pose2D:
-        try:
-            return checks.parse_pose(text)
-        except checks.CheckError as error:
-            raise argparse.ArgumentTypeError(str(error)) from error
-
-    def survey(text: str) -> tuple[tuple[float, float], ...]:
-        try:
-            return checks.parse_waypoints(text)
-        except checks.CheckError as error:
-            raise argparse.ArgumentTypeError(str(error)) from error
-
-    env_root = os.environ.get('USIM_ROOT')
-    parser.add_argument('--usim-root', type=Path, default=Path(env_root) if env_root else None,
-                        help='optional asset checkout override (default: $USIM_ROOT or automatic venv assets)')
-    parser.add_argument('--world', type=Path, help='SDF override (default: automatically prepared VTC world)')
-    parser.add_argument('--engine', choices=('podman', 'docker'),
-                        default=os.environ.get('VTC_ENGINE', 'docker'),
-                        help='container engine (default: Docker; VTC_ENGINE overrides it)')
-    parser.add_argument('--usim-image', default='usim-gazebo:local')
-    parser.add_argument('--network', choices=('bridge', 'host'), default='bridge',
-                        help='owned bridge shared by stack and simulator (default); host is opt-in')
-    parser.add_argument('--base-image', default='daifuku-autonomous:humble',
-                        help='runtime base built from docker/raspberrypi/Dockerfile when missing')
-    parser.add_argument('--stack-image', default='daifuku-usim-vtc-stack:local')
-    parser.add_argument('--no-build', action='store_true',
-                        help='reuse an existing stack image instead of rebuilding it')
-    parser.add_argument('--record-video', action='store_true',
-                        help='enable Gazebo RGB rendering for the recorded navigation video')
-    parser.add_argument('--headless', action='store_true',
-                        help='run without the Gazebo GUI (default: show the GUI)')
-    parser.add_argument('--run-dir', type=Path,
-                        default=SIMULATOR / 'runs' / 'vtc' / _dt.datetime.now().strftime('vtc-%Y%m%d-%H%M%S-%f'))
-    parser.add_argument('--ros-domain-id', type=int, default=87, choices=range(0, 102), metavar='0..101')
-    parser.add_argument('--survey', type=survey,
-                        default=checks.parse_waypoints('2.5,0;2.5,2.5;0,2.5;-1.055,-0.25'),
-                        help='mapping waypoints x,y;... relative to the spawn pose (metres)')
-    parser.add_argument('--goal', type=pose, default=checks.parse_pose('0,-1,-1.38'),
-                        help='fixed navigation goal x,y,yaw in the Gazebo world frame')
-    parser.add_argument('--tolerance', type=float, default=0.35, help='world-truth goal tolerance [m]')
-    parser.add_argument('--goal-clearance', type=float, default=0.20)
-    parser.add_argument('--min-known-cells', type=int, default=500)
-    parser.add_argument('--align-max-translation', type=float, default=0.10)
-    parser.add_argument('--align-max-yaw', type=float, default=math.radians(2.0))
-    parser.add_argument('--prepare-timeout', type=float, default=600)
-    parser.add_argument('--mapping-timeout', type=float, default=1800)
-    parser.add_argument('--navigation-timeout', type=float, default=1200)
-    parser.add_argument('--goal-timeout', type=float, default=300)
-    options = parser.parse_args(argv)
-    for name in ('tolerance', 'goal_clearance', 'align_max_translation', 'align_max_yaw',
-                 'prepare_timeout', 'mapping_timeout', 'navigation_timeout', 'goal_timeout'):
-        value = getattr(options, name)
-        if not math.isfinite(value) or value < 0:
-            parser.error(f'--{name.replace("_", "-")} must be finite and non-negative')
-    return options
-
-
-def main(argv: list[str] | None = None) -> int:
-    options = parse_args(argv)
-    workflow = Workflow(options, ContainerRuntime(options.engine))
-    code = workflow.run()
-    summary = {key: workflow.result.get(key) for key in ('status', 'stage', 'reason', 'run_dir', 'exit_code')}
-    print(json.dumps(summary))
-    detail = workflow.result.get('detail')
-    if detail:
-        print(detail, file=sys.stderr)
-    return code
-
-
-if __name__ == '__main__':
-    raise SystemExit(main())

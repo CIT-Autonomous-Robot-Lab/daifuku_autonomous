@@ -19,11 +19,13 @@ import math
 import time
 from pathlib import Path
 from typing import Callable, Literal, Protocol, overload
-from . import vtc_checks as checks
-from .vtc_assets import default_usim_root, prepare_default_world
-from .vtc_contract import Mapping, Navigation, Phase, RunResult, RobotGeometry
-from .vtc_map import nearest_safe_seed_cell
-from .vtc_runtime import (CONTAINER_PREFIX, EXIT_BLOCKED, EXIT_FAIL, EXIT_PASS, EXIT_USAGE, FASTDDS_TRANSPORTS, STACK, MAP_RELATIVE, REPO, RMW, URDF_RELATIVE, Runtime, Session, Stop)
+from . import checks
+from .assets import default_usim_root, prepare_default_world
+from .complete_scene import WORLD_DIRECTORY
+from .contract import Mapping, Navigation, Phase, RunResult, RobotGeometry
+from .map import nearest_safe_seed_cell
+from ..runtime import Runtime, Session
+from .runtime import (CONTAINER_PREFIX, EXIT_BLOCKED, EXIT_FAIL, EXIT_PASS, EXIT_USAGE, FASTDDS_TRANSPORTS, STACK, MAP_RELATIVE, REPO, RMW, URDF_RELATIVE, Stop)
 
 class WorkflowPhases(Protocol):
     o: argparse.Namespace
@@ -82,7 +84,8 @@ class WorkflowPhases(Protocol):
             )
         self.usim_root = usim_root
         self.result['config']['usim_root'] = str(usim_root)
-        world = (self.o.world or usim_root / 'assets' / 'vtc' / 'world.sdf').resolve()
+        directory = WORLD_DIRECTORY if self.o.usim_root is None else 'vtc'
+        world = (self.o.world or usim_root / 'assets' / directory / 'world.sdf').resolve()
         self.world = world
         if self.o.usim_root is None and self.o.world is None and not world.exists():
             return

@@ -14,7 +14,7 @@
 """Render recorded ROS navigation JSONL, offline, using Pillow and local ffmpeg.
 
 Usage:
-  uv run --project simulator daifuku-vtc-video \
+  uv run --project simulator daifuku-sim vtc video \
       recording.jsonl navigation.mp4 --fps 10 \
       --transition transition.json --result result.json
 
@@ -52,7 +52,6 @@ not the entire recording. JSON lines are capped at 64 MiB and maps at 4M cells.
 """
 from __future__ import annotations
 
-import argparse
 import json
 import math
 import shutil
@@ -505,27 +504,11 @@ def render(args):
                       'video_duration_s': ticks / args.fps}))
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('input', type=Path, help='recorded telemetry JSONL')
-    parser.add_argument('output', type=Path, help='H264 MP4 destination')
-    parser.add_argument('--fps', type=float, default=10)
-    parser.add_argument('--result', '--result-json', dest='result_json', type=Path,
-                        help='independent run/result.json or flat result JSON')
-    parser.add_argument('--transition', type=Path, help='map_to_odom alignment JSON')
-    parser.add_argument('--trim-start', type=float, default=0, metavar='SECONDS')
-    parser.add_argument('--hold-result', type=float, default=3, metavar='SECONDS')
-    parser.add_argument('--map-radius', type=float, default=3, metavar='METERS',
-                        help='radius of the fixed goal-centered map viewport')
-    parser.add_argument('--world-error-limit', type=float, metavar='METERS',
-                        help='override run tolerance (otherwise run value or 0.5)')
-    args = parser.parse_args()
-    try:
-        render(args)
-    except (OSError, ValueError, KeyError, TypeError, RuntimeError) as exc:
-        parser.exit(2, f'render_navigation_video: {exc}\n')
+def main(argv: list[str] | None = None) -> int:
+    from .cli import video_main
+
+    return video_main(argv)
 
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())

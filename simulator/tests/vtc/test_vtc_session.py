@@ -20,11 +20,11 @@ import pytest
 from usim.cli import build_parser
 from usim.runtime_cli import configured
 
-from daifuku_sim.vtc.vtc_checks import robot_geometry
-from daifuku_sim.vtc.vtc_contract import SessionConfig
-from daifuku_sim.vtc.run_vtc import parse_args
-from daifuku_sim.vtc.vtc_runtime import STACK, simulator_command
-from daifuku_sim.vtc import vtc_runtime as runtime
+from daifuku_sim.vtc.checks import robot_geometry
+from daifuku_sim.vtc.contract import SessionConfig
+from daifuku_sim.vtc.cli import parse_args
+from daifuku_sim.vtc.runtime import STACK, simulator_command
+from daifuku_sim.vtc import runtime
 from daifuku_sim import wslg
 from .conftest import RASPICAT_URDF, write_world
 
@@ -118,7 +118,7 @@ def test_session_owns_wslg_only_for_windows_gui_without_display(
 
     monkeypatch.setattr(runtime.sys, 'platform', platform)
     monkeypatch.delenv('DISPLAY', raising=False)
-    monkeypatch.setattr(runtime, '_start_session', start)
+    monkeypatch.setattr(runtime, 'start_session', start)
     monkeypatch.setattr(wslg, 'WslgDisplay', Display)
     urdf = tmp_path / 'robot.urdf'
     urdf.write_text(RASPICAT_URDF, encoding='utf-8')

@@ -11,9 +11,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from daifuku_sim.vtc import vtc_checks as checks
-from daifuku_sim.vtc.vtc_contract import survey_pose_arrived, survey_targets
-from daifuku_sim.vtc.vtc_map import nearest_safe_seed_cell
+from daifuku_sim.vtc import checks
+from daifuku_sim.vtc.contract import survey_pose_arrived, survey_targets
+from daifuku_sim.vtc.map import nearest_safe_seed_cell
 from .conftest import RASPICAT_URDF, STACK, write_map, write_world
 from daifuku_sim.vtc.prepare_slam_params import prepare_slam_profile
 

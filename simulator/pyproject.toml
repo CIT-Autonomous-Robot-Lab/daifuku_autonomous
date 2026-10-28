@@ -1,7 +1,7 @@
 [project]
 name = "daifuku-sim"
 version = "0.1.0"
-description = "usim VTC mapping and navigation harness for daifuku_stack"
+description = "Simulation scenarios for daifuku_stack using usim"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
 dependencies = [
@@ -13,8 +13,9 @@ dependencies = [
 ]
 
 [project.scripts]
-daifuku-vtc = "daifuku_sim.vtc.run_vtc:main"
-daifuku-vtc-video = "daifuku_sim.vtc.render_video:main"
+daifuku-sim = "daifuku_sim.cli:main"
+daifuku-vtc = "daifuku_sim.vtc.cli:main"
+daifuku-vtc-video = "daifuku_sim.vtc.cli:video_main"
 [tool.uv.sources]
 usim = { git = "https://github.com/NOPLAB/usim.git", rev = "a7d97a9542f8939e6e7b80e8c901ab9eff229148" }
 usim-gazebo = { git = "https://github.com/NOPLAB/usim.git", rev = "a7d97a9542f8939e6e7b80e8c901ab9eff229148", subdirectory = "packages/gazebo" }

@@ -17,7 +17,7 @@ import math
 from collections import deque
 from pathlib import Path
 import yaml
-from .vtc_contract import CheckError, Pose2D
+from .contract import CheckError, Pose2D
 
 def _read_pgm(path: Path) -> tuple[int, int, bytes]:
     data = path.read_bytes()

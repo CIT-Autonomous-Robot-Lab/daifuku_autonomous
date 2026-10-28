@@ -24,7 +24,7 @@ from tempfile import TemporaryDirectory
 from typing import Final, TypedDict
 
 from filelock import FileLock
-from usim_env_vtc import fetch_vtc_world
+from .complete_scene import prepare
 
 RESOURCE_BASE: Final = Path(sys.prefix) / 'share' / 'daifuku-vtc'
 
@@ -71,41 +71,5 @@ def default_usim_root() -> Path:
 
 
 def prepare_default_world(root: Path, engine: str) -> None:
-    """Use installed usim's verified VTC sources and pinned CPU Blender converter."""
-    with FileLock(str(root) + '.lock'):
-        out = root / 'assets' / 'vtc'
-        if (out / 'world.sdf').is_file():
-            return
-        out.parent.mkdir(parents=True, exist_ok=True)
-        print(f'Preparing VTC world in {out} with {engine}', file=sys.stderr)
-        with TemporaryDirectory(prefix='.vtc-', dir=out.parent) as temporary:
-            staging = Path(temporary) / 'world'
-            staging.mkdir()
-            fetch_vtc_world.fetch_assets(staging)
-            _ = (staging / 'manifest.json').write_text(
-                json.dumps(fetch_vtc_world.MANIFEST, indent=2), encoding='utf-8',
-            )
-            script = Path(fetch_vtc_world.__file__).with_name('convert_blender.py')
-            _ = subprocess.run([
-                engine, 'run', '--rm', '--network', 'none',
-                '--entrypoint', '/usr/bin/blender',
-                '--mount', f'type=bind,source={staging},target=/vtc',
-                '--mount', f'type=bind,source={script},target=/convert.py,readonly',
-                fetch_vtc_world.BLENDER_IMAGE,
-                '--background', '--factory-startup', '--disable-autoexec',
-                '--python-exit-code', '1', '--python', '/convert.py',
-            ], check=True)
-            meshes = json.loads((staging / 'geometry.json').read_text(encoding='utf-8'))
-            origin = json.loads((staging / 'origin.json').read_text(encoding='utf-8'))
-            _ = fetch_vtc_world.write_sdf(staging, meshes, origin['ground_z_m'])
-            _ = (staging / 'provenance.json').write_text(json.dumps({
-                'repository': fetch_vtc_world.REPOSITORY,
-                'commit': fetch_vtc_world.COMMIT,
-                'blender_image': fetch_vtc_world.BLENDER_IMAGE,
-                **origin,
-                'sources': {
-                    path: {'sha256': digest, 'bytes': size}
-                    for path, (digest, size) in fetch_vtc_world.MANIFEST.items()
-                },
-            }, indent=2) + '\n', encoding='utf-8')
-            _ = staging.replace(out)
+    """Prepare the complete geographic scene rather than the terrain-only Blender subset."""
+    prepare(root, engine)

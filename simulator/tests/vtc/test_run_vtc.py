@@ -8,8 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from daifuku_sim.vtc import run_vtc
-from daifuku_sim.vtc import vtc_phases
+from daifuku_sim.vtc import cli, workflow as vtc_workflow
+from daifuku_sim.vtc import runtime as vtc_runtime
+from daifuku_sim.vtc import phases
 from .conftest import RASPICAT_URDF, write_map, write_world
 
 from .vtc_test_support import (ALL_OK, mapping_ok, navigation_result, result_of, workflow)
@@ -29,7 +30,7 @@ def test_engine_default_and_explicit_overrides(monkeypatch, environment, explici
         monkeypatch.setenv('VTC_ENGINE', environment)
     arguments = [] if explicit is None else ['--engine', explicit]
     # When: the real CLI parses the selected inputs.
-    options = run_vtc.parse_args(arguments)
+    options = cli.parse_args(arguments)
     # Then: Docker is the default; explicit choices retain their precedence.
     assert options.engine == expected
 
@@ -41,7 +42,7 @@ def test_engine_default_and_explicit_overrides(monkeypatch, environment, explici
 def test_malformed_world_fails_before_any_engine_call(tmp_path, usim_root, body) -> None:
     write_world(usim_root / 'assets' / 'vtc' / 'world.sdf', body)
     flow, runtime, timeline, _ = workflow(tmp_path, usim_root, ALL_OK)
-    assert flow.run() == run_vtc.EXIT_USAGE
+    assert flow.run() == vtc_runtime.EXIT_USAGE
     assert runtime.calls == [] and timeline == []
     result = result_of(tmp_path)
     assert (result['status'], result['stage']) == ('FAIL', 'preflight')
@@ -52,7 +53,7 @@ def test_malformed_world_fails_before_any_engine_call(tmp_path, usim_root, body)
 def test_missing_world_path_is_named(tmp_path, usim_root) -> None:
     missing = tmp_path / 'daifuku-missing-vtc-world.sdf'
     flow, runtime, _, _ = workflow(tmp_path, usim_root, ALL_OK, extra=('--world', str(missing)))
-    assert flow.run() == run_vtc.EXIT_USAGE
+    assert flow.run() == vtc_runtime.EXIT_USAGE
     assert runtime.calls == []
     assert str(missing) in result_of(tmp_path)['reason']
 
@@ -60,10 +61,11 @@ def test_missing_world_path_is_named(tmp_path, usim_root) -> None:
 def test_missing_usim_root_uses_automatic_assets(tmp_path, monkeypatch, usim_root) -> None:
     # Given: neither the command line nor the environment supplies a checkout.
     monkeypatch.delenv('USIM_ROOT', raising=False)
-    monkeypatch.setattr(vtc_phases, 'default_usim_root', lambda: usim_root)
+    monkeypatch.setattr(phases, 'default_usim_root', lambda: usim_root)
+    write_world(usim_root / 'assets' / phases.WORLD_DIRECTORY / 'world.sdf')
     flow, runtime, _, _ = workflow(tmp_path, None, ALL_OK)
     # When: the workflow resolves its installed dependency's resource checkout.
-    assert flow.run() == run_vtc.EXIT_PASS
+    assert flow.run() == vtc_runtime.EXIT_PASS
     # Then: all normal phases run using the resolved path, which is recorded.
     assert flow.usim_root == usim_root
     assert result_of(tmp_path)['config']['usim_root'] == str(usim_root)
@@ -75,19 +77,18 @@ def test_automatic_world_is_prepared_only_after_runtime_is_available(
 ) -> None:
     # Given: an automatic checkout exists but has no generated VTC world.
     monkeypatch.delenv('USIM_ROOT', raising=False)
-    monkeypatch.setattr(vtc_phases, 'default_usim_root', lambda: usim_root)
-    (usim_root / 'assets' / 'vtc' / 'world.sdf').unlink()
+    monkeypatch.setattr(phases, 'default_usim_root', lambda: usim_root)
     flow, runtime, _, _ = workflow(tmp_path, None, ALL_OK)
     calls = []
 
     def prepare(root, engine):
         assert runtime.calls[0] == ('available',)
         calls.append((root, engine))
-        write_world(root / 'assets' / 'vtc' / 'world.sdf')
+        write_world(root / 'assets' / phases.WORLD_DIRECTORY / 'world.sdf')
 
-    monkeypatch.setattr(vtc_phases, 'prepare_default_world', prepare)
+    monkeypatch.setattr(phases, 'prepare_default_world', prepare)
     # When: the normal workflow starts.
-    assert flow.run() == run_vtc.EXIT_PASS
+    assert flow.run() == vtc_runtime.EXIT_PASS
     # Then: generation runs once and its actual world is validated.
     assert calls == [(usim_root, 'podman')]
     assert result_of(tmp_path)['world']['file_uris'] == 1
@@ -100,13 +101,13 @@ def test_environment_checkout_still_overrides_automatic_assets(
     monkeypatch.setenv('USIM_ROOT', str(usim_root))
     flow, _, _, _ = workflow(tmp_path, None, ALL_OK)
     # When / Then: it remains usable without automatic download or conversion.
-    assert flow.run() == run_vtc.EXIT_PASS
+    assert flow.run() == vtc_runtime.EXIT_PASS
     assert flow.usim_root == usim_root
 
 
 def test_invalid_asset_checkout_fails_before_engine_calls(tmp_path) -> None:
     flow, runtime, _, _ = workflow(tmp_path, tmp_path, ALL_OK)
-    assert flow.run() == run_vtc.EXIT_USAGE
+    assert flow.run() == vtc_runtime.EXIT_USAGE
     assert runtime.calls == []
     result = result_of(tmp_path)
     assert result['status'] == 'FAIL' and result['stage'] == 'preflight'
@@ -115,7 +116,7 @@ def test_invalid_asset_checkout_fails_before_engine_calls(tmp_path) -> None:
 def test_unavailable_engine_is_blocked_with_exact_output(tmp_path, usim_root) -> None:
     output = 'Cannot connect to Podman. Please verify your connection to the Linux system'
     flow, runtime, timeline, _ = workflow(tmp_path, usim_root, ALL_OK, available=(False, output))
-    assert flow.run() == run_vtc.EXIT_BLOCKED
+    assert flow.run() == vtc_runtime.EXIT_BLOCKED
     assert runtime.calls == [('available',)] and timeline == []
     result = result_of(tmp_path)
     assert (result['status'], result['stage'], result['detail']) == ('BLOCKED', 'runtime', output)
@@ -129,7 +130,7 @@ def test_asset_checkout_is_not_used_to_import_usim(tmp_path, usim_root) -> None:
     # When: the workflow uses the checkout only for assets and build context.
     flow, _, _, _ = workflow(tmp_path, usim_root, ALL_OK)
     # Then: package import and the workflow succeed without modifying that checkout.
-    assert flow.run() == run_vtc.EXIT_PASS
+    assert flow.run() == vtc_runtime.EXIT_PASS
     assert not list(usim_root.rglob('__pycache__'))
 
 # --------------------------------------------------------------------------- full sequence
@@ -137,7 +138,7 @@ def test_asset_checkout_is_not_used_to_import_usim(tmp_path, usim_root) -> None:
 
 def test_happy_path_is_serial_and_passes_on_world_truth(tmp_path, usim_root) -> None:
     flow, runtime, timeline, start = workflow(tmp_path, usim_root, ALL_OK)
-    assert flow.run() == run_vtc.EXIT_PASS
+    assert flow.run() == vtc_runtime.EXIT_PASS
     assert timeline == [
         ('container-start', 'prepare'),
         ('container-exit', 'prepare'),
@@ -149,9 +150,9 @@ def test_happy_path_is_serial_and_passes_on_world_truth(tmp_path, usim_root) -> 
         ('gazebo-stop', 'mapping'),
     ]
     env = runtime.started_env
-    seed = run_vtc.checks.parse_pose(env['navigation']['VTC_SEED'])
+    seed = vtc_workflow.checks.parse_pose(env['navigation']['VTC_SEED'])
     assert seed.as_dict() == pytest.approx(result_of(tmp_path)['transition']['navigation_seed_map'])
-    assert run_vtc.checks.parse_pose(env['navigation']['VTC_GOAL']).as_dict() == pytest.approx({
+    assert vtc_workflow.checks.parse_pose(env['navigation']['VTC_GOAL']).as_dict() == pytest.approx({
         'x': 0.025,
         'y': -0.975,
         'yaw': -1.378,
@@ -185,7 +186,7 @@ def test_host_network_is_explicit_and_not_owned(tmp_path, usim_root) -> None:
     flow, runtime, _, start = workflow(
         tmp_path, usim_root, ALL_OK, extra=('--network', 'host'),
     )
-    assert flow.run() == run_vtc.EXIT_PASS
+    assert flow.run() == vtc_runtime.EXIT_PASS
     assert not any(call[0] == 'create_network' for call in runtime.calls)
     assert start.networks == ['host']
 
@@ -199,7 +200,7 @@ def test_gazebo_camera_is_enabled_only_for_video(tmp_path, usim_root, record, he
         extra += ('--headless',)
     flow, _, _, _ = workflow(tmp_path, usim_root, ALL_OK, extra=extra)
     # When: the workflow starts the actual simulator session configuration.
-    assert flow.run() == run_vtc.EXIT_PASS
+    assert flow.run() == vtc_runtime.EXIT_PASS
     session = json.loads((tmp_path / 'run' / 'mapping' / 'session.json').read_text())
     # Then: only video recording pays the rendering cost.
     assert session['camera_enabled'] is record
@@ -208,7 +209,7 @@ def test_gazebo_camera_is_enabled_only_for_video(tmp_path, usim_root, record, he
 
 def test_container_runtime_passes_shared_network_to_stack(tmp_path, monkeypatch) -> None:
     import subprocess
-    from daifuku_sim.vtc.vtc_runtime import ContainerRuntime
+    from daifuku_sim.runtime import ContainerRuntime
 
     commands = []
 
@@ -270,7 +271,7 @@ def test_usim_port_passes_explicit_network(tmp_path, monkeypatch) -> None:
 def test_aborted_action_fails_even_near_goal(tmp_path, usim_root) -> None:
     phases = {**ALL_OK, 'navigation': navigation_result(status=6)}
     flow, _, _, _ = workflow(tmp_path, usim_root, phases)
-    assert flow.run() == run_vtc.EXIT_FAIL
+    assert flow.run() == vtc_runtime.EXIT_FAIL
     result = result_of(tmp_path)
     assert (result['status'], result['stage']) == ('FAIL', 'verdict')
     assert 'ABORTED' in result['reason']
@@ -279,7 +280,7 @@ def test_aborted_action_fails_even_near_goal(tmp_path, usim_root) -> None:
 def test_succeeded_but_off_target_in_world_fails(tmp_path, usim_root) -> None:
     phases = {**ALL_OK, 'navigation': navigation_result(final=(1.6, 1.25))}
     flow, _, _, _ = workflow(tmp_path, usim_root, phases)
-    assert flow.run() == run_vtc.EXIT_FAIL
+    assert flow.run() == vtc_runtime.EXIT_FAIL
     assert 'world-truth goal error' in result_of(tmp_path)['reason']
 
 
@@ -295,7 +296,7 @@ def test_mapping_failure_stops_gazebo_and_never_navigates(tmp_path, usim_root) -
         return 11
 
     flow, runtime, timeline, start = workflow(tmp_path, usim_root, {**ALL_OK, 'mapping': mapping_fails})
-    assert flow.run() == run_vtc.EXIT_FAIL
+    assert flow.run() == vtc_runtime.EXIT_FAIL
     assert ('gazebo-stop', 'mapping') in timeline
     assert not any(phase == 'navigation' for _, phase in timeline)
     assert all(session.stopped for session in start.sessions)
@@ -307,7 +308,7 @@ def test_mapping_failure_stops_gazebo_and_never_navigates(tmp_path, usim_root) -
 def test_gazebo_dying_mid_phase_removes_the_stack_container(tmp_path, usim_root) -> None:
     hangs = {**ALL_OK, 'mapping': lambda mount, env: None}
     flow, runtime, timeline, _ = workflow(tmp_path, usim_root, hangs, die_in='mapping')
-    assert flow.run() == run_vtc.EXIT_FAIL
+    assert flow.run() == vtc_runtime.EXIT_FAIL
     result = result_of(tmp_path)
     assert result['stage'] == 'mapping' and 'ended early' in result['reason']
     name = flow._name('mapping')
@@ -328,7 +329,7 @@ def test_cleanup_preserves_parallel_users_gazebo_containers(tmp_path, usim_root)
 
     runtime.phases = {**runtime.phases, 'mapping': mapping_with_parallel_user}
     # When: the workflow completes and cleans up.
-    assert flow.run() == run_vtc.EXIT_PASS
+    assert flow.run() == vtc_runtime.EXIT_PASS
     # Then: cleanup has preserved every container it does not own.
     assert runtime.live == {
         'isaacsim_pi4', 'pi4sim', 'usim-gazebo-existing', 'usim-gazebo-parallel-user'
@@ -338,7 +339,7 @@ def test_cleanup_preserves_parallel_users_gazebo_containers(tmp_path, usim_root)
 def test_stack_timeout_is_enforced_and_cleaned(tmp_path, usim_root) -> None:
     hangs = {**ALL_OK, 'mapping': lambda mount, env: None}
     flow, runtime, _, _ = workflow(tmp_path, usim_root, hangs, extra=('--mapping-timeout', '0'))
-    assert flow.run() == run_vtc.EXIT_FAIL
+    assert flow.run() == vtc_runtime.EXIT_FAIL
     result = result_of(tmp_path)
     assert 'exceeded' in result['reason'] and runtime.live == set()
 
@@ -346,7 +347,7 @@ def test_stack_timeout_is_enforced_and_cleaned(tmp_path, usim_root) -> None:
 def test_large_offset_keeps_origin_restart_rejected_but_reuses_world(tmp_path, usim_root) -> None:
     phases = {**ALL_OK, 'mapping': mapping_ok(alignment=(0.4, 0.0, 0.0))}
     flow, _, timeline, _ = workflow(tmp_path, usim_root, phases)
-    assert flow.run() == run_vtc.EXIT_PASS
+    assert flow.run() == vtc_runtime.EXIT_PASS
     result = result_of(tmp_path)
     assert result['alignment']['origin_seed_supported'] is False
     assert result['transition']['mode'] == 'continuous-gazebo'
@@ -362,7 +363,7 @@ def test_continuous_transition_uses_current_pose_and_fixed_world_goal(tmp_path, 
         'navigation': navigation_result(start=end_world),
     }
     flow, runtime, _, start = workflow(tmp_path, usim_root, phases)
-    assert flow.run() == run_vtc.EXIT_PASS
+    assert flow.run() == vtc_runtime.EXIT_PASS
     result = result_of(tmp_path)
     assert result['transition']['odom_pose'] == dict(zip(('x', 'y', 'yaw'), end_world))
     assert result['transition']['translation_consistency_m'] < 1e-10
@@ -370,7 +371,7 @@ def test_continuous_transition_uses_current_pose_and_fixed_world_goal(tmp_path, 
     assert result['truth']['goal_world'] == pytest.approx({'x': 0.0, 'y': -1.0, 'yaw': -1.38})
     assert result['truth']['start_world']['x'] == pytest.approx(0.3)
     assert len(start.sessions) == 1
-    seed = run_vtc.checks.parse_pose(runtime.started_env['navigation']['VTC_SEED'])
+    seed = vtc_workflow.checks.parse_pose(runtime.started_env['navigation']['VTC_SEED'])
     assert seed.as_dict() == pytest.approx(result['transition']['navigation_seed_map'])
 
 
@@ -386,25 +387,25 @@ def test_inconsistent_transition_capture_blocks_navigation(tmp_path, usim_root) 
         return code
 
     flow, _, timeline, _ = workflow(tmp_path, usim_root, {**ALL_OK, 'mapping': inconsistent})
-    assert flow.run() == run_vtc.EXIT_FAIL
+    assert flow.run() == vtc_runtime.EXIT_FAIL
     assert result_of(tmp_path)['stage'] == 'transition'
     assert not any(phase == 'navigation' for _, phase in timeline)
 
 
 def test_goal_off_the_mapped_free_space_fails_before_navigation(tmp_path, usim_root) -> None:
     flow, _, timeline, _ = workflow(tmp_path, usim_root, ALL_OK, extra=('--goal', '9,9,0'))
-    assert flow.run() == run_vtc.EXIT_FAIL
+    assert flow.run() == vtc_runtime.EXIT_FAIL
     result = result_of(tmp_path)
     assert result['stage'] == 'goal' and 'no safe known-free map cell' in result['reason']
     assert not any(phase == 'navigation' for _, phase in timeline)
 
 
 def test_default_alignment_limits() -> None:
-    parsed = run_vtc.parse_args(['--usim-root', '.'])
+    parsed = cli.parse_args(['--usim-root', '.'])
     assert parsed.align_max_translation == 0.10
     assert parsed.align_max_yaw == pytest.approx(math.radians(2.0))
     assert parsed.engine in ('podman', 'docker')
-    assert parsed.goal == run_vtc.checks.Pose2D(0.0, -1.0, -1.38)
+    assert parsed.goal == vtc_workflow.checks.Pose2D(0.0, -1.0, -1.38)
     assert parsed.survey[-1] == (-1.055, -0.25)
 
 
@@ -424,7 +425,7 @@ def test_transition_seed_snaps_before_navigation_when_cell_is_occupied(tmp_path,
 
     phases = {**ALL_OK, 'mapping': seed_overlaps_wall}
     flow, _, timeline, _ = workflow(tmp_path, usim_root, phases)
-    assert flow.run() == run_vtc.EXIT_PASS
+    assert flow.run() == vtc_runtime.EXIT_PASS
     transition = result_of(tmp_path)['transition']
     assert transition['seed_adjustment_m'] > 0
     assert transition['seed_adjustment_m'] <= 0.25
@@ -438,8 +439,8 @@ def test_acceptance_bounds_reject_invalid_cli_values(option: str, value: str) ->
     # Given: a non-finite or negative acceptance bound.
     # When / Then: the CLI rejects it rather than allowing an unbounded run.
     with pytest.raises(SystemExit) as error:
-        run_vtc.parse_args([option, value])
-    assert error.value.code == run_vtc.EXIT_USAGE
+        cli.parse_args([option, value])
+    assert error.value.code == vtc_runtime.EXIT_USAGE
 
 
 def test_existing_run_data_is_preserved(tmp_path, usim_root) -> None:
@@ -450,7 +451,7 @@ def test_existing_run_data_is_preserved(tmp_path, usim_root) -> None:
     previous.write_text('previous user data', encoding='utf-8')
     # When: a new workflow uses that directory.
     flow, _, _, _ = workflow(tmp_path, usim_root, ALL_OK)
-    assert flow.run() == run_vtc.EXIT_PASS
+    assert flow.run() == vtc_runtime.EXIT_PASS
     # Then: it writes into a fresh child without overwriting the previous result.
     assert previous.read_text(encoding='utf-8') == 'previous user data'
     assert flow.run_dir.parent == existing

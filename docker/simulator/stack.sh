@@ -3,7 +3,7 @@
 #
 #   bash /opt/usim_vtc/stack.sh prepare|mapping|navigation
 #
-# run_vtc.py starts one container per phase on the simulator's owned bridge and the run
+# daifuku_sim.vtc.workflow starts one container per phase on the simulator's owned bridge and the run
 # directory mounted at /output. **Only external simulation inputs come from
 # outside** (usim Gazebo: /clock, /odom + odom -> base_footprint, /scan_raw,
 # /motor_power). Never started here: robot_bringup.launch.py, raspicat_driver

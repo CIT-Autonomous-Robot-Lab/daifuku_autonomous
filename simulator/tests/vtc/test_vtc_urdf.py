@@ -20,7 +20,7 @@ from pathlib import Path
 from usim.simulation import SimulationConfig
 from usim_gazebo.assets import GazeboAssetConfig, prepare_assets
 from .conftest import RASPICAT_URDF, write_world
-from daifuku_sim.vtc.vtc_checks import robot_geometry
+from daifuku_sim.vtc.checks import robot_geometry
 
 
 def test_preparation_removes_plugins_without_changing_robot_geometry(tmp_path: Path) -> None:

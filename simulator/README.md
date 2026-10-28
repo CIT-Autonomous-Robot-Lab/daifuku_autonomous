@@ -1,15 +1,10 @@
-# simulator — usim VTC 地図作成・自律移動ハーネス
+# simulator — daifuku シミュレーションシナリオ
 
 usim の Gazebo Classic で VTC ワールドと Raspicat を動かし、
 daifuku の SLAM で地図を作ってから、その地図で emcl2 + VI standalone の自律移動を確認する。
-シミュレータ・センサ・Gazebo 用の資産加工は usim が持ち、ここには daifuku 側の実行と判定だけを置く。
+シミュレータ・センサ・Gazebo 実行は usim が持ち、ここには daifuku 側の実行・判定と選択した地図の準備を置く。
 
 ## 起動
-
-通常起動では Gazebo GUI を表示する。GUI が不要な実行環境では `daifuku-vtc --headless` を指定する。
-Windows + Docker Desktop では、`DISPLAY` が未設定なら WSLg への表示接続を自動作成し、
-シミュレータ終了時に片付ける。ポートはホストへ公開しない。
-それ以外の環境では X11 の `DISPLAY` と、コンテナから表示先への接続が必要。
 
 Python 依存の `usim` と `usim-gazebo` は、`pyproject.toml` で
 `https://github.com/NOPLAB/usim.git` のコミット
@@ -17,9 +12,16 @@ Python 依存の `usim` と `usim-gazebo` は、`pyproject.toml` で
 `--usim-root` と `USIM_ROOT` は不要。インストール済み usim の Git コミット情報から、
 ワールドと build context 用の checkout を `.venv/share/daifuku-vtc/<コミット>/` に
 初回だけ自動取得する。実際の配置は実行中の仮想環境に従う。
-VTC ワールドは Git に含まれない生成物なので、初回起動時に usim の既存ツールで
-固定版の上流 FBX をサイズ・SHA256 検証付きで取得し、選択した Podman / Docker 上の
-固定 Blender イメージで CPU 変換する。以後は同じコミットの生成済み資産を再利用する。
+既定の地図には、簡略Blender版ではなく、以前復元した完全版VTCの地図データを同梱する。
+建物・樹木・低木・ポールなど1039配置、地形64タイルと追加構造物を元のメートル座標で
+保持する。初回のみ固定BlenderイメージでCPU変換し、同じモデルを共有して配置する。
+衝突形状は元のフラグを引き継ぎ、葉を衝突形状へ追加しない。両面の葉は裏面も明示して変換する。
+地形は近傍約0.4 m、遠景0.8 mのLOD、
+色画像はタイルごとに512ピクセルとし、変換コンテナのメモリ上限は3 GiB。
+完成ワールドは `assets/vtc-complete-v1/` に保存し、旧簡略版キャッシュと区別する。
+地図全体がMITという意味ではない。出典・保持範囲は同梱データと生成資産の
+`NOTICE`・`LICENSE-MIT`・`LICENSE-APACHE2` に残す。
+入力の再パッケージ化には `uv run simulator/tools/package_vtc_complete.py --source <復元済み完全版> --out <archive>` を使う。
 Python の import 先は uv がインストールしたパッケージのままとし、uv 内部のキャッシュ
 配置や隣の usim checkout には依存しない。
 
@@ -27,9 +29,18 @@ Python の import 先は uv がインストールしたパッケージのまま�
 
 ```bash
 uv sync --project simulator --locked --inexact
-uv run --project simulator --locked daifuku-vtc
-uv run --project simulator --locked daifuku-vtc --help
+uv run --project simulator --locked daifuku-sim --help
+uv run --project simulator --locked daifuku-sim vtc run
+uv run --project simulator --locked daifuku-sim vtc run --help
 ```
+
+`python -m daifuku_sim` も同じ入口を使う。サブコマンドなしではヘルプだけを表示する。
+通常起動では Gazebo GUI を表示する。GUI が不要な実行環境では `vtc run --headless` を指定する。
+Windows + Docker Desktop では、`DISPLAY` が未設定なら WSLg への表示接続を自動作成し、
+シミュレータ終了時に片付ける。ポートはホストへ公開しない。
+それ以外の環境では X11 の `DISPLAY` と、コンテナから表示先への接続が必要。
+旧 `daifuku-vtc` と `daifuku-vtc-video` は、それぞれ `daifuku-sim vtc run` と
+`daifuku-sim vtc video` の別名として残す。
 
 `--inexact` は既存 venv の追加パッケージを保全する。
 完全に最小の環境が必要なら、空の `UV_PROJECT_ENVIRONMENT` を指定して `uv sync --project simulator --locked` を使う。
@@ -71,9 +82,9 @@ navigation は `localization:=emcl2` と standalone VI を使い、
 `--record-video` のときだけ Gazebo のカメラを有効にする。動画化にはローカルの ffmpeg が必要。
 
 ```bash
-uv run --project simulator --locked daifuku-vtc \
+uv run --project simulator --locked daifuku-sim vtc run \
     --record-video --run-dir simulator/runs/vtc/new-video
-uv run --project simulator --locked daifuku-vtc-video \
+uv run --project simulator --locked daifuku-sim vtc video \
     simulator/runs/vtc/new-video/navigation/recording.jsonl \
     simulator/runs/vtc/new-video/navigation.mp4 --fps 10 \
     --transition simulator/runs/vtc/new-video/transition.json \
@@ -83,12 +94,28 @@ uv run --project simulator --locked daifuku-vtc-video \
 ## 検証
 
 ```bash
-uv run --project simulator --locked --with pytest python -m pytest -q simulator/tests/vtc
+uv run --project simulator --locked --with pytest python -m pytest -q simulator/tests
 bash -n docker/simulator/stack.sh
 ```
 
 単体テストの成功は実 VTC の PASS とは別。
 ホスト側は `simulator/src/daifuku_sim/vtc/`、ROS Humble 用 helper と設定は `docker/simulator/` に置く。
 ホスト venv と ROS の Python ABI が違うので、ROS helper をホスト package に混ぜない。
+
+## 構成と拡張
+
+- `daifuku_sim/cli.py` がシナリオのコマンドを登録する。`__main__.py` は同じ入口を呼ぶ。
+- `daifuku_sim/runtime.py` はコンテナエンジンと所有する子プロセスの管理だけを持ち、
+  VTC や usim の設定を import しない。
+- `vtc/cli.py` が VTC 専用引数と入力検証、`vtc/workflow.py` が実行順序・判定・
+  結果保存・後始末、`vtc/phases.py` が各実行段を持つ。
+- VTC の Gazebo 設定と起動コマンドは `vtc/runtime.py`、
+  資産取得は `vtc/assets.py`、共有データ契約は `vtc/contract.py` に置く。
+  Docker 内の ROS helper には同じ契約を `vtc_contract.py` としてコピーする。
+
+別の実行手順・判定を追加するときは `vtc/` と並ぶシナリオを作り、
+その `cli.py` で引数と handler を登録して、トップレベルの `build_parser()` から呼ぶ。
+共通部からシナリオを参照せず、シナリオから共通の実行基盤を使う。
+ワールド・センサ・シミュレータバックエンドの実装は引き続き usim が持つ。
 
 地図生成・地図と順路の検算は [`tools/maps/`](../tools/maps/) の独立スクリプト。

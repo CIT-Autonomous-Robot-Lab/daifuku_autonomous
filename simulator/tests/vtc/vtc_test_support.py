@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from daifuku_sim.vtc import run_vtc
+from daifuku_sim.vtc import cli, workflow as vtc_workflow
 from .conftest import RASPICAT_URDF, write_map, write_world
 
 class FakeHandle:
@@ -196,14 +196,14 @@ def options(tmp_path: Path, usim_root: Path | None, *extra: str):
     args = ['--run-dir', str(tmp_path / 'run'), '--engine', 'podman', *extra]
     if usim_root is not None:
         args += ['--usim-root', str(usim_root)]
-    return run_vtc.parse_args(args)
+    return cli.parse_args(args)
 
 
 def workflow(tmp_path, usim_root, phases, *, die_in=None, available=(True, ''), extra=()):
     timeline: list = []
     runtime = FakeRuntime(timeline, phases, available)
     start = SessionFactory(timeline, die_in)
-    flow = run_vtc.Workflow(
+    flow = vtc_workflow.Workflow(
         options(tmp_path, usim_root, *extra),
         runtime,
         start_session=start,
