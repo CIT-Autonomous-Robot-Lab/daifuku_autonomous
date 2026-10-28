@@ -208,5 +208,5 @@ jobs:
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - run: uv sync --locked
-      - name: VTC 単体テスト
-        run: uv run --locked --with pytest python -m pytest -q tests/vtc
+      - name: シミュレーションCLIとVTCの単体テスト
+        run: uv run --locked --with pytest python -m pytest -q tests
