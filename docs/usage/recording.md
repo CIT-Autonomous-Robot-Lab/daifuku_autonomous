@@ -153,7 +153,7 @@ ros2 bag play run1 --clock --qos-profile-overrides-path qos_override.yaml
 
 ```bash
 ros2 run rviz2 rviz2 \
-  -d $(ros2 pkg prefix daifuku_stack)/share/daifuku_stack/rviz/navigation.rviz \
+  -d $(ros2 pkg prefix daifuku_bringup)/share/daifuku_bringup/rviz/navigation.rviz \
   --ros-args -p use_sim_time:=true
 ```
 
@@ -180,7 +180,7 @@ ros2 service call /rosbag2_player/play_next rosbag2_interfaces/srv/PlayNext
 ## ノードを再実行する
 
 録った`/scan`と`/odom`から`emcl2`や`vi_planner`を立て直して追うこともできます。その場合、
-**bagの`/tf`には`map→odom`が入っている**ので（`navigation.launch.py`の`/tf`→`tf`は
+**bagの`/tf`には`map→odom`が入っている**ので（navigationのlaunchの`/tf`→`tf`は
 相対名へのremapなので、`namespace:=`を付けていない既定の構成では`/tf`に出ます）、
 そのまま流すと立て直した`emcl2`と二重になります。`--topics`で`/tf`を外すか、
 `--remap /tf:=/tf_bag`で別の名前へ逃がしてください。

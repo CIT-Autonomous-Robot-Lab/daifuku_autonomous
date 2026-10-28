@@ -137,12 +137,12 @@ prepare)
     ;;
 mapping)
     phase_dir mapping
-    slam_defaults=$(ros2 pkg prefix daifuku_config)/share/daifuku_config/stack/mapping/slam_toolbox.yaml
+    slam_defaults=$(ros2 pkg prefix daifuku_config)/share/daifuku_config/mapping/slam_toolbox.yaml
     python3 "$HERE/prepare_slam_params.py" "$slam_defaults" "$DIR/slam_toolbox_gazebo.yaml" || exit 15
     MAPPING_ARGS+=("slam_params_file:=$DIR/slam_toolbox_gazebo.yaml")
     start_rsp
     check_inputs --require-idle-scan
-    start_group "$DIR/launch.log" ros2 launch daifuku_stack mapping.launch.py "${MAPPING_ARGS[@]}"
+    start_group "$DIR/launch.log" ros2 launch daifuku_bringup mapping.launch.py "${MAPPING_ARGS[@]}"
     python3 "$HERE/vtc_ros.py" survey --out "$DIR/mapping.json" \
         --waypoints "${VTC_SURVEY:?VTC_SURVEY is required}" \
         --world-goal "${VTC_WORLD_GOAL:?VTC_WORLD_GOAL is required}" \
@@ -161,7 +161,7 @@ navigation)
         echo "!! generated map missing: $MAP" >&2
         exit 13
     fi
-    for pkg in vi_planner emcl2 daifuku_stack; do
+    for pkg in vi_planner emcl2 daifuku_bringup daifuku_navigation daifuku_localization daifuku_perception; do
         prefix=$(ros2 pkg prefix "$pkg" 2>/dev/null) || {
             echo "!! package $pkg not found in the sourced workspaces" >&2
             exit 13
@@ -170,7 +170,7 @@ navigation)
     done
     start_rsp
     check_inputs --require-idle-scan
-    start_group "$DIR/launch.log" ros2 launch daifuku_stack navigation.launch.py "${NAVIGATION_ARGS[@]}"
+    start_group "$DIR/launch.log" ros2 launch daifuku_bringup navigation.vtc.launch.py "${NAVIGATION_ARGS[@]}"
     python3 "$HERE/vtc_ros.py" navigate --out "$DIR/navigation.json" \
         --seed="${VTC_SEED:?VTC_SEED is required}" \
         --goal="${VTC_GOAL:?VTC_GOAL is required}" \

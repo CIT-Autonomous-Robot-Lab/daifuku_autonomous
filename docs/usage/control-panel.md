@@ -2,7 +2,7 @@
 
 PC 側の rqt に、ゴール送信・ドライバ操作・teleop・CPU 表示をまとめたパネルを出します。
 実装は [`src/daifuku_rqt/`](../../src/daifuku_rqt/README.md)、CPU を集める側は
-`daifuku_stack` の `system_monitor` です。
+`daifuku_bringup` の `system_monitor` です。
 
 ```
 Pi (ros2 コンテナ)                                PC (dev コンテナ / ネイティブ)
@@ -27,9 +27,7 @@ source install/setup.bash
 ```
 
 Pi 側は `system_monitor` が新しいファイルなので、一度だけワークスペースのビルドを通します。
-イメージの再作成は要りません（`Dockerfile` の `COPY src/daifuku_stack` は rosdep に apt 依存を
-解かせるためだけのもので、同じ `RUN` の中で捨てています。実行時のソースは `src/` の
-マウントから来るので、パッケージ名が変わってもイメージは有効なままです）。
+イメージの再作成は要りません（実行時のソースは `src/` のマウントから来ます）。
 
 ```bash
 docker compose up -d
@@ -93,7 +91,7 @@ deactivate と、モータ ON/OFF。状態は 2 秒ごとに `get_state` で取�
 （スピンボックスに入っている間は矢印キーは値の増減に使われます）。
 
 出す先が `/cmd_vel` でないのは、機体の手前に `twist_mux` が入っているためです
-（`robot_bringup.launch.py` の `twist_mux:=true` が既定）。優先度は**自律 100 /
+（`robot.launch.py` の `twist_mux:=true` が既定）。優先度は**自律 100 /
 teleop 10** で、**自律側のほうが勝ちます**。こちらが通るのは自律側が `timeout`
 （0.5 秒）のあいだ黙っているときだけです。
 
@@ -108,7 +106,7 @@ teleop 10** で、**自律側のほうが勝ちます**。こちらが通るの�
 仲裁は**「出している間だけ勝つ」もので、非常停止ではありません。**
 `twist_mux` は勝っている入力を 1 対 1 で中継するだけで、途切れてもゼロを出しません。
 止めるのはドライバの仕事のままです。自前実装（`driver:=original`）の
-`src/daifuku_config/bringup/robot/raspicat_driver.yaml` は `cmd_vel_timeout` = **60 秒**なので、指令が
+`src/daifuku_config/robot/robot/raspicat_driver.yaml` は `cmd_vel_timeout` = **60 秒**なので、指令が
 途切れてからモータが止まるまで 1 分あります。公式実装（`driver:=raspimouse`）は
 このキーを持たず、途切れたときに止まるかどうかは**未確認**です。いずれにせよ teleop の
 停止をドライバ側に任せられないので、パネルは次のすべてで 0 の `Twist` を自分で出します。
@@ -121,7 +119,7 @@ teleop 10** で、**自律側のほうが勝ちます**。こちらが通るの�
 **パネルのプロセスごと落ちた場合はこの経路がどれも通りません。** その場合は最後の指令の
 まま少なくとも 60 秒動き続けます。確実に止めるのはモータ電源（パネルの「モータ OFF」、
 または `control.sh motor off`）です。`driver:=original` で teleop を常用するなら
-`overrides/` で `cmd_vel_timeout` を 1 秒程度に下げることも検討してください。
+`sites/<場所>/overrides.yaml` で `cmd_vel_timeout` を 1 秒程度に下げることも検討してください。
 
 止めたあとパネルが黙るのも意図的です。停止時は 3 回だけゼロを出して黙ります
 （それ以上流しても仲裁の優先度は自律側のほうが上なので意味がありません）。

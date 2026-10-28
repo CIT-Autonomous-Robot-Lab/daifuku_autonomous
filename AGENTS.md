@@ -9,7 +9,7 @@ Raspberry Pi Cat を ROS 2 Humble と standalone VI で自律移動させるワ�
 | 触るもの | 先に読む |
 | --- | --- |
 | 全体構成・launch | [README](README.md)、[構成](docs/usage/architecture.md) |
-| 設定値・override | [設定の説明](src/daifuku_config/README.md)、合成の実装 `src/daifuku_config_manager/src/daifuku_config_manager/{overlay,params}.py` |
+| 設定値・override | [設定の説明](src/daifuku_config/README.md)、合成の実装 `src/daifuku_config/daifuku_config/{overlay,params}.py` |
 | ビルド・設定の反映 | [日常操作](docs/usage/operations.md#設定変更を反映する) |
 | 実機・LiDAR | [Pi 4](docs/setup/raspberry-pi-4.md)、[Pi 5](docs/setup/raspberry-pi-5.md)、[LiDAR](docs/setup/lidar.md) |
 | Docker | [Docker](docker/README.md) |
@@ -22,46 +22,65 @@ Raspberry Pi Cat を ROS 2 Humble と standalone VI で自律移動させるワ�
 
 ## 所有範囲とビルド
 
-- 自前は `daifuku_bringup`、`daifuku_stack`、`daifuku_config`、
-  `daifuku_config_manager`、`raspicat_driver`、`daifuku_rqt`、
+- 自前は `daifuku_bringup`、`daifuku_robot`、`daifuku_perception`、
+  `daifuku_localization`、`daifuku_navigation`、`daifuku_mapping`、`daifuku_maps`、
+  `daifuku_config`、`raspicat_driver`、`daifuku_rqt`、
   `daifuku_waypoint_manager` です。残りは `daifuku_autonomous.repos` から取得する
   外部リポジトリで、変更は上流側で扱います。`raspicat_ros`、`raspicat_description`、
   `raspimouse2` は untracked でも本リポジトリへ追加しません。
-- `daifuku_bringup` は機体・LiDAR ドライバ・EKF、`daifuku_stack` は地図・自律移動・
-  点群から `/scan` を作る段を持ちます。両者を相互依存させません。
-  設定の実体は `daifuku_config`、合成規則は `daifuku_config_manager` に置き、
-  後者から機体・stack の実装を import しません。
+- 機能パッケージの分担は次のとおりです。
+  - `daifuku_robot`: 駆動・LiDAR ドライバ、EKF、IMU 前処理、teleop
+  - `daifuku_perception`: `scan_pipeline`、仰角フィルタ、スタンプ打ち直し
+  - `daifuku_localization`: 自己位置推定器と leveling
+  - `daifuku_navigation`: VI の計画・追従、velocity smoother、計画用 map server
+  - `daifuku_mapping`: SLAM（他の機能を起動せず、bringup から include する部品）
+  - `daifuku_maps`: 地図（`maps/`）と順路（`waypoints/`）
+  - `daifuku_bringup`: 公開の合成 launch、RViz 設定（`rviz/`）、`system_monitor`
+  機能パッケージどうしを公開入口として使わず、合成は `daifuku_bringup` に寄せます。
+  設定の実体と合成規則（Python は `src/daifuku_config/daifuku_config/`）は
+  `daifuku_config` に置き、そこから機能パッケージの実装を import しません。
 - Windows は編集ホストです。ビルド・ROS の確認は Docker または Ubuntu 22.04 で行います。
   再ビルドと再起動の判断表は[日常操作](docs/usage/operations.md#設定変更を反映する)に
   一本化します。Pi の再起動では `workspace-build` が走らず、コンパイル済みコードは更新されません。
 - 新規・移動したファイルは symlink の作成にビルドが必要です。移動・改名後は古い
   `install/` の symlink が残り、パッケージ移動では `build/<pkg>/CMakeCache.txt` にも
   旧パスが残ります。該当パッケージの生成物を整理してからビルドしてください。
-- launch が実行する Python はソースの実行ビットを Git に記録します
-  （`git update-index --chmod=+x <path>`）。Windows の `core.fileMode=false` と
-  `--symlink-install` の組では、ローカルの chmod だけでは Linux の `Permission denied` を防げません。
+- 自前 Python ノードは CMake が実行可能なラッパーを生成します。Windows の
+  ソース実行ビットに依存させません。ラッパーは share の実装を実行するので、
+  `--symlink-install` では Python の編集も再ビルドなしで反映されます。
+  起動名を追加したら CMake の生成対象と CI のインストール確認を揃えます。
 - Pi の ROS base イメージでは `daifuku_rqt` と `daifuku_waypoint_manager` を
   `SKIP_PACKAGES` から外しません。rqt/RViz が無くビルドできないためです。
-  `daifuku_bringup`、`daifuku_config_manager`、`daifuku_config` は実機でも必須です。
+  `daifuku_bringup`、`daifuku_robot`、`daifuku_config` は実機でも必須です。
 
 ## 設定と起動の契約
 
 - 設定の合成・場所別の値の理由は[設定の説明](src/daifuku_config/README.md)に置きます。
-  `stack/nav2/*.yaml` と `stack/vi_planner.yaml` はノード単位で分割し、
+  `navigation/nav2/*.yaml` と `navigation/vi_planner.yaml` はノード単位で分割し、
   同じノードを複数断片に定義しません。断片間は深くマージせず、override だけを深くマージします。
+- 公開の navigation 入口は場所ごとに固定です（`daifuku_bringup` の
+  `navigation.<場所>.launch.py`）。どの場所を走るかは launch 名で決まり、
+  `OVERRIDES` も `site` ファイルも変えられません。`daifuku_navigation` の
+  `navigation.launch.py` は合成から使う部品で、公開入口ではありません。
+- 場所の override は `src/daifuku_config/sites/<場所>/overrides.yaml` です。
+  最上位キーは機能パッケージ名（`daifuku_robot:`、`daifuku_perception:`、
+  `daifuku_localization:`、`daifuku_navigation:`、`daifuku_mapping:` など）で、旧 stack の節はありません。
 - `site` は場所名 1 語だけです。地図は名前から推測せず、override の
   `site.map.navigation` と `site.map.localization` から解決します。同じ地図でも両方明記します。
   `/map` は計画用、`/map_loc` は自己位置推定用です。明示した地図と override の不一致、
   計画用地図の未指定を既定地図へのフォールバックで隠しません。
-- `overrides:=` は場所の既定を置き換えます。無効化は `overrides:=none` とし、
-  その場合は `map:=` が必要です。VTC の生成地図にも `overrides:=none` を明示し、
-  実機の場所別調整を混ぜません。環境変数 `OVERRIDES` は `site` より強いので、
-  一時的な構成以外では残さないでください。
-- 機体は場所を知りません。場所変更では navigation/mapping だけを立て直します。
-  `site_manager` は `robot_bringup` に 1 つ、`config_sentinel` は top-level launch ごとに
-  1 つだけ置きます。include される launch に見張りを重ねません。
-- `robot_bringup` の見張りは `watch_site=False` です。override に
-  `daifuku_bringup:` の設定を戻す場合は、この指定も見直します。
+- mapping の `overrides:=<場所>` は既定 `none` です。VTC の公開入口
+  `navigation.vtc.launch.py` は外部の地図を明示し、`overrides` は `none` です。
+  実機の場所別調整を混ぜません。
+- `site` ファイルと `site_manager` は**次に立てる場所**の任意の選択だけを持ちます。
+  `tools/site.sh` は次の場所を選んで対応する起動コマンドを表示するだけで、
+  走っている launch を止めたり立て直したりしません。機体は場所を知りません。
+- `config_sentinel` は top-level launch ごとにちょうど 1 つ置き、include される
+  launch に見張りを重ねません。見張る範囲は navigation が選んだ場所の
+  navigation・localization・perception と使用中プロファイルの明示ファイル、
+  mapping が mapping・perception、機体が robot だけです。
+  固定された場所の設定が変われば、設定どおり静止を待って終了します。
+  関係しない場所選択（`site` の書き換え）では終了しません。
   `SENTINEL_RESTART_CODE` は非ゼロを保ち、通常のノード終了を設定変更と取り違えさせません。
   リンク切れの設定は監視対象から外れるため、起動ログで確認して生成物を整理します。
 - 設定変更は sentinel が launch を終了させます。機体は Compose が上げ直しますが、
@@ -133,7 +152,7 @@ Raspberry Pi Cat を ROS 2 Humble と standalone VI で自律移動させるワ�
 - `tsudanuma_mugimaru` の計画地図は順路から生成した回廊です。順路変更時は地図も再生成し、
   自由セル・連結性・画像の上下方向を検算します。PGM の行 0 は地図の y 最大側です。
   `tools/maps/verify_{map_thresholds,corridor_orientation,waypoints}.py` を使い、
-  地図固有の既知事項は[地図の説明](src/daifuku_stack/maps/tsudanuma_mugimaru/README.md)に従います。
+  地図固有の既知事項は[地図の説明](src/daifuku_maps/maps/tsudanuma_mugimaru/README.md)に従います。
 - RViz に `Navigation 2` パネルを足しません。同じ `/waypoints` へ MarkerArray を出し、
   自前パネルの Path と型が衝突して設定読み込みが途中で止まります。
   `/waypoints` の表示は Path、点の表示は `/waypoint_markers` です。
@@ -159,7 +178,7 @@ Raspberry Pi Cat を ROS 2 Humble と standalone VI で自律移動させるワ�
   ROS・エンジン不要の VTC 単体テストだけを走行 PASS としません。
 - `site_manager` / `config_sentinel` の launch テストは実機ノードと隔離します。
   `ROS_DOMAIN_ID=77` と `ROS_LOCALHOST_ONLY=1` を外しません。
-  `daifuku_config_manager` から `daifuku_config` への実行時依存も必要です。
+  テストは `daifuku_config` パッケージ内に置きます。
 - lint は個別指定を保ち、`ament_lint_common` や pep257 を戻しません。
   移植 C++ の書式と日本語 docstring に合わないためです。`ament_python` では
   `test_depend` だけでなく実行する `test/test_*.py` が必要です。

@@ -26,7 +26,7 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[3]
-MAPS = ROOT / "src/daifuku_stack/maps/tsukuba2026"
+MAPS = ROOT / "src/daifuku_maps/maps/tsukuba2026"
 
 
 def test_reference_loop_has_continuous_body_clearance_and_no_lateral_motion() -> None:
@@ -35,8 +35,8 @@ def test_reference_loop_has_continuous_body_clearance_and_no_lateral_motion() ->
     metadata = yaml.safe_load((MAPS / "navigation_reviewed.yaml").read_text(encoding="utf-8"))
     source = MAPS / metadata["image"]
     assert hashlib.sha256(source.read_bytes()).hexdigest() == route["map_sha256"]
-    profile = yaml.safe_load((ROOT / "src/daifuku_config/overrides/tsukuba2026.yaml").read_text(encoding="utf-8"))
-    selected_yaml = ROOT / "src/daifuku_stack/maps" / profile["site"]["map"]["navigation"]
+    profile = yaml.safe_load((ROOT / "src/daifuku_config/sites/tsukuba2026/overrides.yaml").read_text(encoding="utf-8"))
+    selected_yaml = ROOT / "src/daifuku_maps/maps" / profile["site"]["map"]["navigation"]
     selected = yaml.safe_load(selected_yaml.read_text(encoding="utf-8"))
     with Image.open(source) as image:
         original_pixels = np.flipud(np.array(image))
@@ -51,8 +51,8 @@ def test_reference_loop_has_continuous_body_clearance_and_no_lateral_motion() ->
     )
     assert selected["resolution"] == metadata["resolution"]
     metadata = selected
-    scale = int(profile["daifuku_stack"]["vi_planner"]["ros__parameters"]["map_scale"])
-    config = yaml.safe_load((ROOT / "src/daifuku_config/stack/nav2/costmaps.yaml").read_text(encoding="utf-8"))
+    scale = int(profile["daifuku_navigation"]["vi_planner"]["ros__parameters"]["map_scale"])
+    config = yaml.safe_load((ROOT / "src/daifuku_config/navigation/nav2/costmaps.yaml").read_text(encoding="utf-8"))
     params = config["local_costmap"]["local_costmap"]["ros__parameters"]
     polygon = np.array(json.loads(params["footprint"]), dtype=float)
     np.testing.assert_array_equal(polygon, np.array(route["footprint_base_frame_m"]))
@@ -95,7 +95,7 @@ def test_reference_loop_has_continuous_body_clearance_and_no_lateral_motion() ->
     primitives = route["primitives"]
     shortest_move = min(float(np.linalg.norm(np.array(item["end"][:2])-item["start"][:2]))
                         for item in primitives if item["start"][:2] != item["end"][:2])
-    assert profile["daifuku_stack"]["vi_planner"]["ros__parameters"]["goal_tolerance_xy"] < shortest_move
+    assert profile["daifuku_navigation"]["vi_planner"]["ros__parameters"]["goal_tolerance_xy"] < shortest_move
     previous = np.array(primitives[0]["start"], dtype=float)
     points = [previous[:2]]
     length = 0.0

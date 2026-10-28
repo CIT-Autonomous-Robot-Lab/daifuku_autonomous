@@ -20,7 +20,7 @@ RViz2 上で waypoint を作り、並べ替え・YAML 保存/読込を行い、v
 
 `vi_planner` は `/navigate_through_poses` を提供しないため、
 `/follow_waypoints` へ順路を送ります。停止時間と失敗時の継続は
-`src/daifuku_config/stack/vi_planner.yaml` の `waypoint_pause_sec` と
+`src/daifuku_config/navigation/vi_planner.yaml` の `waypoint_pause_sec` と
 `stop_on_failure` で設定します。
 
 ## Pi では建てない
@@ -32,7 +32,7 @@ RViz プラグインなので、実機イメージ (`ros:humble-ros-base`) で�
 
 ## 使い方
 
-`navigation.launch.py` が読む `daifuku_stack/rviz/navigation.rviz` には設定済み。
+`navigation.launch.py` が読む `daifuku_bringup/rviz/navigation.rviz` には設定済み。
 別の RViz 設定から使うときは以下が要る。
 
 1. **Panels → Add New Panel** から `daifuku_waypoint_manager/WaypointManagerPanel`
@@ -143,12 +143,12 @@ latch して出す。**これは他ノードが読むためのもの**で、い�
 このトピックは別の入口として残っています。
 
 `vi_planner` 側はトピック名が `waypoints`。`waypoint_prefetch` は
-`src/daifuku_config/stack/vi_planner.yaml`・ノードの宣言ともに `false` だが、
+`src/daifuku_config/navigation/vi_planner.yaml`・ノードの宣言ともに `false` だが、
 **既定の場所である `19f` の overrides が `true` へ上書きしている**ので、引数を何も
 足さずに立てれば先読みは入っています。先読みは価値関数を2本保持するため、
 メモリ使用量が増えます。
 
-同じものを `daifuku_bringup/src/joy_teleop.py`（START+BACK での巡回開始）も出す。
+同じものを `daifuku_robot/src/joy_teleop.py`（START+BACK での巡回開始）も出す。
 **実機のイメージにこのパネルは入らない**ので、機体だけで走らせるときはあちらが
 出どころになる。トピック名はパネルの `kWaypointPathTopic`・`joy_teleop` の
 publisher・`vi_planner` の `waypoint_topic` の 3 か所にあり、1 つだけ変えると
@@ -170,7 +170,7 @@ RViz の Fixed Frame と waypoint の `frame_id` が一致している必要が�
 ## YAML の受け入れ規則
 
 読み手が 2 つある。このパネルの `readYamlFile` と、実機で巡回を始める
-`daifuku_bringup/src/joy_teleop.py` の `load_waypoints` である。**両方が同じ規則で
+`daifuku_robot/src/joy_teleop.py` の `load_waypoints` である。**両方が同じ規則で
 受けること。** 片方だけが通す形にすると、手で書いた順路が「実機では走るのに
 パネルでは開けない」（あるいはその逆）になり、しかもどちらの側にも異常が出ない。
 
@@ -187,9 +187,9 @@ RViz の Fixed Frame と waypoint の `frame_id` が一致している必要が�
 
 ## 保存済みの waypoint
 
-`daifuku_stack/waypoints/waypoints_tsudanuma v1.0.yaml`（73 点、`tsudanuma` 用）と、
+`daifuku_maps/waypoints/waypoints_tsudanuma v1.0.yaml`（73 点、`tsudanuma` 用）と、
 そこから採り直した `v1.1`（73 点）・`v1.2`（69 点）。地図に紐づくデータなので
-`daifuku_stack` 側の `maps/` の隣に置いてある。`19f` では座標が地図の外に出るので
+`daifuku_maps` の `maps/` の隣に置いてある。`19f` では座標が地図の外に出るので
 使えない。**ファイル名に空白が入っている**ので、`waypoints_file` へシェルから渡すときは
 引用符で囲むこと（囲まないと `-p waypoints_file:=...` が途中で切れ、空扱いになって
 **START+BACK が黙って巡回を断る**）。冒頭の日本語の注記を持つのは `v1.0` だけ。

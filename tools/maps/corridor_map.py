@@ -39,7 +39,7 @@
 セルはそのまま (手描きの壁は消えません)。
 
     uv run tools/maps/corridor_map.py nav.yaml out.yaml \\
-        --waypoints src/daifuku_stack/waypoints/waypoints_*_v1.1.yaml \\
+        --waypoints src/daifuku_maps/waypoints/waypoints_*_v1.1.yaml \\
         --radius 8.5
 
 **この出力は順路から導かれるので、順路を変えたら作り直しが要ります。** 新しい

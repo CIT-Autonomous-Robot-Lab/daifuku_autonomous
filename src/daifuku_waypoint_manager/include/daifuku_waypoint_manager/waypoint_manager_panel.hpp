@@ -67,7 +67,7 @@ private Q_SLOTS:
 
 private:
   // NavigateThroughPoses ではなく FollowWaypoints を使う。前者の BT は
-  // ComputePathThroughPoses を要求するが、planner:=vi (daifuku_stack の既定) では
+  // ComputePathThroughPoses を要求するが、standalone VI (daifuku_navigation) では
   // その action が存在せず、木がスタブ (常に失敗) に差し替えられているため。
   using FollowWaypoints = nav2_msgs::action::FollowWaypoints;
   using GoalHandleFollowWaypoints = rclcpp_action::ClientGoalHandle<FollowWaypoints>;

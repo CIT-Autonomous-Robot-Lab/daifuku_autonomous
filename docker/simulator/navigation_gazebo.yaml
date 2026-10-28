@@ -1,5 +1,5 @@
 # Simulation-specific tuning; regular robot and site settings are unchanged.
-daifuku_stack:
+daifuku_localization:
   emcl2:
     ros__parameters:
       # Ideal Gazebo rays do not need the hardware profile's 1 m likelihood field.
@@ -10,6 +10,7 @@ daifuku_stack:
       odom_fw_dev_per_fw: 0.01
       odom_rot_dev_per_fw: 0.01
       odom_rot_dev_per_rot: 0.01
+daifuku_navigation:
   vi_planner:
     ros__parameters:
       # Reserve part of the 0.35 m world-truth gate for localization uncertainty.

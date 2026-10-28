@@ -22,7 +22,7 @@ rqt                                          # Plugins > Raspicat > Raspicat Con
 
 | パネルの操作 | 相手 |
 | --- | --- |
-| 稼働状況 | `/diagnostics`（`daifuku_stack` の `system_monitor` が出す） |
+| 稼働状況 | `/diagnostics`（`daifuku_bringup` の `system_monitor` が出す） |
 | ゴール送信・中断 | `vi_planner` の `navigate_to_pose` アクション |
 | configure / activate / deactivate | `/<ドライバ名>/change_state`、状態表示は `/get_state` を 2 秒ごと |
 | モータ ON/OFF | `/motor_power`（`std_srvs/SetBool`） |
@@ -41,7 +41,7 @@ rqt                                          # Plugins > Raspicat > Raspicat Con
 
 ## 止まり方（ここが一番重要）
 
-自前実装（`driver:=original`）の `src/daifuku_config/bringup/robot/raspicat_driver.yaml` は
+自前実装（`driver:=original`）の `src/daifuku_config/robot/robot/raspicat_driver.yaml` は
 `cmd_vel_timeout` が **60 秒**です。つまり「`cmd_vel` が途切れたから止まる」までに
 1 分かかります。公式実装（`driver:=raspimouse`）にはこのキーが**そもそも
 ありません**（`raspicat.yaml` が並べている 14 個で全部）。指令が途切れたときに

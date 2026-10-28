@@ -12,10 +12,9 @@
 # own overlay workspace /opt/usim_vtc_ws, sourced last by stack.sh, so a stale
 # /opt/ros_ws in the base cannot shadow the current checkout.
 #
-# Only what the simulated workflow runs is built: daifuku_config /
-# daifuku_config_manager / daifuku_stack, emcl2, vi_planner and
-# raspicat_description. daifuku_bringup, raspicat_driver and livox_ros_driver2
-# are not built here, and stack.sh never launches them.
+# The composition and functional packages are built with emcl2, vi_planner and
+# raspicat_description. The robot composition is installed as a dependency of
+# bringup, but stack.sh never starts it or any real hardware driver.
 ARG BASE_IMAGE=daifuku-autonomous:humble
 FROM ${BASE_IMAGE}
 
@@ -37,14 +36,18 @@ yaml.safe_dump({'repositories': picked}, open('/opt/usim_vtc/vtc_stack.repos', '
 RUN cd /opt/usim_vtc_ws && vcs import . < /opt/usim_vtc/vtc_stack.repos
 
 COPY src/daifuku_config /opt/usim_vtc_ws/src/daifuku_config
-COPY src/daifuku_config_manager /opt/usim_vtc_ws/src/daifuku_config_manager
-COPY src/daifuku_stack /opt/usim_vtc_ws/src/daifuku_stack
+COPY src/daifuku_bringup /opt/usim_vtc_ws/src/daifuku_bringup
+COPY src/daifuku_robot /opt/usim_vtc_ws/src/daifuku_robot
+COPY src/daifuku_perception /opt/usim_vtc_ws/src/daifuku_perception
+COPY src/daifuku_localization /opt/usim_vtc_ws/src/daifuku_localization
+COPY src/daifuku_navigation /opt/usim_vtc_ws/src/daifuku_navigation
+COPY src/daifuku_mapping /opt/usim_vtc_ws/src/daifuku_mapping
+COPY src/daifuku_maps /opt/usim_vtc_ws/src/daifuku_maps
 # A Windows checkout may carry CRLF and no exec bits (core.fileMode=false).
-RUN find /opt/usim_vtc_ws/src/daifuku_config /opt/usim_vtc_ws/src/daifuku_config_manager \
-         /opt/usim_vtc_ws/src/daifuku_stack \
+RUN find /opt/usim_vtc_ws/src/daifuku_* \
         -type f \( -name '*.py' -o -name '*.yaml' -o -name '*.xml' -o -name '*.txt' -o -name '*.cfg' -o -name 'site' \) \
         -exec sed -i 's/\r$//' {} + \
-    && chmod +x /opt/usim_vtc_ws/src/daifuku_stack/src/*.py
+    && find /opt/usim_vtc_ws/src/daifuku_* -type f -name '*.py' -exec chmod +x {} +
 
 # Standalone vi_planner is an ament_cargo
 # package: it needs the ROS 2 Rust underlay docker/raspberrypi/Dockerfile builds at
@@ -77,7 +80,9 @@ RUN source /opt/ros/humble/setup.bash \
     && source /opt/ros2_rust_ws/install/local_setup.bash \
     && cd /opt/usim_vtc_ws \
     && colcon build --parallel-workers "${BUILD_JOBS}" \
-         --packages-select daifuku_config daifuku_config_manager daifuku_stack \
+         --packages-select daifuku_config daifuku_bringup daifuku_robot \
+                           daifuku_perception daifuku_localization daifuku_navigation \
+                           daifuku_mapping daifuku_maps \
                            emcl2 raspicat_description vi_planner \
          --cmake-args -DCMAKE_BUILD_TYPE=Release \
     && rm -rf build log \

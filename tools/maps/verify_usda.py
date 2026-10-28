@@ -27,7 +27,7 @@
 生成されたように見え、Isaac 上でも壁は立つ。壊れるのは「地図と環境が一致している」
 という前提だけなので、目視では絶対に気づけない。
 
-    uv run tools/maps/verify_usda.py src/daifuku_stack/maps/19f/map_19f.yaml /tmp/world.usda free
+    uv run tools/maps/verify_usda.py src/daifuku_maps/maps/19f/map_19f.yaml /tmp/world.usda free
 
 終了コード: 0 = 一致、1 = 不一致。
 """

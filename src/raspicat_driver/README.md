@@ -112,7 +112,7 @@ Pi 4 では `buzzer_pwm_channel` を 0 以上にすると `configure` を拒否�
 
 ## パラメータと前提
 
-パラメータは `src/daifuku_config/bringup/robot/raspicat_driver.yaml`（全キーを既定値の
+パラメータは `src/daifuku_config/robot/robot/raspicat_driver.yaml`（全キーを既定値の
 まま列挙。値の由来は [`src/daifuku_config/README.md`](../../src/daifuku_config/README.md)）。
 
 ホスト側に要るものは 2 つです。どちらも `tools/image/` が入れます。

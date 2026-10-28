@@ -28,7 +28,7 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[3]
-MAPS = ROOT / "src/daifuku_stack/maps/tsukuba2026"
+MAPS = ROOT / "src/daifuku_maps/maps/tsukuba2026"
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,7 +125,7 @@ def test_preview_frame_and_profile_match_the_reviewed_map() -> None:
     # Given: the original coordinate frame and selected two-map profile.
     source = yaml.safe_load((MAPS / "navigation_connected.yaml").read_text())
     actual = yaml.safe_load((MAPS / "navigation_reviewed.yaml").read_text())
-    profile = yaml.safe_load((ROOT / "src/daifuku_config/overrides/tsukuba2026.yaml").read_text())
+    profile = yaml.safe_load((ROOT / "src/daifuku_config/sites/tsukuba2026/overrides.yaml").read_text())
     # When: the viewer preview and machine-consumed metadata are decoded.
     pgm = raster(MAPS / actual["image"])
     png = raster(MAPS / "navigation_reviewed.png")
@@ -160,8 +160,8 @@ def test_cityhall_crop_preserves_pixels_and_glim_world_coordinates() -> None:
 def test_vi_arrival_region_supports_two_cell_transition_outcomes() -> None:
     # Given: the configured planner resolution and machine-consumed goal radius.
     metadata = yaml.safe_load((MAPS / "navigation_reviewed.yaml").read_text())
-    profile = yaml.safe_load((ROOT / "src/daifuku_config/overrides/tsukuba2026.yaml").read_text())
-    parameters = profile["daifuku_stack"]["vi_planner"]["ros__parameters"]
+    profile = yaml.safe_load((ROOT / "src/daifuku_config/sites/tsukuba2026/overrides.yaml").read_text())
+    parameters = profile["daifuku_navigation"]["vi_planner"]["ros__parameters"]
     resolution = metadata["resolution"] * parameters["map_scale"]
     radius = parameters["goal_margin_radius"]
     rows, columns = np.mgrid[-4:5, -4:5]
@@ -180,10 +180,10 @@ def test_vi_arrival_region_supports_two_cell_transition_outcomes() -> None:
 
 def test_vi_arrival_angles_cover_every_discrete_action_phase() -> None:
     # Given: the actual heading cells and all configured rotation actions.
-    base = yaml.safe_load((ROOT / "src/daifuku_config/stack/vi_planner.yaml").read_text(encoding="utf-8"))
-    site = yaml.safe_load((ROOT / "src/daifuku_config/overrides/tsukuba2026.yaml").read_text())
+    base = yaml.safe_load((ROOT / "src/daifuku_config/navigation/vi_planner.yaml").read_text(encoding="utf-8"))
+    site = yaml.safe_load((ROOT / "src/daifuku_config/sites/tsukuba2026/overrides.yaml").read_text())
     parameters = (base["vi_planner"]["ros__parameters"] |
-                  site["daifuku_stack"]["vi_planner"]["ros__parameters"])
+                  site["daifuku_navigation"]["vi_planner"]["ros__parameters"])
     count = int(parameters["theta_cell_num"])
     resolution = 360/count
     steps = [int(round(float(angle)/resolution))
@@ -209,8 +209,8 @@ def test_vi_arrival_angles_cover_every_discrete_action_phase() -> None:
 def test_translation_lengths_progress_without_skipping_native_cells() -> None:
     # Given: the selected planner cell size and each nonzero translation.
     metadata = yaml.safe_load((MAPS / "navigation_cityhall.yaml").read_text())
-    profile = yaml.safe_load((ROOT / "src/daifuku_config/overrides/tsukuba2026.yaml").read_text())
-    parameters = profile["daifuku_stack"]["vi_planner"]["ros__parameters"]
+    profile = yaml.safe_load((ROOT / "src/daifuku_config/sites/tsukuba2026/overrides.yaml").read_text())
+    parameters = profile["daifuku_navigation"]["vi_planner"]["ros__parameters"]
     resolution = float(np.float32(metadata["resolution"]))*parameters["map_scale"]
     # When: a full subcell/heading distribution is translated.
     for displacement in parameters["action_forward_m"]:

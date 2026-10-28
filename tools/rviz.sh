@@ -19,7 +19,7 @@ PANEL="${REPO}/src/daifuku_waypoint_manager"
 
 case "${1:-navigation}" in
   *.rviz) CONFIG="$1" ;;
-  *) CONFIG="${REPO}/src/daifuku_stack/rviz/${1:-navigation}.rviz" ;;
+  *) CONFIG="${REPO}/src/daifuku_bringup/rviz/${1:-navigation}.rviz" ;;
 esac
 [[ -f "${CONFIG}" ]] || { echo "no such rviz config: ${CONFIG}" >&2; exit 2; }
 

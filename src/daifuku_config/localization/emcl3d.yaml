@@ -1,0 +1,50 @@
+# EMCL3D の自己位置推定 (localization:=emcl3d)。PCD の点群地図に対する 6DoF の MCL。
+# 「既定」= src/emcl3d の config/emcl3d.yaml (= emcl3d_node.cpp の declare_parameter)。
+# emcl2 と同じく nav2 のノードではないので、emcl3d_params_file でノードへ直接渡る。
+# 地図ごとの調整はここではなく sites/<場所>/overrides.yaml に置く (ノード名 emcl3d で重なる)。
+# **map_path はここに書かない** — overrides の site: map: pointcloud: (か map_pcd:=) から
+# launch が渡す。2D 地図と同じく、場所と地図を別々に指定させないため。
+
+emcl3d:
+  ros__parameters:
+    use_sim_time: false
+    map_frame: map                      # 既定 同左
+    odom_frame: odom                    # 既定 同左
+    base_frame: base_footprint          # 既定 base_link: URDF に base_link が無い (emcl2 と同じ)
+    # Mid-360 の生の点群をそのまま食わせる (scan_pipeline の仰角フィルタや帯は通さない)。
+    # emcl3d は「header.stamp に deskew 済み」を前提にするが、Livox の 1 フレーム 0.1 秒の
+    # 歪みはこの機体の速度 (0.5m/s) で最大 5cm なので、そのまま入れている。**未検証**。
+    cloud_topic: /livox/lidar           # 既定 /points
+    publish_tf: true                    # 既定 同左: map -> odom を出す。他の推定器と同時に立てないこと
+
+    max_cloud_age: 1.0                  # 既定 同左 [s]
+    future_tolerance: 0.1               # 既定 同左 [s]
+    tf_wait_timeout: 0.3                # 既定 同左 [s]: odom -> base_footprint を雲の時刻で引く待ち
+    max_position_stddev: 2.0            # 既定 同左 [m]: 診断の警告閾値
+    max_rotation_stddev: 0.5            # 既定 同左 [rad]
+    map_voxel_size: 0.2                 # 既定 同左 [m]
+    scan_voxel_size: 0.2                # 既定 同左 [m]
+    min_range: 0.5                      # 既定 0.0 [m]: 機体自身の反射を落とす。**未検証**
+    max_range: 70.0                     # 既定 100.0 [m]: Mid-360 の測距上限 (pointcloud_to_laserscan の range_max と同じ)
+    max_input_points: 2000000           # 既定 同左
+    max_eval_points: 2000               # 既定 同左: Pi で 1 回の更新に見る点の上限
+    min_valid_points: 20                # 既定 同左
+
+    # [x, y, z, roll, pitch, yaw]。起動時の初期姿勢 (RViz の 2D Pose Estimate で上書きする)。
+    initial_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    initial_variance: [1.0, 1.0, 1.0, 0.1, 0.1, 0.5]   # 既定 同左 [m^2, rad^2]
+    num_particles: 500                  # 既定 同左
+    random_seed: 1                      # 既定 同左
+    resample_ess_ratio: 0.5             # 既定 同左
+    sigma_hit: 0.3                      # 既定 同左 [m]
+    z_hit: 0.95                         # 既定 同左
+    z_random: 0.05                      # 既定 同左
+    likelihood_temperature: 10.0        # 既定 同左
+    inlier_distance: 0.5                # 既定 同左 [m]
+    min_inlier_ratio: 0.3               # 既定 同左
+    alpha_threshold: 0.5                # 既定 同左: 下回り続けると膨張リセット
+    reset_confirmation_updates: 3       # 既定 同左
+    translation_noise: [0.1, 0.1, 0.1]  # 既定 同左 [m] (標準偏差)
+    rotation_noise: [0.1, 0.1, 0.1]     # 既定 同左 [rad]
+    expansion_translation: [0.2, 0.2, 0.2]  # 既定 同左 [m]
+    expansion_rotation: [0.1, 0.1, 0.1]     # 既定 同左 [rad]
