@@ -1,7 +1,7 @@
 # セットアップガイド
 
 Raspberry Pi CatとナビゲーションPCを同じROS 2ネットワークへ接続し、機体側
-（`daifuku_bringup`）と自律移動側（`daifuku_stack`）を起動できる状態にするまでの手順です。
+（`robot.launch.py`）と自律移動側（`navigation.<場所>.launch.py`、`mapping.launch.py`）を起動できる状態にするまでの手順です。
 
 ## 1. 実行環境を選ぶ
 

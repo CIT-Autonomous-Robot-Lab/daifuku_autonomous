@@ -1,41 +1,40 @@
 # LiDARとオドメトリ
 
-**LiDARのドライバとEKFを立てるのは`daifuku_bringup`の`robot_bringup.launch.py`です。**
-`docker compose up`で常駐しているので、`navigation.launch.py`と`mapping.launch.py`は
+**LiDARのドライバとEKFを立てるのは機体側の`robot.launch.py`です**（実装は`daifuku_robot`）。
+`docker compose up`で常駐しているので、navigationとmappingの公開launchは
 生データ（`/livox/lidar`・`/livox/imu`、`lidar:=2d`なら`/scan_raw`）と`/odom`を
 受け取る側です。手元で単独に立てるときは先に次を通してください。
 
 ```bash
-ros2 launch daifuku_bringup robot_bringup.launch.py
+ros2 launch daifuku_bringup robot.launch.py
 ```
 
-内訳は`lidar_bringup.launch.py`（LiDARドライバと取り付け位置の静的TF）と
+内訳は`daifuku_robot`の`lidar_bringup.launch.py`（LiDARドライバと取り付け位置の静的TF）と
 `odom_fusion.launch.py`（車輪＋IMUのEKF）の2つで、どちらも単独でも立てられます。
 
-**`/scan`を作る段だけは`daifuku_stack`にあります**（`scan_pipeline.launch.py`。
-`navigation` / `mapping` が include）。理由は次の節。
+**`/scan`を作る段だけは`daifuku_perception`にあります**（`scan_pipeline.launch.py`。
+navigation / mapping が include）。理由は次の節。
 
 `lidar:=2d|mid360`でセンサー構成を切り替えます。既定は本機の構成に合わせて`mid360`
 です。どちらも入力を`/scan_raw`へ集約し、角度フィルタ後の`/scan`をSLAMとNav2へ
 渡します。
 
 **この経路は2つのlaunchに分かれています。** センサーのドライバ（`urg_node` /
-`livox_ros_driver2`）は`robot_bringup.launch.py`（`docker compose up`で常駐）、
+`livox_ros_driver2`）は`robot.launch.py`（`docker compose up`で常駐）、
 点群を`/scan`に変える段（仰角フィルタ・`pointcloud_to_laserscan`・`restamp_scan`・
-角度フィルタ）は`daifuku_stack`の`scan_pipeline.launch.py`で、`navigation.launch.py`と
-`mapping.launch.py`が include します。2026-08-25にこう分けたのは、**場所ごとに変わる値
-（帯と仰角）を持つのが後半だけ**で、常駐している機体がそれを読むために場所を知る
-必要があったためです。**`lidar:=`と`lidar_driver:=`は両方のlaunchが持つので揃える
+角度フィルタ）は`daifuku_perception`の`scan_pipeline.launch.py`で、navigationとmappingの
+公開launchが include します。**場所ごとに変わる値（帯と仰角）を持つのは後半だけ**なので、
+常駐している機体は場所を知らずに済みます。**`lidar:=`と`lidar_driver:=`は両方のlaunchが持つので揃える
 こと**（既定は環境変数`LIDAR` / `LIDAR_DRIVER`から来るので、`.env`に1行書けば
 揃います）。食い違うとエラーも警告も出ないまま`/scan`が空になります。
 
-既定の`src/daifuku_config/stack/sensors/scan_filter.yaml`は、コネクタがある後方50度
+既定の`src/daifuku_config/perception/scan_filter.yaml`は、コネクタがある後方50度
 （+155度から-155度まで、±180度をまたぐ範囲）を除外します。
 
 センサーごとのトピックの流れは次のとおりです。
 
-縦線（`|`）の左が`robot_bringup`（常駐）、右が`scan_pipeline`（`navigation` /
-`mapping`）の受け持ちです。
+縦線（`|`）の左が機体（常駐）、右が`scan_pipeline`（navigation /
+mapping）の受け持ちです。
 
 ```text
 2D LiDAR      : urg_node → /scan_raw | → 角度フィルタ → /scan
@@ -58,10 +57,9 @@ C++の`topic_tools throttle`を挟むと合計10%に落ちます。EKFは`freque
 44 Hzで足ります。**この`throttle`が落ちると`/imu/mid360`ごと止まり、EKFは`imu0`が
 一度も来ないまま車輪だけで回ります**（エラーも警告も出ません）。
 
-**LiDARの帯（仰角と高さ）を場所ごとに変えるには`overrides:=<場所>`を渡すか、
-`tools/site.sh <名前>`で既定を切り替えます。** 読むのは`navigation` / `mapping`が
-include する段なので、**立て直せば反映されます**（2026-08-25より前は常駐している
-raspicatサービスが読んでいたので、機体の立て直しが要りました）。
+**LiDARの帯（仰角と高さ）は場所ごとの`sites/<場所>/overrides.yaml`にあります。** navigationは
+場所のlaunch（`navigation.<場所>.launch.py`）を選べばその値になり、mappingは`overrides:=<場所>`を
+渡します。読むのはnavigation / mappingが include する段なので、**立て直せば反映されます**。
 
 `elevation_filter:=false`にすると仰角フィルタは立たず、`/livox/lidar`が
 `pointcloud_to_laserscan`へ直接入ります（relayは挟みません）。
@@ -98,7 +96,7 @@ costmapから消え、近くはセンサーの垂直FOVから外れて死角に�
 2026-08-08に5.0から戻し、`tsudanuma_mugimaru`はそれを写しました）。0度は搭載高の水平面そのもの＝断片の
 `min_height: 0.275`と同じ切り方なので、仰角フィルタは実質素通しで、帯は全距離で
 `min_height`〜`max_height`のままです。地図ごとの値と経緯は
-`src/daifuku_config/overrides/tsudanuma.yaml`にあります。
+`src/daifuku_config/sites/tsudanuma/overrides.yaml`にあります。
 
 `range_max`の既定はセンサの測距上限に合わせた70m（反射率80%で70m、10%では40m）です。
 ただし実際に70mを使うのは`emcl2`だけで、costmapは`obstacle_max_range: 2.5`、
@@ -112,7 +110,7 @@ SLAMは`max_laser_range: 10.0`で頭打ちになります。
 `/scan_raw`へremapされます。
 
 ```bash
-ros2 launch daifuku_bringup robot_bringup.launch.py lidar:=2d
+ros2 launch daifuku_bringup robot.launch.py lidar:=2d
 ```
 
 Ethernet接続のURGでは`urg_interface:=ethernet`を指定します。別のパラメータファイルを
@@ -144,7 +142,7 @@ ros2 run <2d_lidar_package> <2d_lidar_node> \
 
 ### IPアドレス
 
-`src/daifuku_config/bringup/sensors/MID360_config.json`を実ネットワークに合わせます。
+`src/daifuku_config/robot/sensors/MID360_config.json`を実ネットワークに合わせます。
 
 - `host_net_info`内の4個の`*_data_ip`: ドライバを動かすPCの固定IP
 - `lidar_configs[0].ip`: Mid-360本体のIP
@@ -157,7 +155,7 @@ ros2 run <2d_lidar_package> <2d_lidar_node> \
 Nav2コストマップのメッセージフィルタが、起動から数分でデータを「古すぎる」
 「未来の時刻」として破棄します。
 
-対策として、`lidar:=mid360 lidar_driver:=true`のときだけ`daifuku_stack`の
+対策として、`lidar:=mid360 lidar_driver:=true`のときだけ`daifuku_perception`の
 `src/restamp_scan.py`が
 `/scan_mid360_prestamp`を購読し、受信時刻でスタンプを打ち直して`/scan_raw`へ再配信
 します。こうするとスキャンのスタンプが、車輪オドメトリ・TF・Nav2と同じ時計に
@@ -166,7 +164,7 @@ Nav2コストマップのメッセージフィルタが、起動から数分で�
 できるようになれば、この中継は不要になります。
 
 中継は`prepare_mid360_imu.py`・`joy_teleop.py`と同じく通常の
-`Node`として起動します（`lib/daifuku_stack/restamp_scan.py`。トピックは相対名の
+`Node`として起動します（`lib/daifuku_perception/restamp_scan.py`。トピックは相対名の
 `scan_in` / `scan_out`で、launch側が remap します）。実行ファイルが無ければlaunchごと
 エラーで止まるので、古い`install/`が残っていても黙って`/scan_raw`だけが欠けることは
 ありません。切り分けは
@@ -195,7 +193,7 @@ base_footprint`と`/odom`の所有者はEKFで、EKFが車輪の並進速度とM
 `false`にすると2D LiDAR構成と同様に、車輪ノードが`/odom`と`odom -> base_footprint`を
 自分で配信する形に戻ります。
 
-**この引数は`robot_bringup.launch.py`ひとつに閉じています。** 同じlaunchがドライバと
+**この引数は`robot.launch.py`ひとつに閉じています。** 同じlaunchがドライバと
 EKF（`odom_fusion.launch.py`）の両方を立てるので、**片方だけ切り替わる状態は作れません**。
 `true`のときだけドライバの`odom`を`/wheel/odom`へremapし、TF配信を止めます（自前実装は
 `publish_tf: false`、公式実装は`publish_tf`を持たないのでノードの`/tf`を
@@ -238,7 +236,7 @@ navigationを立てるときではなくbootのとき**です。Mid-360のジャ
 バイアスがあり、この個体はZ軸で+0.013960 rad/s（+0.800 deg/s、5001サンプル、2026-08-05実測）
 でした。放置すると静止しているだけで48 deg/minヨーが回ります。`robot_localization`は
 センサのバイアスを推定しないので、`prepare_mid360_imu`が起動後の静止区間から測って
-引きます（`src/daifuku_config/bringup/sensors/mid360_ekf.yaml`の`prepare_mid360_imu`節）。
+引きます（`src/daifuku_config/robot/sensors/mid360_ekf.yaml`の`prepare_mid360_imu`節）。
 測定はメッセージ駆動（静止した100サンプルが溜まるまで待つ）なので、IMUが後から来ても
 取りこぼしません。100サンプルは間引き後の44 Hzで2.3秒です。
 
@@ -254,26 +252,26 @@ prepare_mid360_imu: gyro bias = [+0.000112, -0.000305, +0.013960] rad/s
 
 ## スキャンフィルタを変更する
 
-恒久的に除外角度を変える場合は`src/daifuku_config/stack/sensors/scan_filter.yaml`の`angle_min`と`angle_max`をラジアンで編集します。別ファイルを使う場合（**渡す先は`navigation`か`mapping`**。角度フィルタはそちらが立てます）:
+恒久的に除外角度を変える場合は`src/daifuku_config/perception/scan_filter.yaml`の`angle_min`と`angle_max`をラジアンで編集します。別ファイルを使う場合（**渡す先は`navigation`か`mapping`**。角度フィルタはそちらが立てます）:
 
 ```bash
-ros2 launch daifuku_stack navigation.launch.py \
+ros2 launch daifuku_bringup navigation.19f.launch.py \
   scan_filter_params_file:=/path/to/scan_filter.yaml
 ```
 
 一時的に無効化する場合:
 
 ```bash
-ros2 launch daifuku_stack navigation.launch.py scan_filter_enabled:=false
+ros2 launch daifuku_bringup navigation.19f.launch.py scan_filter_enabled:=false
 ```
 
-角度だけを変えたいならファイルごと渡さずに済みます。`overrides:=`は`sensors/`の
+角度だけを変えたいならファイルごと渡さずに済みます。場所の`overrides`は`perception/`の
 パラメータファイルにも重なるので、変えたいキーだけを書けます。行き先は
 **パッケージ名とノード名**で決まるので、節の名前はファイル名ではありません。
 
 ```yaml
-daifuku_stack:
-  scan_to_scan_filter_chain:   # -> stack/sensors/scan_filter.yaml
+daifuku_perception:
+  scan_to_scan_filter_chain:   # -> perception/scan_filter.yaml
     ros__parameters:
       filter1:
         params:
@@ -281,8 +279,8 @@ daifuku_stack:
           angle_max: -2.705260341
 ```
 
-`pointcloud_to_laserscan`（`stack/sensors/mid360_scan.yaml`）も同じです。
-機体側（`daifuku_bringup:`）に書くのは`ekf_filter_node`（`bringup/sensors/mid360_ekf.yaml`）と
+`pointcloud_to_laserscan`（`perception/mid360_scan.yaml`）も同じです。
+機体側（`daifuku_robot:`）に書くのは`ekf_filter_node`（`robot/sensors/mid360_ekf.yaml`）と
 `urg_node`（`urg_params_file`が指すファイル）です。
 JSONの`MID360_config.json`だけは対象外で、こちらは`mid360_config:=`でファイルごと
 差し替えます。行き先の決まりかたは[設定](../usage/configuration.md)の

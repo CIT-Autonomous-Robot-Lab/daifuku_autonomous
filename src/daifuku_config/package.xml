@@ -3,19 +3,31 @@
 <package format="3">
   <name>daifuku_config</name>
   <version>0.1.0</version>
-  <description>設定ファイルの実体。合成規則とノードは daifuku_config_manager 側</description>
+  <description>機能別設定、場所別調整、合成規則と設定監視</description>
   <maintainer email="noplab90@gmail.com">Keita Sekiguchi / nop</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
 
-  <!-- ament_lint_common (詰め合わせ) は使わず、走らせるものだけを名指しする。
-       理由は AGENTS.md。ここは yaml しか持たないので copyright は見る対象が
-       無い (拡張子で選ぶ) が、6 つと揃えておく。 -->
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>rcl_interfaces</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_cmake_copyright</test_depend>
+  <test_depend>ament_cmake_flake8</test_depend>
   <test_depend>ament_cmake_lint_cmake</test_depend>
   <test_depend>ament_cmake_xmllint</test_depend>
+  <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>python3-pytest</test_depend>
+  <test_depend>launch_testing_ament_cmake</test_depend>
+  <test_depend>ros2param</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

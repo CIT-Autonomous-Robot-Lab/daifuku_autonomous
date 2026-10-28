@@ -163,7 +163,7 @@ def test_seed_snapping_rejects_a_disconnected_free_component(tmp_path: Path) -> 
 
 
 def test_gazebo_slam_profile_preserves_daifuku_mapping_parameters(tmp_path: Path) -> None:
-    source = STACK.parents[1] / 'src' / 'daifuku_config' / 'stack' / 'mapping' / 'slam_toolbox.yaml'
+    source = STACK.parents[1] / 'src' / 'daifuku_config' / 'mapping' / 'slam_toolbox.yaml'
     destination = tmp_path / 'slam_toolbox_gazebo.yaml'
     prepare_slam_profile(source, destination)
     expected = yaml.safe_load(source.read_text(encoding='utf-8'))
@@ -313,8 +313,8 @@ def test_stack_launch_arguments() -> None:
     assert not {'planner', 'local_planner', 'nav2'} & {
         arg.split(':=', 1)[0] for arg in navigation
     }
-    assert 'ros2 launch daifuku_stack mapping.launch.py "${MAPPING_ARGS[@]}"' in script
-    assert 'ros2 launch daifuku_stack navigation.launch.py "${NAVIGATION_ARGS[@]}"' in script
+    assert 'ros2 launch daifuku_bringup mapping.launch.py "${MAPPING_ARGS[@]}"' in script
+    assert 'ros2 launch daifuku_bringup navigation.vtc.launch.py "${NAVIGATION_ARGS[@]}"' in script
     assert '--seed="${VTC_SEED:?VTC_SEED is required}"' in script
     assert '--goal="${VTC_GOAL:?VTC_GOAL is required}"' in script
     assert '--wait-nav2' not in script
@@ -354,11 +354,13 @@ def test_vi_planner_rust_underlay_is_required_and_sourced() -> None:
 def test_stack_never_starts_hardware_bringup() -> None:
     script = (STACK / 'stack.sh').read_text(encoding='utf-8')
     code = '\n'.join(line for line in script.splitlines() if not line.lstrip().startswith('#'))
-    for forbidden in ('daifuku_bringup', 'robot_bringup', 'odom_fusion', 'lidar_bringup',
+    for forbidden in ('robot.launch.py', 'robot_bringup', 'odom_fusion', 'lidar_bringup',
                       'raspicat_driver', 'raspimouse', 'livox', 'urg_node', 'ekf'):
         assert forbidden not in code, forbidden
     dockerfile = (STACK / 'Dockerfile').read_text(encoding='utf-8')
     build = re.search(r'--packages-select (.*?)--cmake-args', dockerfile, re.S).group(1).split()
     assert sorted(w for w in build if w != '\\') == sorted(
-        ['daifuku_config', 'daifuku_config_manager', 'daifuku_stack', 'emcl2', 'raspicat_description', 'vi_planner']
+        ['daifuku_config', 'daifuku_bringup', 'daifuku_robot', 'daifuku_perception',
+         'daifuku_localization', 'daifuku_navigation', 'daifuku_mapping', 'daifuku_maps',
+         'raspicat_driver', 'emcl2', 'raspicat_description', 'vi_planner']
     )

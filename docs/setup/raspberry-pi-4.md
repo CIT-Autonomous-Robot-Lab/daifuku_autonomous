@@ -23,7 +23,7 @@
 | `.env` の `COMPOSE_FILE` | `compose.original.yaml`（既定） | `compose.rt.yaml`（書き換えが要る） |
 
 **`driver:=` という引数そのものの既定値は `raspimouse` です。** Docker では compose が
-`driver:=` を明示して渡すのでこの既定は表に出ませんが、`robot_bringup.launch.py` を
+`driver:=` を明示して渡すのでこの既定は表に出ませんが、`robot.launch.py` を
 手で叩くときだけは効きます（rtmouse の無い機体では configure で落ちます）。
 
 **同時には動かせません。** rtmouse は GPIO と PWM のレジスタを `ioremap()` して直接
@@ -67,7 +67,7 @@ rtmouse は out-of-tree モジュールで、キャラクタデバイスのメ�
 
 ## パルスカウンタは切ってある（公式実装）
 
-`src/daifuku_config/bringup/robot/raspicat.yaml` の `use_pulse_counters` は `false`（`cmd_vel` の積分）
+`src/daifuku_config/robot/robot/raspicat.yaml` の `use_pulse_counters` は `false`（`cmd_vel` の積分）
 です。これは rtmouse を経由する公式実装の話で、自前実装（`raspicat_driver.yaml`）は
 `true` が既定です。本来は `true`（`/dev/rtcounter_{l,r}*` のロータリエンコーダ）が正しい設定
 ですが、この個体の I2C カウンタが走行中にランダムで固着します。
@@ -106,7 +106,7 @@ Pi 4 のメモリとコア数に由来するもので、Pi 5 では緩みます�
   全部外れるため。`compose.common.yaml` の `args:` に入れていない）。
 - **`use_composition` の既定 `False` は意図的です。** `True` にすると参加者あたりの
   エンドポイントが増えすぎて新規参加者からディスカバリできなくなり、CPU 飢餓で bond の
-  心拍も途絶えます。`src/daifuku_config/stack/lifecycle_bond.yaml` の `bond_timeout: 60.0` も同じ事情
+  心拍も途絶えます。`src/daifuku_config/navigation/lifecycle_bond.yaml` の `bond_timeout: 60.0` も同じ事情
   （既定の 4 秒では 8 プロセス同時起動の load 10〜19 に間に合わない）。
 - **UDP だけだと TF が遅れます。** 参加者が 20 個近くになるとカーネルが飽和し、TF の
   タイムスタンプが 20 秒以上遅れてゴールが次々と中断します。同一ホスト内は SHM を
@@ -130,7 +130,7 @@ rtmouse はレジスタを `ioremap` していて鳴らす瞬間だけ GPIO19 �
 叩いて鳴らします（音程がわずかに揺れる。理由と Pi 5 での回避策は
 [`src/raspicat_driver/README.md`](../../src/raspicat_driver/README.md)）。
 
-**測距センサだけは切ってあります**（`src/daifuku_config/bringup/robot/raspicat.yaml` の
+**測距センサだけは切ってあります**（`src/daifuku_config/robot/robot/raspicat.yaml` の
 `use_light_sensors: false`）。`true` に戻すと `raspimouse` が
 `/dev/rtlightsensor0` を 100 Hz で読み、rtmouse 側でカーネル oops を起こして
 プロセスごと落ちます。ログには何も出ず、`odom` が来ないという形でだけ現れます

@@ -24,6 +24,6 @@ services:
       - ros2
       - launch
       - daifuku_bringup
-      - robot_bringup.launch.py
+      - robot.launch.py
       - driver:=raspimouse
       - lidar:=${LIDAR:-mid360}

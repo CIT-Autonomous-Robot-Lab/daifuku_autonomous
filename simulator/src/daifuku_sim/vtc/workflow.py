@@ -27,7 +27,7 @@ never run at the same time:
                + survey + map_saver) -> mapping stack stopped, Gazebo kept alive
     alignment  capture measured map/odom pose and TF; convert fixed world goal
     navigation same Gazebo world/odom + a fresh stack container
-               (RSP + navigation.launch.py with emcl2 and standalone VI on the
+               (RSP + navigation.vtc.launch.py with emcl2 and standalone VI on the
                generated map)  -> NavigateToPose result + world truth
 
 ``result.json`` in the run directory is the machine-readable verdict. Exit

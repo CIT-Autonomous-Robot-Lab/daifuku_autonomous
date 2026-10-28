@@ -31,7 +31,7 @@ pc : osq_lock+0x7c/0x1a0
 note: raspimouse[...] exited with preempt_count 1
 ```
 
-`src/daifuku_config/bringup/robot/raspicat.yaml`の`use_light_sensors`は`false`にしてあります。
+`src/daifuku_config/robot/robot/raspicat.yaml`の`use_light_sensors`は`false`にしてあります。
 `/light_sensors`を使うものはこのワークスペースにありません。
 
 背景として、mainlineの`mcp320x`（IIO）が同じSPIチップセレクトを掴んでいます。
@@ -48,7 +48,7 @@ rtmouseもMCP3204を自前で叩くので、両者が同じデバイスを取り
 
 ## 遠隔操作しても機体が動かない
 
-`twist_mux`（`robot_bringup.launch.py`の`twist_mux:=true`が既定）を挟むと、ドライバが
+`twist_mux`（`robot.launch.py`の`twist_mux:=true`が既定）を挟むと、ドライバが
 購読するのは`/cmd_vel`ではなく`/cmd_vel_mux`です。人が出す指令の宛先は
 `/cmd_vel_teleop`（優先度10）で、`/cmd_vel`は自律側の出力（優先度100）です。
 
@@ -150,8 +150,8 @@ ls -l /dev/shm | head
 ## Waypointパネルが`/follow_waypoints action server is unavailable`と出す
 
 ゴールが送られる前に止まっているので、サーバ側が居ません。
-`/follow_waypoints`を出すのは**`vi_planner`だけ**で、`navigation.launch.py`が立てます。
-`robot_bringup.launch.py`だけでは出ません。
+`/follow_waypoints`を出すのは**`vi_planner`だけ**で、navigationの公開launchが立てます。
+`robot.launch.py`だけでは出ません。
 
 **`ros2 action list`では判別できません。** あれはクライアントしか居ない名前も出すので、
 RVizやパネルを開いているだけで`/follow_waypoints`が一覧に現れます。`info`で
@@ -202,7 +202,7 @@ ros2 node info /vi_planner
 プロセスが同時に立ち上がってloadが10〜19まで跳ね、bond形成が既定の4秒に間に合いま
 せん。
 
-`src/daifuku_config/stack/lifecycle_bond.yaml`でタイムアウトを60秒へ延長しています。値が効いて
+`src/daifuku_config/navigation/lifecycle_bond.yaml`でタイムアウトを60秒へ延長しています。値が効いて
 いるか確認してください。
 
 ```bash
@@ -220,9 +220,8 @@ ros2 param get /lifecycle_manager_localization bond_timeout
 ずれている旨のログが、起動から数分後に出る場合です。Mid-360がPTP同期していないため、
 デバイス内蔵時計がPiのシステム時計に対して毎分数秒ずれていくことが原因です。
 
-`lidar:=mid360`では`daifuku_stack`の`src/restamp_scan.py`が受信時刻でスタンプを
-打ち直します（**`navigation` / `mapping` が立てる段**。2026-08-25に機体側から
-移りました）。中継が動いているか確認してください。
+`lidar:=mid360`では`daifuku_perception`の`src/restamp_scan.py`が受信時刻でスタンプを
+打ち直します（**navigation / mapping が立てる段**）。中継が動いているか確認してください。
 
 ```bash
 ros2 node list | grep restamp_scan
@@ -231,13 +230,13 @@ ros2 topic hz /scan_raw
 ```
 
 `/scan_mid360_prestamp`だけが流れて`/scan_raw`が止まっている場合は、中継ノードが
-起動していません。中継は他のノードと同じ`Node`（`lib/daifuku_stack/restamp_scan.py`）
+起動していません。中継は他のノードと同じ`Node`（`lib/daifuku_perception/restamp_scan.py`）
 なので、実行ファイルが無ければ**launchごとエラーで止まります**。黙って`/scan_raw`だけが
 欠けることは無いので、まず`ros2 launch`のログを見てください。それでも見当たらなければ
 置き場を確認します。
 
 ```bash
-ls $(ros2 pkg prefix daifuku_stack)/lib/daifuku_stack/
+ls $(ros2 pkg prefix daifuku_perception)/lib/daifuku_perception/
 ```
 
 見つからなければ、`restamp_scan.py`を`install(PROGRAMS)`へ足す前の`install/`が
@@ -262,16 +261,16 @@ RESETのログが毎スキャン出て、推定姿勢が回り続ける場合で
 2. ずれている場合は[地図作成](mapping.md)からやり直す
 3. 地図を取り直すまでの暫定処置として、`alpha_threshold`を下げ、
    `expansion_radius_orientation`を狭め、`sensor_reset: false`にしてリセットを抑制する。
-   この3つは地図固有の値なので、断片の`src/daifuku_config/stack/localization/emcl2.yaml`ではなく
-   `src/daifuku_config/overrides/19f.yaml`に置く（19Fの地図では設定済み）
+   この3つは地図固有の値なので、断片の`src/daifuku_config/localization/emcl2.yaml`ではなく
+   `src/daifuku_config/sites/19f/overrides.yaml`に置く（19Fの地図では設定済み）
 
 現在の設定値と背景は[設定リファレンス](configuration.md#自己位置推定の暫定設定)を
 参照してください。地図を取り直したあとは既定寄りの値へ戻してください。
 
 ## `/scan`が配信されない
 
-**`/scan`を出すのは`raspicat`サービス（`robot_bringup.launch.py`）です。** 下の3つの
-引数もそちらのもので、`navigation.launch.py`や`mapping.launch.py`へ渡しても何も
+**`/scan`を出すのは`raspicat`サービス（`robot.launch.py`）です。** 下の3つの
+引数もそちらのもので、navigationやmappingのlaunchへ渡しても何も
 起きません（Dockerでは`.env`の`LIDAR`が`lidar:=`に展開されるので、変更後は
 `docker compose up -d`）。
 
@@ -284,7 +283,7 @@ RESETのログが毎スキャン出て、推定姿勢が回り続ける場合で
 
 ## Mid-360で`bind failed`になる
 
-`src/daifuku_config/bringup/sensors/MID360_config.json`の`host_net_info`に設定したIPが、ROS 2ノードを動かすPCの対象NICへ実際に割り当てられているか確認します。LiDAR本体IPも同一セグメントに合わせます。
+`src/daifuku_config/robot/sensors/MID360_config.json`の`host_net_info`に設定したIPが、ROS 2ノードを動かすPCの対象NICへ実際に割り当てられているか確認します。LiDAR本体IPも同一セグメントに合わせます。
 
 ## TFが競合または不安定になる
 
@@ -300,8 +299,8 @@ ros2 run tf2_ros tf2_echo odom base_footprint
 ```
 
 **launch引数の食い違いではこの状態になりません。** `use_mid360_imu`は
-`robot_bringup.launch.py`1つに閉じていて、同じlaunchがドライバとEKFの両方を立てるためです
-（`navigation.launch.py`と`mapping.launch.py`はこの引数を持ちません）。それでも
+`robot.launch.py`1つに閉じていて、同じlaunchがドライバとEKFの両方を立てるためです
+（navigationとmappingのlaunchはこの引数を持ちません）。それでも
 publisherが2つあるなら、`robot_bringup`が二重に走っている疑いがあります——`docker exec`の
 残骸が代表格です。
 
@@ -319,7 +318,7 @@ docker compose exec raspicat ps -ef | grep ekf_node
 
 逆に**`odom -> base_footprint`がまったく出ない**ときは、`raspicat`サービスが
 立っていないか、その中でEKFが上がっていません（`docker compose logs raspicat`）。
-このTFを出すのは`robot_bringup`が`include`するEKFで、`navigation.launch.py`側では
+このTFを出すのは`robot_bringup`が`include`するEKFで、navigation側では
 ありません。
 
 センサーTFもURDFと`publish_lidar_tf:=true`の両方から配信しないでください。

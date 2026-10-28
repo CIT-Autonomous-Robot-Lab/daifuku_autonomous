@@ -1,7 +1,7 @@
 # 設定
 
-`daifuku_config` は設定の実体を持ちます。合成と監視の実装は
-`daifuku_config_manager`、地図は `daifuku_stack` にあります。
+`daifuku_config` は機能別設定、場所別調整、合成と監視の Python API を持ちます。
+機能パッケージを import しない共有の葉です。
 起動・停止・再ビルドの判断は[日常操作](../../docs/usage/operations.md#設定変更を反映する)、
 自律移動の手順は[自律移動](../../docs/usage/navigation.md)を参照してください。
 
@@ -9,20 +9,28 @@
 
 | 設定 | 読む側 |
 | --- | --- |
-| `bringup/robot/` | 常駐する駆動ドライバ、twist_mux、ゲームパッド |
-| `bringup/sensors/` | 常駐する LiDAR ドライバ、IMU 前処理、EKF |
-| `stack/nav2/*.yaml` と `stack/vi_planner.yaml` | navigation の `params_file` へ合成 |
-| `stack/localization/` | 選択した自己位置推定器 |
-| `stack/lifecycle_bond.yaml` | navigation の lifecycle 管理 |
-| `stack/mapping/` | mapping の SLAM Toolbox |
-| `stack/sensors/` | navigation/mapping が立てる `/scan` 生成段 |
-| `overrides/*.yaml` | 場所ごとの地図・スキャン・推定器・VI の調整 |
-| `site` | 現在の場所名 1 語 |
+| `robot/robot/` | 駆動ドライバ、twist_mux、ゲームパッド |
+| `robot/sensors/` | LiDAR ドライバ、IMU 前処理、EKF |
+| `perception/` | navigation/mapping のスキャン生成 |
+| `localization/` | 選択した自己位置推定器 |
+| `navigation/nav2/` と `navigation/vi_planner.yaml` | 自律移動 |
+| `navigation/lifecycle_bond.yaml` | navigation/localization の lifecycle 管理 |
+| `mapping/` | SLAM Toolbox |
+| `sites/<場所>/overrides.yaml` | 場所ごとの地図と機能別調整 |
+| `sites/<場所>/{navigation_scan,localization_scan}.yaml` | 明示した場所のスキャン構成 |
+| `site` | 次回起動用の任意の場所選択 |
 
-機体は場所を知りません。場所や `stack/` の設定を変えたら navigation/mapping を
-立て直し、`bringup/` を変えたら常駐する機体側も読み直します。
-設定変更で `config_sentinel` が launch を終了させる点、新規ファイルにはビルドが
-必要な点を含め、反映の判断表は上記の日常操作にまとめています。
+再利用する launch の `overrides` は `none` が既定です。
+`OVERRIDES` や `site` ファイルから場所を暗黙に取り込みません。
+場所別の入口だけが固定した場所とスキャン構成を指定します。
+
+見張りは top-level composition に一つだけ置きます。機体は robot、
+navigation は perception/localization/navigation、mapping は perception/mapping を
+監視し、対応する override の部分木と site メタデータだけを見ます。
+明示したスキャン構成、独自 params、extra_params_file も指紋と起動前検査へ含めます。
+`watch_site=False` は場所告知を無視する指定で、固定した override の変更検出は止めません。
+`config_watch:=shutdown` は静止と起動前検査を満たしたとき非ゼロの専用終了コードで
+launch を終了します。`warn` は通知だけ、`off` は監視を立てません。
 
 自律移動は standalone `vi_planner` が担います。`nav2/` にあるのは共通部品の設定で、
 Nav2 の map server・velocity smoother・lifecycle 管理と、選択時の AMCL は引き続き使います。
@@ -31,7 +39,7 @@ Nav2 の map server・velocity smoother・lifecycle 管理と、選択時の AMC
 
 ## 合成と上書き
 
-`stack/nav2/*.yaml` をファイル名順に読み、`stack/vi_planner.yaml` と合わせて
+`navigation/nav2/*.yaml` をファイル名順に読み、`navigation/vi_planner.yaml` と合わせて
 `params_file` を作ります。断片はノード単位で分け、同じノード名を 2 ファイルに
 置きません。キーが重ならなくても起動時に止まります。断片間の深いマージはしません。
 VI の断片を合成から外すと値が渡らず、override の行き先も失われます。
@@ -51,19 +59,21 @@ site:
     navigation: 19f/map_19f.yaml
     localization: 19f/map_19f.yaml
 
-daifuku_stack:
+daifuku_perception:
   elevation_filter:
     ros__parameters:
       min_elevation_deg: 0.0
+daifuku_navigation:
   vi_planner:
     ros__parameters:
       waypoint_prefetch: false
 ```
 
-- 各 launch は `daifuku_bringup:` / `daifuku_stack:` の自分の部分木だけを読みます。
+- 各機能は `daifuku_robot:` / `daifuku_perception:` / `daifuku_localization:` /
+  `daifuku_navigation:` / `daifuku_mapping:` の自分の部分木だけを読みます。
   知らないパッケージ名と、そのパッケージの設定に存在しないノード名は起動エラーです。
   既知だがその launch が使わないノードの節は適用されません
-  （mapping に渡した `emcl2:` など）。
+  （mapping 構成に渡した `daifuku_localization:` の節など）。
 - `params_file:=` で土台を替えても、上書き先として認めるノード名は断片から決まります。
 - `MID360_config.json` は ROS パラメータ形式ではないため上書き対象外です。
 - 既存の場所別 override はキーの集合を揃えています。断片同値の行も、
@@ -78,16 +88,15 @@ daifuku_stack:
 
 ## 場所と地図
 
-場所の変更は `tools/site.sh <名前>`、または起動中なら
-`ros2 param set /site_manager site <名前>` で行います。停止中は `site` の場所名を
-書き換えます。反映には navigation/mapping の再起動が必要で、機体の再起動は不要です。
-`OVERRIDES` 環境変数が残っているとファイルより優先されます。
+任意の `site_manager` は次回起動用の場所選択を検査・保存・告知します。
+機体からは自動起動せず、明示して起動した構成を切り替えません。
+実行中の場所を変える場合は、対応する場所別入口を選び直して起動してください。
 
 `overrides:=` は場所の既定を置き換えます。上書き無しは空文字ではなく
 `overrides:=none` です。このとき、または `site.map` が無いときは `map:=` が必須で、
 既定の場所の地図へは落としません。VTC の生成地図も `overrides:=none` を明示します。
 
-`site.map` のパスは `daifuku_stack` の `maps/` からの相対パスか絶対パスです。
+`site.map` のパスは `daifuku_navigation` の `maps/` からの相対パスか絶対パスです。
 
 | 役 | launch 引数 | 用途 |
 | --- | --- | --- |
@@ -110,7 +119,7 @@ emcl3d は `/map_loc` を読まないため 2D 地図が別でも起動でき、
 全点の自由セル・連結性・上下方向を検算してください。点が自由セルでも回廊が壁で
 分断されることがあり、この順路の半径下限は 8.0 m です。PGM の行 0 は y 最大側です。
 既知の壁内 waypoint や地図閾値は
-[地図の説明](../daifuku_stack/maps/tsudanuma_mugimaru/README.md)と
+[地図の説明](../daifuku_navigation/maps/tsudanuma_mugimaru/README.md)と
 `tools/maps/verify_{map_thresholds,corridor_orientation,waypoints}.py` で確認します。
 
 ## コメントと設定の所有者
@@ -143,7 +152,7 @@ emcl3d は `/map_loc` を読まないため 2D 地図が別でも起動でき、
   なり、再起動以外で復旧できない個体への回避です。代償は指令積分の幻の odom です。
   走行終了時に必ずゼロ指令を届けます。「Testing counters」のログは read 成功の証拠ではありません。
   公式実装は指令換算の 400 が固定なので、正しい径でも指令速度と実速度は一致しません。
-- `bringup/robot/raspicat.yaml` は上流設定の完全コピーです。include の外から差分を
+- `robot/robot/raspicat.yaml` は上流設定の完全コピーです。include の外から差分を
   注入してもノード個別パラメータに負けるため、この形を取っています。
 
 ### `twist_mux.yaml` の配線と優先度

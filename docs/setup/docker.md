@@ -112,7 +112,7 @@ sed -i 's|^COMPOSE_FILE=.*|COMPOSE_FILE=docker/raspberrypi/compose.common.yaml:d
 docker compose up -d
 ```
 
-`.env`の`USE_MID360_IMU`（既定`true`）は、同じ`robot_bringup.launch.py`が
+`.env`の`USE_MID360_IMU`（既定`true`）は、同じ`robot.launch.py`が
 立てるドライバとEKFの両方へ効きます。
 
 ```bash
@@ -121,7 +121,7 @@ docker compose up -d    # 環境変数は起動時に読まれるのでコンテ
 ```
 
 読むのは`raspicat`サービス1つだけです。**ドライバもEKFも同じlaunch
-（`robot_bringup.launch.py`）が立てるので、片方だけ切り替わる状態は作れません。**
+（`robot.launch.py`）が立てるので、片方だけ切り替わる状態は作れません。**
 配線と、`true`のときの注意（**機体の電源投入時に静止させること**——バイアス測定は
 bootのタイミングになりました）は[LiDARとオドメトリ](lidar.md#imuと車輪オドメトリ)。
 

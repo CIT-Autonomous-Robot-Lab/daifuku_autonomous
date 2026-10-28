@@ -23,7 +23,7 @@ docker compose up -d
 ```bash
 cd ~/daifuku_autonomous
 tmux new-session -d -s nav -c "$PWD" -n nav
-tmux send-keys -t nav:nav 'docker compose exec ros2 /ros_entrypoint.sh ros2 launch daifuku_stack navigation.launch.py use_sim_time:=false localization:=emcl2' Enter
+tmux send-keys -t nav:nav 'docker compose exec ros2 /ros_entrypoint.sh ros2 launch daifuku_bringup navigation.19f.launch.py use_sim_time:=false localization:=emcl2' Enter
 
 tmux new-window -t nav -c "$PWD" -n motor
 tmux send-keys -t nav:motor 'bash tools/control.sh motor on'
@@ -74,16 +74,15 @@ Mid-360のIMU融合（`use_mid360_imu`）は既定の`true`のまま使ってい
 **起動時は機体を静止させておいてください。** Mid-360のジャイロの電源投入時バイアス
 （実測+0.80 deg/s = 48 deg/min）を`prepare_mid360_imu`が測って引きます。
 
-**LiDARの引数は`navigation.launch.py`にはありません。** センサーを立てるのは
-`raspicat`サービス（`robot_bringup.launch.py`）のほうで、`lidar`も`lidar_z`も
+**LiDARのドライバの引数はnavigationのlaunchにはありません。** センサーを立てるのは
+`raspicat`サービス（`robot.launch.py`）のほうで、`lidar`も`lidar_z`も
 `publish_lidar_tf`もそちらの引数です。2D LiDAR構成にするならリポジトリルートの
 `.env`に`LIDAR=2d`を書いて`docker compose up -d`してください（ネイティブ環境では
-`robot_bringup.launch.py`へ`lidar:=2d`を渡します）。`lidar_z`の既定0.275はこの機体の
+`robot.launch.py`へ`lidar:=2d`を渡します）。`lidar_z`の既定0.275はこの機体の
 Mid-360の搭載高さ（接地面から275mm、2026-08-03実測）なので、機体を変えたら実測し
 直してください。`use_rviz`の既定は`false`です。
 
-広域地図`tsudanuma`で走らせるときは`tools/site.sh tsudanuma`で場所ごと
-切り替えます（[広域地図（map_tsudanuma）で動かす](#広域地図map_tsudanumaで動かす)）。
+広域地図`tsudanuma`で走らせるときは`navigation.tsudanuma.launch.py`を使います（[広域地図（map_tsudanuma）で動かす](#広域地図map_tsudanumaで動かす)）。
 
 ## 基本起動
 
@@ -93,28 +92,26 @@ Mid-360の搭載高さ（接地面から275mm、2026-08-03実測）なので、�
 **自己位置推定は19Fも津田沼もEMCL2です。** `localization:=emcl2`がlaunchの既定で、
 `vi_planner`は`localizer: "external"`のままemcl2の推定姿勢を読みます。
 
-**地図も調整も渡しません。** 走らせる場所は`src/daifuku_config/site`の名前1語（既定は`19f`）で、
-`overrides`はその名前の`src/daifuku_config/overrides/<名前>.yaml`になります。**地図はその
+**地図も調整も渡しません。** 走らせる場所はlaunchの名前で決まり（`navigation.19f.launch.py`なら`19f`）、
+`overrides`はその場所の`src/daifuku_config/sites/<場所>/overrides.yaml`に固定です。**地図はその
 overrides自身が`site:`節で宣言します。**
 
 ```yaml
 site:
   map:
-    navigation:   19f/map_19f.yaml   # 経路計画（/map）。daifuku_stack の maps/ からの相対パス
+    navigation:   19f/map_19f.yaml   # 経路計画（/map）。daifuku_maps の maps/ からの相対パス
     localization: 19f/map_19f.yaml   # 自己位置推定（/map_loc）
 ```
 
 `site:`はパッケージ名の段に並ばない予約節で、「その場所そのものに付く値」の置き場です
 （いまは地図だけ）。**overridesの名前は場所であって、地図のファイル名ではありません**
 （`19f` / `tsudanuma`。`maps/`のフォルダ名と同じ）。地図を差し替えるならこの行を直します。
-場所の切り替えは`ros2 param set /site_manager site <名前>`か`echo <名前> >`、または
-その2つを選び分ける`tools/site.sh <名前>`です（**機体は立て直しません**。2026-08-25から
-LiDARの帯もこの launch 側が読みます）
+場所を変えるときは別の場所のlaunchを立てます（**機体は立て直しません**）
 （[日常操作](operations.md#走らせる場所を切り替える)）。
 
 ### 地図は2枚
 
-**経路計画と自己位置推定で別の地図を使えます**（2026-08-25から。それまでは1枚でした）。
+**経路計画と自己位置推定で別の地図を使えます**。
 経路計画には入ってほしくない場所を手で塗り潰した地図を使い、自己位置推定には実測の
 ままの地図を使う、という分け方が上流（[mugimaru_bringup](https://github.com/CIT-Autonomous-Robot-Lab/mugimaru_bringup)）の
 運用です。1枚しか持てないと、塗り潰した壁をLiDARが見つけられずに自己位置が壊れるか、
@@ -131,13 +128,12 @@ LiDARの帯もこの launch 側が読みます）
 もう一方の地図で黙って走る形になるためです（起動時にエラーで止まります）。同梱の
 `19f`と`tsudanuma`は2行とも同じ地図です。
 
-**2枚を別にできるのは`localization:=emcl2`のときだけです。** `amcl`は上流の
-`localization_launch.py`が自前で`map_server`を立てるので2枚目を渡す口がなく、
-`localization:=vi`（VIOLA）は`vi_planner`の地図の購読が1つしかないので経路計画と
-同じ地図を見ます。別の地図を指したまま他を選ぶと**起動時にエラーで止まります**。
+**2枚を別にする構成は`localization:=emcl2`で使います。** `amcl`は従来の
+起動契約を保ち、異なる2枚を指定するとエラーにします。`localization:=vi`（VIOLA）は
+`vi_planner`の地図の購読が1つしかないので、経路計画と同じ地図を使います。
 
-**`localization:=vi`（VIOLA）では`/map_loc`を誰も読みません。** `map_server_loc`は
-立って配信しますが、購読するのは`emcl2`だけで、そちらが立たない構成だからです。
+**`localization:=vi`（VIOLA）では`map_server_loc`を立てません。**
+同じVIノードが`/map`を使って推定し、`map→odom`を所有します。
 同梱の`19f`・`tsudanuma`・`tsudanuma_mugimaru`はemcl2を使うので、
 いずれも自己位置推定には`/map_loc`を使います。
 
@@ -148,21 +144,19 @@ RVizには`Map (navigation)`と`Map (localization)`の2つの表示がありま�
 突き合わせるべきなのは自己位置推定が使っている地図。[困ったとき](troubleshooting.md)）。
 経路計画が「なぜそこを通らないか」を見たいときだけ`Map (navigation)`をオンにしてください。
 
-**`localization:=amcl`では`/map_loc`が出ません**（上流の`localization_launch.py`が自前で
-`map_server`を1つ立てるため）。その構成では地図が出ないので、`Map (navigation)`のほうへ
-戻してください。`emcl2`と`vi`は`map_server_loc`が立つので出ます（`vi`は誰も購読しませんが、
-配信はされています）。
+**`localization:=amcl`も`/map_loc`を使います。** `daifuku_localization`が
+自己位置推定用のmap serverとAMCLを起動します。`vi`では`/map_loc`を出さないので、
+RVizの表示は`Map (navigation)`へ切り替えます。
 
 `map:=`を明示することもできますが、`site: map:`と別のファイルを指していると**起動時に
 エラーで止まります**（別の場所の帯とEMCL2調整を載せたまま走るのを防ぐため）。承知の
-うえでやるなら`overrides:=none`を添えてください（`ros2 launch`は値が空の`overrides:=`を
-受け付けません）。**そのときは`map:=`が要ります**——場所を名乗っていない以上、地図は
-決まりません。`site: map:`の無いoverridesを重ねたときも同じです。どちらも**既定の
-地図へ落とさずエラーで止めます**。別の場所にいるのに19Fの地図で自己位置を推定し始める
-ほうが危ないためです。
+うえで外部の地図を使う場合は、場所別入口ではなく
+`navigation.vtc.launch.py overrides:=none map:=<外部地図> map_loc:=<外部地図>`を使います。
+場所別入口に`overrides:=none`を渡して場所の固定を外すことはできません。
+いずれも既定の地図へ落とさず、地図が決まらなければ起動エラーにします。
 
 ```bash
-ros2 launch daifuku_stack navigation.launch.py \
+ros2 launch daifuku_bringup navigation.19f.launch.py \
   use_sim_time:=false localization:=emcl2
 ```
 
@@ -174,7 +168,7 @@ Mid-360でも2D LiDARでもこちらは変わりません。RVizを同じ端末�
 
 ```bash
 docker compose exec ros2 \
-  /ros_entrypoint.sh ros2 launch daifuku_stack navigation.launch.py \
+  /ros_entrypoint.sh ros2 launch daifuku_bringup navigation.19f.launch.py \
   use_sim_time:=false localization:=emcl2
 ```
 
@@ -183,7 +177,7 @@ docker compose exec ros2 \
 Nav2標準AMCLへ変更する場合:
 
 ```bash
-ros2 launch daifuku_stack navigation.launch.py \
+ros2 launch daifuku_bringup navigation.19f.launch.py \
   localization:=amcl
 ```
 
@@ -198,7 +192,7 @@ emcl2の代わりに外部パッケージ`emcl3d`（`NOPLAB/emcl3d`）を立て�
 **PCDの座標が2D地図と揃っていないと、推定は合っていても経路がずれます**（19Fは未検証）。
 
 ```bash
-ros2 launch daifuku_stack navigation.launch.py localization:=emcl3d
+ros2 launch daifuku_bringup navigation.19f.launch.py localization:=emcl3d
 ```
 
 ### `localization:=vi`（プランナ内蔵の推定器）
@@ -208,7 +202,7 @@ ros2 launch daifuku_stack navigation.launch.py localization:=emcl3d
 残ります）。
 
 **使うかどうかはこの引数、どれを使うかは`localizer`**です。断片
-（`src/daifuku_config/stack/vi_planner.yaml`）の既定は`external`（＝外部の推定を読む）で、
+（`src/daifuku_config/navigation/vi_planner.yaml`）の既定は`external`（＝外部の推定を読む）で、
 そのまま`localization:=vi`を渡すと**起動時に止まります**。
 
 **同梱の3地図はいずれも`external`のままです。** 19Fの`belief`上書きも外してあり、
@@ -234,7 +228,7 @@ ros2 launch daifuku_stack navigation.launch.py localization:=emcl3d
 
 ```bash
 # 試す場所の設定で localizer を adaptive などへ変更した場合のみ
-ros2 launch daifuku_stack navigation.launch.py \
+ros2 launch daifuku_bringup navigation.19f.launch.py \
   localization:=vi
 ```
 
@@ -259,12 +253,12 @@ BTやNav2のコントローラは立てず、NavFn・DWBへの切り替え引数
 地図サーバ、AMCL、ライフサイクル管理などの共有ユーティリティは引き続き使います。
 
 ```bash
-ros2 launch daifuku_stack navigation.launch.py
-ros2 launch daifuku_stack navigation.launch.py velocity_smoother:=false
+ros2 launch daifuku_bringup navigation.19f.launch.py
+ros2 launch daifuku_bringup navigation.19f.launch.py velocity_smoother:=false
 ```
 
 投げ直しの前には3秒止まったままスキャンを取り込んで場を更新します。
-上限は`src/daifuku_config/stack/vi_planner.yaml`の`goal_retry_limit`です。
+上限は`src/daifuku_config/navigation/vi_planner.yaml`の`goal_retry_limit`です。
 巡回の`stop_on_failure`と`waypoint_pause_sec`も同じファイルで設定します。
 
 `vi_planner`は既定でアウトオブコアソルバ（`frontier2d_sparse_compact`）で解きます。
@@ -292,7 +286,7 @@ ros2 launch daifuku_stack navigation.launch.py velocity_smoother:=false
 0.05 mのまま解くと状態数は14.1億に達し、既定の密ソルバは状態配列だけで79 GBを要求
 するため、起動と同時に落ちます。
 
-`src/daifuku_config/overrides/tsudanuma.yaml`を`overrides:=tsudanuma`で重ねると、プランナ内部だけが
+`src/daifuku_config/sites/tsudanuma/overrides.yaml`を`overrides:=tsudanuma`で重ねると、プランナ内部だけが
 0.25 m/セル（`map_scale: 5`、1178×800×60＝5650万状態）に粗くなり、状態配列を確保しない
 アウトオブコアソルバ（`frontier2d_sparse_compact`）へ切り替わります。確定した価値関数と方策
 （実測648 MB）はRAMに置かれます。地図サーバと自己位置推定は0.05 mのままです。
@@ -306,8 +300,7 @@ ros2 launch daifuku_stack navigation.launch.py velocity_smoother:=false
 `compact_sink_dir`を戻してください。**
 
 ```bash
-tools/site.sh tsudanuma   # 場所を切り替える
-ros2 launch daifuku_stack navigation.launch.py
+ros2 launch daifuku_bringup navigation.tsudanuma.launch.py
 ```
 
 `vi_planner`の狭域追従は、全域ではなくロボット近傍のパッチだけを
@@ -334,7 +327,7 @@ compactでも同じです（2026-08-20の上流の更新まで、密だけが地
 - `map_scale: 5`は単独では効きません。`downsample_policy: optimistic`（ブロック内にfreeが
   1つでもあればfree）、`action_forward_m`、`goal_margin_radius`が
   セットで、1つでも欠けると波がゴール近傍で止まります。値は
-  `src/daifuku_config/overrides/tsudanuma.yaml`のコメントにそろえてあります。
+  `src/daifuku_config/sites/tsudanuma/overrides.yaml`のコメントにそろえてあります。
 - 保守的プーリング（障害物優先。`downsample_policy`の既定）だと通路のセル幅が価値反復の
   遷移分布（約2セル幅）を下回り、`map_scale`が4以上で波がゴール近傍から広がりません。
   楽観側は通路を細らせない代わりに、自由セルの境界が壁へ寄ります。
@@ -356,7 +349,7 @@ compactでも同じです（2026-08-20の上流の更新まで、密だけが地
   スキャンマッチングは占有セルの尤度場に依存するため、現状では自己位置推定の
   拠り所がほとんどありません（経路計画とは別の課題です）。
 
-実測値の出どころは`src/daifuku_config/overrides/tsudanuma.yaml`のヘッダと
+実測値の出どころは`src/daifuku_config/sites/tsudanuma/overrides.yaml`のヘッダと
 [`src/daifuku_config/README.md`](../../src/daifuku_config/README.md)です。
 
 ## ゴールを指定する
@@ -389,14 +382,14 @@ RVizで次の順に操作します。
 RVizを立て直したあと、「Nav2 Goal」の単発ゴール——もこれで止まります。詳細は
 [`src/daifuku_waypoint_manager/README.md`](../../src/daifuku_waypoint_manager/README.md)。
 
-`daifuku_stack/waypoints/`に津田沼の順路を版ごとに置いてあります（`v1.0`と`v1.1`が
+`daifuku_maps/waypoints/`に津田沼の順路を版ごとに置いてあります（`v1.0`と`v1.1`が
 73点、`v1.2`が69点）。パネルの「Load YAML」で読みます（`19f`では座標が地図の外に
 出るため使えません）。
 
 RVizのFixed Frameとwaypointの`frame_id`が一致している必要があります。ずれていると
 追加も追加読み込みも拒否され、パネルのステータス行にだけ理由が出ます。
 
-点と点のあいだの停止時間は`src/daifuku_config/stack/vi_planner.yaml`の
+点と点のあいだの停止時間は`src/daifuku_config/navigation/vi_planner.yaml`の
 `waypoint_pause_sec`で設定します。この間も価値関数の更新は続きます。
 `stop_on_failure: false`なら行けない点があっても巡回を続け、完了時に取りこぼした点数が
 ステータス行に出ます。
@@ -407,11 +400,11 @@ RVizのFixed Frameとwaypointの`frame_id`が一致している必要があり�
 ゴールごとに価値関数を解き直すので、**点が変わるたびに丸ごと1回のsolveが入り、その
 間ずっと機体が止まっています**（実測で19Fが29秒、津田沼が87秒）。
 
-`src/daifuku_config/stack/vi_planner.yaml`の`waypoint_prefetch`を`true`にすると、いまの点へ
+`src/daifuku_config/navigation/vi_planner.yaml`の`waypoint_prefetch`を`true`にすると、いまの点へ
 走っているあいだに次の点を別スレッドで解いておき、着いたらsolveを飛ばして受け取ります。
 
-**いま`true`なのは`19f`だけです。** 断片（`src/daifuku_config/stack/vi_planner.yaml`）は
-`false`で、それを上書きしているのは`overrides/19f.yaml`だけです。津田沼は
+**いま`true`なのは`19f`だけです。** 断片（`src/daifuku_config/navigation/vi_planner.yaml`）は
+`false`で、それを上書きしているのは`sites/19f/overrides.yaml`だけです。津田沼は
 2026-08-07に`true`にしたあと、**2026-08-08に`false`へ戻しました**——走行中の固まりの
 容疑者を切り分けるためで、あちらは場が648 MB×2＝1.3 GBになります。2026-08-04にも一度
 **断片**で`true`へ反転して同日の実機で固まりが出たため、容疑者の1つとして戻した経緯が
@@ -433,7 +426,7 @@ vi_planner: path with 412 poses in 0.34s (solved_now=true, iters=0, prefetched)
 655 MB×2＝1.31 GB**です（密にはディスクへ逃がす口がありません）。津田沼は`true`へ
 戻せば648 MB×2＝1.3 GBが匿名メモリとして居座ります。
 solveのCPUも取られます（追従の`try_lock`は邪魔しませんが、10Hzの制御周期がずれ得ます）。
-**Pi 4（4 GB）で走らせるなら`overrides/19f.yaml`の`waypoint_prefetch`を`false`へ
+**Pi 4（4 GB）で走らせるなら`sites/19f/overrides.yaml`の`waypoint_prefetch`を`false`へ
 戻してください**——既定の場所が`19f`なので、引数を何も足さずに立てるとPi 4でも
 これが効きます（Pi 5の8 GBを前提にしている点は`compact_ram_limit_mb`と同じ事情です）。
 走行中に固まるようになったときも、まずここを戻して切り分けます。
@@ -447,8 +440,8 @@ solveのCPUも取られます（追従の`try_lock`は邪魔しませんが、10
 いるのは地図の全域ぶんの価値関数ですが、走り出すのに要るのは**いまの姿勢から
 ゴールまでの経路**だけなので、それが引けた時点でsolveを打ち切れます。
 
-`early_start`を`true`にすると打ち切ります（断片の`src/daifuku_config/stack/vi_planner.yaml`は
-`false`のままで、**同梱の3地図は`overrides/`で`true`にしています**）。判定は
+`early_start`を`true`にすると打ち切ります（断片の`src/daifuku_config/navigation/vi_planner.yaml`は
+`false`のままで、**同梱の3地図は`sites/<場所>/overrides.yaml`で`true`にしています**）。判定は
 ロールアウトそのもの（`compute_path_to_pose`が返すのと同じ辿り方）なので、
 **打ち切った場でも経路は必ず引けます**。先読みとは別物なので、両方同時に有効に
 できます。

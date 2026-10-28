@@ -131,7 +131,15 @@ RUN --mount=type=cache,target=/opt/cargo/registry \
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     --mount=type=bind,source=daifuku_autonomous.repos,target=/tmp/repos.yaml \
-    --mount=type=bind,source=src/daifuku_stack/package.xml,target=/tmp/stack/daifuku_stack/package.xml \
+    --mount=type=bind,source=src/daifuku_config/package.xml,target=/tmp/daifuku/daifuku_config/package.xml \
+    --mount=type=bind,source=src/daifuku_bringup/package.xml,target=/tmp/daifuku/daifuku_bringup/package.xml \
+    --mount=type=bind,source=src/daifuku_robot/package.xml,target=/tmp/daifuku/daifuku_robot/package.xml \
+    --mount=type=bind,source=src/daifuku_perception/package.xml,target=/tmp/daifuku/daifuku_perception/package.xml \
+    --mount=type=bind,source=src/daifuku_localization/package.xml,target=/tmp/daifuku/daifuku_localization/package.xml \
+    --mount=type=bind,source=src/daifuku_navigation/package.xml,target=/tmp/daifuku/daifuku_navigation/package.xml \
+    --mount=type=bind,source=src/daifuku_mapping/package.xml,target=/tmp/daifuku/daifuku_mapping/package.xml \
+    --mount=type=bind,source=src/daifuku_maps/package.xml,target=/tmp/daifuku/daifuku_maps/package.xml \
+    --mount=type=bind,source=src/raspicat_driver/package.xml,target=/tmp/daifuku/raspicat_driver/package.xml \
     source /opt/ros/${ROS_DISTRO}/setup.bash \
     && mkdir -p /tmp/vcs && cd /tmp/vcs \
     && vcs import . < /tmp/repos.yaml \
@@ -139,7 +147,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
           src/livox_ros_driver2/package.xml \
     && rosdep update --rosdistro=${ROS_DISTRO} \
     && apt-get update \
-    && rosdep install --from-paths /tmp/vcs/src /tmp/stack --ignore-src -r -y \
+    && rosdep install --from-paths /tmp/vcs/src /tmp/daifuku --ignore-src -r -y \
          --rosdistro=${ROS_DISTRO} \
     && cd / \
     && rm -rf /tmp/vcs

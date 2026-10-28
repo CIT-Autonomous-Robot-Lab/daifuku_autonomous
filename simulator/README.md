@@ -65,8 +65,10 @@ Windows + Docker Desktop では、`DISPLAY` が未設定なら WSLg への表示
 Gazebo のワールドと odom は mapping から navigation まで同じセッションを保つ。
 RSP 用 URDF はそのまま使い、Gazebo 用コピーの plugin 除去は usim に任せる。
 
-mapping は `map_saver_cli --free 0.15` で保存する。
-navigation は `localization:=emcl2` と standalone VI を使い、
+mapping は `ros2 launch daifuku_bringup mapping.launch.py` で立て、`map_saver_cli --free 0.15` で保存する。
+navigation は公開入口 `ros2 launch daifuku_bringup navigation.vtc.launch.py` を使う。
+生成した地図を外から明示して渡し、`overrides` は `none` で実機の場所別調整を混ぜない。
+推定は `localization:=emcl2`、計画と追従は standalone VI。
 両段とも `use_sim_time:=true lidar:=2d lidar_driver:=false overrides:=none config_watch:=off`。
 実機の設定値は変更しない。
 

@@ -47,9 +47,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from src.daifuku_bringup.src.joy_waypoints import load_waypoint_document  # noqa: E402
+from src.daifuku_robot.src.joy_waypoints import load_waypoint_document  # noqa: E402
 
-WAYPOINTS_DIR = ROOT / "src" / "daifuku_stack" / "waypoints"
+WAYPOINTS_DIR = ROOT / "src" / "daifuku_maps" / "waypoints"
 
 
 def _write(body):

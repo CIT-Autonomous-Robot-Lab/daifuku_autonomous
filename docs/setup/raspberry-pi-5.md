@@ -2,7 +2,7 @@
 
 Raspberry Pi 5 では rtmouse カーネルモジュールが動かないので、本体ドライバは
 自前実装（[`src/raspicat_driver`](../../src/raspicat_driver/README.md)、
-`robot_bringup.launch.py` の `driver:=original`）だけが選べます。ナビゲーション側は
+`robot.launch.py` の `driver:=original`）だけが選べます。ナビゲーション側は
 Pi 4 と同じです。**このドライバがリポジトリの標準**で、Pi 4 でも同じものを選べます
 （[Raspberry Pi 4 で動かす](raspberry-pi-4.md)）。
 
@@ -54,14 +54,14 @@ PWM チャネルに載せ替えられます（手順と理由は
   オドメトリ側にしか効かないので、公式実装だとこの機体は指令の 89%（400 / 447）で
   走ります。
 - パルスカウンタが生きているとき、`odom` の Twist は**指令値ではなく実測値**です。
-  `src/daifuku_config/bringup/sensors/mid360_ekf.yaml` はこのメッセージから vx と vyaw だけを取るので、
+  `src/daifuku_config/robot/sensors/mid360_ekf.yaml` はこのメッセージから vx と vyaw だけを取るので、
   指令値を入れると自分の出力でループを閉じることになります。
 - `odom_hz` の既定は 50.0（raspimouse は 100.0）。1 周期あたり I2C を 6 トランザク
   ション使うので、62.5 kHz のバスの占有率を半分に落としてあります（カウンタ 1 個に
   つき 3 回。上位バイトで下位バイトを挟んで桁上がりを検出するため）。
 - `publish_tf` パラメータがあります。EKF に `odom -> base_footprint` を出させる構成
   （`use_mid360_imu:=true`）では `false` になります（TF は区間ごとに所有者を 1 つだけに
-  する）。渡すのは `robot_bringup.launch.py` なので、手で書き換える必要はありません。
+  する）。渡すのは `robot.launch.py` なので、手で書き換える必要はありません。
   公式実装にはこのキーが無いので、あちらは launch がノードの `/tf` を捨て先へ remap
   します。
 
@@ -231,7 +231,7 @@ ros2 topic pub --times 20 /cmd_vel geometry_msgs/msg/Twist \
 2026-08-04 に Pi 5 Model B Rev 1.1（8GB・Ubuntu 24.04.4・6.8.0-1060-raspi）に
 Raspberry Pi Cat の HAT を載せ、**車輪を浮かせた状態でモータを回すところまで**
 確かめました。走行はまだです。ピン・チャネル・アドレス・デバイスパスはすべて
-パラメータに出してあるので、`src/daifuku_config/bringup/robot/raspicat_driver.yaml` を直せばコードは
+パラメータに出してあるので、`src/daifuku_config/robot/robot/raspicat_driver.yaml` を直せばコードは
 触らずに済みます。
 
 `/cmd_vel` から PWM までは一致します。指令周波数は

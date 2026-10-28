@@ -27,7 +27,7 @@
 画素 205 (p=(255-205)/255=0.196) を **free 側に落とす**。そうなると VI の
 `unknown_as_obstacle` が効かなくなる。地図を取り直すたびに検算する。
 
-    uv run tools/maps/verify_map_thresholds.py src/daifuku_stack/maps/*/*.yaml
+    uv run tools/maps/verify_map_thresholds.py src/daifuku_maps/maps/*/*.yaml
 
 終了コード: 0 = 全部 OK、1 = どれかで未観測が free に化けている。
 """

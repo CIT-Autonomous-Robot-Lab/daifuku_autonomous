@@ -1,0 +1,132 @@
+# 価値反復プランナ (value_iteration3, Rust)。「既定」= ノードの src/node/params.rs の
+# declare_parameter。地図ごとの調整は ../sites/<場所>/overrides.yaml、合成順序・値の由来・
+# 実測は ../README.md。
+# **既定と違うのは 8 つだけ** — solver / map_wait_sec / compact_ram_limit_mb /
+# action_forward_m と、追従の窓の 4 つ (local_shape / local_xy_range /
+# local_xy_range_lat / local_shape_ratio_max)。localizer も書いてあるが値は既定と同じで、
+# 「どの推定器を使うか」を持つ唯一の場所なので空欄にせず明示してある。
+# vi_planner is always standalone and serves navigation and waypoint actions.
+# follow / standalone / publish_tf are launch-owned; do not configure them here.
+vi_planner:
+  ros__parameters:
+    use_sim_time: false
+    solver: "frontier2d_sparse_compact"  # 既定 frontier2d_sparse (密): アウトオブコア。常駐が数 MB で済むので地図の大きさに耐える (密へ戻す判断は ../README.md)
+    compact_ram_limit_mb: 4096    # 既定 0 (= MemAvailable の半分で自動): sink を RAM に置ける上限 [MB]。超過分は /tmp/vi_planner_sink = SD カードへ落ち、追従が置き直しのたびに読む。**compact_sink_dir を指定すると効かない**
+    # ▲ 密の常駐の上限だった dense_limit_mb は 2026-08-09 にキーごと消えた (書いても読ま
+    #   れない)。ノードが /proc/meminfo の MemAvailable を見て起動を止める・警告する。
+    theta_cell_num: 60            # 既定 60: 姿勢の離散数。360 を割り切ること (t_resolution = 360/この値 が整数除算)
+    safety_radius: 0.3            # 既定 0.2 [m]: 障害物近傍ペナルティの半径 (VI 内部の膨張)。2026-08-20 の屋外実験で 0.2 から広げた
+    safety_radius_penalty: 30     # 既定 30 [秒/セル]: 障害物に近寄る代わりに払う迂回コスト
+    goal_margin_radius: 0.3       # 既定 0.3 [m]: ゴール圏 (final_state) 判定半径 = ゴール許容差
+    goal_margin_theta: 15.0       # 既定 15.0 [deg]: 同、角度
+    map_wait_sec: 60              # 既定 30 [s]: /map の到着待ち上限。広域地図では遅い
+    vi_threads: 0                 # 既定 0 (= 論理コア数): 価値反復のスレッド数 (VI_THREADS)
+    goal_tolerance_xy: 0.25       # 既定 0.25 [m]: 価値関数キャッシュを再利用するゴール一致判定
+    goal_tolerance_deg: 10.0      # 既定 10.0 [deg]: 同、角度
+    unknown_as_obstacle: true     # 既定 true: 未観測セルを障害物として扱う
+    # ── 広域 (compute_path_to_pose) ──
+    max_rollout_steps: 10000      # 既定 10000: 方策を辿って経路を作るときの最大手数
+    path_spacing: 0.05            # 既定 0.05 [m]: 出力する Path の姿勢間隔 (0 で補間しない)
+    # ── 狭域 (follow_path) ──
+    control_frequency: 10.0       # 既定 10.0 [Hz]: cmd_vel を出す周期
+    refine_budget_ms: 40          # 既定 40 [ms/tick]: ローカルウィンドウ価値反復に使う時間予算
+    no_action_timeout_sec: 3.0    # 既定 3.0 [s]: pose か方策が無い状態がこれだけ続いたら追従を中断。15 へ延ばしても粘れず、1 点飛ばすまでが 2 分に伸びただけだったので戻した (2026-08-04 実機)
+    # ── 追従の窓 (4 つで「停止中は全周 2.0m 以上・全速前進で前 3.0m」。導出と代償は ../README.md) ──
+    local_shape: "capsule"        # 既定 square (地図軸の矩形 = 本家): 幅 lat の円を進行方向の線分に沿って掃いた形。ロボット座標系に載る。ellipse は前縁が尖って横被覆が落ちるのでこちら
+    local_xy_range: 2.5           # 既定 1.0 [m]: 窓の**前後**の基準半径 (停止中の前後到達距離そのもの)
+    local_xy_range_lat: 2.0       # 既定 0.0 (= local_xy_range と同じ) [m]: 窓の横半径。capsule は前縁でもこの幅を保つ
+    local_shape_ratio_max: 1.25   # 既定 1.5: 進行方向へ前後半軸を伸縮させる倍率上限。1.25 で「前 3.0m / 後 2.0m」に決まる
+    # ▲ 広げた代償は 2 つあり、**どちらもエラーも警告も出ない**。1 tick の refine が窓を
+    #   掃き切れないと greedy の判断が丸ごと掃き待ちになる (19F だけ約 4 割。津田沼の 2 つは
+    #   収まる) のと、1 tick の変位が変形の不感帯に届かないと窓が静止形のままになるの 2 つ。
+    #   どちらも地図ごとの表が ../README.md にある。
+    # ── 未設定 (既定のまま。狭域 1 tick の判断器。2026-08-08 に上流が足した) ──
+    # 場も solve も全域伝播も変わらず、**変わるのは「場から速度指令を引く読み方」だけ**。
+    # 既定の greedy は下の action_* の離散行動そのもの。dwa / mppi は同じ場を連続に読む。
+    # **この機体では dwa / mppi を使わないこと。3 地図とも greedy。**
+    # DwaConfig::from_actions (vi_lib/src/ctrl.rs) が行動集合から読むのは v_min / v_max /
+    # max|rot| の 3 つだけで、**(v, ω) の組を捨てて外接矩形をサンプルする** — 下の「速い+緩い」
+    # 「遅い+鋭い」の組が潰れて最高速に最大角速度が当たり、旋回半径が組で決めた値より小さい
+    # 指令が出る。**組を伝える口が無いのでキーでは直せない** (2026-09-03 の実機で
+    # tsudanuma_mugimaru がスピンし、19F と津田沼も 2026-08-20 に戻した)。
+    # follow_controller: "greedy"   # greedy (既定) / dwa / mppi
+    # dwa_horizon_s: 1.0          # dwa・mppi の前方シミュレーション時間 [s]
+    # dwa_lethal_penalty: 2.0     # 既定 2.0 [PROB_BASE 倍]: 軌道の途中で margin 帯を踏む候補を棄却する。0 で「壁を掠める」旧挙動へ戻る。dwa 専用なのでいまはどの地図でも効いていない
+    # mppi_samples: 256           # mppi のサンプル本数。候補数 (dwa 7x11) と温度・ノイズは 2026-08-09 にキーごと消えてノード内の const になった (書いても読まれない)
+    # ── スタンドアロン (standalone は launch が渡す) ──
+    goal_retry_limit: 3           # 既定 3: 追従が失敗したときにゴールを投げ直す上限 (負で無制限)。投げ直す前に止まって場を更新する 3 秒はノード内の const (goal_retry_settle_sec は 2026-08-09 にキーごと消えた)
+    stop_on_failure: false        # 既定 false: follow_waypoints で 1 点失敗したら残りを諦めるか
+    waypoint_pause_sec: 0.2       # 既定 0.2 [s]: 1 点に着いてから次の点へ向かうまで。この間も場は更新し続ける
+    # ── 狭域 → 広域のフィードバック (共有価値関数の全域伝播。仕組みと実測は ../README.md) ──
+    global_sweep: true            # 既定 true: 全域伝播 (値が動いた範囲だけの能動集合。粒度は密がセル、compact がタイル) を回すか。切ると狭域が「通れない」と判断しても広域は塞がった通路を指し続ける
+    # ▲ 掃きの配分は global_sweep_duty [%] 1 つにまとまった (既定 25 のまま未設定)。
+    #   **上げないこと** — 掃きが握るロックが長くなり、前身の budget を 20 → 60ms へ上げた
+    #   2026-08-04 の実機では機体が 1〜2 秒おきに固まった (切り分けは未了)。100 で掃きっぱなし。
+    # ── ウェイポイントの先読み (代償と条件は ../../../../docs/usage/navigation.md) ──
+    waypoint_prefetch: false      # 既定 false: 次のウェイポイントを走行中に解いておくか。価値関数が 2 つ生きるので場も 2 倍で、走行中ずっと 1 コアを使う。**同梱の overrides で true なのは 19f (655MB x2) と tsudanuma_mugimaru (711MB x2)**。**4GB 機では外すこと**
+    # ── 未設定 (既定のまま。上の先読みが効くかどうかを決める 2 つ) ──
+    # waypoint_topic: "waypoints" # 順路 (nav_msgs/Path、latch)。出すのはパネルと joy_teleop だけで、来なければ先読みは**黙って起きない**
+    # waypoint_prefetch_threads: 1  # 先読みの solve のスレッド数。**効くのは compact だけ** (密は VI_THREADS をプロセスで 1 つ読む)
+    # ── 走り出しの短縮 (効かない地図がある。../../../../docs/usage/navigation.md) ──
+    early_start: false            # 既定 false: ゴールまで方策が繋がった時点で solve を打ち切るか。経路から外れると場を捨てて解き直す間ずっと止まる。**同梱の overrides は 3 地図とも true だが、地図の値域が compact の値バンドに収まると打ち切る隙が無い** (19F と tsudanuma_mugimaru はそちら側)。**未検証**
+    # ── 可視化 (経路計算には影響しない) ──
+    value_publish_interval_ms: 500  # 既定 500 [ms]: 配信間隔。**負で可視化そのものを立てず、0 で伝播が落ち着いたときのみ** (壁沿いを走る間は落ち着かないので全域スライスが黙って固まる)。掃きスレッドが全域スライス (19F 13 万 / 津田沼 94 万セル) をロック内で 2 秒ごとに作るので、2026-08-04 の「2 秒おきに固まる」の容疑者。0 か -1 が戻し方 (on/off だった publish_value_function は 2026-08-09 にこの符号へ吸収された)
+    cost_drawing_threshold: 60    # 既定 60: 色スケール上限 [ステップ数≒秒]。**地図ごとに測り直す値**で、同梱の 3 地図はどれも ../sites/ で上げてある (19F 100 / 津田沼 2 つが 600)。**全域スライスと追従の窓がこの 1 つを共有する**ので (window_cost_drawing_threshold は 2026-08-09 に消えた)、広い上限を入れると窓のほうは 1 色に潰れる (表示だけの話)
+    # ── 行動集合 (前進量と回転量の組。3 つの配列で要素数を揃えること。6 個でなくてよい) ──
+    # 前進量は**価値反復の 1 手の長さであると同時に linear.x の指令値そのもの**で、1 手 = 1 秒。
+    # 前へ出る 3 つを 0.5 にした理由と代償 (旋回半径・すり抜け・ゴール圏との余裕) は
+    # ../README.md。**0.5 は behaviors.yaml の velocity_smoother 上限 0.4 を超えるので、
+    # 断片のままだと黙ってクリップされる** (../sites/ の 3 地図はどれも外してある)。
+    action_names: ["forward", "back", "right", "rightfw", "left", "leftfw"]  # 既定 同左
+    action_forward_m: [0.5, -0.2, 0.0, 0.5, 0.0, 0.5]      # 既定 [0.3, -0.2, 0.0, 0.2, 0.0, 0.2] [m]: 各行動の前進量。前へ出る 3 つが既定と違う (back は据え置き)
+    action_rotation_deg: [0.0, 0.0, -30.0, -30.0, 30.0, 30.0]  # 既定 [0.0, 0.0, -20.0, -20.0, 20.0, 20.0] [deg]: 各行動の回転量。**旋回半径は上の前進量 ÷ ここ** (±30 は 0.5m/s で 0.95m)。±20 だと 0.8m/s で半径 2.3m になり津田沼の WP1 右折を曲がれず蛇行した (2026-08-20 実測)。19F はここと同じ ±30、津田沼の 2 つは ../sites/ で旋回前進が速い/遅いの 2 段 (遅い側が tsudanuma ±30 / tsudanuma_mugimaru ±40)
+    # ▲ **据え切り (right/left = 前進 0) の回転量を旋回前進より大きくしないこと。** 1 手の
+    #   コストは着地セルの penalty だけで回転量に依らない (vi_lib/src/state.rs の
+    #   penalty: PROB_BASE) ので、大きいと「向きを変える最安手」になり、まず止まって回るのが
+    #   常に得になる。等しいときは旋回前進が前へ出るぶん安いので、据え切りは前が塞がった
+    #   ときだけ選ばれる。**破ると 2026-08-05 と同じ「その場旋回 → 直進の繰り返し」へ戻る**
+    #   (tsudanuma_mugimaru が据え切りだけ ±60 で、2026-09-03 の実機でその場で回り続けた)。
+
+    # ── 未設定 (既定のまま) ──
+    # standalone / follow are always true, set by navigation.launch.py.
+    # map_scale: 1                # プランナ内部で地図を粗くする倍率 (1 = /map のまま)。実例は ../sites/ の 3 地図とも
+    # downsample_policy: "conservative"  # map_scale > 1 のときの縮小方針 (障害物優先。optimistic は free 優先)
+    # compact_sink_dir: ""        # compact 解の置き場 ("" = RAM)。追従が置き直しのたびに読むので遅い先だと制御周期に響く。同梱の 3 地図はどれも空 (Pi 5 の 8GB 前提)。**4GB 機で使うなら実ディスクを指すこと** (指定すると無条件に勝ち、compact_ram_limit_mb は一切読まれない)
+    # pose_topic: "mcl_pose"      # 自己位置を読むトピック。launch が上書きする
+    # scan_topic: "scan"          # スキャンを読むトピック。launch が上書きする
+    # global_frame: "map"         # 出力する Path のフレーム
+    # local_shape_slew_per_sec: 1.0  # 既定 1.0 [m/s]: 半軸の変化率上限 (10Hz なら 2.5m から 3.0m まで 0.5 秒)。belief 系の推定器は再収束で姿勢が 1 tick に数 m 飛ぶので要る
+    #     ▲ 形は square (地図軸の矩形 = 本家) / circle / ellipse / capsule。**凸であること** —
+    #       凹形を足すと clear_map_from_scan が再入するビームを黙って切る (判定は
+    #       in_local_area 1 か所で、スキャン注入・狭域の掃き・σ マージン膨張が全部そこを通る)。
+    #     ▲ compact の追従パッチは**変形の上限込みの外接半径**で決まる (square では ratio_max が
+    #       入らない)。実寸は起動ログの "vi_planner: follow patch ..." だけが手掛かりで、
+    #       門は half を win から作るぶん構造上鳴らない。4GB 機ではそこを見ること。../README.md
+    #
+    # ── 自己位置推定 (2026-08-09 に上流が足した VIOLA。**この構成の既定では使わない**) ──
+    # **どれを使うかを持つのはここだけ**で、使うかどうかは launch の localization:=vi。
+    # 2 か所に分かれるので噛み合わなければ起動時に止まる (backends.validate_localization)
+    # —— どちらの向きも、通せば**自己位置だけが静かに壊れる**ため。
+    #   external (既定) … pose_topic (= emcl2 の mcl_pose) をそのまま自己位置にする
+    #   adaptive        … 窓つきヒストグラム MCL の多重解像度版。誘拐から戻れて未シードでも
+    #                     立ち上がる。**内蔵を使うならまずこれ**
+    #   grid            … その 1 レベル版 (要シード、再定位なし)
+    #   belief          … 全地図に belief を持つ和積。未シードでも立つが窓が無いぶん重い
+    #   viterbi         … 同じ場を min-plus で回す変種。1 観測 183ms で実走行には向かない
+    localizer: "external"        # 既定 同左: 自己位置の出どころ。同梱の 3 地図は emcl2 の推定を読む
+    #     ▲ 内蔵を選ぶと pose_topic の意味が「連続入力」から**手動シード**へ変わる。launch が
+    #       localization:=vi のときだけ initialpose へ向け直す (mcl_pose のままだと 20Hz で
+    #       張り直され、**エラーも警告も出ないまま素通しと変わらない**)。**その initialpose は
+    #       相対名**なので、namespace:= を付けると RViz の 2D Pose Estimate (/initialpose) が
+    #       届かず、名前空間なし (既定) でしかシードできない。
+    # publish_tf: false           # map→odom を自分で出すか。
+    #     ▲ **ここに書かないこと** — 渡すのは launch (localization:= の解決結果)。ここで真に
+    #       すると emcl2 構成のときに出し手が 2 人になり、**自己位置だけが静かに壊れる**。
+    # transform_tolerance: 0.5    # 上が真のときの TF スタンプの未来日付け [s]
+    # odom_topic: "odom"          # 同、T_odom→base の出どころ
+    #     ▲ 内蔵推定器と組の belief_* / scan_quality_gate / sigma_margin_gain /
+    #       map_clear_from_scan / qmdp / active_reloc は external では読まれないか実質無効
+    #       なので**ここには書かない**。active_reloc は**上の solver も密であることが要る** —
+    #       アウトオブコアの解は単一ゴール専用なので、compact のまま true にすると起動時に
+    #       止まる。
+    #

@@ -14,7 +14,7 @@
 
 """A hand-built rqt panel for driving and watching the Raspberry Pi Cat.
 
-Four things live here: the CPU view fed by daifuku_stack's system_monitor, a
+Four things live here: the CPU view fed by daifuku_bringup's system_monitor, a
 NavigateToPose client, the body driver's lifecycle and motor_power services,
 and a teleop pad.
 
@@ -71,7 +71,7 @@ from daifuku_rqt.control_groups import StatusGroup
 HOLD_LIMIT = 5.0
 
 # cmd_vel publish rate.  vi_planner runs its control loop at 10 Hz
-# (src/daifuku_config/stack/vi_planner.yaml), so this matches what the driver already sees.
+# (src/daifuku_config/navigation/vi_planner.yaml), so this matches what the driver already sees.
 TELEOP_HZ = 10.0
 
 # Human-issued velocity goes to the manual input of twist_mux, not to /cmd_vel

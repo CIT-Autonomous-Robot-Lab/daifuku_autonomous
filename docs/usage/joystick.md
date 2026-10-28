@@ -1,6 +1,6 @@
 # ゲームパッドで操作する
 
-`robot_bringup.launch.py`が`joy:=true`（既定）で`joy_node`と`joy_teleop`を立てます。
+`robot.launch.py`が`joy:=true`（既定）で`joy_node`と`joy_teleop`を立てます。
 手で走らせるのと、保存したウェイポイントの巡回を始めるのを、どちらもコントローラだけで
 行えます。ノートPCもRVizも要りません。
 
@@ -32,7 +32,7 @@
 ボタンと軸の番号が総入れ替えになります。左スティックと十字キーを入れ替えるモードを持つ
 機種もあるので、そちらも切っておいてください。番号が合わないときは**エラーが出ず、ただ
 効きません**。`ros2 topic echo /joy`で押しながら確かめ、
-`src/daifuku_config/bringup/robot/joy_teleop.yaml`の`button_*` / `axis_*`を直します。
+`src/daifuku_config/robot/robot/joy_teleop.yaml`の`button_*` / `axis_*`を直します。
 
 **Logicool F710は背面のスイッチをXにし、前面のMODEランプを消灯にしてください。**
 MODEランプの点灯中は、本体の機能で左スティックと十字キーが入れ替わります。
@@ -95,7 +95,7 @@ MODEランプの点灯中は、本体の機能で左スティックと十字キ�
 自律側の加減速は`velocity_smoother`の担当です。
 
 制限を外すには該当のキーを0以下にします。実装は
-[`src/joy_buttons.py`](../../src/daifuku_bringup/src/joy_buttons.py)の`RateLimiter`で、
+[`src/daifuku_robot/src/joy_buttons.py`](../../src/daifuku_robot/src/joy_buttons.py)の`RateLimiter`で、
 rclpyを持ち込んでいないので開発ホストからそのまま呼んで検算できます。
 
 ## モードは音で分かります
@@ -124,7 +124,7 @@ rclpyを持ち込んでいないので開発ホストからそのまま呼んで
 
 上がりが「入った・始まった」、下がりが「切れた・断られた」です。効かなかったときにも鳴らす
 のは、そこが**今まで完全に無音だった**ためで、「2秒押したのに何も起きない」が一番分かり
-にくいからです（巡回中にもう一度押した、`navigation.launch.py`が立っていない、YAMLが
+にくいからです（巡回中にもう一度押した、navigationが立っていない、YAMLが
 読めない、ゴールを拒否された、のどれか。理由はログに出ます）。
 
 **1点でも外したら下がりになります。** `/follow_waypoints`を受ける`vi_planner`は
@@ -137,7 +137,7 @@ teleopへ移って巡回を**取り消した**ときは鳴りません。取り�
 
 鳴らしているのは本体ドライバで、自前実装（`driver:=original`）も公式実装
 （`driver:=raspimouse`）も同じトピック・同じ型で受けます。**鳴らなくても走行には何の影響も
-ありません。** うるさければ`src/daifuku_config/bringup/robot/joy_teleop.yaml`の`buzzer: false`で止まります。
+ありません。** うるさければ`src/daifuku_config/robot/robot/joy_teleop.yaml`の`buzzer: false`で止まります。
 
 ## いまのモードはLEDで分かります
 
@@ -166,7 +166,7 @@ teleopへ移って巡回を**取り消した**ときは鳴りません。取り�
 
 音は残してあります。機体が見えない位置にいるときは音のほうが届くからで、LEDは「いまどうか」、
 音は「いま変わった・効かなかった」を受け持ちます。要らなければ
-`src/daifuku_config/bringup/robot/joy_teleop.yaml`の`leds: false`で止まります（`buzzer: false`と同じ形）。
+`src/daifuku_config/robot/robot/joy_teleop.yaml`の`leds: false`で止まります（`buzzer: false`と同じ形）。
 
 ピンを掴めていなければ**エラーも出ずにただ点きません**。起動ログの
 `peripherals: leds=`で分かります。実機での配線確認は
@@ -245,7 +245,7 @@ STARTとBACKを同時に2秒押すと、`waypoints_file`のYAMLを読んで
 見えるのは、点ごとに止まったまま`goal_retry_limit`まで投げ直して次へ移る機体です。
 取りこぼした点はログと下がりの音で確認してください。
 
-`navigation.launch.py`が立っていないと押しても始まりません（ログに
+navigationが立っていないと押しても始まりません（ログに
 `follow_waypoints action server is not available`が出ます）。走行中にもう一度押しても
 何も起きません。取り消すにはSTARTを2秒押してteleopへ移ります。
 
@@ -294,7 +294,7 @@ ros2 topic echo /cmd_vel_mux               # 仲裁を抜けてドライバへ�
 ## 使わないとき
 
 ```bash
-ros2 launch daifuku_bringup robot_bringup.launch.py joy:=false
+ros2 launch daifuku_bringup robot.launch.py joy:=false
 ```
 
 とはいえ、**挿していなくても他は動きます**。`joy_teleop`は`/joy`が一度も来なければ何も
@@ -309,5 +309,5 @@ publishしないので、自律走行の邪魔をしません（`start_enabled: 
 ros2 topic hz /joy      # 挿してから数秒待つ。出れば拾えている
 ```
 
-設定値は[`src/daifuku_config/bringup/robot/joy_teleop.yaml`](../../src/daifuku_config/bringup/robot/joy_teleop.yaml)、
-実装は[`src/joy_teleop.py`](../../src/daifuku_bringup/src/joy_teleop.py)にあります。
+設定値は[`src/daifuku_config/robot/robot/joy_teleop.yaml`](../../src/daifuku_config/robot/robot/joy_teleop.yaml)、
+実装は[`src/daifuku_robot/src/joy_teleop.py`](../../src/daifuku_robot/src/joy_teleop.py)にあります。

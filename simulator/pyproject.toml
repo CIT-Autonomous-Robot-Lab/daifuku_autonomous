@@ -1,7 +1,7 @@
 [project]
 name = "daifuku-sim"
 version = "0.1.0"
-description = "Simulation scenarios for daifuku_stack using usim"
+description = "Simulation scenarios for daifuku using usim"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
 dependencies = [
