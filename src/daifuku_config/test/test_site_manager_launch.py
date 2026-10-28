@@ -131,6 +131,8 @@ class TestSiteManager(unittest.TestCase):
             # 綴り違いは断る。**断ったならファイルにも残っていない。**
             self.assertFalse(_param_set("nowhere_like_this"))
             self.assertEqual(params.read_site_file(site_file), start_site)
+            self.assertFalse(_param_set("../other"))
+            self.assertEqual(params.read_site_file(site_file), start_site)
 
             # 実在する場所なら書いて、告知もそちらへ動く。
             self.assertTrue(_param_set(other_site))

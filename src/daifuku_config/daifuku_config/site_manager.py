@@ -33,7 +33,10 @@ def validate(site):
     """選択先を保存する前に、全機能の override を検査する。"""
     if not params.is_site(site):
         return False, f"場所の名前になっていません: {site!r}"
-    path = params.overrides_path(site)
+    try:
+        path = params.overrides_path(site)
+    except RuntimeError as exc:
+        return False, str(exc)
     if not os.path.isfile(path):
         available = ", ".join(params.available_overrides()) or "(なし)"
         return False, f"そんな場所はありません: {site} ({path} が無い)。選べるのは {available}"

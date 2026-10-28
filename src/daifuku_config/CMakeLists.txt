@@ -31,6 +31,7 @@ if(BUILD_TESTING)
   ament_add_pytest_test(overlay test/test_overlay.py)
   ament_add_pytest_test(monitoring test/test_monitoring.py)
   ament_add_pytest_test(sentinel test/test_sentinel.py)
+  ament_add_pytest_test(site_selection test/test_site_selection.py)
   find_package(launch_testing_ament_cmake REQUIRED)
   add_launch_test(test/test_config_sentinel_launch.py TIMEOUT 60
     ENV ROS_DOMAIN_ID=77 ROS_LOCALHOST_ONLY=1)
