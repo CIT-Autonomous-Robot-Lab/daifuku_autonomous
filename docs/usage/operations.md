@@ -131,7 +131,7 @@ TELEOP_LINEAR_SPEED=0.1 bash tools/control.sh teleop keyboard
 ## 設定変更を反映する
 
 `docker/raspberrypi/`のイメージが持つのはaptの依存とツールチェーンだけです。ワークスペースの
-ソースはイメージに含めず、composeが`src/`をマウントして渡します。ビルドは`up`のたびに
+ソースはイメージに含めず、composeがリポジトリ全体をマウントして渡します。ビルドは`up`のたびに
 コンテナの中の`colcon build`が行います。変更したものによって、どこからやり直すかが3通りに
 分かれます。
 
@@ -172,17 +172,21 @@ docker compose up -d
 新しく足したときは`docker compose up`が要ります。`install/`のsymlinkはビルド時に
 張られるためです。
 
-名前を変えたり別のディレクトリへ移したりしたときは、それに加えて**古いsymlinkが
-`install/`に残ります**。両方あるように見えて新しいほうしか更新されないので、紛らわしければ
-`install/`のボリュームごと捨ててから建て直してください。ボリューム名は`docker volume ls`で
-確認します（`build`と`log`は残して構いません）。
+`workspace-build` と開発用の `build-autonomous` は、パッケージの追加・削除・移動、
+ファイルの追加・削除・改名、`CMakeLists.txt` などのビルド定義の変更を検出します。
+変更時だけ `build/` と `install/` の生成物を自動整理して建て直します。
+既存ファイルの値やコードだけの編集は差分ビルドのままです。
+Cargo の取得キャッシュ（`build/.cargo`）とログは残します。ビルドが失敗した場合は、
+次の実行でも未完了の構成変更として扱います。
 
-```bash
-docker compose down
-docker volume ls | grep autonomous-install
-docker volume rm <上で出た名前>
-docker compose up -d
-```
+この仕組みを初めて入れるときは、スクリプトがイメージ内にあるため
+`docker compose down` → `docker compose build` → `docker compose up -d` が必要です。
+構成の記録が無い既存の `build/` と `install/` は初回だけ成果物を整理します。
+
+名前付きボリュームは使用しません。生成物はホストのリポジトリ直下の
+`build/`・`install/`・`log/` に保存されます。旧ボリュームは参照しなくなりますが、
+自動削除や中身の移行はしません。実機用と開発用で同じ作業ツリーを使い回す場合も、
+コンテナ内のパスが変わるため初回は再ビルドします。
 
 ### 走らせたまま設定を直したとき
 

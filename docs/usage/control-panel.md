@@ -33,18 +33,8 @@ Pi 側は `system_monitor` が新しいファイルなので、一度だけワ�
 docker compose up -d
 ```
 
-ただし、`autonomous_nav` という名前だった頃にビルドした Pi では、名前付きボリュームの
-`build/` と `install/` に古い成果物が残ります。`--merge-install` なので新しい名前の下に
-上書きされず、`install/setup.bash` が両方を読んで**リンク切れのパッケージが 1 つ増えた
-状態**になります。一度だけ落としてください。
-
-```bash
-docker compose run --rm workspace-build bash -c '
-  cd /opt/ros_ws
-  rm -rf build/autonomous_nav install/lib/autonomous_nav install/share/autonomous_nav \
-         install/share/ament_index/resource_index/packages/autonomous_nav \
-         install/share/colcon-core/packages/autonomous_nav'
-```
+旧名 `autonomous_nav` などの生成物は、構成変更時のビルドで自動整理されます。
+手動で旧パッケージの成果物を削除する必要はありません。
 
 ## 起動
 

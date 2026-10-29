@@ -96,9 +96,10 @@ ros2 service call /rosbag2_recorder/snapshot rosbag2_interfaces/srv/Snapshot
 
 ## bagを取り出す
 
-`compose.common.yaml`がマウントしているのは`src/`と名前付きボリュームだけで、
-**bagを書けるホストのパスがありません**。`/tmp`はコンテナを作り直す（`down`、recreate）と
-消えるので、録ったらその場で出します。
+`compose.common.yaml` はリポジトリ全体を `/opt/ros_ws` にマウントします。
+`/opt/ros_ws/log/bags/` に記録すればホストの `log/bags/` に残ります。
+`/tmp` に記録した場合はコンテナを作り直す（`down`、recreate）と消えるので、
+録ったらその場で取り出します。
 
 ```bash
 docker compose cp ros2:/tmp/bags/run1 ./run1
@@ -108,12 +109,7 @@ ros2 bag info run1
 `info`で**`/map`と`/tf_static`のcountが1以上**あることを確認してください。0なら記録側で
 QoSが噛み合っておらず、そのbagからはTFツリーも地図も組み直せません。
 
-`/opt/ros_ws/src/`の下へ直接書けば持ち出しは要りませんが、**gitの作業ツリーに落ちます**。
-常用するなら`compose.common.yaml`の`ros2`サービスへ1行足すほうが素直です。
-
-```yaml
-      - ../../bags:/opt/ros_ws/bags
-```
+`log/` は Git の追跡対象外なので、bag 用のマウント追加は不要です。
 
 ## 再生する
 

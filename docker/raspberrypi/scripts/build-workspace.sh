@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # `docker compose up` のたびに走るワークスペースビルド。ソースは compose が
-# マウントし、前回の build/ は名前付きボリュームに残るので差分だけが建て直される。
+# マウントし、前回の build/ はホストに残るので差分だけが建て直される。
 # ROS と ros2_rust のオーバーレイは /ros_entrypoint.sh が読み込み済み。
 #
 # **パッケージは名前で選ばない。** src/ にあるものは全部建て、建てられないものだけを
@@ -25,7 +25,7 @@ SKIP_PACKAGES=(daifuku_rqt daifuku_waypoint_manager)
 cd "${WS}"
 mkdir -p src
 
-# クレートのレジストリはビルド用ボリュームに置く (up をまたいで残る。イメージ側の
+# クレートのレジストリは build/ に置く (up をまたいで残る。イメージ側の
 # /opt/cargo にはツールチェーンしか入っていない)。
 export CARGO_HOME="${WS}/build/.cargo"
 mkdir -p "${CARGO_HOME}"
@@ -102,6 +102,9 @@ fi
 pkg_list="$(colcon list --base-paths src)"
 mapfile -t cargo_pkgs < <(awk '$3 ~ /cargo/ {print $1}' <<<"${pkg_list}")
 
+# 旧 install を読み込む前に、パッケージ移動や削除・改名の残骸を整理する。
+bash /usr/local/lib/daifuku/workspace-layout.sh prepare <<<"${pkg_list}"
+
 MULTIARCH="$(dpkg-architecture -qDEB_HOST_MULTIARCH)"
 
 # --symlink-install なので launch や yaml は install/ から src/ への symlink になり、
@@ -134,5 +137,7 @@ colcon build --base-paths src --merge-install --symlink-install \
     --parallel-workers "${BUILD_JOBS}" \
     --packages-select "${cargo_pkgs[@]}" \
     --cargo-args --release
+
+bash /usr/local/lib/daifuku/workspace-layout.sh commit
 
 printf '\nワークスペースのビルドが完了しました: %s/install\n' "${WS}"

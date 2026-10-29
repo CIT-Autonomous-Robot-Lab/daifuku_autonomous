@@ -42,7 +42,8 @@ SHMを使うため、`compose.common.yaml`は`ipc: host`で`/dev/shm`をホス�
 ## ビルドと起動
 
 イメージが持つのはaptの依存とツールチェーンだけです。ワークスペースのソースは
-composeが`src/`をマウントし、`up`のたびにコンテナの中で`colcon build`します。
+composeがリポジトリ全体を `/opt/ros_ws` に bind mount し、`up`のたびに
+コンテナの中で`colcon build`します。
 `up`はまず`workspace-build`サービスを走らせ、その正常終了を待ってから`ros2`と
 `raspicat`を起動します。
 
@@ -58,7 +59,9 @@ docker compose ps
 
 初回の`up`はワークスペース全体を建てるので時間がかかります（Raspberry Pi 4で
 1〜2時間、大半は価値反復プランナのRustのreleaseビルド）。2回目以降は変更のあった
-パッケージだけが建て直されます。成果物は名前付きボリュームに残ります。
+パッケージだけが建て直されます。構成変更時は生成物を自動整理して再ビルドします。
+成果物はホストのリポジトリ直下の `build/`・`install/`・`log/` に残ります。
+名前付きボリュームは使いません。
 
 `BUILD_JOBS`が効くのは`up`のときの`colcon build`だけです（既定は4＝Pi 4の
 全コア）。メモリが不足してOOMで落ちるときだけ減らします。
@@ -92,7 +95,7 @@ docker compose up -d
 - `compose.rt.yaml`: rtmouseを使う公式ドライバ。Pi 4専用
 - `compose.none.yaml`: 本体ドライバを立てず`workspace-build`と`ros2`を使う環境
 
-どの入口もプロジェクト名は`daifuku-autonomous`で、名前付きボリュームを共有します。
+どの入口もプロジェクト名は`daifuku-autonomous`で、同じリポジトリを bind mount します。
 `Dockerfile`は依存とツールチェーン、`scripts/build-workspace.sh`はコンテナ内の
 ビルド、`fastdds_udp_whitelist.xml`はDDSの設定です。
 

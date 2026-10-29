@@ -89,6 +89,8 @@ if [[ ${#cargo_pkgs[@]} -ne 0 ]]; then
   skip_args=(--packages-skip "${cargo_pkgs[@]}")
 fi
 
+bash /usr/local/lib/daifuku/workspace-layout.sh prepare <<<"${pkg_list}"
+
 colcon build \
   --base-paths src \
   --symlink-install \
@@ -106,5 +108,7 @@ colcon build \
   --parallel-workers "${BUILD_JOBS}" \
   --packages-select "${cargo_pkgs[@]}" \
   --cargo-args --release
+
+bash /usr/local/lib/daifuku/workspace-layout.sh commit
 
 printf '\nBuild complete. Refresh this shell with:\n  source %s/install/setup.bash\n' "${WS}"

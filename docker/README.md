@@ -54,11 +54,10 @@ Windows側（`dev/tools/windows/`）はPodman固有の処理が主で`raspberryp
 
 ## Composeプロジェクト名
 
-どのComposeファイルも`name:`を明示しています。既定ではCompose
-ファイルのあるディレクトリ名がプロジェクト名になり、ネットワーク名や
-名前付きボリューム名がそこから作られるため、ディレクトリを動かすと
-`dev/`のcolconキャッシュ（`autonomous-build`/`-install`/`-log`）が
-別ボリュームに化けます。
+どのComposeファイルも`name:`を明示し、ディレクトリを動かしても同じ
+プロジェクトとして扱います。実機用・開発用とも、リポジトリ全体を1つの
+bind mount で渡します。名前付きボリュームは使わず、生成物はホストの
+リポジトリ直下の `build/`・`install/`・`log/` に保存します。
 
 | Composeファイル | プロジェクト名 |
 |---|---|
@@ -68,9 +67,7 @@ Windows側（`dev/tools/windows/`）はPodman固有の処理が主で`raspberryp
 
 `raspberrypi/`の2つは本体ドライバ違いの断片で、共通部分（`compose.common.yaml`）
 と**2つ重ねて**使います（`COMPOSE_FILE`にコロン区切りで並べる。commonが先）。
-**プロジェクト名をわざと同じにしてあります**。違えると、ドライバを替えた瞬間に
-ビルドキャッシュのボリュームが別物になり、1〜2時間かけて建て直すことになります。
-`compose.common.yaml`は`name:`を持たないので、ドライバ側2つに書いてあります。
+ドライバを替えても同じプロジェクトとホストの成果物を使います。
 
 かつては入口側が`compose.common.yaml`を`include:`していましたが、Compose 2.40は
 includeした側のサービスの上書きを`services.raspicat conflicts with imported

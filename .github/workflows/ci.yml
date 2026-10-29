@@ -61,6 +61,10 @@ jobs:
         run: |
           . /opt/ros/humble/setup.sh
           colcon build --packages-select $PACKAGES
+      - name: Docker の永続ビルドキャッシュと構成変更を検査する
+        run: |
+          . /opt/ros/humble/setup.sh
+          python3 -m pytest -q docker/raspberrypi/tests
       - name: ROS ノード・設定監視・起動構成を検査する
         run: |
           . /opt/ros/humble/setup.sh
