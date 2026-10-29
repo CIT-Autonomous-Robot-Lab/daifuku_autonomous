@@ -98,6 +98,18 @@ RUN pkgs=""; \
     fi \
     && rm -rf /opt/ros2_rust_ws/build /opt/ros2_rust_ws/log
 
+# 新しい生成器のRustクレートも、colcon-ros-cargoが読む従来の索引へ登録する。
+RUN for prefix in /opt/ros/${ROS_DISTRO} /opt/ros2_rust_ws/install; do \
+      mkdir -p "$prefix/share/ament_index/resource_index/rust_packages"; \
+      for manifest in "$prefix"/share/*/rust/Cargo.toml; do \
+        package_dir="${manifest%/rust/Cargo.toml}"; \
+        touch "$prefix/share/ament_index/resource_index/rust_packages/${package_dir##*/}"; \
+      done; \
+    done \
+    && source /opt/ros/${ROS_DISTRO}/setup.bash \
+    && source /opt/ros2_rust_ws/install/local_setup.bash \
+    && python3 -c 'import os; from colcon_ros_cargo.task.ament_cargo.build import find_installed_cargo_packages; missing = {"rclrs", "nav_msgs", "geometry_msgs", "sensor_msgs", "nav2_msgs", "tf2_msgs"} - find_installed_cargo_packages(os.environ).keys(); assert not missing, missing'
+
 # MID360 用。マウントしたワークスペースを建てるとき livox_ros_driver2 がリンクする。
 RUN git clone --depth 1 --branch "${LIVOX_SDK2_REF}" \
       https://github.com/Livox-SDK/Livox-SDK2.git /tmp/Livox-SDK2 \
