@@ -135,6 +135,9 @@ TELEOP_LINEAR_SPEED=0.1 bash tools/control.sh teleop keyboard
 コンテナの中の`colcon build`が行います。変更したものによって、どこからやり直すかが3通りに
 分かれます。
 
+CMake・Python・Rust は1回の `colcon build` で依存順にビルドします。
+Rust だけを後段へ飛ばすと、それに依存する launch の `package.sh` が欠けるためです。
+
 | 変更したもの | やること |
 |---|---|
 | `src/daifuku_{bringup,robot,perception,localization,navigation,mapping,maps}`配下のlaunch、地図、順路、RViz設定、Python | 何もしない。`--symlink-install`なのでノードを再起動するだけで反映される。**`config_sentinel`は気づきません**（見張るのは設定だけ）。機体側なら`docker compose restart raspicat`で自分で立て直す |
@@ -164,8 +167,9 @@ docker compose up -d
 `vcs import`（ネットワークに繋がっているときだけ）なので、リポジトリを新しく足しただけなら`up`で入り、
 中のパッケージも名前を書かずに建ちます。ただしそれが新しいapt依存を連れてくる場合や、Piで建たない
 パッケージを`build-workspace.sh`の`SKIP_PACKAGES`へ足す場合は`build`からやり直してください。
-タグやコミットの変更は次の`up`で反映されますが、ブランチ名のままだと上流へは進まないので、
-`src/`側で直接チェックアウトを合わせます
+Livox はタグ、その他はコミットハッシュで固定しています。固定値の変更は次の `up` で
+反映されます。ブランチ名に戻した場合は `vcs import` だけでは上流へ進まないため、
+`src/` 側で直接チェックアウトを合わせます
 （[Docker環境](../setup/docker.md#外部ソースと再起動)に詳しくあります）。
 
 1行目が効くのは既にあるファイルを直したときだけです。launchやconfigでも、ファイルを

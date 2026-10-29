@@ -95,12 +95,13 @@ if [[ -d src/livox_ros_driver2 ]]; then
   cp -f src/livox_ros_driver2/launch_ROS2/* src/livox_ros_driver2/launch/
 fi
 
-# cargo のパッケージ (vi_planner) は rclrs を使うので、CMake / Python のパッケージを
-# 建てて install/ を載せてから 2 段目で建てる。型で見分けるので名前は書かない。
-# **colcon list の失敗は変数代入で拾う** (プロセス置換だと set -e が効かず、空の
-# 一覧のまま cargo パッケージを 1 段目に混ぜてしまう)。
+# Rust を別段へ飛ばすと、それに依存する launch の package.sh が揃わない。
+# CMake/Python/Rust を同じビルドに載せ、colcon に依存順を任せる。
 pkg_list="$(colcon list --base-paths src)"
-mapfile -t cargo_pkgs < <(awk '$3 ~ /cargo/ {print $1}' <<<"${pkg_list}")
+awk '$1 == "vi_planner" && $3 ~ /cargo/ {found=1} END {exit !found}' <<<"${pkg_list}" || {
+  echo "vi_planner が colcon から見えません (Cargo.toml の additional-packages を確認)" >&2
+  exit 1
+}
 
 # 旧 install を読み込む前に、パッケージ移動や削除・改名の残骸を整理する。
 bash /usr/local/lib/daifuku/workspace-layout.sh prepare <<<"${pkg_list}"
@@ -111,7 +112,8 @@ MULTIARCH="$(dpkg-architecture -qDEB_HOST_MULTIARCH)"
 # 直しただけならビルドは要らない。
 colcon build --base-paths src --merge-install --symlink-install \
     --parallel-workers "${BUILD_JOBS}" \
-    --packages-skip "${SKIP_PACKAGES[@]}" "${cargo_pkgs[@]}" \
+    --packages-skip "${SKIP_PACKAGES[@]}" \
+    --cargo-args --release \
     --cmake-args -DROS_EDITION=ROS2 \
                  -DDISTRO_ROS="${ROS_DISTRO}" \
                  "-DCMAKE_LIBRARY_PATH=/opt/ros/${ROS_DISTRO}/lib;/usr/lib/${MULTIARCH};/lib/${MULTIARCH}" \
@@ -122,21 +124,6 @@ colcon build --base-paths src --merge-install --symlink-install \
                  -DOPENSSL_INCLUDE_DIR=/usr/include \
                  -DOPENSSL_CRYPTO_LIBRARY="/usr/lib/${MULTIARCH}/libcrypto.so" \
                  -DOPENSSL_SSL_LIBRARY="/usr/lib/${MULTIARCH}/libssl.so"
-
-# **vi_planner が見えなければ落ちること。** 見えないまま進むと建てるものが 0 個で
-# exit 0 になり、機体が前のバイナリのまま上がって `docker compose up` を何度通しても
-# 直らない。
-printf '%s\n' "${cargo_pkgs[@]}" | grep -qx vi_planner || {
-  printf 'vi_planner が colcon から見えません (vi_rs/Cargo.toml の\n' >&2
-  printf '[workspace.metadata.colcon] additional-packages を確認)\n' >&2
-  exit 1
-}
-
-source "${WS}/install/local_setup.bash"
-colcon build --base-paths src --merge-install --symlink-install \
-    --parallel-workers "${BUILD_JOBS}" \
-    --packages-select "${cargo_pkgs[@]}" \
-    --cargo-args --release
 
 bash /usr/local/lib/daifuku/workspace-layout.sh commit
 

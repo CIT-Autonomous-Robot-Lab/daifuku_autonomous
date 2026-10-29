@@ -76,38 +76,23 @@ if [[ "${online}" == true ]]; then
     -r -y
 fi
 
-# Build CMake/Python first, then the Rust navigation node against that overlay.
-# colcon list の失敗は変数代入で拾う (プロセス置換だと set -e が効かない)。
+# CMake/Python/Rust を同じビルドに載せ、colcon に依存順を任せる。
 pkg_list="$(colcon list --base-paths src)"
-mapfile -t cargo_pkgs < <(awk '$3 ~ /cargo/ {print $1}' <<<"${pkg_list}")
-printf '%s\n' "${cargo_pkgs[@]}" | grep -qx vi_planner || {
+awk '$1 == "vi_planner" && $3 ~ /cargo/ {found=1} END {exit !found}' <<<"${pkg_list}" || {
   printf 'vi_planner is missing from colcon list\n' >&2
   exit 1
 }
-skip_args=()
-if [[ ${#cargo_pkgs[@]} -ne 0 ]]; then
-  skip_args=(--packages-skip "${cargo_pkgs[@]}")
-fi
-
 bash /usr/local/lib/daifuku/workspace-layout.sh prepare <<<"${pkg_list}"
 
 colcon build \
   --base-paths src \
   --symlink-install \
   --parallel-workers "${BUILD_JOBS}" \
-  "${skip_args[@]}" \
+  --cargo-args --release \
   --cmake-args \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DROS_EDITION=ROS2 \
     -DDISTRO_ROS=humble
-
-source "${WS}/install/local_setup.bash"
-colcon build \
-  --base-paths src \
-  --symlink-install \
-  --parallel-workers "${BUILD_JOBS}" \
-  --packages-select "${cargo_pkgs[@]}" \
-  --cargo-args --release
 
 bash /usr/local/lib/daifuku/workspace-layout.sh commit
 

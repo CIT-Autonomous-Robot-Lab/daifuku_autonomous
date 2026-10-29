@@ -6,24 +6,24 @@ repositories:
   src/emcl2_ros2:
     type: git
     url: https://github.com/CIT-Autonomous-Robot-Lab/emcl2_ros2.git
-    version: main
+    version: 3eacea2dc70d9d29eb0d501d01eb5df001814776
   src/emcl3d:
     type: git
     url: https://github.com/NOPLAB/emcl3d.git
-    version: main
+    version: 5095ffaf0f0126adefb1af52340418da444149f1
   src/value_iteration3:
     type: git
     url: https://github.com/NOPLAB/value_iteration3.git
-    version: main
+    version: b1cb081fd668085a4f6e13b644a5927520c5493f
   src/raspicat_ros:
     type: git
     url: https://github.com/CIT-Autonomous-Robot-Lab/raspicat_ros.git
-    version: ros2
+    version: 0d5c8fba06a07720a0de8020b5e56695ffdcc846
   src/raspicat_description:
     type: git
     url: https://github.com/CIT-Autonomous-Robot-Lab/raspicat_description.git
-    version: ros2
+    version: 352e7e3fb8d65d71916c64c0bfc2cdd2bc0945e4
   src/raspimouse2:
     type: git
     url: https://github.com/CIT-Autonomous-Robot-Lab/raspimouse2.git
-    version: master
+    version: 2bac95b37d32ea28e8db5c83e2b70b8c46f14d79

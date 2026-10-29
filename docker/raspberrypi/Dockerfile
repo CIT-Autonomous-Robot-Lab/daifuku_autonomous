@@ -136,11 +136,13 @@ RUN --mount=type=cache,target=/opt/cargo/registry \
 #
 # 自前のソースはまとめて渡し、Pi で建てない GUI パッケージだけを除く。
 # bind mount なので地図などの実体をイメージの層に残さない。
+# ament_cargo は colcon/cargo プラグインが提供するので rosdep の対象から外す。
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     --mount=type=bind,source=daifuku_autonomous.repos,target=/tmp/repos.yaml \
     --mount=type=bind,source=src,target=/tmp/daifuku \
     source /opt/ros/${ROS_DISTRO}/setup.bash \
+    && source /opt/ros2_rust_ws/install/local_setup.bash \
     && mkdir -p /tmp/vcs && cd /tmp/vcs \
     && vcs import . < /tmp/repos.yaml \
     && cp src/livox_ros_driver2/package_ROS2.xml \
@@ -150,6 +152,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && package_paths="$(colcon list --base-paths /tmp/daifuku \
          --packages-skip daifuku_rqt daifuku_waypoint_manager --paths-only)" \
     && rosdep install --from-paths /tmp/vcs/src ${package_paths} --ignore-src -r -y \
+         --skip-keys ament_cargo \
          --rosdistro=${ROS_DISTRO} \
     && cd / \
     && rm -rf /tmp/vcs

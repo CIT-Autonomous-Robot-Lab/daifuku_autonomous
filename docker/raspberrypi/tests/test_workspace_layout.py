@@ -209,3 +209,39 @@ def test_builder_entrypoint_does_not_source_old_workspace(tmp_path: Path) -> Non
         ['bash', str(ENTRYPOINT), 'build-workspace'], env=env, timeout=30)
     # Then: 古い overlay に阻まれずビルドコマンドに到達する。
     assert result.returncode == 0
+
+
+def test_builder_orders_cmake_rust_and_launch_packages(tmp_path: Path) -> None:
+    # Given: CMake → Rust → 公開 launch の依存を持つ、成果物のないワークスペース。
+    for name, dependency in (
+            ('daifuku_config', ''),
+            ('vi_planner', 'daifuku_config'),
+            ('daifuku_bringup', 'vi_planner')):
+        source = tmp_path / 'src' / name
+        source.mkdir(parents=True)
+        package_type = 'ament_cargo' if name == 'vi_planner' else 'ament_cmake'
+        depends = f'<depend>{dependency}</depend>' if dependency else ''
+        _ = (source / 'package.xml').write_text(
+            f'<package format="3"><name>{name}</name><version>0.0.0</version>' +
+            '<description>fixture</description>' +
+            '<maintainer email="test@example.com">test</maintainer><license>Apache-2.0</license>' +
+            f'<buildtool_depend>{package_type}</buildtool_depend>{depends}' +
+            f'<export><build_type>{package_type}</build_type></export></package>')
+        if name == 'vi_planner':
+            _ = (source / 'Cargo.toml').write_text(
+                '[package]\nname = "vi_planner"\nversion = "0.0.0"\nedition = "2021"\n')
+            (source / 'src').mkdir()
+            _ = (source / 'src' / 'main.rs').write_text('fn main() {}\n')
+        else:
+            _ = (source / 'CMakeLists.txt').write_text(
+                f'cmake_minimum_required(VERSION 3.16)\nproject({name})\n' +
+                'find_package(ament_cmake REQUIRED)\nament_package()\n')
+    builder = SCRIPT.parents[1] / 'raspberrypi' / 'scripts' / 'build-workspace.sh'
+    env = dict(os.environ, ROS_WS=str(tmp_path), BUILD_JOBS='2', CARGO_NET_OFFLINE='true')
+    # When: 実際のビルド入口を通す。
+    result = subprocess.run(
+        ['bash', str(builder)], env=env, capture_output=True, text=True, timeout=180)
+    # Then: Rust を飛ばして依存パッケージの package.sh が欠落することがない。
+    assert result.returncode == 0, result.stdout + result.stderr
+    for name in ('daifuku_config', 'vi_planner', 'daifuku_bringup'):
+        assert (tmp_path / 'install' / 'share' / name / 'package.sh').is_file()
