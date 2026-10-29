@@ -65,6 +65,7 @@ jobs:
       - name: Docker の永続ビルドキャッシュと構成変更を検査する
         run: |
           . /opt/ros/humble/setup.sh
+          install -D docker/common/workspace-layout.sh /usr/local/lib/daifuku/workspace-layout.sh
           python3 -m pytest -q docker/raspberrypi/tests
       - name: ROS ノード・設定監視・起動構成を検査する
         run: |
