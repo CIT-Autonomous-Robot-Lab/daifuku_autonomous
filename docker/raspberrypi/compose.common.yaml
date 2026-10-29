@@ -1,6 +1,6 @@
 # .env の COMPOSE_FILE で common を先、ドライバ側を後に重ねること。
 # 単体では raspicat の placeholder が exit 1 になる。
-# ドライバ変更やディレクトリ移動でキャッシュを失わないようプロジェクト名を固定する。
+# ドライバを切り替えても同じ Compose プロジェクトとして扱う。
 name: daifuku-autonomous
 
 services:
@@ -27,11 +27,7 @@ services:
       # 新しいクレートを足すときはネット接続して false にする。
       CARGO_NET_OFFLINE: ${CARGO_NET_OFFLINE:-false}
     volumes:
-      - ../../src:/opt/ros_ws/src
-      - ../../daifuku_autonomous.repos:/opt/ros_ws/daifuku_autonomous.repos:ro
-      - autonomous-build:/opt/ros_ws/build
-      - autonomous-install:/opt/ros_ws/install
-      - autonomous-log:/opt/ros_ws/log
+      - ../..:/opt/ros_ws
 
   ros2:
     image: daifuku-autonomous:humble
@@ -45,7 +41,7 @@ services:
     # sleep が回収しない孤児のゾンビを tini で回収する。生きた残骸は entrypoint.sh が止める。
     init: true
     # デーモンの再起動では depends_on が効かず、前回の install/ で動く。
-    # down -v の後は docker compose up -d を通してから再起動すること。
+    # 成果物を消した後は docker compose up -d を通してから再起動すること。
     restart: unless-stopped
     network_mode: host
     # SHM を共有し、UDP のみで配信したときの Pi 4 の飽和と TF 遅延を防ぐ。
@@ -68,12 +64,7 @@ services:
       - ./fastdds_udp_whitelist.xml:/etc/fastdds/udp_whitelist.xml:ro
       # cgroup 規則で後挿しのマイナー番号も許可する。joy_node は raspicat 側。
       - /dev/input:/dev/input:ro
-      # install/ の symlink が切れないよう workspace-build と同じ src/ を見せる。
-      - ../../src:/opt/ros_ws/src
-      - ../../daifuku_autonomous.repos:/opt/ros_ws/daifuku_autonomous.repos:ro
-      - autonomous-build:/opt/ros_ws/build
-      - autonomous-install:/opt/ros_ws/install
-      - autonomous-log:/opt/ros_ws/log
+      - ../..:/opt/ros_ws
     device_cgroup_rules:
       - "c 13:* r"
 
@@ -98,7 +89,7 @@ services:
         exit 1
     # ros2 launch が回収しない孤児のゾンビを tini で回収する。
     init: true
-    # install/ が名前付きボリュームに残るので、単独で先に上がっても前回の成果物が見える。
+    # install/ がホストに残るので、単独で先に上がっても前回の成果物が見える。
     restart: unless-stopped
     network_mode: host
     ipc: host
@@ -119,19 +110,10 @@ services:
       USE_MID360_IMU: ${USE_MID360_IMU:-true}
     volumes:
       - ./fastdds_udp_whitelist.xml:/etc/fastdds/udp_whitelist.xml:ro
-      - ../../src:/opt/ros_ws/src
-      - ../../daifuku_autonomous.repos:/opt/ros_ws/daifuku_autonomous.repos:ro
-      - autonomous-build:/opt/ros_ws/build
-      - autonomous-install:/opt/ros_ws/install
-      - autonomous-log:/opt/ros_ws/log
+      - ../..:/opt/ros_ws
       # rtmouse のメジャー番号は insmod ごとに変わるため /dev 全体を渡す。
       # 固定の devices / cgroup 規則では再起動後にモータ・エンコーダを掴めなくなる。
       # char デバイスはほぼ privileged 相当。狭めるなら rtmouse 側で番号を固定すること。
       - /dev:/dev
     device_cgroup_rules:
       - "c *:* rwm"
-
-volumes:
-  autonomous-build:
-  autonomous-install:
-  autonomous-log:

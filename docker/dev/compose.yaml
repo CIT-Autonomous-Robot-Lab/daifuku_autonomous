@@ -1,5 +1,4 @@
-# プロジェクト名は固定する。名前付きボリュームがこれを接頭辞に持つので、
-# ディレクトリを動かすと colcon のキャッシュが別ボリュームに化ける。
+# ディレクトリを動かしても同じ Compose プロジェクトとして扱う。
 name: daifuku-raspicat-dev
 
 services:
@@ -33,11 +32,3 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ../..:/workspaces/daifuku_autonomous
-      - autonomous-build:/workspaces/daifuku_autonomous/build
-      - autonomous-install:/workspaces/daifuku_autonomous/install
-      - autonomous-log:/workspaces/daifuku_autonomous/log
-
-volumes:
-  autonomous-build:
-  autonomous-install:
-  autonomous-log:

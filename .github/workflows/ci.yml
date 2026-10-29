@@ -51,16 +51,22 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            python3-pytest python3-numpy ros-humble-ament-cmake-python ros-humble-ament-cmake-pytest \
+            cargo python3-pip python3-pytest python3-numpy ros-humble-ament-cmake-python ros-humble-ament-cmake-pytest \
             ros-humble-ament-lint-auto ros-humble-ament-cmake-copyright \
             ros-humble-ament-cmake-flake8 ros-humble-ament-cmake-lint-cmake \
             ros-humble-ament-cmake-xmllint ros-humble-launch-testing \
             ros-humble-launch-testing-ament-cmake ros-humble-nav2-common \
             ros-humble-diagnostic-updater
+          pip3 install colcon-cargo colcon-ros-cargo
       - name: 自前の機能パッケージと公開入口をビルドする
         run: |
           . /opt/ros/humble/setup.sh
           colcon build --packages-select $PACKAGES
+      - name: Docker の永続ビルドキャッシュと構成変更を検査する
+        run: |
+          . /opt/ros/humble/setup.sh
+          install -D docker/common/workspace-layout.sh /usr/local/lib/daifuku/workspace-layout.sh
+          python3 -m pytest -q docker/raspberrypi/tests
       - name: ROS ノード・設定監視・起動構成を検査する
         run: |
           . /opt/ros/humble/setup.sh

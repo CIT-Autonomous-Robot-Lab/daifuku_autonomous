@@ -16,6 +16,12 @@ for ws in \
   "${ROS_WS:-/opt/ros_ws}" \
   "${AUTONOMOUS_WS:-/workspaces/daifuku_autonomous}"
 do
+  # ビルド開始時の旧 install は構成変更で壊れている可能性がある。
+  # ツールチェーンの overlay だけで開始し、生成後に build-workspace が読む。
+  if [[ "${1:-}" == build-workspace && "${ws}" == "${ROS_WS:-/opt/ros_ws}" ]] ||
+     [[ "${1:-}" == build-autonomous && "${ws}" == "${AUTONOMOUS_WS:-/workspaces/daifuku_autonomous}" ]]; then
+    continue
+  fi
   if [[ -f "${ws}/install/setup.bash" ]]; then
     source "${ws}/install/setup.bash"
   fi
