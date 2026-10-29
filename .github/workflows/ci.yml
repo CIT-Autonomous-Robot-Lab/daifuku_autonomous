@@ -1,4 +1,4 @@
-# 外部ドライバや Rust プランナは変更せず、自前の構成・設定・ROS 配線を検査する。
+# 自前の構成・ROS 配線に加え、実機用イメージで外部依存も含めてビルドする。
 name: CI
 
 on:
@@ -111,6 +111,30 @@ jobs:
           )
           nav2_params.fragments_resolver(context)
           PY
+
+  workspace-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v4
+      - name: 実機用 Docker イメージをビルドする
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/raspberrypi/Dockerfile
+          load: true
+          tags: daifuku-autonomous:ci
+          cache-from: type=gha,scope=raspberrypi
+          cache-to: type=gha,scope=raspberrypi,mode=max
+      - name: 実機と同じ入口でワークスペース全体をビルドする
+        run: |
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -e HOME=/tmp -e ROS_HOME=/tmp/ros -e ROS_LOG_DIR=/tmp/ros/log \
+            -e BUILD_JOBS=2 -e MAKEFLAGS=-j2 -e CARGO_BUILD_JOBS=2 \
+            -v "$GITHUB_WORKSPACE:/opt/ros_ws" \
+            daifuku-autonomous:ci build-workspace
 
   map-tools:
     runs-on: ubuntu-latest

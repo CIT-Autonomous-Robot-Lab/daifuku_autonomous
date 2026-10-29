@@ -212,7 +212,12 @@ def test_builder_entrypoint_does_not_source_old_workspace(tmp_path: Path) -> Non
 
 
 def test_builder_orders_cmake_rust_and_launch_packages(tmp_path: Path) -> None:
-    # Given: CMake → Rust → 公開 launch の依存を持つ、成果物のないワークスペース。
+    # Given: plain cargo のライブラリと CMake → ament_cargo → launch の依存。
+    library = tmp_path / 'src' / 'vi_lib'
+    (library / 'src').mkdir(parents=True)
+    _ = (library / 'Cargo.toml').write_text(
+        '[package]\nname = "vi_lib"\nversion = "0.0.0"\nedition = "2021"\n')
+    _ = (library / 'src' / 'lib.rs').write_text('pub fn value() -> u8 { 1 }\n')
     for name, dependency in (
             ('daifuku_config', ''),
             ('vi_planner', 'daifuku_config'),
@@ -229,9 +234,11 @@ def test_builder_orders_cmake_rust_and_launch_packages(tmp_path: Path) -> None:
             f'<export><build_type>{package_type}</build_type></export></package>')
         if name == 'vi_planner':
             _ = (source / 'Cargo.toml').write_text(
-                '[package]\nname = "vi_planner"\nversion = "0.0.0"\nedition = "2021"\n')
+                '[package]\nname = "vi_planner"\nversion = "0.0.0"\nedition = "2021"\n' +
+                '[dependencies]\nvi_lib = { path = "../vi_lib" }\n')
             (source / 'src').mkdir()
-            _ = (source / 'src' / 'main.rs').write_text('fn main() {}\n')
+            _ = (source / 'src' / 'main.rs').write_text(
+                'fn main() { assert_eq!(vi_lib::value(), 1); }\n')
         else:
             _ = (source / 'CMakeLists.txt').write_text(
                 f'cmake_minimum_required(VERSION 3.16)\nproject({name})\n' +
@@ -245,3 +252,4 @@ def test_builder_orders_cmake_rust_and_launch_packages(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
     for name in ('daifuku_config', 'vi_planner', 'daifuku_bringup'):
         assert (tmp_path / 'install' / 'share' / name / 'package.sh').is_file()
+    assert (tmp_path / 'build' / 'vi_lib' / 'release' / 'libvi_lib.rlib').is_file()

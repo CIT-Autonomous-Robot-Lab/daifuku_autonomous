@@ -88,7 +88,7 @@ colcon build \
   --base-paths src \
   --symlink-install \
   --parallel-workers "${BUILD_JOBS}" \
-  --cargo-args --release \
+  --cargo-args --profile release \
   --cmake-args \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DROS_EDITION=ROS2 \

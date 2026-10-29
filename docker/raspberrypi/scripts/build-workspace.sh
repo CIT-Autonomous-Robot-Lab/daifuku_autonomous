@@ -113,7 +113,7 @@ MULTIARCH="$(dpkg-architecture -qDEB_HOST_MULTIARCH)"
 colcon build --base-paths src --merge-install --symlink-install \
     --parallel-workers "${BUILD_JOBS}" \
     --packages-skip "${SKIP_PACKAGES[@]}" \
-    --cargo-args --release \
+    --cargo-args --profile release \
     --cmake-args -DROS_EDITION=ROS2 \
                  -DDISTRO_ROS="${ROS_DISTRO}" \
                  "-DCMAKE_LIBRARY_PATH=/opt/ros/${ROS_DISTRO}/lib;/usr/lib/${MULTIARCH};/lib/${MULTIARCH}" \
