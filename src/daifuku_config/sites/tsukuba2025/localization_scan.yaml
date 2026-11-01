@@ -28,6 +28,7 @@ scan_filter_loc:
         invert: false
 localization_elevation_filter:
   ros__parameters:
+    elevation_frame: localization_gravity       # 既定 "": 取得時刻の重力方向で仰角を判定。
     min_elevation_deg: 9.5                     # Reject near terrain returns.
     max_elevation_deg: 75.0                    # Same upper angle bound.
     far_range_m: 30.0                          # Keep the original near-field selection.

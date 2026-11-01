@@ -13,15 +13,15 @@ daifuku_localization:
       footprint_frame_id: localization_gravity  # Same colocated frame, no XY shift.
       laser_likelihood_max_dist: 0.2            # Run profile: two0.15m support cells.
       alpha_threshold: 0.0                     # Upward rays invalidate opacity reset.
-      odom_fw_dev_per_fw: 0.01                  # Nonzero physical odometry noise.
-      odom_rot_dev_per_fw: 0.01                 # Nonzero physical odometry noise.
-      odom_rot_dev_per_rot: 0.01                # Nonzero physical odometry noise.
+      odom_fw_dev_per_fw: 0.001                 # 既定 0.19: WORLDオドメトリの人工拡散を抑える。
+      odom_rot_dev_per_fw: 0.001                # 既定 0.13: 少数ビーム区間で方位を拡散させない。
+      odom_rot_dev_per_rot: 0.001               # 既定 0.2: 物理姿勢由来の旋回オドメトリに合わせる。
 daifuku_navigation:
   vi_planner:
     ros__parameters:
       solver: frontier2d_sparse_compact         # User selection: compact implementation.
       map_scale: 1                              # Keep the0.2m navigation grid.
-      goal_margin_radius: 0.3                   # Arrival cells; not cache tolerance.
+      goal_margin_radius: 0.3                   # Default0.3: retain opposite corners of0.2m terminal cells.
       value_publish_interval_ms: -1             # Disable value-grid publication.
       vi_threads: 4                             # Foreground solve worker count.
       waypoint_prefetch: true                   # Actual prefetch enabled in runs.
@@ -37,4 +37,4 @@ daifuku_navigation:
   velocity_smoother:
     ros__parameters:
       max_velocity: [0.8, 0.0, 1.0]              # Same limits as the recorded runs.
-      velocity_timeout: 1.5                    # Longer than the1s greedy command interval.
+      velocity_timeout: 1.0                    # 既定 1.0: 更新が遅れても1秒モデルの指令を延長しない。

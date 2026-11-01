@@ -3,7 +3,7 @@ pointcloud_to_laserscan:
     target_frame: base_footprint                # Physical navigation frame.
     transform_tolerance: 0.1                    # Transform lookup tolerance, seconds.
     min_height: 0.275                          # Same physical obstacle band as runs.
-    max_height: 5.5                            # Retain nearby overhead obstacle returns.
+    max_height: 1.0                            # 既定 DBL_MAX: 頭上の反射を走行障害物にしない。
     angle_min: -3.141592653589793               # Full circle.
     angle_max: 3.141592653589793                # Full circle.
     angle_increment: 0.017453292519943295        #1degree navigation bins.
@@ -14,7 +14,7 @@ pointcloud_to_laserscan:
     use_inf: true                             # Missing returns remain unobserved.
 elevation_filter:
   ros__parameters:
-    min_elevation_deg: 4.5                     # Keep5degree and higher physical rings.
+    min_elevation_deg: 4.5                     # 既定 -90.0: 下向きの地形反射を除く。
     max_elevation_deg: 75.0                    # Same upper elevation bound as runs.
 scan_to_scan_filter_chain:
   ros__parameters:
