@@ -9,3 +9,9 @@ dependencies = [
   "pyyaml>=6.0",
   "scipy>=1.10",
 ]
+
+[project.optional-dependencies]
+usd = ["usd-core==25.5.1"]
+
+[dependency-groups]
+test = ["pytest>=8.0"]
