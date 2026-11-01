@@ -33,10 +33,10 @@ Near the robot the effective floor is the sensor height, so low obstacles
 come back into the costmap; far away it rises past what a fixed band
 could use.
 
-The angle is measured from the sensor origin in the cloud's own frame, so
-the cloud must arrive before any transform (i.e. livox_frame, upstream of
-pointcloud_to_laserscan). This holds only while lidar_roll and lidar_pitch
-are 0; tilt the sensor and the band tilts with it.
+The angle is measured from the sensor origin. elevation_frame optionally
+sets its axes using the acquisition-time TF rotation, without translating
+the origin or changing the output coordinates. A gravity-aligned frame
+keeps the elevation band level while the robot rolls or pitches.
 
 Topics are the relative cloud_in / cloud_out, remapped by
 scan_pipeline.launch.py -- the same shape as restamp_scan.py.
@@ -49,7 +49,9 @@ import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
+from rclpy.time import Time
 from sensor_msgs.msg import PointCloud2
+from tf2_ros import Buffer, TransformListener
 
 # Beyond this the tangent is large enough that the cut can never reject a
 # point, so treat it as "no limit" instead of multiplying by ~1e15.
@@ -60,6 +62,11 @@ class ElevationFilter(Node):
     def __init__(self):
         super().__init__("elevation_filter")
         self._restamp_cloud = self.declare_parameter("restamp_cloud", False).value
+        self._elevation_frame = self.declare_parameter("elevation_frame", "").value
+        self._tf_wait = None
+        if self._elevation_frame:
+            self._tf_buffer = Buffer()
+            self._tf_listener = TransformListener(self._tf_buffer, self)
         # Declared wide open so this node is a pass-through until a
         # parameter file narrows it. src/daifuku_config/config/perception/mid360_elevation.yaml
         # holds the real values.
@@ -195,10 +202,45 @@ class ElevationFilter(Node):
             self._publisher.publish(message)
             return
 
+        if self._elevation_frame and message.header.frame_id != self._elevation_frame:
+            # Keep one pending cloud; never replay stale scans after TF catches up.
+            if self._tf_wait is not None:
+                self._tf_wait.cancel()
+            self._tf_wait = self._tf_buffer.wait_for_transform_async(
+                self._elevation_frame, message.header.frame_id,
+                Time.from_msg(message.header.stamp),
+            )
+            self._tf_wait.add_done_callback(
+                lambda future: self._transform_ready(message, future),
+            )
+            return
+        self._filter(message)
+
+    def _transform_ready(self, message, future):
+        if future is not self._tf_wait or future.cancelled():
+            return
+        future.result()
+        self._tf_wait = None
+        transform = self._tf_buffer.lookup_transform(
+            self._elevation_frame, message.header.frame_id,
+            Time.from_msg(message.header.stamp),
+        )
+        self._filter(message, transform.transform.rotation)
+
+    def _filter(self, message, rotation=None):
         points = np.frombuffer(message.data, dtype=self._point_dtype(message))
         x = points["x"]
         y = points["y"]
         z = points["z"]
+        if rotation is not None:
+            qx, qy, qz, qw = rotation.x, rotation.y, rotation.z, rotation.w
+            matrix = np.array([
+                [1-2*(qy*qy+qz*qz), 2*(qx*qy-qz*qw), 2*(qx*qz+qy*qw)],
+                [2*(qx*qy+qz*qw), 1-2*(qx*qx+qz*qz), 2*(qy*qz-qx*qw)],
+                [2*(qx*qz-qy*qw), 2*(qy*qz+qx*qw), 1-2*(qx*qx+qy*qy)],
+            ])
+            # Rotate direction vectors only: elevation stays sensor-relative.
+            x, y, z = matrix @ np.array([x, y, z])
         radius = np.hypot(x, y)
 
         # Compared as slopes rather than angles: no atan2 per point, and

@@ -79,6 +79,154 @@ navigation は公開入口 `ros2 launch daifuku_bringup navigation.vtc.launch.py
 終了コードは 0 PASS / 1 FAIL / 2 入力不正 / 3 BLOCKED。
 後始末は自分のコンテナと bridge だけを対象にする。
 
+## つくばチャレンジ2025の全コース
+
+`daifuku-sim tsukuba2025` は、小範囲SLAM試験とは独立したシナリオ。
+現在の30地点と17領域の計画地図を使い、物理シミュレーションとemcl2を止めずに、
+領域ごとの地図読み込みとVIの再起動を行う。自己位置推定へ真値を連続入力しない。
+各地点のアクション進行と独立したシミュレータのworld姿勢による到達誤差を照合する。
+`--end-index` による部分診断は `PARTIAL_PASS` であり、完走の `PASS` にはしない。
+目標間の経路長が最大約164.8mとなるため、到達期限の既定値は1800秒。
+独立した実位置の到達誤差上限0.6mは変更しない。
+
+Fast DDSのサービス応答は、応答先readerの発見通知を最大5秒待つ。
+クライアント側でサーバーを発見しても、サーバー側の応答先発見は同時とは限らず、
+既定の100msでは区間アクションの受付応答が送信前に失われるため。
+`docker/simulator/fastdds_udp.xml`のサービスpublisherに適用し、既に発見済みなら直ちに送る。
+固定の起動待ちや要求の再送は加えず、物理到達判定も緩和しない。
+
+ワールドは、以前の2025用の地形・歩道補正を合成したUSDからCPUで生成する。
+簡略VTCや補正前の完全版を、2025の物理コースとして使わない。
+
+```bash
+uv run simulator/tools/package_tsukuba2025.py \
+    --out simulator/runs/tsukuba2025-world
+```
+
+このツールの既定入力は、手元に保全した
+`runs/vtc/isaac-course-20261016/course-2025/frontage-model-v3/runtime-world.usda`。
+別の配置では `--stage`、`--course`、`--index` を明示する。
+順路の75 m以内に関係するメッシュを元の三角形のまま保持する。
+この選択線は`course.json`の`world_route`で保持し、30地点の疎な目標点列とは分離する。
+センサー到達距離70 mと5 mの余裕を含み、地形を平坦化・間引きしない。
+`transform.json` は元地図とGazeboの剛体変換、実地形から求めた開始地面高、
+元コースのSHA256を記録する。地図と選択された30地点の座標は変更しない。
+間引き前の密な経路・全区間と必須折返しは、30点化しても保持する。
+高密度の衝突メッシュを含むため、小範囲試験よりメモリ・ディスクを多く使う。
+このシナリオの起動期限は900秒。`--startup-timeout` でGazeboの生成待ちと
+ROS入力待ちをまとめて変更できる。生成されたCOLLADAの材質色は、
+Gazebo Classicが扱えるメッシュ単位の平均色とし、衝突形状は変更しない。
+
+Mid-360は `/livox/lidar` の `sensor_msgs/PointCloud2`。
+水平360度、垂直-7..52度、0.1..70 m、720×28方向、10 Hzの実レイキャストを使い、
+XYZと強度を出す。実機の反射率依存距離・非反復走査・測距ノイズまでは再現しない。
+`livox_frame` は機体基準 `[0.144, 0, 0.275]` mに取り付け、
+公開の `navigation.tsukuba2025.launch.py` の二つの点群投影系へ接続する。
+
+3D点群対応のusimを開発中にローカルで検証する場合、通常の固定Git依存とは
+区別して、変更した両パッケージを検証用venvへインストールする。
+Windowsのリポジトリルートでの例:
+
+```bash
+uv pip install --python simulator/.venv/Scripts/python.exe --no-deps \
+    -e ../usim -e ../usim/packages/gazebo
+uv run --project simulator --no-sync daifuku-sim tsukuba2025 \
+    --usim-root ../usim --keep-open
+```
+
+Windows + Docker Desktop でこのシナリオが WSLg 接続を自動作成する場合は、
+`--wslg-gpu` を usim へ渡し、`/dev/dxg` と WSL の描画ライブラリを使う。
+複数 GPU がある場合は、起動元の環境変数
+`MESA_D3D12_DEFAULT_ADAPTER_NAME` で使用するアダプタ名を指定できる。
+たとえば `NVIDIA` は GeForce を選び、内蔵 GPU や CPU 描画への意図しない切替を避ける。
+大規模なコースでは GUI が黒いままの場合も走行本体の生存と描画ログを分けて確認し、
+`ogre.log` の `GL_RENDERER` で実際の描画装置を確認する。
+
+`--no-sync` はこの開発版を固定Git版へ戻さず実行する指定。
+`--keep-open` は成功後も同じ物理セッションを到達位置に表示し続け、
+`result.json` を先に保存する。ヘッドレス試験では付けず `--headless` を使う。
+結果・元コース・各地点の到達誤差・軌跡・領域別ログは実行ディレクトリへ保存する。
+
+### GazeboのGPU 3D点群
+
+`--lidar-sensor-type gpu_ray` は既存のCPU `ray` の代わりに、GPU描画による
+実距離をROS PointCloud2へ出す。形状・衝突・1 ms物理刻み・720×28方向・
+10 Hz・距離範囲・取付位置は変えない。専用のイメージを先に構築する。
+usimのGPU用イメージには、Gazeboの出力画素境界による1行・1列の測距ラベルずれを
+直すシェーダーが必要。修正前のイメージを再利用すると、角度設定が同じでも
+点群の形状がずれるため、Pythonだけの再読込みではなくGPU用レイヤーを再構築する。
+既存の追従器は壁時計周期なので、出力ワールドは1倍速を上限として
+1 msの物理刻みをすべて進める。上限を外すと1手の実行時間がモデルとずれる。
+
+```bash
+(cd ../usim && docker build -f packages/gazebo/Dockerfile -t usim-gazebo:gpu-lidar .)
+docker build -f docker/simulator/Dockerfile.emcl \
+    -t daifuku-usim-vtc-stack:emcl-freshness ../emcl2_ros2
+MESA_D3D12_DEFAULT_ADAPTER_NAME=NVIDIA \
+uv run --project simulator --no-sync daifuku-sim tsukuba2025 \
+    --usim-root ../usim --usim-image usim-gazebo:gpu-lidar \
+    --stack-image daifuku-usim-vtc-stack:emcl-freshness \
+    --lidar-sensor-type gpu_ray --headless --no-build --goal-timeout 1800
+```
+
+`Dockerfile.emcl` は既存ROSイメージを土台に、隣のローカルEMCLチェックアウトだけを
+再構築する。今回のEMCL修正は、取得時刻のナノ秒を含むスキャン識別、同一観測の
+再処理防止、再サンプル後の等重み化と初期共分散の反映。
+実クラスの6回帰テストもイメージ構築時に行う。
+EMCL側の未コミット変更を使うため、上流を取得し直す通常のROSイメージ構築とは分ける。
+コースドライバは既知の名目開始位置だけをシードに使い、方位の標準偏差を20度とする。
+初期化後に10スキャン以上を観測し、位置分散0.01 m²以下・方位分散0.005 rad²以下へ
+収束してからモータを有効にする。物理真値は従来どおり独立評価にだけ使う。
+
+Windows + Docker Desktopでは、ヘッドレスでもWSLgのGPU接続を自動作成する。
+GUIは起動しない。Gazeboのセンサー同期を使い、実際の受信時刻から点群周期と
+実時間比を計測する。Humble 2.0.3のプラグイン名は
+`libgazebo_ros_velodyne_laser.so` で、ROS 1のGPU専用ライブラリ名とは異なる。
+出力にはXYZ・強度に加えてringとtimeが含まれ、欠測方向はNaNとして保持される。
+モデル生成完了とセンサー準備完了は別なので、実際の点群受信で準備を判定する。
+
+### WindowsネイティブIsaac SimとRTX LiDAR
+
+`--backend isaacsim` はWindowsネイティブIsaac Sim 6.1と、同じDocker ROS構成を使う。
+既定の `--backend gazebo` は変えない。Isaac Simをインストールし、EULAに同意した
+Python 3.12環境の実行ファイルを `ISAAC_PYTHON` に設定して実行する。
+開発中の変更を使う場合は、固定Git版へ戻さずローカルのパッケージを導入する。
+
+```bash
+uv pip install --python "$ISAAC_PYTHON" --no-deps \
+    -e simulator -e ../usim -e ../usim/packages/isaacsim -e ../usim/packages/gazebo
+"$ISAAC_PYTHON" -m daifuku_sim tsukuba2025 \
+    --backend isaacsim --usim-root ../usim --headless --ros-domain-id 93
+```
+
+`--world` は同じ出力済みコースパッケージの `world.sdf` を指す。
+Isaacは隣の `manifest.json` から元の合成USDと常駐インデックスを読み、
+変換時のレイヤー・インデックスのSHA256を照合する。元USDも保全しておく。
+80 m以内の元形状を有効にし、70 mの測距範囲を保つ。メッシュを間引かない。
+720×28方向、10 Hz、1 ms物理刻みで、RTXのGPUレイ計算によるXYZ・強度を使う。
+回転走査の水平角は半開区間であり、Gazebo/PhysX版の末尾の重複方向とは異なる。
+
+Windowsとの通信はTCP 55100を使う。Docker内は標準の `LARGE_DATA` 構成で、
+発見にUDP、大きい地図や点群の転送にTCP・共有メモリを使う。
+Docker Desktopのホストアドレスは起動ごとに調べ、専用のプロファイルを保存する。
+自己位置推定の初期値と未駆動時の位置検証は、Gazeboの原点ではなく元コースの
+開始座標を使う。Isaacのodomは元座標系なので、実行時の `transform.json` は恒等変換、
+元の変換は `source-transform.json` に保全する。
+
+プランナの到達セルは、対角の2点とも到達半径内に入る必要がある。
+0.2 m格子で終端セルが消えないよう、到達セル半径は0.3 mを保つ。
+独立した真値による0.6 mの到達判定は緩めない。設定値の調整やセンサー単体の
+速度測定だけでは完走とせず、同じ連続実走で設定された全30地点をすべて確認する。
+
+実センサーの独立検証:
+
+```bash
+RUN_GAZEBO_MID360=1 uv run --project simulator --no-sync --with pytest \
+    python -m pytest -q -s simulator/tests/test_mid360_native.py
+```
+
+通常の単体テストでは、このDocker/Gazebo依存検査だけを明示的に対象外とする。
+
 ## 録画
 
 `--record-video` のときだけ Gazebo のカメラを有効にする。動画化にはローカルの ffmpeg が必要。

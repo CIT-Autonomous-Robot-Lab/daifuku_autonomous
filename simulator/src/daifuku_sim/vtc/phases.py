@@ -102,11 +102,11 @@ class WorkflowPhases(Protocol):
             except checks.CheckError as error:
                 raise Stop('FAIL', 'preflight', f'malformed VTC world: {error}', EXIT_USAGE) from error
 
-    def images(self) -> None:
+    def images(self, *, simulator_image: bool = True) -> None:
         logs = self.run_dir / 'images'
         logs.mkdir(parents=True, exist_ok=True)
         builds: list[tuple[str, Path, Path, str, dict[str, str]]] = []
-        if not self.runtime.image_exists(self.o.usim_image):
+        if simulator_image and not self.runtime.image_exists(self.o.usim_image):
             builds.append(
                 ('usim-gazebo', self.usim_root / 'docker' / 'Dockerfile.gazebo', self.usim_root, self.o.usim_image, {})
             )

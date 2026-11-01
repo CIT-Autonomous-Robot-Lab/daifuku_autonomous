@@ -12,13 +12,16 @@ dependencies = [
     "usim-gazebo==0.1.0",
 ]
 
+[dependency-groups]
+test = ["pytest>=8.0", "numpy==1.26.4", "usd-core==25.5.1"]
+
 [project.scripts]
 daifuku-sim = "daifuku_sim.cli:main"
 daifuku-vtc = "daifuku_sim.vtc.cli:main"
 daifuku-vtc-video = "daifuku_sim.vtc.cli:video_main"
 [tool.uv.sources]
-usim = { git = "https://github.com/NOPLAB/usim.git", rev = "a7d97a9542f8939e6e7b80e8c901ab9eff229148" }
-usim-gazebo = { git = "https://github.com/NOPLAB/usim.git", rev = "a7d97a9542f8939e6e7b80e8c901ab9eff229148", subdirectory = "packages/gazebo" }
+usim = { git = "https://github.com/NOPLAB/usim.git", rev = "9b233a9406b6c83db08538e016e3115cc3b6805b" }
+usim-gazebo = { git = "https://github.com/NOPLAB/usim.git", rev = "9b233a9406b6c83db08538e016e3115cc3b6805b", subdirectory = "packages/gazebo" }
 
 [build-system]
 requires = ["hatchling"]

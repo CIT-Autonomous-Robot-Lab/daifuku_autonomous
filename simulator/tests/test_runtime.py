@@ -40,3 +40,17 @@ def test_session_delivers_stop_and_environment_to_owned_process(tmp_path: Path) 
     # Then: the child exits cleanly after receiving both the signal and environment.
     assert code == 0
     assert log.read_text(encoding='utf-8').splitlines() == ['stop', 'owned']
+
+
+def test_session_wait_observes_real_child_exit_without_stopping_it(tmp_path: Path) -> None:
+    # Given: an owned child exits on its own.
+    log = tmp_path / "child.log"
+    session = start_session([sys.executable, "-c", "print('CHILD_DONE')"], log, {})
+    # When: the supervisor awaits that exact exit event.
+    try:
+        code = session.wait(timeout=10)
+    finally:
+        session.stop(timeout=0)
+    # Then: natural completion and its output are preserved.
+    assert code == 0
+    assert log.read_text(encoding="utf-8").strip() == "CHILD_DONE"

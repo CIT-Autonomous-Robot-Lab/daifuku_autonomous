@@ -1,0 +1,33 @@
+{
+  "method": "native triangle gradient above0.3 plus one0.2m body-clearance raster cell",
+  "bounds_m": [
+    [
+      224.614223,
+      -184.650134
+    ],
+    [
+      230.614223,
+      -178.650134
+    ]
+  ],
+  "maximum_gradient": 0.3,
+  "clearance_cells": 1,
+  "resolution_m": 0.2,
+  "steep_facets": 17,
+  "affected_meshes": [
+    {
+      "path": "/World/Terrain/TC_x6_y2/LandscapeComponent_50",
+      "steep_triangles": 17
+    }
+  ],
+  "new_obstacle_cells": 19,
+  "source_navigation_sha256": "3db9a04b22d123c2a27f0190dde1adf6058639251660ccb6613dea30fbe9e914",
+  "source_world": "C:\\Users\\nop\\dev\\lab\\daifuku_autonomous\\simulator\\runs\\vtc\\isaac-course-20261016\\course-2025\\frontage-model-v3\\runtime-world.usda",
+  "source_world_sha256": "76fda50210f42c7517960e7c79892b9fb3d98f474f4723896d52cc2dbd6717a3",
+  "evidence": "C:\\Users\\nop\\dev\\lab\\daifuku_autonomous\\simulator\\runs\\vtc\\tsukuba2025-wp30-odom-confidence-full-1793246131457\\goal7-stall-scan\\terrain-diagnostic.json",
+  "evidence_sha256": "4d06e51462ddd0aee1ca8b53a43ed650e84be15737e627f4722f5ebd967bae23",
+  "source_geometry_modified": false,
+  "old_obstacle_cells_cleared": 0,
+  "official_goals_changed": 0,
+  "all_goals_free_and_connected": true
+}

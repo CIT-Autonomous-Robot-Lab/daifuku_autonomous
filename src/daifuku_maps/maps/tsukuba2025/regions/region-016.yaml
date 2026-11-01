@@ -1,6 +1,9 @@
 image: region-016.pgm
 resolution: 0.2
-origin: [-170.2, -128.59999999999997, 0]
+origin:
+- 112.19999999999999
+- -214.59999999999997
+- 0.0
 negate: 0
 occupied_thresh: 0.65
 free_thresh: 0.196
