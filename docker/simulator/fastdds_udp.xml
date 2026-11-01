@@ -14,4 +14,15 @@
       <useBuiltinTransports>false</useBuiltinTransports>
     </rtps>
   </participant>
+  <publisher profile_name="service">
+    <qos>
+      <reliability>
+        <kind>RELIABLE</kind>
+        <max_blocking_time>
+          <sec>5</sec>
+          <nanosec>0</nanosec>
+        </max_blocking_time>
+      </reliability>
+    </qos>
+  </publisher>
 </profiles>

@@ -1,0 +1,9 @@
+# Rebuild only EMCL from a local upstream checkout; use that checkout as context.
+ARG BASE_IMAGE=daifuku-usim-vtc-stack:local
+FROM ${BASE_IMAGE}
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+COPY . /opt/usim_vtc_ws/src/emcl2_ros2/
+RUN source /opt/ros/humble/setup.bash \
+    && cd /opt/usim_vtc_ws \
+    && colcon build --packages-select emcl2 --cmake-args -DBUILD_TESTING=ON \
+    && ctest --test-dir build/emcl2 -R '^(duplicate_scan|subsecond_scans|resampling_|initial_covariance)' --output-on-failure

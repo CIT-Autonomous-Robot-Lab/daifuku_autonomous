@@ -167,6 +167,10 @@ class _SessionProcess:
     def poll(self) -> int | None:
         return self._process.poll()
 
+    def wait(self, timeout: float | None = None) -> int:
+        """Await the owned simulator's actual exit without polling."""
+        return self._process.wait(timeout=timeout)
+
     def stop(self, timeout: float) -> int:
         try:
             if self._process.stdin and not self._process.stdin.closed:
@@ -183,7 +187,7 @@ class _SessionProcess:
         return code
 
 
-def start_session(command: list[str], log: Path, env: dict[str, str]) -> Session:
+def start_session(command: list[str], log: Path, env: dict[str, str]) -> _SessionProcess:
     """Start a supervised CLI process that accepts stop on standard input."""
     stream = log.open('w', encoding='utf-8')
     process = subprocess.Popen(

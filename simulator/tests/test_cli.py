@@ -31,6 +31,7 @@ from daifuku_sim.vtc import cli as vtc_cli
     ['vtc', '--help'],
     ['vtc', 'run', '--help'],
     ['vtc', 'video', '--help'],
+    ['tsukuba2025', '--help'],
 ])
 def test_help_needs_no_simulator_or_video_dependencies(arguments: list[str]) -> None:
     # Given: an independent interpreter with no simulator dependencies imported.
@@ -62,6 +63,11 @@ def test_help_needs_no_simulator_or_video_dependencies(arguments: list[str]) -> 
     ['vtc', 'run', '--tolerance', 'nan'],
     ['vtc', 'run', '--goal', 'invalid'],
     ['vtc', 'run', '--survey', '1,2'],
+    ['tsukuba2025', '--goal-timeout', 'nan'],
+    ['tsukuba2025', '--course-timeout', '0'],
+    ['tsukuba2025', '--end-index', '151'],
+    ['tsukuba2025', '--startup-timeout', '-1'],
+    ['tsukuba2025', '--headless', '--keep-open'],
 ])
 def test_invalid_commands_fail_before_creating_run_data(
     tmp_path: Path, arguments: list[str],
