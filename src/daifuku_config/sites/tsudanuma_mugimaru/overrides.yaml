@@ -51,8 +51,8 @@ daifuku_localization:
 daifuku_navigation:
   velocity_smoother:
     ros__parameters:
-      max_velocity: [1.5, 0.0, 3.0]     # 断片 [0.4, 0.0, 1.0]: この地図だけの頭 (tsudanuma.yaml は [1.0, 0.0, 2.5])。実速度は action_forward_m が決める
-      min_velocity: [-1.5, 0.0, -3.0]   # 断片 [-0.4, 0.0, -1.0]: 上と対
+      max_velocity: [1.5, 0.0, 3.14]     # 断片 [0.4, 0.0, 1.0]: この地図だけの頭 (tsudanuma.yaml は [1.0, 0.0, 2.5])。実速度は action_forward_m が決める
+      min_velocity: [-1.5, 0.0, -3.14]   # 断片 [-0.4, 0.0, -1.0]: 上と対
 
   # ── 価値反復プランナ ──────────────────────────────────────────────────────
   # **地図が元から 0.1m/cell なので map_scale の効き方が他の 2 つと違う** (scale 2 =
@@ -65,8 +65,8 @@ daifuku_navigation:
       map_scale: 2                         # 既定 1: 内部だけ 0.20m/cell (5925 万状態)。**上げても solve は速くならない** (scale 3 は状態数 44% でフル solve 27.72s、scale 2 は 27.95s。1 手が跨ぐセルが減って反復が増え相殺する)。減るのは sink だけ (0.71 -> 0.32GB)
       downsample_policy: "conservative"    # 既定同値: 2 倍なら通路は片側 0.1m しか細らない (楽観が要るのは 0.25m/cell から)
       action_names: ["forward", "back", "right", "rightfwsl", "rightfw", "left", "leftfwsl", "leftfw"]  # 既定 6 手: この地図だけの 8 手 (tsudanuma.yaml とは並びも値も違う。未検証)
-      action_forward_m: [1.0, -0.4, 0.0, 0.5, 1.0, 0.0, 0.5, 1.0]  # 断片 6 つ [0.5, -0.2, 0.0, 0.5, 0.0, 0.5]: 直進と速い旋回前進を 1.0m へ。上限は velocity_smoother の 1.5m/s
-      action_rotation_deg: [0.0, 0.0, -40.0, -40.0, -20.0, 40.0, 40.0, 20.0]  # 断片 6 つ: 据え切り ±40 度、速い側 ±20 度 (1.0m で半径 2.86m)、遅い側 ±40 度 (0.5m で 0.72m)。**据え切りは旋回前進以下に保つこと** (理由は ../../navigation/vi_planner.yaml の ▲。∓60 だった構成が 2026-09-03 の実機でスピンした)
+      action_forward_m: [0.8, -0.4, 0.0, 0.4, 0.8, 0.0, 0.4, 0.8]  # 断片 6 手: 直進・高速旋回0.8m、低速旋回0.4m
+      action_rotation_deg: [0.0, 0.0, -45.0, -45.0, -20.0, 45.0, 45.0, 20.0]  # 断片 6 手: 据え切り・低速旋回45度、高速旋回20度
       goal_margin_radius: 1.0              # 断片 0.3 [m]: この地図だけの許容差 (tsudanuma.yaml は 0.75)。**効くのはメートルでセル数ではない** (0.20m/cell では 5 セル)
       safety_radius_penalty: 10            # 断片 30: この地図だけの値 (19F は 30、tsudanuma は 5)。30 だと貪欲ロールアウトが降下できない (未検証)
       max_rollout_steps: 100000            # 断片 10000: 対角 296m ÷ 1.0m ≒ 296 手だが、回り込むと桁が足りない
