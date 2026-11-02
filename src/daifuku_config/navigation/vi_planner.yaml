@@ -1,10 +1,7 @@
 # 価値反復プランナ (value_iteration3, Rust)。「既定」= ノードの src/node/params.rs の
 # declare_parameter。地図ごとの調整は ../sites/<場所>/overrides.yaml、合成順序・値の由来・
 # 実測は ../README.md。
-# **既定と違うのは 8 つだけ** — solver / map_wait_sec / compact_ram_limit_mb /
-# action_forward_m と、追従の窓の 4 つ (local_shape / local_xy_range /
-# local_xy_range_lat / local_shape_ratio_max)。localizer も書いてあるが値は既定と同じで、
-# 「どの推定器を使うか」を持つ唯一の場所なので空欄にせず明示してある。
+# 共通の走行設定。場所別の調整は ../sites/ に置く。
 # vi_planner is always standalone and serves navigation and waypoint actions.
 # follow / standalone / publish_tf are launch-owned; do not configure them here.
 vi_planner:
@@ -15,10 +12,10 @@ vi_planner:
     # ▲ 密の常駐の上限だった dense_limit_mb は 2026-08-09 にキーごと消えた (書いても読ま
     #   れない)。ノードが /proc/meminfo の MemAvailable を見て起動を止める・警告する。
     theta_cell_num: 60            # 既定 60: 姿勢の離散数。360 を割り切ること (t_resolution = 360/この値 が整数除算)
-    safety_radius: 0.3            # 既定 0.2 [m]: 障害物近傍ペナルティの半径 (VI 内部の膨張)。2026-08-20 の屋外実験で 0.2 から広げた
-    safety_radius_penalty: 30     # 既定 30 [秒/セル]: 障害物に近寄る代わりに払う迂回コスト
-    goal_margin_radius: 0.3       # 既定 0.3 [m]: ゴール圏 (final_state) 判定半径 = ゴール許容差
-    goal_margin_theta: 15.0       # 既定 15.0 [deg]: 同、角度
+    safety_radius: 0.4            # 既定 0.2 [m]: 障害物との余裕を広げる
+    safety_radius_penalty: 60     # 既定 30 [秒/セル]: 障害物近傍の通過を抑える
+    goal_margin_radius: 0.5       # 既定 0.3 [m]: 到達判定の距離許容差
+    goal_margin_theta: 20.0       # 既定 15.0 [deg]: 到達判定の角度許容差
     map_wait_sec: 60              # 既定 30 [s]: /map の到着待ち上限。広域地図では遅い
     vi_threads: 0                 # 既定 0 (= 論理コア数): 価値反復のスレッド数 (VI_THREADS)
     goal_tolerance_xy: 0.25       # 既定 0.25 [m]: 価値関数キャッシュを再利用するゴール一致判定
@@ -56,7 +53,7 @@ vi_planner:
     # ── スタンドアロン (standalone は launch が渡す) ──
     goal_retry_limit: 3           # 既定 3: 追従が失敗したときにゴールを投げ直す上限 (負で無制限)。投げ直す前に止まって場を更新する 3 秒はノード内の const (goal_retry_settle_sec は 2026-08-09 にキーごと消えた)
     stop_on_failure: false        # 既定 false: follow_waypoints で 1 点失敗したら残りを諦めるか
-    waypoint_pause_sec: 0.2       # 既定 0.2 [s]: 1 点に着いてから次の点へ向かうまで。この間も場は更新し続ける
+    waypoint_pause_sec: 0.0       # 既定 0.2 [s]: 到達後の待機を省く
     # ── 狭域 → 広域のフィードバック (共有価値関数の全域伝播。仕組みと実測は ../README.md) ──
     global_sweep: true            # 既定 true: 全域伝播 (値が動いた範囲だけの能動集合。粒度は密がセル、compact がタイル) を回すか。切ると狭域が「通れない」と判断しても広域は塞がった通路を指し続ける
     # ▲ 掃きの配分は global_sweep_duty [%] 1 つにまとまった (既定 25 のまま未設定)。
@@ -79,7 +76,7 @@ vi_planner:
     # 断片のままだと黙ってクリップされる** (../sites/ の 3 地図はどれも外してある)。
     action_names: ["forward", "back", "right", "rightfw", "left", "leftfw"]  # 既定 同左
     action_forward_m: [0.5, -0.2, 0.0, 0.5, 0.0, 0.5]      # 既定 [0.3, -0.2, 0.0, 0.2, 0.0, 0.2] [m]: 各行動の前進量。前へ出る 3 つが既定と違う (back は据え置き)
-    action_rotation_deg: [0.0, 0.0, -30.0, -30.0, 30.0, 30.0]  # 既定 [0.0, 0.0, -20.0, -20.0, 20.0, 20.0] [deg]: 各行動の回転量。**旋回半径は上の前進量 ÷ ここ** (±30 は 0.5m/s で 0.95m)。±20 だと 0.8m/s で半径 2.3m になり津田沼の WP1 右折を曲がれず蛇行した (2026-08-20 実測)。19F はここと同じ ±30、津田沼の 2 つは ../sites/ で旋回前進が速い/遅いの 2 段 (遅い側が tsudanuma ±30 / tsudanuma_mugimaru ±40)
+    action_rotation_deg: [0.0, 0.0, -30.0, -30.0, 30.0, 30.0]  # 既定 [0, 0, -20, -20, 20, 20] [deg]: 各行動の回転量
     # ▲ **据え切り (right/left = 前進 0) の回転量を旋回前進より大きくしないこと。** 1 手の
     #   コストは着地セルの penalty だけで回転量に依らない (vi_lib/src/state.rs の
     #   penalty: PROB_BASE) ので、大きいと「向きを変える最安手」になり、まず止まって回るのが

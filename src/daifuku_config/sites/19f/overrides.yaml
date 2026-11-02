@@ -3,7 +3,7 @@
 # 値の由来・実測・経緯は ../../README.md、仰角フィルタは docs/setup/lidar.md。
 # 自己位置推定は津田沼と同じ emcl2 (launch の既定)。VI は外部の推定姿勢を読む。
 #   ros2 launch daifuku_navigation navigation.launch.py localization:=emcl2
-# **3 ファイルはキーの集合をそろえてある** (「断片同値」の行は消しても挙動は変わらない)。
+# 未指定のパラメータは共通設定を使う。
 # 8 手の行動は津田沼の 2 地図だけ (屋内で 1 手 0.8m は曲がりきれない見込み。未検証)。
 
 # ── 地図 (ノードのパラメータではない) ─────────────────────────────────────
@@ -40,8 +40,8 @@ daifuku_localization:
 daifuku_navigation:
   velocity_smoother:
     ros__parameters:
-      max_velocity: [0.5, 0.0, 2.5]     # 断片 [0.4, 0.0, 1.0]: VI の 1 手 0.5m/s のクリップを外す
-      min_velocity: [-0.5, 0.0, -2.5]   # 断片 [-0.4, 0.0, -1.0]: 上と対
+      max_velocity: [0.5, 0.0, 3.14]    # 断片 [0.4, 0.0, 1.0]: 並進・旋回の上限を広げる
+      min_velocity: [-0.5, 0.0, -3.14]  # 断片 [-0.4, 0.0, -1.0]: 上限と対称
 
   # ── 価値反復プランナ ──────────────────────────────────────────────────────
   # map_scale は**プランナ内部だけ**の解像度 (/map・コストマップ・emcl2 は 0.05m のまま)。
@@ -51,17 +51,8 @@ daifuku_navigation:
       map_scale: 2                         # 既定 1: 内部だけ 0.10m/cell (794 万状態)。solve を軽くするため
       downsample_policy: "conservative"    # 既定同値: scale 2 なら通路は片側 0.05m しか細らない (楽観が要るのは scale >= 4)
       action_forward_m: [0.5, -0.2, 0.0, 0.5, 0.0, 0.5]  # 断片同値 (6 手)。これ以上は velocity_smoother の上限で頭打ち
-      action_rotation_deg: [0.0, 0.0, -30.0, -30.0, 30.0, 30.0]  # 断片同値: 旋回半径 0.95m
-      goal_margin_radius: 0.3              # 断片同値 [m]: ゴール圏 ÷ 0.10m/cell = 3 セル
-      safety_radius_penalty: 30            # 断片同値 [秒/セル]: 19F の通路幅なら貪欲ロールアウトが降下できる
-      max_rollout_steps: 10000             # 断片同値: 対角 54.1m ÷ 0.5m ≒ 109 手なので桁で余る
+      action_rotation_deg: [0.0, 0.0, -45.0, -30.0, 45.0, 30.0]  # 断片 [0, 0, -30, -30, 30, 30]: 据え切りを45度に拡大
       cost_drawing_threshold: 100          # 断片 60: 表示専用。色スケール上限 [ステップ≒秒] ≒50m
       early_start: true                    # 断片 false: 方策が繋がった時点で solve を打ち切る。密なので効く。ログの cut short / truncated で見る (未検証)
       waypoint_prefetch: true              # 断片 false: 点あたり 29 秒の停止が消える代わりに場が 2 本 (655MB x2 = 1.31GB) + 1 コア。**Pi 4 (4GB) では外すこと**
       follow_controller: "greedy"          # 既定同値: dwa は 2026-08-20 の左それの切り分けで戻した (目印として明示)。壁際が通れないなら dwa_lethal_penalty: 0.0
-
-# ── ここで上書きしていないもの (要るとしたらこの順で疑う) ────────────────────
-#   emcl2.range_threshold … 貫通と見なす角度幅 [rad]。上げるほど緩む。
-#   emcl2.laser_likelihood_max_dist … 断片の 1.0 (両地図に効いている)。
-#   costmaps.*.inflation_radius … 経路が出ないとき。外接円 0.408m を下回らせない。
-#   vi_planner.compact_sink_dir … この地図は密なので効かない (compact 専用)。
