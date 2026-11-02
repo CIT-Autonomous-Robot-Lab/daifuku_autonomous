@@ -136,6 +136,34 @@ Windows用スクリプトは既存のICS共有を解除し、旧`OpenDHCPServer`
 
 ## WSL2から直接つなぐ
 
+### WSL用の小パケットDDSプロファイル
+
+WSLでは`docker/raspberrypi/fastdds_wsl_udp.xml`を使います。UDPの
+`maxMessageSize`を1400に制限し、SHMは使いません。Pi側の
+`fastdds_udp_whitelist.xml`も同じUDP上限ですが、同一ホストのSHMは維持します。
+大きなBest EffortデータがWSLで届かない場合の通信設定であり、
+実機のフィルタ停止が修正されたという意味ではありません。
+
+WSLの`~/.bashrc`に、実際のリポジトリ位置に合わせて設定します。
+
+```bash
+export ROS_DOMAIN_ID=90
+export ROS_LOCALHOST_ONLY=0
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+export FASTRTPS_DEFAULT_PROFILES_FILE=/mnt/c/Users/nop/dev/lab/daifuku_autonomous/docker/raspberrypi/fastdds_wsl_udp.xml
+```
+
+XMLのwhitelistはloopbackと`192.168.1.1`です。mirrored以外の構成で
+自分のロボットLANアドレスが異なる場合は、WSL用XMLのアドレスを変更します。
+LAN切断中は実機通信を確認できません。設定は新しいROSプロセスから有効になるため、
+RVizなどを新しいターミナルから起動し直してください。
+Pi側にも更新したXMLを配置し、静止状態で対象ROSプロセスを再起動してから、
+スキャン・TFの更新とCPU負荷を比較します。UDPの分割数が増えるため、
+ローカル通信までUDPへ切り替えないでください。
+
+以下はネットワーク方式そのものの説明です。小パケット設定の適用だけで
+`.wslconfig`やOSのMTUを変更する必要はありません。
+
 WSL2の中でROS 2ノード（RVizなど）を動かして機体のトピックを見る場合、既定のNATでは
 接続できません。WSLの`eth0`は`172.31.x.x`で、Windowsホストが`192.168.1.1/24`を持つため
 **pingとsshはSNATで通ります**。しかしDDSの参加者は自分のロケータとして`172.31.x.x`を
