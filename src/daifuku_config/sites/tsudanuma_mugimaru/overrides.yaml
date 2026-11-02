@@ -10,7 +10,7 @@
 # navigation の地図に壁を描くほう。
 # **2026-09-03 の実機で初走行し、その場で回り続けた (スピン)。** greedy へ戻すのと据え切りを
 # ∓60 → ∓40 へ下げるのを**同時に**やったので、直ってもどちらが効いたかは分からない。
-# 3 ファイルでそろえてあるのは**キーの集合だけ** (8 手の行動は津田沼の 2 地図だけ)。
+# 共通設定と異なる値だけを指定する。
 
 # ── 地図 (ノードのパラメータではない) ─────────────────────────────────────
 # **どちらも free_thresh 0.2 で、未観測画素 205 が nav 28 / loc 25 セルぶん空きへ化ける**
@@ -20,22 +20,13 @@ site:
     navigation:   tsudanuma_mugimaru/navigation/tsudanuma-challenge_nav_corridor.yaml  # 経路計画 (/map)。手描きの壁 + 順路から 8.5m の回廊だけ。**順路を変えたら作り直すこと**
     localization: tsudanuma_mugimaru/localization/tsudanuma-challenge_loc.yaml  # 自己位置推定 (/map_loc)。実測のまま
 
-  # ── 仰角フィルタ ──────────────────────────────────────────────────────────
-  # 場所は tsudanuma.yaml と同じなので仰角も同じ切り方。戻すなら 5.0 から。**角度だけ戻すと
-  # 帯が潰れる** — 下限が距離とともに上がるので (70m 先で 6.40m)、max_height と対で見ること。
 daifuku_perception:
-  elevation_filter:
-    ros__parameters:
-      min_elevation_deg: 0.0          # 断片同値: 搭載高の水平面。勾配対策は無し
-
   # ── スキャンの切り出し ────────────────────────────────────────────────────
   # 仰角 0.0 なので全距離で 0.275-2.00m 固定 (tsudanuma.yaml は 2.50 で、こちらだけ低い)。
   # 対角が 296m あるので emcl2 は range_max を使い切る。
   pointcloud_to_laserscan:
     ros__parameters:
-      min_height: 0.275               # 断片同値: 搭載高 (2026-08-03 実測)。下げると床が載る
       max_height: 2.00                # 断片 0.50: 樹冠・庇・看板を落とす (tsudanuma.yaml は 2.50)
-      range_max: 70.0                 # 断片同値: センサの測距上限 (反射率 80% で 70m)
 
   # ── emcl2 ────────────────────────────────────────────────────────────────
   # **emcl2 が読むのは localization の地図**で、手描きの壁はそちらに無いので 19F のような
@@ -61,9 +52,7 @@ daifuku_navigation:
   # action_names / _forward_m / _rotation_deg は**同じ長さでないと起動時に落ちる**。
   vi_planner:
     ros__parameters:
-      solver: "frontier2d_sparse_compact"  # 断片同値: 密だと 3.3GB 見当で tsudanuma と同じく OOM 圏。明示する
       map_scale: 2                         # 既定 1: 内部だけ 0.20m/cell (5925 万状態)。**上げても solve は速くならない** (scale 3 は状態数 44% でフル solve 27.72s、scale 2 は 27.95s。1 手が跨ぐセルが減って反復が増え相殺する)。減るのは sink だけ (0.71 -> 0.32GB)
-      downsample_policy: "conservative"    # 既定同値: 2 倍なら通路は片側 0.1m しか細らない (楽観が要るのは 0.25m/cell から)
       action_names: ["forward", "back", "right", "rightfwsl", "rightfw", "left", "leftfwsl", "leftfw"]  # 既定 6 手: この地図だけの 8 手 (tsudanuma.yaml とは並びも値も違う。未検証)
       action_forward_m: [0.8, -0.4, 0.0, 0.4, 0.8, 0.0, 0.4, 0.8]  # 断片 6 手: 直進0.8m、旋回前進0.4/0.8m
       action_rotation_deg: [0.0, 0.0, -45.0, -45.0, -20.0, 45.0, 45.0, 20.0]  # 断片 6 手: 据え切り・低速旋回45度、高速旋回20度
@@ -73,4 +62,3 @@ daifuku_navigation:
       early_start: true                    # 断片 false: 方策が繋がった時点で計算を打ち切る
       waypoint_prefetch: true              # 断片 false: いまの点へ走っている間に次を解く (2026-09-02)。**効くことは実測済み** (2 点目は先読みから 0.04s で採用。1 手 0.8m の頃)。**1 点目は必ず待つ。** 場が 2 本で sink 711MB x2 = 1.42GB + 1 コア — **Pi 5 (8GB) 前提**。**ノードのメモリ判定は 1 本ぶんしか見ない**ので 4GB 機では黙って OOM になる。走行中の固まりが出たら真っ先にここを疑う
       waypoint_prefetch_threads: 2         # 既定 1: 既定の 1 スレッドだと本体のコア数の恩恵を受けない (回廊地図でフル solve 13.07s に対し先読み 51.01s、2 で 32.44s = 走行 89.85s の 1/2.8)。代償は 1 点目が 0.5 秒ほど伸びること。**Pi 5 の 4 コアで 3 以上にしないこと**。**秒数はどれも 1 手 0.8m・作り直し前の回廊地図の実測で、要再測**
-      follow_controller: "greedy"          # 既定同値: dwa は 2026-09-03 のスピンで戻した (3 地図とも greedy)。**dwa はこの行動集合と噛み合わない** — 理由は ../../navigation/vi_planner.yaml の未設定ブロック

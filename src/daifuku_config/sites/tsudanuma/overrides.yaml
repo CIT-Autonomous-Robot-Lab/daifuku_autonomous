@@ -5,7 +5,7 @@
 # **この地図は密ソルバでは解けない** (scale 5 の密でも 3.17GB で OOM)。内部だけ粗くし
 # (map_scale)、compact で解く。確定出力 (sink 648MB) は RAM — **4GB 機で使うなら
 # compact_sink_dir を書き戻すこと** (退避先は tmpfs でないこと)。
-# **3 ファイルはキーの集合をそろえてある** (「断片同値」の行は消しても挙動は変わらない)。
+# 共通設定と異なる値だけを指定する。
 # 8 手の行動は津田沼の 2 地図だけ (19F は断片の 6 手のまま。未検証)。
 
 # ── 地図 (ノードのパラメータではない) ─────────────────────────────────────
@@ -15,23 +15,13 @@ site:
     navigation:   tsudanuma/map_tsudanuma.yaml   # 経路計画 (/map)
     localization: tsudanuma/map_tsudanuma.yaml   # 自己位置推定 (/map_loc)
 
-  # ── 仰角フィルタ ──────────────────────────────────────────────────────────
-  # この地図には勾配があり、床が帯へ入り込んで地図に無い壁として立つ。**2026-08-08 に
-  # 5.0 -> 0.0 へ戻したので、いまその対策は効いていない** (3 度なら 5.2m 先から偽の壁)。
-  # emcl2 の貫通が増える方向なので alpha_threshold と対で見る。戻すなら 5.0 から (未検証)。
 daifuku_perception:
-  elevation_filter:
-    ros__parameters:
-      min_elevation_deg: 0.0          # 断片同値: 搭載高の水平面。勾配対策は無し
-
   # ── スキャンの切り出し ────────────────────────────────────────────────────
   # 仰角 0.0 なので帯は全距離で 0.275-2.50m 固定、range_max がそのまま実効の上限になる。
   # 仰角を 5.0 へ戻すときは、max_height をどこに置くかが帯の届く距離を決める。
   pointcloud_to_laserscan:
     ros__parameters:
-      min_height: 0.275               # 断片同値: 搭載高 (2026-08-03 実測)。下げると床が載る
       max_height: 2.50                # 断片 0.50: 樹冠・庇・看板を落とす (2026-08-26 に 4.00 から)
-      range_max: 70.0                 # 断片同値: センサの測距上限 (反射率 80% で 70m)
 
   # ── emcl2 ────────────────────────────────────────────────────────────────
   # 68.2% が未観測で占有セルが 0.4% しかなく、19F と同じ alpha 崩壊の余地があるため
@@ -56,7 +46,6 @@ daifuku_navigation:
   # action_names / _forward_m / _rotation_deg は**同じ長さでないと起動時に落ちる**。
   vi_planner:
     ros__parameters:
-      solver: "frontier2d_sparse_compact"  # 断片同値: 密だと 3.17GB で OOM。必須なので明示する
       map_scale: 5                         # 既定 1: 内部だけ 0.25m/cell (5650 万状態)
       downsample_policy: "optimistic"      # 既定 conservative: 保守側だと通路のセル幅が死ぬ
       action_names: ["forward", "back", "right", "rightfw", "rightfwsl", "left", "leftfw", "leftfwsl"]  # 既定 6 手: 旋回前進を速い/遅いの 2 段にするため fwsl を足した (2026-08-26。未検証)
@@ -67,4 +56,3 @@ daifuku_navigation:
       early_start: true                    # 断片 false: 方策が繋がった時点で計算を打ち切る
       waypoint_prefetch: true              # 断片 false: 次点を先読みする。4GB機では無効にする
       waypoint_prefetch_threads: 2         # 既定 1: 先読みを2スレッドで計算する
-      follow_controller: "greedy"          # 既定同値: dwa は 2026-08-20 の左それの切り分けで戻した (19F と同時)。壁際が通れないなら dwa_lethal_penalty: 0.0

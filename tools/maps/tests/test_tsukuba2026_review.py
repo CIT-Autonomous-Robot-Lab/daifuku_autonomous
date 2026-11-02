@@ -162,7 +162,7 @@ def test_vi_arrival_region_supports_two_cell_transition_outcomes() -> None:
     metadata = yaml.safe_load((MAPS / "navigation_reviewed.yaml").read_text())
     profile = yaml.safe_load((ROOT / "src/daifuku_config/sites/tsukuba2026/overrides.yaml").read_text())
     parameters = profile["daifuku_navigation"]["vi_planner"]["ros__parameters"]
-    resolution = metadata["resolution"] * parameters["map_scale"]
+    resolution = metadata["resolution"] * parameters.get("map_scale", 1)
     radius = parameters["goal_margin_radius"]
     rows, columns = np.mgrid[-4:5, -4:5]
     lower = np.stack((columns, rows), axis=-1)*resolution
@@ -211,7 +211,7 @@ def test_translation_lengths_progress_without_skipping_native_cells() -> None:
     metadata = yaml.safe_load((MAPS / "navigation_cityhall.yaml").read_text())
     profile = yaml.safe_load((ROOT / "src/daifuku_config/sites/tsukuba2026/overrides.yaml").read_text())
     parameters = profile["daifuku_navigation"]["vi_planner"]["ros__parameters"]
-    resolution = float(np.float32(metadata["resolution"]))*parameters["map_scale"]
+    resolution = float(np.float32(metadata["resolution"]))*parameters.get("map_scale", 1)
     # When: a full subcell/heading distribution is translated.
     for displacement in parameters["action_forward_m"]:
         if displacement == 0:
