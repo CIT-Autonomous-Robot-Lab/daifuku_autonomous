@@ -122,6 +122,18 @@ class OverlayTest(unittest.TestCase):
         finally:
             os.unlink(path)
 
+    def test_navigation_layers_use_supported_vi_parameters(self):
+        root = Path(__file__).resolve().parents[1]
+        removed = {"goal_tolerance_xy", "goal_tolerance_deg", "waypoint_pause_sec"}
+        for path in sorted((root / "sites").glob("*/overrides.yaml")):
+            with self.subTest(site=path.parent.name):
+                base = load(root / "navigation" / "vi_planner.yaml")
+                extra = load(path).get("daifuku_navigation", {})
+                overlay(base, extra)
+                params = base["vi_planner"]["ros__parameters"]
+                self.assertFalse(removed.intersection(params))
+                self.assertEqual(params["scan_penalty_radius"], 0.1)
+
 
 if __name__ == "__main__":
     unittest.main()

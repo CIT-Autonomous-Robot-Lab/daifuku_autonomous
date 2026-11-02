@@ -259,7 +259,7 @@ ros2 launch daifuku_bringup navigation.19f.launch.py velocity_smoother:=false
 
 投げ直しの前には3秒止まったままスキャンを取り込んで場を更新します。
 上限は`src/daifuku_config/navigation/vi_planner.yaml`の`goal_retry_limit`です。
-巡回の`stop_on_failure`と`waypoint_pause_sec`も同じファイルで設定します。
+巡回の失敗時動作は同じファイルの`stop_on_failure`で設定します。
 
 `vi_planner`は既定でアウトオブコアソルバ（`frontier2d_sparse_compact`）で解きます。
 状態配列を確保せず、確定した価値関数と方策だけを12バイト/状態で持つので、地図が
@@ -389,16 +389,19 @@ RVizを立て直したあと、「Nav2 Goal」の単発ゴール——もこれ�
 RVizのFixed Frameとwaypointの`frame_id`が一致している必要があります。ずれていると
 追加も追加読み込みも拒否され、パネルのステータス行にだけ理由が出ます。
 
-点と点のあいだの停止時間は`src/daifuku_config/navigation/vi_planner.yaml`の
-`waypoint_pause_sec`で設定します。この間も価値関数の更新は続きます。
+点と点のあいだに人工的な待ち時間は入れず、到達後は次の点へ進みます。
+到達範囲は`goal_margin_radius`と`goal_margin_theta`で指定します。
+失敗時の動作は`src/daifuku_config/navigation/vi_planner.yaml`の
+`stop_on_failure`で設定します。
 `stop_on_failure: false`なら行けない点があっても巡回を続け、完了時に取りこぼした点数が
 ステータス行に出ます。
 
 ### 次の点を走行中に解いておく（`waypoint_prefetch`）
 
-上の「いったん止まる」がポーズ時間だけでは済みません。VIは
-ゴールごとに価値関数を解き直すので、**点が変わるたびに丸ごと1回のsolveが入り、その
-間ずっと機体が止まっています**（実測で19Fが29秒、津田沼が87秒）。
+次のゴールに一致するキャッシュや先読み結果がなければ、価値関数のsolve中は停止します。
+solveの過去の実測は19Fが29秒、津田沼が87秒です。
+キャッシュと先読みの照合は`(x, y, 整数度の向き)`の完全一致で、同じセル内でも
+座標が異なれば再利用しません。向きは0以上360未満へ正規化し、整数度へ切り捨てます。
 
 `src/daifuku_config/navigation/vi_planner.yaml`の`waypoint_prefetch`を`true`にすると、いまの点へ
 走っているあいだに次の点を別スレッドで解いておき、着いたらsolveを飛ばして受け取ります。
@@ -489,7 +492,8 @@ compactだった頃のものです）。前進量とペナルティを下げて�
 
 ## 価値反復の表示
 
-新しいゴールの最初の計算で地図全体を解くため、地図サイズにより数秒から数十秒かかる場合があります。同じゴールへの再計画は価値関数キャッシュにより高速です。
+キャッシュのないゴールでは、地図サイズにより計算に数秒から数十秒かかる場合があります。
+座標と整数度の向きが完全に一致するゴールへの再計画は、価値関数キャッシュを再利用します。
 
 `rviz/navigation.rviz`には次のOccupancyGrid表示があります。
 

@@ -19,16 +19,11 @@ daifuku_localization:
 daifuku_navigation:
   vi_planner:
     ros__parameters:
-      solver: frontier2d_sparse_compact         # User selection: compact implementation.
-      map_scale: 1                              # Keep the0.2m navigation grid.
       goal_margin_radius: 0.3                   # Default0.3: retain opposite corners of0.2m terminal cells.
       value_publish_interval_ms: -1             # Disable value-grid publication.
       vi_threads: 4                             # Foreground solve worker count.
       waypoint_prefetch: true                   # Actual prefetch enabled in runs.
-      waypoint_prefetch_threads: 1              # Background prefetch worker count.
       stop_on_failure: true                     # Do not silently skip waypoints.
-      waypoint_pause_sec: 0.0                   # Continue to the prefetched goal.
-      follow_controller: greedy                 # User selection: discrete-action tracking.
       # Execute the modeled displacement before selecting another greedy action.
       control_frequency: 1.0
       action_forward_m: [0.3, -0.2, 0.0, 0.2, 0.0, 0.2]  # Existing six actions.
@@ -37,4 +32,3 @@ daifuku_navigation:
   velocity_smoother:
     ros__parameters:
       max_velocity: [0.8, 0.0, 1.0]              # Same limits as the recorded runs.
-      velocity_timeout: 1.0                    # 既定 1.0: 更新が遅れても1秒モデルの指令を延長しない。

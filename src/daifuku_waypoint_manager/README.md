@@ -19,8 +19,8 @@ RViz2 上で waypoint を作り、並べ替え・YAML 保存/読込を行い、v
 ## `/navigate_through_poses` は使わない
 
 `vi_planner` は `/navigate_through_poses` を提供しないため、
-`/follow_waypoints` へ順路を送ります。停止時間と失敗時の継続は
-`src/daifuku_config/navigation/vi_planner.yaml` の `waypoint_pause_sec` と
+`/follow_waypoints` へ順路を送ります。到達後は人工的な待ち時間を入れず次の点へ進みます。
+失敗時の継続は `src/daifuku_config/navigation/vi_planner.yaml` の
 `stop_on_failure` で設定します。
 
 ## Pi では建てない
@@ -131,9 +131,11 @@ waypoint どうしを結ぶオレンジの線に加えて、**機体の現在地
 マーカ（見せるため）とは別に、順路そのものを `nav_msgs/Path` で `/waypoints` へ
 latch して出す。**これは他ノードが読むためのもの**で、いまの用途は
 `vi_planner` の先読み（`waypoint_prefetch`）1 つ。VI は経路計画も経路追従も
-ゴールごとの価値反復に依っていて、点が変わるたびに丸ごと 1 回解き直す（実測で
-19F が 29 秒、津田沼が 87 秒）。その間**機体は止まっている**ので、次の点が分かって
-いれば走行中に解いておける。「次の点」を知る手段がこの Path。
+ゴールごとの価値反復に依っていて、一致するキャッシュや先読み結果がなければ
+solve 中は機体が止まる（過去の実測で 19F が 29 秒、津田沼が 87 秒）。
+次の点が分かっていれば走行中に解いておける。「次の点」を知る手段がこの Path。
+キャッシュと先読みは `(x, y, 整数度の向き)` の完全一致で照合する。
+向きは 0 以上 360 未満へ正規化して整数度へ切り捨て、同じセル内でも座標が異なれば再利用しない。
 
 出すのは**並びが変わったとき**だけ（`publishMarkers(reset=true)` の側）。選択の
 変更と機体からの線の引き直しでは出さない — 走行中に毎秒飛ばすと購読側が並びを
