@@ -12,7 +12,6 @@
 # limitations under the License.
 """場所を固定する入口と、機能ごとの隔離された include。"""
 
-import glob
 import os
 
 from ament_index_python.packages import get_package_share_directory
@@ -72,7 +71,7 @@ def validate_site(context: LaunchContext, *, site: str | None):
 
 
 def _source_parameter_files(
-    context: LaunchContext, navigation_root: str, *, separate_localization_scan: bool,
+    context: LaunchContext, *, separate_localization_scan: bool,
 ) -> list[str]:
     """合成が引数を書き換える前に、監視する元ファイルを確定する。"""
     names = (
@@ -81,8 +80,6 @@ def _source_parameter_files(
     )
     files = [value(context, name) for name in names
              if value(context, name)]
-    files += sorted(glob.glob(os.path.join(value(context, "params_dir"), "*.yaml")))
-    files.append(os.path.join(navigation_root, "vi_planner.yaml"))
     if separate_localization_scan:
         files.append(value(context, "localization_scan_params_file"))
     return files
@@ -95,7 +92,7 @@ def _assemble_navigation(context: LaunchContext, *, site: str | None):
     navigation_root = params.config_root("daifuku_navigation")
     localization_root = params.config_root("daifuku_localization")
     source_files = _source_parameter_files(
-        context, navigation_root, separate_localization_scan=separate_localization_scan,
+        context, separate_localization_scan=separate_localization_scan,
     )
 
     common_names = [
@@ -144,6 +141,7 @@ def _assemble_navigation(context: LaunchContext, *, site: str | None):
             "package": "daifuku_navigation", "config_root": navigation_root,
             "packages": ["daifuku_perception", "daifuku_localization", "daifuku_navigation"],
             "files": source_files, "watch_site": False,
+            "params_dir": value(context, "params_dir"),
         }),
         *scan_pipelines,
         GroupAction([

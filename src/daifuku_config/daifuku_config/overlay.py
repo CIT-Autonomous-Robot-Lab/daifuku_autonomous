@@ -185,6 +185,18 @@ def reject_unknown_nodes(layers, hit, config_root):
     )
 
 
+def navigation_fragments(config_root: str, params_dir: str = "") -> list[str]:
+    """起動と再起動検査で同じ navigation 断片集合を選ぶ。"""
+    params_dir = params_dir or os.path.join(config_root, "nav2")
+    vi = os.path.join(config_root, "vi_planner.yaml")
+    if not os.path.isfile(vi):
+        raise RuntimeError(f"Missing parameter fragment: {vi}")
+    fragments = sorted(glob.glob(os.path.join(params_dir, "*.yaml")))
+    if not fragments:
+        raise RuntimeError(f"No parameter fragments found in {params_dir}")
+    return fragments + [vi]
+
+
 def fragment_owners(fragment_paths):
     """断片ファイルのノード名の持ち主。同じ名前が 2 ファイルにあれば RuntimeError。"""
     owner = {}

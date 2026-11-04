@@ -28,6 +28,10 @@ def tree(tmp_path, monkeypatch):
         (directory / "params.yaml").write_text(
             yaml.safe_dump({name: {"ros__parameters": {"value": 1}}}), encoding="utf-8",
         )
+    (tmp_path / "navigation" / "nav2").mkdir()
+    change(tmp_path / "navigation" / "nav2" / "smoother.yaml",
+           {"velocity_smoother": {"ros__parameters": {}}})
+    change(tmp_path / "navigation" / "vi_planner.yaml", {"vi_planner": {}})
     for site in ("selected", "other"):
         directory = tmp_path / "sites" / site
         directory.mkdir(parents=True)
@@ -182,3 +186,51 @@ def test_repository_audit_checks_relocated_overlays():
     from daifuku_config.overlay import audit_tree
 
     assert audit_tree(str(Path(__file__).resolve().parents[1])) == []
+
+
+def test_precheck_rejects_duplicate_navigation_fragment_nodes(tree):
+    directory = tree / "navigation" / "nav2"
+    for filename in ("smoother.yaml", "duplicate.yaml"):
+        change(directory / filename, {"velocity_smoother": {"ros__parameters": {}}})
+    change(tree / "navigation" / "vi_planner.yaml", {"vi_planner": {}})
+
+    ok, reason = monitoring.precheck(**scope("daifuku_navigation"))
+
+    assert not ok
+    assert "velocity_smoother" in reason
+    assert "two fragments" in reason
+
+
+@pytest.mark.parametrize("node", ["velocity_smoother", "vi_planner"])
+def test_custom_navigation_directory_additions_are_checked(tree, node):
+    directory = tree / "custom_nav2"
+    directory.mkdir()
+    change(directory / "smoother.yaml", {"velocity_smoother": {}})
+    watched = scope("daifuku_navigation")
+    watched["params_dir"] = str(directory)
+    before = monitoring.config_digest(**watched)
+
+    change(directory / "new.yaml", {node: {"ros__parameters": {"value": 8}}})
+
+    assert monitoring.config_digest(**watched) != before
+    ok, reason = monitoring.precheck(**watched)
+    assert not ok
+    assert node in reason
+    assert "two fragments" in reason
+
+
+def test_fragment_uniqueness_is_limited_to_selected_navigation_set(tree):
+    directory = tree / "custom_nav2"
+    directory.mkdir()
+    change(directory / "smoother.yaml", {"velocity_smoother": {}})
+    change(tree / "navigation" / "nav2" / "unused_duplicate.yaml",
+           {"velocity_smoother": {}})
+    for subdir in ("perception", "localization"):
+        change(tree / subdir / "same_node.yaml", {"velocity_smoother": {}})
+    explicit = tree / "explicit.yaml"
+    change(explicit, {"velocity_smoother": {"ros__parameters": {"speed": 5}}})
+    watched = scope("daifuku_perception", "daifuku_localization",
+                    "daifuku_navigation", files=[explicit])
+    watched["params_dir"] = str(directory)
+
+    assert monitoring.precheck(**watched) == (True, "")

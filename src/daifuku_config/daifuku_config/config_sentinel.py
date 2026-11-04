@@ -40,6 +40,7 @@ class ConfigSentinel(Node):
         self._digest = self.declare_parameter("digest", "").value
         self._packages = self.declare_parameter("packages", Parameter.Type.STRING_ARRAY).value
         self._files = self.declare_parameter("files", Parameter.Type.STRING_ARRAY).value or []
+        self._params_dir = self.declare_parameter("params_dir", "").value
         self._watch_site = self.declare_parameter("watch_site", False).value
         # follow は場所告知への追随だけを制御する。固定構成のファイル変更は監視する。
         self._follow = self.declare_parameter("follow", False).value
@@ -148,7 +149,7 @@ class ConfigSentinel(Node):
         try:
             now = monitoring.config_digest(
                 self._site, self._package, self._config_root,
-                packages=self._packages, files=self._files,
+                packages=self._packages, files=self._files, params_dir=self._params_dir,
             )
         except (OSError, yaml.YAMLError, RuntimeError) as err:
             # 書きかけを読んだだけかもしれないので、これを立て直しの理由にしない。
@@ -198,7 +199,7 @@ class ConfigSentinel(Node):
 
         ok, reason = monitoring.precheck(
             target, self._package, self._config_root,
-            packages=self._packages, files=self._files,
+            packages=self._packages, files=self._files, params_dir=self._params_dir,
         )
         if not ok:
             self._say(reasons, f"**この設定では立ち上がらないので、立て直しません**: {reason}")

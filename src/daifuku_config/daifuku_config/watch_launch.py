@@ -52,7 +52,7 @@ def declare_watch_arg():
 
 
 def sentinel_actions(context, *args, package, config_root, packages=None, files=None,
-                     action=None, node_name=None, watch_site=False, **kwargs):
+                     action=None, node_name=None, watch_site=False, params_dir="", **kwargs):
     """選んだ機能の根と入力ファイルだけを、一つの sentinel で監視する。
 
     files には合成で引数を差し替える前の入力パスを渡す。
@@ -76,7 +76,8 @@ def sentinel_actions(context, *args, package, config_root, packages=None, files=
           if path.strip()],
     ]))
     site = value(context, "overrides").strip()
-    digest = config_digest(site, package, config_root, packages=selected, files=inputs)
+    digest = config_digest(site, package, config_root, packages=selected, files=inputs,
+                           params_dir=params_dir)
     stale = [path for root in selected_roots(package, config_root, selected).values()
              for path in config_files(root)[1]]
     logs = []
@@ -92,6 +93,7 @@ def sentinel_actions(context, *args, package, config_root, packages=None, files=
             "package": package,
             "config_root": config_root,
             "packages": selected,
+            "params_dir": params_dir,
             **({"files": inputs} if inputs else {}),
             "site": site,
             "watch_site": watch_site,

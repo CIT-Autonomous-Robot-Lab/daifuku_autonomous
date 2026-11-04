@@ -13,12 +13,16 @@
 
 """公開入口が場所と機能の接続を決める。"""
 
+from pathlib import Path
+
 from daifuku_bringup_launch import composition, navigation_args
 from daifuku_config import params
 from launch import LaunchContext
 from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription
 from launch.utilities import normalize_to_list_of_substitutions, perform_substitutions
 import pytest
+import rclpy
+import yaml
 
 
 def test_fixed_site_rejects_another_override():
@@ -74,6 +78,50 @@ def test_dual_scan_uses_isolated_topics_and_localization_frame(monkeypatch, tmp_
     assert scan["scan_raw_topic"] == "/scan_loc_raw"
     assert scan["filtered_cloud_topic"] == "/livox/lidar_localization"
     assert scan["restamp_scan"] == "false"
+
+
+def test_navigation_sentinel_watches_new_custom_fragments(tmp_path, monkeypatch):
+    from daifuku_config.config_sentinel import ConfigSentinel
+    from launch.actions import OpaqueFunction
+    from launch_ros.actions import Node
+    from launch_ros.utilities import evaluate_parameters
+
+    source = Path(__file__).resolve().parents[2]
+    for module in (composition, navigation_args):
+        monkeypatch.setattr(module, "get_package_share_directory",
+                            lambda package: str(source / package))
+    custom = tmp_path / "custom"
+    custom.mkdir()
+    (custom / "smoother.yaml").write_text("velocity_smoother: {}\n", encoding="utf-8")
+    context = LaunchContext()
+    for action in composition.generate_navigation(None).entities:
+        if isinstance(action, DeclareLaunchArgument):
+            action.execute(context)
+    context.launch_configurations["params_dir"] = str(custom)
+    actions = composition._assemble_navigation(context, site=None)
+    watch = next(action for action in actions if isinstance(action, OpaqueFunction)
+                 and action._OpaqueFunction__function == params.sentinel_actions)
+    sentinel_action = next(action for action in watch.execute(context) if isinstance(action, Node))
+    parameters = evaluate_parameters(context, sentinel_action._Node__parameters)[0]
+    parameter_file = tmp_path / "sentinel.yaml"
+    parameter_file.write_text(yaml.safe_dump({
+        "config_sentinel": {"ros__parameters": parameters},
+    }), encoding="utf-8")
+    rclpy.init(args=["--ros-args", "--params-file", str(parameter_file)])
+    node = None
+    try:
+        node = ConfigSentinel()
+        (custom / "added.yaml").write_text("velocity_smoother: {}\n", encoding="utf-8")
+        node._min_uptime = 0.0
+        node._poll()
+        assert not node.exit_requested
+        (custom / "added.yaml").write_text("new_node: {}\n", encoding="utf-8")
+        node._poll()
+        assert node.exit_requested
+    finally:
+        if node is not None:
+            node.destroy_node()
+        rclpy.shutdown()
 
 
 @pytest.mark.parametrize("site", [None, *params.available_overrides()])
