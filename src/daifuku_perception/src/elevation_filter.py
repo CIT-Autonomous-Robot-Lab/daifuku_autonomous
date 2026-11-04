@@ -228,7 +228,12 @@ class ElevationFilter(Node):
         self._filter(message, transform.transform.rotation)
 
     def _filter(self, message, rotation=None):
-        points = np.frombuffer(message.data, dtype=self._point_dtype(message))
+        points = np.ndarray(
+            shape=(message.height, message.width),
+            dtype=self._point_dtype(message),
+            buffer=message.data,
+            strides=(message.row_step, message.point_step),
+        ).reshape(-1)
         x = points["x"]
         y = points["y"]
         z = points["z"]

@@ -41,6 +41,7 @@ def sentinel(tmp_path, monkeypatch):
     node._config_root = str(tmp_path)
     node._packages = None
     node._files = []
+    node._params_dir = ""
     node._site = ""
     node._watch_site = False
     node._follow = False
@@ -96,6 +97,31 @@ def test_invalid_selected_file_prevents_restart(sentinel):
     path.write_text("node: [", encoding="utf-8")
     node._poll()
     assert not node.exit_requested
+
+
+def test_new_custom_fragment_blocks_restart_until_duplicate_is_fixed(sentinel, tmp_path):
+    node, _path = sentinel
+    root = tmp_path / "navigation"
+    root.mkdir()
+    (root / "vi_planner.yaml").write_text("vi_planner: {}\n", encoding="utf-8")
+    custom = tmp_path / "custom"
+    custom.mkdir()
+    (custom / "smoother.yaml").write_text("velocity_smoother: {}\n", encoding="utf-8")
+    node._package = "daifuku_navigation"
+    node._config_root = str(root)
+    node._params_dir = str(custom)
+    node._digest = monitoring.config_digest(
+        "", node._package, node._config_root, params_dir=node._params_dir,
+    )
+
+    added = custom / "added.yaml"
+    added.write_text("velocity_smoother: {}\n", encoding="utf-8")
+    node._poll()
+    assert not node.exit_requested
+
+    added.write_text("map_server: {}\n", encoding="utf-8")
+    node._poll()
+    assert node.exit_requested
 
 
 def test_warn_only_does_not_restart(sentinel):

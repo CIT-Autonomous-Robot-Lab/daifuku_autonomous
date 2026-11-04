@@ -25,6 +25,35 @@ import pytest
 import yaml
 
 
+@pytest.mark.parametrize("explicit", [False, True])
+def test_fragment_resolver_preserves_explicit_base_and_fragment_ownership(
+    tmp_path, monkeypatch, explicit,
+):
+    from daifuku_navigation_launch import nav2_params
+
+    root = tmp_path / "navigation"
+    root.mkdir()
+    (root / "vi_planner.yaml").write_text("vi_planner: {}\n", encoding="utf-8")
+    custom = tmp_path / "custom"
+    custom.mkdir()
+    (custom / "smoother.yaml").write_text("velocity_smoother: {}\n", encoding="utf-8")
+    base = tmp_path / "explicit.yaml"
+    base.write_text("custom_node: {}\n", encoding="utf-8")
+    monkeypatch.setattr(nav2_params, "config_root", lambda package: str(root))
+    context = LaunchContext()
+    context.launch_configurations.update({
+        "params_dir": str(custom), "params_file": str(base) if explicit else "",
+    })
+
+    body, owned, _origin, always = nav2_params.fragments_resolver(context)
+
+    assert body == ({"custom_node": {}} if explicit else {
+        "velocity_smoother": {}, "vi_planner": {},
+    })
+    assert owned == {"velocity_smoother", "vi_planner"}
+    assert always is not explicit
+
+
 def _load(source):
     specification = importlib.util.spec_from_file_location(source.stem, source)
     assert specification is not None and specification.loader is not None

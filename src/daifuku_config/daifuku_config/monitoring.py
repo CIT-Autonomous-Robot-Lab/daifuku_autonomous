@@ -21,8 +21,8 @@ import yaml
 
 from . import paths
 from .overlay import (
-    CONFIG_DIRS, KNOWN_PACKAGES, check_sections, config_files, load, meta,
-    reject_unknown_nodes,
+    CONFIG_DIRS, KNOWN_PACKAGES, check_sections, config_files, fragment_owners,
+    load, meta, navigation_fragments, reject_unknown_nodes,
 )
 
 
@@ -59,7 +59,7 @@ def _selected_overlay(body, selected):
     }
 
 
-def config_digest(site, package, config_root, *, packages=None, files=None):
+def config_digest(site, package, config_root, *, packages=None, files=None, params_dir=""):
     """コメントや順序で変わらず、選んだ構成の値で変わる指紋。"""
     roots = selected_roots(package, config_root, packages)
     payload = {"roots": {}, "layers": {}, "files": {}}
@@ -70,7 +70,9 @@ def config_digest(site, package, config_root, *, packages=None, files=None):
         }
     for name in _names(site):
         payload["layers"][name] = _selected_overlay(load(paths.overrides_path(name)), roots)
-    for path in sorted(set(files or [])):
+    fragments = (navigation_fragments(roots["daifuku_navigation"], params_dir)
+                 if "daifuku_navigation" in roots else [])
+    for path in sorted(set([*(files or []), *fragments])):
         body = load(path)
         payload["files"][path] = (_selected_overlay(body, roots)
                                   if _is_overlay(body) else body)
@@ -78,10 +80,12 @@ def config_digest(site, package, config_root, *, packages=None, files=None):
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
 
 
-def precheck(site, package, config_root, *, packages=None, files=None):
+def precheck(site, package, config_root, *, packages=None, files=None, params_dir=""):
     """選んだ入力だけを検査し、壊れた設定での再起動を防ぐ。"""
     try:
         roots = selected_roots(package, config_root, packages)
+        if "daifuku_navigation" in roots:
+            fragment_owners(navigation_fragments(roots["daifuku_navigation"], params_dir))
         for root in roots.values():
             for path in config_files(root)[0]:
                 load(path)

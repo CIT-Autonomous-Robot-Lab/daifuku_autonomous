@@ -18,7 +18,6 @@
 使う役と固定サイトの宣言との整合はここで検査する。
 """
 
-import glob
 import os
 
 from ament_index_python.packages import get_package_share_directory
@@ -26,6 +25,7 @@ from launch.actions import LogInfo, SetLaunchConfiguration
 
 from daifuku_config import value
 from daifuku_config.params import config_root, load, site_meta, site_name
+from daifuku_config.overlay import fragment_owners, navigation_fragments
 
 
 def fragments_resolver(context):
@@ -46,29 +46,11 @@ def fragments_resolver(context):
         (中身, 上書きを受けるノード名, 出どころの表示, 常に一時ファイルを作るか)。
     """
     params_dir = value(context, "params_dir")
-    vi_frag = os.path.join(config_root("daifuku_navigation"), "vi_planner.yaml")
-    if not os.path.isfile(vi_frag):
-        # 黙って落とさない。抜けると vi_planner が宣言時の既定だけで上がり、
-        # overrides の vi_planner: が「行き先の無いノード名」で落ちる。
-        raise RuntimeError(f"Missing parameter fragment: {vi_frag}")
-    nav2_fragments = sorted(glob.glob(os.path.join(params_dir, "*.yaml")))
-    if not nav2_fragments:
-        raise RuntimeError(f"No parameter fragments found in {params_dir}")
-    fragments = nav2_fragments + [vi_frag]
-
-    merged, owner = {}, {}
+    fragments = navigation_fragments(config_root("daifuku_navigation"), params_dir)
+    fragment_owners(fragments)
+    merged = {}
     for frag in fragments:
         body = load(frag)
-        for node_name in body:
-            if node_name in owner:
-                raise RuntimeError(
-                    f"Node '{node_name}' is defined in two fragments: "
-                    f"{owner[node_name]} and {frag}.\n"
-                    "The fragments (src/daifuku_config/navigation/nav2/*.yaml + "
-                    "src/daifuku_config/navigation/vi_planner.yaml) must partition the nodes; "
-                    "put site overrides in src/daifuku_config/sites/<site>/overrides.yaml."
-                )
-            owner[node_name] = frag
         merged.update(body)
     origin = f"{len(fragments)} fragments from {params_dir} (+ vi_planner.yaml)"
 

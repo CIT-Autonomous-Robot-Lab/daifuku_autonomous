@@ -20,6 +20,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import pytest
+
 
 def _load_overlay():
     try:
@@ -44,6 +46,80 @@ load = _overlay_mod.load
 overlay = _overlay_mod.overlay
 reject_unknown_nodes = _overlay_mod.reject_unknown_nodes
 select = _overlay_mod.select
+
+
+def test_fragment_owners_rejects_duplicate_node_in_one_file(tmp_path: Path) -> None:
+    fragment = tmp_path / "navigation.yaml"
+    fragment.write_text(
+        "vi_planner:\n  ros__parameters:\n    map_scale: 2\n"
+        "vi_planner:\n  ros__parameters:\n    local_cpu_share: 0.6\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(_overlay_mod.yaml.YAMLError, match="duplicate key"):
+        fragment_owners([str(fragment)])
+
+
+@pytest.mark.parametrize("section", [42, False, 0, "", [], ["vi_planner"]])
+def test_audit_tree_reports_invalid_package_section(
+    tmp_path: Path, section: int | bool | str | list[str],
+) -> None:
+    site = tmp_path / "sites" / "example"
+    site.mkdir(parents=True)
+    path = site / "overrides.yaml"
+    path.write_text(
+        _overlay_mod.yaml.safe_dump({"daifuku_navigation": section}),
+        encoding="utf-8",
+    )
+
+    problems = audit_tree(str(tmp_path))
+
+    assert len(problems) == 1
+    assert str(path) in problems[0]
+    assert "daifuku_navigation" in problems[0]
+
+
+def test_load_preserves_yaml_merge_override(tmp_path: Path) -> None:
+    path = tmp_path / "params.yaml"
+    path.write_text(
+        "defaults: &defaults\n  map_scale: 2\n"
+        "vi_planner:\n  ros__parameters:\n"
+        "    <<: *defaults\n    map_scale: 3\n",
+        encoding="utf-8",
+    )
+
+    body = load(path)
+
+    assert body["vi_planner"]["ros__parameters"]["map_scale"] == 3
+
+
+def test_load_preserves_nested_merge_alias(tmp_path: Path) -> None:
+    path = tmp_path / "params.yaml"
+    path.write_text(
+        "holder:\n  defaults: &defaults\n"
+        "    <<: {map_scale: 2}\n    map_scale: 3\n"
+        "vi_planner:\n  <<: *defaults\n"
+        "another:\n  <<: *defaults\n",
+        encoding="utf-8",
+    )
+
+    body = load(path)
+
+    assert body["holder"]["defaults"] == {"map_scale": 3}
+    assert body["vi_planner"] == {"map_scale": 3}
+    assert body["another"] == {"map_scale": 3}
+
+
+def test_load_rejects_duplicate_nodes_in_inline_merge(tmp_path: Path) -> None:
+    path = tmp_path / "params.yaml"
+    path.write_text(
+        "<<: {vi_planner: {ros__parameters: {map_scale: 2}}, "
+        "vi_planner: {ros__parameters: {map_scale: 3}}}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(_overlay_mod.yaml.YAMLError, match="duplicate key"):
+        load(path)
 
 
 class OverlayTest(unittest.TestCase):
