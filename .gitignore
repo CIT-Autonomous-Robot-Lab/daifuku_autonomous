@@ -24,3 +24,6 @@ src/livox_ros_driver2/
 src/value_iteration3/
 
 .env
+
+# 点群地図は別途取得する（maps/tsudanuma_3d/README.md）。
+*.pcd

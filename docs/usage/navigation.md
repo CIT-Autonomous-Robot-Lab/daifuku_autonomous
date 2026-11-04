@@ -2,6 +2,10 @@
 
 保存済み地図を読み込み、自己位置推定、経路計画、経路追従を起動します。
 
+津田沼でPCD地図によるEMCL3Dを使う入口は
+`navigation.tsudanuma_3d.launch.py`です。PCDは別途ダウンロードします。
+[取得・配置と起動手順](../../src/daifuku_maps/maps/tsudanuma_3d/README.md)を参照してください。
+
 ## tmuxで一式を起動する
 
 Raspberry Pi本体にSSHでつなぎ、保存済み地図で自律移動を始める手順です。そのまま
