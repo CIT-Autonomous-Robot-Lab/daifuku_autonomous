@@ -22,9 +22,9 @@ vi_planner:
     # 経路と追従
     max_rollout_steps: 10000     # 既定 10000: 経路生成の最大手数
     path_spacing: 0.05           # 既定 0.05 [m]: 出力経路の補間間隔
-    control_frequency: 10.0      # 既定 10.0 [Hz]: 速度指令の周期
+    control_frequency: 10.0      # 既定 10.0 [Hz]: 指令・入力処理の周期。局所計算の周期ではない
     scan_penalty_radius: 0.1     # 既定 0.1 [m]: スキャン障害物のペナルティ帯半幅
-    refine_budget_ms: 70         # 既定 40 [ms/tick]: 局所反復の時間予算
+    local_cpu_share: 0.6         # 既定 0.6: 1コア基準の局所計算CPU秒/実時間秒
     no_action_timeout_sec: 3.0   # 既定 3.0 [s]: 姿勢・方策がないときの中断時間
     local_shape: "capsule"       # 既定 square: 進行方向に沿うカプセル形
     local_xy_range: 2.5          # 既定 1.0 [m]: 追従窓の前後半径
@@ -40,7 +40,7 @@ vi_planner:
     goal_retry_limit: 3          # 既定 3: 失敗時の再試行上限
     stop_on_failure: false       # 既定 false: 失敗した点を飛ばして続行
     global_sweep: true           # 既定 true: 局所の変更を全域へ伝播
-    # global_sweep_duty: 25      # 既定 25 [%]: 全域伝播のCPU配分
+    global_cpu_share: 0.2        # 既定 0.2: 1コア基準の全域伝播CPU秒/実時間秒
     waypoint_prefetch: false     # 既定 false: 次点の先読み。4GB機では無効にする
     # waypoint_topic: "waypoints"  # 既定 waypoints: 先読み対象の順路
     # waypoint_prefetch_threads: 1  # 既定 1: compact先読みのスレッド数

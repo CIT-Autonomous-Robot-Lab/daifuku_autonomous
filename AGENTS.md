@@ -147,8 +147,9 @@ Raspberry Pi Cat を ROS 2 Humble と standalone VI で自律移動させるワ�
 - 4 GB 機では `waypoint_prefetch` を無効にします。既定の場所 `19f` も先読みを
   有効にしており、場が 2 本になります。メモリ判定は 1 本単位なので合計 OOM を防げません。
   compact の RAM 閾値はプロセス全体の上限ではありません。詳細は[設定の説明](src/daifuku_config/README.md)。
-- `global_sweep_duty` は不用意に上げません。追従と同じ Mutex を握るため、
-  コアが空いていても追従が止まります。可視化・先読み・窓の拡大も同じ観点で確認します。
+- `local_cpu_share`・`global_cpu_share` は1コア基準の独立したCPU配分です。
+  反復計算は共有Mutexの外で並行します。配分を上げる場合はCPU・メモリ帯域と、
+  可視化・先読み・窓の拡大を含めた制御周期を確認します。
   `early_start` の打ち切り場から外れると、再 solve の間は停止します。
 - `tsudanuma_mugimaru` の計画地図は順路から生成した回廊です。順路変更時は地図も再生成し、
   自由セル・連結性・画像の上下方向を検算します。PGM の行 0 は地図の y 最大側です。
