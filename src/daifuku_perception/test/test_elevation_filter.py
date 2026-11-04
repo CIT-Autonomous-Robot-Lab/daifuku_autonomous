@@ -70,6 +70,46 @@ def test_cloud_uses_receive_time_only_when_requested(
         rclpy.shutdown()
 
 
+@pytest.mark.parametrize("row_padding", [0, 4, 12])
+def test_organized_cloud_preserves_points_across_row_padding(
+    row_padding: int, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    specification = importlib.util.spec_from_file_location(
+        "tested_padded_elevation",
+        Path(__file__).resolve().parents[1] / "src/elevation_filter.py",
+    )
+    assert specification is not None and specification.loader is not None
+    module = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(module)
+    rclpy.init()
+    node = module.ElevationFilter()
+    captured: list[PointCloud2] = []
+    monkeypatch.setattr(node, "_publisher", SimpleNamespace(publish=captured.append))
+    records = [
+        struct.pack("<fff", 1.0, 0.0, 0.5),
+        struct.pack("<fff", 2.0, 0.0, 1.0),
+    ]
+    cloud = PointCloud2()
+    cloud.header.frame_id = "sensor"
+    cloud.height, cloud.width = 2, 1
+    cloud.point_step, cloud.row_step = 12, 12 + row_padding
+    cloud.fields = [
+        PointField(name=name, offset=offset, datatype=PointField.FLOAT32, count=1)
+        for name, offset in (("x", 0), ("y", 4), ("z", 8))
+    ]
+    cloud.data = b"".join(record + bytes(row_padding) for record in records)
+    try:
+        node._callback(cloud)
+
+        assert len(captured) == 1
+        assert captured[0].height == 1
+        assert captured[0].width == 2
+        assert bytes(captured[0].data) == b"".join(records)
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
 @pytest.mark.parametrize("deferred,superseded", [(False, False), (True, False), (True, True)])
 def test_elevation_uses_acquisition_rotation_without_translating_points(
     deferred: bool, superseded: bool, monkeypatch: pytest.MonkeyPatch,
