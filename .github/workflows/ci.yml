@@ -153,11 +153,12 @@ jobs:
         run: |
           uv run tools/maps/verify_corridor_orientation.py
           uv run tools/maps/verify_waypoints.py
-      - name: 順路間引きと地形補正の回帰テスト
+      - name: 順路間引き・地形補正・点群ワールドの回帰テスト
         run: |
           uv run --project tools/maps --locked --group test --extra usd --python 3.12 \
             python -m pytest -q tools/maps/tests/test_thin_tsukuba2025.py \
-              tools/maps/tests/test_add_terrain_hazards.py
+              tools/maps/tests/test_add_terrain_hazards.py \
+              tools/maps/tests/test_pcd_to_world.py
 
   simulator:
     runs-on: ubuntu-latest
