@@ -1,0 +1,30 @@
+# tsudanuma_mugimaru の計画地図・走行調整を使い、自己位置推定をEMCL3Dへ替える。
+# PCDの取得・座標整合は daifuku_maps/maps/tsudanuma_3d/README.md を参照。
+site:
+  map:
+    navigation: tsudanuma_mugimaru/navigation/tsudanuma-challenge_nav_corridor.yaml
+    localization: tsudanuma_mugimaru/localization/tsudanuma-challenge_loc.yaml
+    pointcloud: tsudanuma_3d/map_tsudanuma_aligned.pcd
+
+daifuku_perception:
+  pointcloud_to_laserscan:
+    ros__parameters:
+      max_height: 2.00  # 既定 0.50: mugimaruと同じ計画用の高さ帯
+
+daifuku_navigation:
+  velocity_smoother:
+    ros__parameters:
+      max_velocity: [1.0, 0.0, 3.14]  # 既定 [0.4, 0.0, 1.0]: mugimaruの行動上限に合わせる
+      min_velocity: [-1.0, 0.0, -3.14]  # 既定 [-0.4, 0.0, -1.0]: 上と対
+  vi_planner:
+    ros__parameters:
+      map_scale: 2  # 既定 1: mugimaruの内部解像度0.20mを維持
+      action_names: ["forward", "back", "right", "rightfwsl", "rightfw", "left", "leftfwsl", "leftfw"]  # 既定 6手: mugimaruと同じ8手
+      action_forward_m: [0.8, -0.4, 0.0, 0.4, 0.8, 0.0, 0.4, 0.8]  # 既定 6手: mugimaruの並進量
+      action_rotation_deg: [0.0, 0.0, -45.0, -45.0, -20.0, 45.0, 45.0, 20.0]  # 既定 6手: mugimaruの旋回量
+      goal_margin_radius: 1.0  # 既定 0.5: mugimaruの到達半径
+      max_rollout_steps: 100000  # 既定 10000: 大域の回り込みを許す
+      cost_drawing_threshold: 600  # 既定 60: mugimaruの表示範囲
+      early_start: true  # 既定 false: 方策が接続した時点で開始する
+      waypoint_prefetch: true  # 既定 false: mugimaru同様8GB機を前提とする
+      waypoint_prefetch_threads: 2  # 既定 1: 4コア中の先読み負荷を抑える
