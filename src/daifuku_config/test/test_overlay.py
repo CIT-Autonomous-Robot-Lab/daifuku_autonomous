@@ -208,7 +208,7 @@ class OverlayTest(unittest.TestCase):
                 overlay(base, extra)
                 params = base["vi_planner"]["ros__parameters"]
                 self.assertFalse(removed.intersection(params))
-                self.assertEqual(params["scan_penalty_radius"], 0.1)
+                self.assertEqual(params["scan_penalty_radius"], 0.4)
 
 
 if __name__ == "__main__":
