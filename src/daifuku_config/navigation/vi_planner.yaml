@@ -8,10 +8,10 @@ vi_planner:
     solver: "frontier2d_sparse_compact"  # 既定 frontier2d_sparse: 省メモリ版
     compact_ram_limit_mb: 4096    # 既定 0 [MB]: RAM上限。compact_sink_dir指定時は無効
     theta_cell_num: 60           # 既定 60: 姿勢分割数。360の約数にする
-    safety_radius: 0.4           # 既定 0.2 [m]: 障害物との余裕
-    safety_radius_penalty: 10000    # 既定 30 [秒/セル]: 障害物近傍の通過コスト
-    goal_margin_radius: 0.5      # 既定 0.3 [m]: 到達判定の距離許容差
-    goal_margin_theta: 20.0      # 既定 15.0 [deg]: 到達判定の角度許容差
+    safety_radius: 0.45           # 既定 0.2 [m]: 障害物との余裕
+    safety_radius_penalty: 10000   # 既定 30 [秒/セル]: 障害物近傍の回避を強める
+    goal_margin_radius: 0.75     # 既定 0.3 [m]: 実機調整の到達許容距離0.75 m
+    goal_margin_theta: 45.0      # 既定 15.0 [deg]: 実機調整の到達許容角度45度
     map_wait_sec: 60             # 既定 30 [s]: 地図の到着待ち
     vi_threads: 0               # 既定 0: 論理コア数を使用
     unknown_as_obstacle: true    # 既定 true: 未観測を障害物とする
@@ -27,9 +27,9 @@ vi_planner:
     local_cpu_share: 0.6         # 既定 0.6: 1コア基準の局所計算CPU秒/実時間秒
     no_action_timeout_sec: 3.0   # 既定 3.0 [s]: 姿勢・方策がないときの中断時間
     local_shape: "capsule"       # 既定 square: 進行方向に沿うカプセル形
-    local_xy_range: 2.5          # 既定 1.0 [m]: 追従窓の前後半径
+    local_xy_range: 3.0          # 既定 1.0 [m]: 追従窓を前後3 mへ広げる
     local_xy_range_lat: 2.0      # 既定 0.0 [m]: 追従窓の横半径
-    local_shape_ratio_max: 1.25  # 既定 1.5: 前後半軸の伸縮倍率上限
+    local_shape_ratio_max: 1.0   # 既定 1.5: 追従窓の前後伸縮を無効にする
     # local_shape_slew_per_sec: 1.0  # 既定 1.0 [m/s]: 追従窓の変形速度上限
     # follow_controller: "greedy"  # 既定 greedy: greedy/dwa/mppi
     # dwa_horizon_s: 1.0         # 既定 1.0 [s]: DWA・MPPIの予測時間
