@@ -204,6 +204,56 @@ API が無いので sysfs を通すしかなく、Docker は既定で `/sys` を
 コンテナを使わずホストで直接動かすこともできます。ネイティブの ROS 2 Humble は
 Ubuntu 22.04 前提で Pi 5 では使えないので、その場合も ROS 側はコンテナのままです。
 
+### EMCL3DをGPUで実行する
+
+GPU利用時は`compose.vulkan.yaml`を最後に重ねます。通常構成はCPU専用のままです。
+ホストはV3DカーネルドライバとDRM render nodeが必要です。Pi 5のGPUは
+[Mesa V3DV](https://docs.mesa3d.org/drivers/v3d.html)で使います。
+Jammy標準Mesaに依存せず、GPUイメージのarm64版ではPi 5対応Mesaをソースからビルドします。
+ホストのMesaライブラリはコンテナへコピーしません。
+
+ホストでGPUノードとそのGIDを確認し、リポジトリルートの`.env`へ設定します。
+`renderD128`とは限らないので、実際のV3Dノードを指定してください。
+
+```bash
+ls -l /dev/dri/renderD*
+stat -c '%g' /dev/dri/renderD128
+```
+
+```dotenv
+COMPOSE_FILE=docker/raspberrypi/compose.common.yaml:docker/raspberrypi/compose.original.yaml:docker/raspberrypi/compose.vulkan.yaml
+DRI_RENDER_DEVICE=/dev/dri/renderD128
+RENDER_GID=上のstatで確認した数値
+EMCL3D_COMPUTE_BACKEND=vulkan
+```
+
+```bash
+docker compose build workspace-build
+docker compose up -d
+docker compose exec ros2 vulkaninfo --summary
+docker compose exec ros2 /ros_entrypoint.sh ros2 launch daifuku_bringup \
+  navigation.19f.launch.py localization:=emcl3d
+```
+
+`vulkaninfo`でV3DのハードウェアGPUが表示されることを確認します。
+llvmpipe/lavapipeはCPUによるソフトウェア実装なのでGPU利用の確認にはなりません。
+EMCL3DはGPUが無い場合やVulkan未ビルドの場合にエラーになり、CPUへ黙って退避しません。
+GPU利用を含むPi 5実機での性能・走行は別途確認が必要です。
+
+同じGPU対応バイナリでCPUへ切り替える場合は、起動時に明示します。
+
+```bash
+docker compose exec ros2 /ros_entrypoint.sh ros2 launch daifuku_bringup \
+  navigation.19f.launch.py localization:=emcl3d emcl3d_compute_backend:=cpu
+```
+
+GPUへ戻す指定は`emcl3d_compute_backend:=vulkan`です。切替にはnavigationの再起動が必要です。
+優先順位は起動引数、`EMCL3D_COMPUTE_BACKEND`、合成した
+`localization/emcl3d.yaml`の`compute_backend`の順です。
+GPU Composeでは環境変数の既定が`vulkan`、通常構成ではYAMLの`cpu`を使います。
+Vulkanへの依存自体をなくす場合は`.env`からGPU Composeを外して通常イメージで
+`docker compose up -d`を実行し、`workspace-build`でCPU専用に再ビルドします。
+
 ### 3. 確認する
 
 ```bash

@@ -136,6 +136,37 @@ jobs:
             -v "$GITHUB_WORKSPACE:/opt/ros_ws" \
             daifuku-autonomous:ci build-workspace
 
+  vulkan-build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v4
+      - name: Pi 5用Mesaを含むarm64 GPUイメージをビルドする
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/raspberrypi/Dockerfile
+          target: vulkan
+          load: true
+          tags: daifuku-autonomous:ci-vulkan
+          cache-from: type=gha,scope=raspberrypi-vulkan-arm64
+          cache-to: type=gha,scope=raspberrypi-vulkan-arm64,mode=max
+      - name: 固定したEMCL3DをVulkan有効でコンパイルする
+        run: |
+          docker run --rm --entrypoint bash \
+            -v "$GITHUB_WORKSPACE:/opt/ros_ws" \
+            daifuku-autonomous:ci-vulkan -lc '
+              set -eo pipefail
+              source /opt/ros/humble/setup.bash
+              vcs import . < daifuku_autonomous.repos
+              colcon build --packages-select emcl3d --parallel-workers 2 \
+                --cmake-args -DCMAKE_BUILD_TYPE=Release \
+                -DEMCL3D_ENABLE_VULKAN=ON -DBUILD_TESTING=OFF
+              test -x install/emcl3d/lib/emcl3d/emcl3d_node
+              ldd install/emcl3d/lib/emcl3d/emcl3d_node | grep libvulkan
+            '
+
   map-tools:
     runs-on: ubuntu-latest
     steps:
