@@ -32,8 +32,8 @@ emcl3d:
 
     # [x, y, z, roll, pitch, yaw]。起動時の初期姿勢 (RViz の 2D Pose Estimate で上書きする)。
     initial_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-    initial_variance: [1.0, 1.0, 1.0, 0.1, 0.1, 0.5]   # 既定 同左 [m^2, rad^2]
-    num_particles: 500                  # 既定 同左
+    initial_variance: [1.0, 1.0, 1.0, 0.00121847, 0.00121847, 1.09662271]   # 既定 [1,1,1,0.1,0.1,0.5]: roll/pitch の標準偏差 2度、yaw 60度
+    num_particles: 50                   # 既定 500: 粒子数
     num_threads: 0                      # 既定 0: CPU計算に使うスレッド数、0は全コア
     compute_backend: cpu                # 既定 cpu: Pi 5のGPU構成では起動引数でvulkanに切替
     random_seed: 1                      # 既定 同左
@@ -47,6 +47,6 @@ emcl3d:
     alpha_threshold: 0.5                # 既定 同左: 下回り続けると膨張リセット
     reset_confirmation_updates: 3       # 既定 同左
     translation_noise: [0.1, 0.1, 0.1]  # 既定 同左 [m] (標準偏差)
-    rotation_noise: [0.1, 0.1, 0.1]     # 既定 同左 [rad]
+    rotation_noise: [0.01, 0.01, 0.1]  # 既定 [0.1,0.1,0.1] [rad]: roll/pitch の拡散を yaw の 1/10 に抑える
     expansion_translation: [0.2, 0.2, 0.2]  # 既定 同左 [m]
-    expansion_rotation: [0.1, 0.1, 0.1]     # 既定 同左 [rad]
+    expansion_rotation: [0.03490659, 0.03490659, 0.17453293]  # 既定 [0.1,0.1,0.1] [rad]: roll/pitch ±2度、yaw ±10度
