@@ -1,0 +1,21 @@
+# Pi 5では common、original、vulkan の順に重ねる。
+# CPU専用構成には足さない。RENDER_GIDはホストのDRM render nodeのGID。
+services:
+  workspace-build:
+    build:
+      target: vulkan
+    image: daifuku-autonomous:humble-vulkan
+    environment:
+      EMCL3D_ENABLE_VULKAN: "ON"
+
+  ros2:
+    image: daifuku-autonomous:humble-vulkan
+    devices:
+      - "${DRI_RENDER_DEVICE:-/dev/dri/renderD128}:/dev/dri/renderD128"
+    group_add:
+      - "${RENDER_GID:?set RENDER_GID to the host DRM render node group}"
+    environment:
+      EMCL3D_COMPUTE_BACKEND: ${EMCL3D_COMPUTE_BACKEND:-vulkan}
+
+  raspicat:
+    image: daifuku-autonomous:humble-vulkan

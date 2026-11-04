@@ -4,7 +4,36 @@
 # 上げるときは人が明示的にこの sha を書き換えること。
 ARG ROS_IMAGE=ros:humble-ros-base-jammy@sha256:7bea3d9aa2483d3ca34c8e30d921b79273b0913bd7dc64bebf51d082b5d107e4
 
-FROM ${ROS_IMAGE}
+# Jammy の Mesa は Pi 5 に古いため、ARM64 だけ V3DV をソースから作る。
+# CPU ターゲットはこのステージを参照しないので Vulkan 依存を持ち込まない。
+FROM ${ROS_IMAGE} AS mesa-v3dv
+ARG TARGETARCH
+ARG BUILD_JOBS=4
+RUN mkdir -p /mesa-root \
+    && if [ "${TARGETARCH}" = arm64 ]; then \
+      apt-get update \
+      && apt-get install -y --no-install-recommends \
+        build-essential ca-certificates curl xz-utils pkg-config ninja-build \
+        python3-pip python3-mako python3-yaml python3-ply \
+        libdrm-dev libexpat1-dev libzstd-dev zlib1g-dev \
+      && pip3 install --no-cache-dir meson==1.7.0 \
+      && curl -fL https://archive.mesa3d.org/mesa-24.3.4.tar.xz -o /tmp/mesa.tar.xz \
+      && echo 'e641ae27191d387599219694560d221b7feaa91c900bcec46bf444218ed66025  /tmp/mesa.tar.xz' | sha256sum -c - \
+      && tar -xJf /tmp/mesa.tar.xz -C /tmp \
+      && meson setup /tmp/mesa-build /tmp/mesa-24.3.4 \
+        --prefix=/usr --libdir=lib/aarch64-linux-gnu --buildtype=release \
+        --wrap-mode=nofallback \
+        -Dvulkan-drivers=broadcom -Dgallium-drivers=[] -Dplatforms=[] \
+        -Dglx=disabled -Degl=disabled -Dgbm=disabled \
+        -Dopengl=false -Dgles1=disabled -Dgles2=disabled \
+        -Dllvm=disabled -Dshared-glapi=disabled -Dbuild-tests=false \
+      && meson compile -C /tmp/mesa-build -j "${BUILD_JOBS}" \
+      && DESTDIR=/mesa-root meson install -C /tmp/mesa-build \
+      && test -f "/mesa-root/usr/share/vulkan/icd.d/broadcom_icd.$(uname -m).json" \
+      && rm -rf /tmp/mesa* /var/lib/apt/lists/*; \
+    fi
+
+FROM ${ROS_IMAGE} AS runtime-base
 
 ENV DEBIAN_FRONTEND=noninteractive \
     ROS_DISTRO=humble \
@@ -193,3 +222,24 @@ RUN ldconfig \
 WORKDIR ${ROS_WS}
 ENTRYPOINT ["/ros_entrypoint.sh"]
 CMD ["bash"]
+
+# 明示的な --target vulkan だけが GPU 開発・実行依存を追加する。
+FROM runtime-base AS vulkan
+ARG TARGETARCH
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update \
+    && apt-get install -y --no-install-recommends \
+      libvulkan-dev glslang-tools vulkan-tools libdrm2 libexpat1 libzstd1 zlib1g \
+    && if [ "${TARGETARCH}" != arm64 ]; then \
+      apt-get install -y --no-install-recommends mesa-vulkan-drivers; \
+    fi
+COPY --from=mesa-v3dv /mesa-root/ /
+RUN ldconfig \
+    && if [ "$(dpkg --print-architecture)" = arm64 ]; then \
+      test -f /usr/share/vulkan/icd.d/broadcom_icd.aarch64.json \
+      && ! ldd /usr/lib/aarch64-linux-gnu/libvulkan_broadcom.so | grep 'not found'; \
+    fi
+
+# ターゲット未指定のビルドは従来どおり CPU イメージにする。
+FROM runtime-base AS runtime

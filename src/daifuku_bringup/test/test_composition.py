@@ -80,6 +80,37 @@ def test_dual_scan_uses_isolated_topics_and_localization_frame(monkeypatch, tmp_
     assert scan["restamp_scan"] == "false"
 
 
+@pytest.mark.parametrize("explicit,expected", [("", "vulkan"), ("cpu", "cpu")])
+def test_compute_backend_environment_and_explicit_override_reach_localization(
+    monkeypatch, explicit, expected,
+):
+    # Given: the GPU container default and an optional explicit CPU selection.
+    monkeypatch.setenv("EMCL3D_COMPUTE_BACKEND", "vulkan")
+    context = LaunchContext()
+    if explicit:
+        context.launch_configurations["emcl3d_compute_backend"] = explicit
+    for action in composition.generate_navigation("19f").entities:
+        if isinstance(action, DeclareLaunchArgument):
+            action.execute(context)
+    # When: the public entry resolves its component include.
+    actions = composition._assemble_navigation(context, site="19f")
+    includes = []
+    pending = list(actions)
+    while pending:
+        action = pending.pop()
+        if isinstance(action, GroupAction):
+            pending.extend(action.get_sub_entities())
+        elif isinstance(action, IncludeLaunchDescription):
+            includes.append(action)
+    arguments = [{
+        name: perform_substitutions(context, normalize_to_list_of_substitutions(value))
+        for name, value in include.launch_arguments
+    } for include in includes]
+    # Then: the environment default or explicit argument reaches the component unchanged.
+    localization = next(bundle for bundle in arguments if "emcl3d_params_file" in bundle)
+    assert localization["emcl3d_compute_backend"] == expected
+
+
 def test_navigation_sentinel_watches_new_custom_fragments(tmp_path, monkeypatch):
     from daifuku_config.config_sentinel import ConfigSentinel
     from launch.actions import OpaqueFunction

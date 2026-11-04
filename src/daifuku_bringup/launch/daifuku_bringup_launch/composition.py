@@ -108,6 +108,7 @@ def _assemble_navigation(context: LaunchContext, *, site: str | None):
     ]}
     localization_names = LOCALIZATION_PARAMETER_ARGUMENTS + (
         "map_loc", "map_pcd", "emcl2_executable", "emcl2_node_name", "leveling",
+        "emcl3d_compute_backend",
     )
     localization = common | {
         name: LaunchConfiguration(name) for name in localization_names

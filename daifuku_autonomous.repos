@@ -10,7 +10,7 @@ repositories:
   src/emcl3d:
     type: git
     url: https://github.com/NOPLAB/emcl3d.git
-    version: e4df332cfc9fc78c01af1dc991579a9b9558b534
+    version: 559eb63d067659185e928c748ef058c119bf34f0
   src/value_iteration3:
     type: git
     url: https://github.com/NOPLAB/value_iteration3.git
