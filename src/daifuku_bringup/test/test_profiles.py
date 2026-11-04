@@ -17,6 +17,7 @@ import os
 
 from daifuku_bringup_launch import composition
 from daifuku_config import params
+from daifuku_navigation_launch import nav2_params
 from launch import LaunchContext
 from launch.actions import DeclareLaunchArgument, OpaqueFunction, SetLaunchConfiguration
 from launch_ros.actions import Node
@@ -24,8 +25,16 @@ import pytest
 
 
 @pytest.mark.parametrize("site", params.available_overrides())
-def test_installed_site_composes_its_maps_and_one_watcher(site):
+def test_installed_site_composes_its_maps_and_one_watcher(site, monkeypatch, tmp_path):
     # Given: installed settings/assets and the actual fixed-site entry defaults.
+    # PCD assets are acquired separately, so use a file at that boundary in CI.
+    pcd = tmp_path / "map.pcd"
+    pcd.touch()
+    map_path = nav2_params._map_path
+    monkeypatch.setattr(
+        nav2_params, "_map_path",
+        lambda declared: str(pcd) if str(declared).endswith(".pcd") else map_path(declared),
+    )
     context = LaunchContext()
     for action in composition.generate_navigation(site).entities:
         if isinstance(action, DeclareLaunchArgument):
@@ -49,3 +58,6 @@ def test_installed_site_composes_its_maps_and_one_watcher(site):
     assert os.path.isfile(context.launch_configurations["map_loc"])
     assert len(watchers) == 1
     assert os.path.isfile(context.launch_configurations["params_file"])
+    if site == "tsudanuma_3d":
+        assert context.launch_configurations["localization"] == "emcl3d"
+        assert context.launch_configurations["map_pcd"] == str(pcd)
