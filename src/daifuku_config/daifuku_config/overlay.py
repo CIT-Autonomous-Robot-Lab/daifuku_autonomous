@@ -43,10 +43,35 @@ KNOWN_PACKAGES = tuple(CONFIG_DIRS)
 RESERVED_SECTIONS = ("site",)
 
 
+class _UniqueKeyLoader(yaml.SafeLoader):
+    """明示した重複キーを拒否し、YAML merge による上書きは保つ。"""
+
+    def construct_mapping(self, node, deep=False):
+        keys = set()
+        for key_node, _ in node.value:
+            if key_node.tag == "tag:yaml.org,2002:merge":
+                continue
+            key = self.construct_object(key_node, deep=deep)
+            try:
+                duplicate = key in keys
+                keys.add(key)
+            except TypeError as err:
+                raise yaml.constructor.ConstructorError(
+                    "while constructing a mapping", node.start_mark,
+                    "found unhashable key", key_node.start_mark,
+                ) from err
+            if duplicate:
+                raise yaml.constructor.ConstructorError(
+                    "while constructing a mapping", node.start_mark,
+                    f"found duplicate key {key!r}", key_node.start_mark,
+                )
+        return super().construct_mapping(node, deep=deep)
+
+
 def load(path):
     """YAML を dict として読む (空ファイルは {})。"""
-    with open(path, "rb") as f:
-        body = yaml.safe_load(f.read().decode("utf-8"))
+    with open(path, encoding="utf-8") as f:
+        body = yaml.load(f, Loader=_UniqueKeyLoader)
     if body is None:
         return {}
     if not isinstance(body, dict):
@@ -80,6 +105,10 @@ def check_sections(body, label):
             "です。どの launch も自分のパッケージ名の部分木しか読まないので、"
             "名前を間違えるとエラーも警告も出ないまま消えます。"
         )
+    for package in KNOWN_PACKAGES:
+        section = body.get(package)
+        if section is not None and not isinstance(section, dict):
+            raise RuntimeError(f"{label}: {package}: 設定の節は mapping が必要です")
 
 
 def select(body, label, package):
@@ -172,7 +201,7 @@ def audit_tree(config_dir):
     problems = []
     overrides_dir = os.path.join(config_dir, "sites")
     for path in sorted(glob.glob(os.path.join(overrides_dir, "*", "overrides.yaml"))):
-        label = os.path.basename(path)
+        label = path
         try:
             body = load(path)
             check_sections(body, label)
