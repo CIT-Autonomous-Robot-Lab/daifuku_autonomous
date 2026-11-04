@@ -18,11 +18,13 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+import xml.etree.ElementTree as ET
 
 import pytest
 
 from daifuku_sim.cli import main
 from daifuku_sim.vtc import cli as vtc_cli
+from daifuku_sim import worlds
 
 
 @pytest.mark.parametrize('arguments', [
@@ -32,6 +34,7 @@ from daifuku_sim.vtc import cli as vtc_cli
     ['vtc', 'run', '--help'],
     ['vtc', 'video', '--help'],
     ['tsukuba2025', '--help'],
+    ['19f', '--help'],
 ])
 def test_help_needs_no_simulator_or_video_dependencies(arguments: list[str]) -> None:
     # Given: an independent interpreter with no simulator dependencies imported.
@@ -86,9 +89,14 @@ def test_invalid_commands_fail_before_creating_run_data(
 @pytest.mark.parametrize('legacy', [False, True])
 def test_run_dispatch_preserves_result_and_exit_code(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], legacy: bool,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Given: an explicit invalid asset checkout, requiring no external services.
     run_dir = tmp_path / 'run'
+    builtin_world = tmp_path / 'worlds' / 'vtc'
+    builtin_world.mkdir(parents=True)
+    (builtin_world / 'world.sdf').write_text('<sdf version="1.6"/>')
+    monkeypatch.setattr(worlds, 'WORLDS', builtin_world.parent)
     arguments = [
         '--usim-root', str(tmp_path / 'missing'),
         '--run-dir', str(run_dir),
@@ -118,3 +126,27 @@ def test_video_dispatch_reports_missing_input_without_creating_output(
     assert code == 2
     assert capsys.readouterr().err
     assert not output.exists()
+
+
+@pytest.mark.parametrize('name', ['19f', 'warehouse', 'second_floor'])
+def test_world_name_dispatches_to_its_own_sdf(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str,
+) -> None:
+    directory = tmp_path / name
+    directory.mkdir()
+    world = directory / 'world.sdf'
+    world.write_text(f'<sdf version="1.6"><world name="{name}"/></sdf>')
+    monkeypatch.setattr(worlds, 'WORLDS', tmp_path)
+    loaded = []
+
+    def launch(path: Path, options: worlds.WorldOptions) -> int:
+        loaded.append(ET.parse(path).find('world').attrib['name'])
+        assert options.headless
+        return 7
+
+    monkeypatch.setattr(worlds, 'run_world', launch)
+
+    code = main([name, '--headless'])
+
+    assert code == 7
+    assert loaded == [name]

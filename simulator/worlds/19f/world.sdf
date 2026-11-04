@@ -1,0 +1,71 @@
+<?xml version='1.0' encoding='utf-8'?>
+<sdf version="1.6">
+  <world name="19f">
+    <gravity>0 0 -9.81</gravity>
+    <physics name="default" type="ode">
+      <max_step_size>0.001</max_step_size>
+      <real_time_update_rate>1000</real_time_update_rate>
+    </physics>
+    <scene>
+      <ambient>0.65 0.65 0.65 1</ambient>
+      <background>0.75 0.8 0.85 1</background>
+    </scene>
+    <light name="sun" type="directional">
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <direction>-0.4 0.2 -1</direction>
+    </light>
+    <gui>
+      <camera name="overview">
+        <pose>38 -45 35 0 0.65 2.3</pose>
+      </camera>
+    </gui>
+    <model name="pcd_surface">
+      <static>true</static>
+      <link name="surface">
+        <visual name="visual">
+          <geometry>
+            <mesh>
+              <uri>meshes/19f.stl</uri>
+            </mesh>
+          </geometry>
+          <material>
+            <ambient>0.65 0.72 0.8 1</ambient>
+            <diffuse>0.65 0.72 0.8 1</diffuse>
+          </material>
+        </visual>
+        <collision name="collision">
+          <geometry>
+            <mesh>
+              <uri>meshes/19f.stl</uri>
+            </mesh>
+          </geometry>
+        </collision>
+      </link>
+    </model>
+    <model name="support_floor">
+      <static>true</static>
+      <link name="surface">
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>48.385963439941406 41.422725677490234 0.1</size>
+            </box>
+          </geometry>
+          <pose>4.1074018478393555 -8.068359375 -0.05 0 0 0</pose>
+          <material>
+            <ambient>0.3 0.3 0.32 1</ambient>
+            <diffuse>0.3 0.3 0.32 1</diffuse>
+          </material>
+        </visual>
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>48.385963439941406 41.422725677490234 0.1</size>
+            </box>
+          </geometry>
+          <pose>4.1074018478393555 -8.068359375 -0.05 0 0 0</pose>
+        </collision>
+      </link>
+    </model>
+  </world>
+</sdf>

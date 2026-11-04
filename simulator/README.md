@@ -6,6 +6,32 @@ daifuku の SLAM で地図を作ってから、その地図で emcl2 + VI standa
 
 ## 起動
 
+19fの実測PCDから生成したワールドは`worlds/19f/world.sdf`に置く。
+元のXYZを10cmボクセルの表面メッシュへ変換し、描画と衝突で共用する。
+疎な床点群を補う支持平面を`z=0`に追加しており、補完内容と点群のSHA256は
+`worlds/19f/manifest.json`に記録する。点群の穴・ノイズは残る。
+VTCとは別のワールドで、ロボットや自律走行を自動起動しない。
+
+リポジトリルートからワールドだけを表示する:
+
+```bash
+uv run --project simulator --locked daifuku-sim 19f
+```
+
+`vtc`・`tsukuba2025`以外の名前は`worlds/<名前>/world.sdf`から自動検出する。
+同名のディレクトリがあっても組み込みシナリオを優先する。
+Linuxではインストール済みGazebo Classicを、WindowsではWSLの`Ubuntu-22.04`を使う。
+Windowsのディストリビューションは`--wsl-distro`または`DAIFUKU_WSL_DISTRO`で指定できる。
+GUI不要なら`19f --headless`を指定する。終了はGUIを閉じるかCtrl+C。
+
+再生成はリポジトリルートで次を実行する。PCDはGit管理外なので別途配置し、
+既存ディレクトリを上書きしないよう、新しい出力先を指定する。
+
+```bash
+uv run --project tools/maps python tools/maps/pcd_to_world.py \
+    src/daifuku_maps/maps/19f/map_19f.pcd --output simulator/runs/19f-new
+```
+
 Python 依存の `usim` と `usim-gazebo` は、`pyproject.toml` で
 `https://github.com/NOPLAB/usim.git` のコミット
 `a7d97a9542f8939e6e7b80e8c901ab9eff229148` に固定している。

@@ -1,0 +1,29 @@
+{
+  "schema": "daifuku-pcd-world/1",
+  "source": "C:\\Users\\nop\\dev\\lab\\daifuku_autonomous\\src\\daifuku_maps\\maps\\19f\\map_19f.pcd",
+  "source_sha256": "4b87fbcd4a5ce6f659fd8549c09ebbb09a27d56ef912432f9e3a629c2fafea8f",
+  "source_points": 123354,
+  "finite_points": 123354,
+  "source_bounds_m": [
+    [
+      -19.085580825805664,
+      -27.779722213745117,
+      -2.4569544792175293
+    ],
+    [
+      27.300384521484375,
+      11.643004417419434,
+      6.535237789154053
+    ]
+  ],
+  "voxel_size_m": 0.1,
+  "occupied_voxels": 87418,
+  "triangles": 679488,
+  "coordinates": "source XYZ in metres, Z up; no rotation, translation or rescaling",
+  "reconstruction": "occupied voxels; no denoising, height extrusion or hole filling",
+  "support_floor": {
+    "top_z_m": 0.0,
+    "inferred": true,
+    "reason": "sparse measured floor cannot continuously support robot wheels"
+  }
+}

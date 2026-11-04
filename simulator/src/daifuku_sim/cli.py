@@ -25,11 +25,13 @@ class CommandOptions(argparse.Namespace):
 def build_parser() -> argparse.ArgumentParser:
     from .vtc.cli import configure_parser
     from .tsukuba2025.cli import configure_parser as configure_course
+    from .worlds import register_worlds
 
     parser = argparse.ArgumentParser(description='Run daifuku simulation scenarios.')
     scenarios = parser.add_subparsers(dest='scenario')
     configure_parser(scenarios.add_parser('vtc', help='VTC mapping and navigation'))
     configure_course(scenarios.add_parser('tsukuba2025', help='Complete 2025 course with Mid-360 point clouds'))
+    register_worlds(scenarios)
     return parser
 
 
