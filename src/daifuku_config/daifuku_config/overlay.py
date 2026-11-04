@@ -46,12 +46,18 @@ RESERVED_SECTIONS = ("site",)
 class _UniqueKeyLoader(yaml.SafeLoader):
     """明示した重複キーを拒否し、YAML merge による上書きは保つ。"""
 
-    def construct_mapping(self, node, deep=False):
+    def __init__(self, stream):
+        super().__init__(stream)
+        self._validated_mappings = set()
+
+    def flatten_mapping(self, node):
+        if node in self._validated_mappings:
+            return
         keys = set()
         for key_node, _ in node.value:
             if key_node.tag == "tag:yaml.org,2002:merge":
                 continue
-            key = self.construct_object(key_node, deep=deep)
+            key = self.construct_object(key_node)
             try:
                 duplicate = key in keys
                 keys.add(key)
@@ -65,7 +71,8 @@ class _UniqueKeyLoader(yaml.SafeLoader):
                     "while constructing a mapping", node.start_mark,
                     f"found duplicate key {key!r}", key_node.start_mark,
                 )
-        return super().construct_mapping(node, deep=deep)
+        self._validated_mappings.add(node)
+        super().flatten_mapping(node)
 
 
 def load(path):

@@ -93,6 +93,35 @@ def test_load_preserves_yaml_merge_override(tmp_path: Path) -> None:
     assert body["vi_planner"]["ros__parameters"]["map_scale"] == 3
 
 
+def test_load_preserves_nested_merge_alias(tmp_path: Path) -> None:
+    path = tmp_path / "params.yaml"
+    path.write_text(
+        "holder:\n  defaults: &defaults\n"
+        "    <<: {map_scale: 2}\n    map_scale: 3\n"
+        "vi_planner:\n  <<: *defaults\n"
+        "another:\n  <<: *defaults\n",
+        encoding="utf-8",
+    )
+
+    body = load(path)
+
+    assert body["holder"]["defaults"] == {"map_scale": 3}
+    assert body["vi_planner"] == {"map_scale": 3}
+    assert body["another"] == {"map_scale": 3}
+
+
+def test_load_rejects_duplicate_nodes_in_inline_merge(tmp_path: Path) -> None:
+    path = tmp_path / "params.yaml"
+    path.write_text(
+        "<<: {vi_planner: {ros__parameters: {map_scale: 2}}, "
+        "vi_planner: {ros__parameters: {map_scale: 3}}}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(_overlay_mod.yaml.YAMLError, match="duplicate key"):
+        load(path)
+
+
 class OverlayTest(unittest.TestCase):
 
     def test_overlay_deep_merges_dicts_and_replaces_lists(self):
