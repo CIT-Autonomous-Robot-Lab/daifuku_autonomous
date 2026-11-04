@@ -65,6 +65,7 @@ ros2 launch daifuku_bringup navigation.tsukuba2026.launch.py
 | `config_watch` | `shutdown` | 起動後に設定ファイルが書き変わったときどうするか。`shutdown`（既定）は大声で言ったうえで**このlaunchを終了する**（`navigation`は人が立てたものなので、上げ直す人は居ません）。`warn`は言うだけ、`off`は見張り（`config_sentinel`）ごと立てない。見張るのはその場所のnavigation・localization・perceptionの設定と、使用中プロファイルが明示したファイル。[日常操作](operations.md#走らせたまま設定を直したとき) |
 | `emcl2_params_file` | `src/daifuku_config/localization/emcl2.yaml` | EMCL2パラメータ |
 | `emcl3d_params_file` | `src/daifuku_config/localization/emcl3d.yaml` | EMCL3Dパラメータ |
+| `emcl3d_compute_backend` | 空（環境変数`EMCL3D_COMPUTE_BACKEND`、未設定ならYAML） | `cpu` / `vulkan`。明示時はYAMLより優先。GPUビルドとPi 5の設定は[Pi 5](../setup/raspberry-pi-5.md#emcl3dをgpuで実行する)を参照 |
 | `map_pcd` | 空（`overrides`の`site: map: pointcloud:`から導く） | `localization:=emcl3d`が読む点群地図（PCD）のパス。明示すると宣言と同じファイルかを見る。**`emcl3d`で決まらなければ起動時に止まる**。他の`localization`では読まない |
 | `bond_params_file` | `src/daifuku_config/navigation/lifecycle_bond.yaml` | ライフサイクルマネージャのbondタイムアウト |
 | `localization` | `emcl2` | `emcl2` / `emcl` / `emcl3d` / `amcl` / `vi` |

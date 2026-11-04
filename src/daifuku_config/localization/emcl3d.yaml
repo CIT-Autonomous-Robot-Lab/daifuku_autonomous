@@ -34,6 +34,8 @@ emcl3d:
     initial_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     initial_variance: [1.0, 1.0, 1.0, 0.1, 0.1, 0.5]   # 既定 同左 [m^2, rad^2]
     num_particles: 500                  # 既定 同左
+    num_threads: 0                      # 既定 0: CPU計算に使うスレッド数、0は全コア
+    compute_backend: cpu                # 既定 cpu: Pi 5のGPU構成では起動引数でvulkanに切替
     random_seed: 1                      # 既定 同左
     resample_ess_ratio: 0.5             # 既定 同左
     sigma_hit: 0.3                      # 既定 同左 [m]

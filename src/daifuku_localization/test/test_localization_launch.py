@@ -19,7 +19,9 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchContext
 from launch.utilities import normalize_to_list_of_substitutions, perform_substitutions
 from launch_ros.actions import Node
+from launch_ros.utilities import evaluate_parameters
 import pytest
+import yaml
 
 
 @pytest.fixture
@@ -58,6 +60,7 @@ def test_selected_estimator_reads_localization_scan(component, backend, estimato
         "map_pcd": "/localization.pcd", "emcl2_package": "emcl2",
         "emcl2_executable": "emcl2_node", "emcl2_node_name": "emcl2",
         "localization_scan_topic": "/scan_loc",
+        "emcl3d_compute_backend": "",
         **{name: str(configuration) for name in (
             "amcl_params_file", "emcl2_params_file", "emcl3d_params_file",
         )},
@@ -73,3 +76,27 @@ def test_selected_estimator_reads_localization_scan(component, backend, estimato
     if backend != "emcl3d":
         assert ("scan", "/scan_loc") in selected.expanded_remapping_rules
         assert ("map", "map_loc") in selected.expanded_remapping_rules
+
+
+@pytest.mark.parametrize("backend", ["", "cpu", "vulkan"])
+def test_emcl3d_compute_selection_overrides_yaml_only_when_explicit(component, backend, tmp_path):
+    # Given: a YAML selection distinct from an explicit CPU override.
+    configuration = tmp_path / "parameters.yaml"
+    configuration.write_text("emcl3d:\n  ros__parameters:\n    compute_backend: vulkan\n")
+    context = LaunchContext()
+    context.launch_configurations.update({
+        "localization": "emcl3d", "use_sim_time": "false", "use_respawn": "false",
+        "log_level": "info", "map_pcd": "/map.pcd",
+        "emcl3d_params_file": str(configuration), "emcl3d_compute_backend": backend,
+    })
+    # When: the actual Node action resolves its parameters.
+    node = component.localization_nodes(context)[0]
+    evaluated = evaluate_parameters(context, node._Node__parameters)
+    resolved = {}
+    for entry in evaluated:
+        if isinstance(entry, Path):
+            resolved.update(yaml.safe_load(entry.read_text())["emcl3d"]["ros__parameters"])
+        else:
+            resolved.update(entry)
+    # Then: an empty argument preserves YAML; an explicit selection takes precedence.
+    assert resolved["compute_backend"] == (backend or "vulkan")

@@ -14,7 +14,7 @@
 
 import os
 
-from daifuku_config import params, value
+from daifuku_config import env_default, params, value
 from launch import LaunchContext, LaunchDescription
 from launch.actions import DeclareLaunchArgument, GroupAction, OpaqueFunction
 from launch.conditions import IfCondition
@@ -61,9 +61,11 @@ def localization_nodes(context: LaunchContext):
                              ("scan", LC("localization_scan_topic"))], **common,
         ))
     else:
+        backend = value(context, "emcl3d_compute_backend")
+        compute = [{"compute_backend": backend}] if backend else []
         actions.append(Node(
             package="emcl3d", executable="emcl3d_node", name="emcl3d",
-            parameters=[LC("emcl3d_params_file"), sim, {"map_path": LC("map_pcd")}],
+            parameters=[LC("emcl3d_params_file"), sim, {"map_path": LC("map_pcd")}, *compute],
             remappings=tf + [("particlecloud", "particle_cloud")], **common,
         ))
     if managed:
@@ -88,6 +90,10 @@ def generate_launch_description():
         DeclareLaunchArgument("emcl2_params_file", default_value=os.path.join(root, "emcl2.yaml")),
         DeclareLaunchArgument(
             "emcl3d_params_file", default_value=os.path.join(root, "emcl3d.yaml")),
+        DeclareLaunchArgument(
+            "emcl3d_compute_backend",
+            default_value=env_default("EMCL3D_COMPUTE_BACKEND", ""),
+            choices=["", "cpu", "vulkan"]),
         DeclareLaunchArgument("emcl2_package", default_value="emcl2"),
         DeclareLaunchArgument("emcl2_executable", default_value="emcl2_node"),
         DeclareLaunchArgument("emcl2_node_name", default_value="emcl2"),

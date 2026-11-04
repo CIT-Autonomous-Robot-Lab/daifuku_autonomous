@@ -115,6 +115,7 @@ colcon build --base-paths src --merge-install --symlink-install \
     --packages-skip "${SKIP_PACKAGES[@]}" \
     --cargo-args --profile release \
     --cmake-args -DROS_EDITION=ROS2 \
+                 -DEMCL3D_ENABLE_VULKAN="${EMCL3D_ENABLE_VULKAN:-OFF}" \
                  -DDISTRO_ROS="${ROS_DISTRO}" \
                  "-DCMAKE_LIBRARY_PATH=/opt/ros/${ROS_DISTRO}/lib;/usr/lib/${MULTIARCH};/lib/${MULTIARCH}" \
                  "-DCMAKE_INCLUDE_PATH=/usr/include;/usr/include/eigen3;/usr/include/pcl-1.12" \
