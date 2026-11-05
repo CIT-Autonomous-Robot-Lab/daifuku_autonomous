@@ -1,4 +1,9 @@
 <library path="daifuku_waypoint_manager">
+  <class name="daifuku_waypoint_manager/GlobalEstimatePose"
+         type="daifuku_waypoint_manager::GlobalEstimatePoseTool"
+         base_class_type="rviz_common::Tool">
+    <description>Searches the map using the emcl3d global localization action.</description>
+  </class>
   <class name="daifuku_waypoint_manager/WaypointManagerPanel"
          type="daifuku_waypoint_manager::WaypointManagerPanel"
          base_class_type="rviz_common::Panel">

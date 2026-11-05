@@ -50,3 +50,29 @@ emcl3d:
     rotation_noise: [0.01, 0.01, 0.1]  # 既定 [0.1,0.1,0.1] [rad]: roll/pitch の拡散を yaw の 1/10 に抑える
     expansion_translation: [0.2, 0.2, 0.2]  # 既定 同左 [m]
     expansion_rotation: [0.03490659, 0.03490659, 0.17453293]  # 既定 [0.1,0.1,0.1] [rad]: roll/pitch ±2度、yaw ±10度
+
+    global_localization:
+      run_on_startup: false             # 既定 false: 起動時の全域探索
+      apply_result: true                # 既定 true: 成功した推定を適用
+      search_mode: xy_yaw               # 既定 xy_yaw: XYとyawを探索
+      fixed_z_roll_pitch: [0.0, 0.0, 0.0]  # 既定 [0.0, 0.0, 0.0]: 固定z[m]とroll/pitch[rad]
+      search_bounds: [0.0, 0.0, 0.0, 0.0]  # 既定 [0.0, 0.0, 0.0, 0.0]: 全ゼロでPCDのXY範囲
+      yaw_range: [-3.141592653589793, 3.141592653589793]  # 既定 同左: 探索角度[rad]
+      num_candidates: 100000           # 既定 100000: 粗探索の候補数
+      max_eval_points: 2000            # 既定 2000: 候補ごとの観測点上限
+      batch_size: 256                  # 既定 256: 一度に評価する候補数
+      num_hypotheses: 10               # 既定 10: 保持する競合仮説数
+      refinement_levels: 3             # 既定 3: 局所探索の反復数
+      free_cells_only: true            # 既定 true: 既知の自由空間だけに配置
+      free_space_topic: /map           # 既定 map: emcl3d構成でも配信される計画用地図の自由空間
+      occupancy_threshold: 50          # 既定 50: 未知セルを除き、この値未満を自由とする
+      footprint_radius: 0.3            # 既定 0.3: 自由空間に収める機体半径[m]
+      min_inlier_ratio: 0.6            # 既定 0.6: 採用する一致点率の下限
+      max_mean_squared_error: 0.15      # 既定 0.15: 打ち切り平均二乗距離の上限[m²]
+      ambiguity_score_margin: 0.02     # 既定 0.02: 競合仮説とのスコア差
+      mode_separation_xy: 1.0          # 既定 1.0: 別仮説とするXY距離[m]
+      mode_separation_yaw: 0.5         # 既定 0.5: 別仮説とするyaw差[rad]
+      max_position_stddev: 0.5         # 既定 0.5: 採用する位置標準偏差の上限[m]
+      max_yaw_stddev: 0.2              # 既定 0.2: 採用するyaw標準偏差の上限[rad]
+      startup_wait_timeout: 30.0       # 既定 30.0: 観測と自由空間の入力待ち[s]
+      timeout: 30.0                    # 既定 30.0: 探索時間の上限[s]
