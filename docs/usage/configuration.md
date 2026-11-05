@@ -188,7 +188,7 @@ daifuku_perception:         # /scan を作る段。変更後は navigation / map
 daifuku_navigation:
   vi_planner:               # -> src/daifuku_config/navigation/vi_planner.yaml（params_fileの合成結果）
     ros__parameters:
-      safety_radius_penalty: 1
+      map_penalty: 1
 
 daifuku_localization:
   emcl2:                    # -> src/daifuku_config/localization/emcl2.yaml

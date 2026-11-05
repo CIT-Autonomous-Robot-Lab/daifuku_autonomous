@@ -271,6 +271,7 @@ ros2 launch daifuku_bringup navigation.19f.launch.py velocity_smoother:=false
 スキャンから書いたペナルティを全域伝播（`global_sweep`、既定で有効）が広域の経路まで
 広げます。狭域・広域は独立したworkerで常時反復し、収束後も再確認します。
 CPU配分は1コア基準で`local_cpu_share: 0.6`、`global_cpu_share: 0.2`です。
+局所は有限の正値で1を超えると補助スレッドを使えます。広域は`0 < share <= 1`です。
 実際のスレッドCPU時間で休止量を決め、制御周期やロック待ちは計算時間と区別します。
 初回solve・先読み・自己位置推定・制御のCPU使用量はこの配分に含みません。
 
@@ -474,17 +475,17 @@ vi_planner: dropped the truncated value function (early_start) after 30 ticks wi
 いまcompactなのは津田沼だけです）の確定は値バンド単位でしか進まず、
 バンド幅は`4 × 1手で進む最大セル数 × 最大ペナルティ`です
 （`frontier2d_sparse_compact.rs`の`couple_margin`）。`19f`の
-0.1 m/セル・`action_forward_m` 0.5 m・`safety_radius_penalty: 30`なら
+0.1 m/セル・`action_forward_m` 0.5 m・`map_penalty: 30`なら
 4×5×30＝600ステップ、1ステップ0.5 mなので**300 m相当**になります。**これは式に
 値を入れただけで、実測ではありません**（バンド幅の実測は取っていません）。
 地図の値域が丸ごと1バンドに収まると波2つで解き終わってしまい、打ち切る隙がありません。
 このとき**エラーも警告も出ず、ただ何も短くなりません**。建物1フロア程度の広さは
 こちら側の見込みで、効くのは津田沼のような広域地図です（津田沼は0.25 m/セル・
-`safety_radius_penalty: 1`なので4×2×1＝8ステップ）。**2地図とも`true`にしてあります。
+`map_penalty: 1`なので4×2×1＝8ステップ）。**2地図とも`true`にしてあります。
 19Fは密へ戻したのでバンドが無くなり、効くようになりました**（上の600ステップの話は
 compactだった頃のものです）。前進量とペナルティを下げても
 `map_scale`を上げてもバンドは狭くなり、効きやすくなります（津田沼が
-`safety_radius_penalty: 1`なのは別の理由——貪欲ロールアウトが降下できないため——ですが、
+`map_penalty: 1`なのは別の理由——貪欲ロールアウトが降下できないため——ですが、
 バンドもそのぶん狭くなります）。効いたかは上のログの`cut short` /
 `truncated`で判断してください。
 
