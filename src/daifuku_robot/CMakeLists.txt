@@ -3,6 +3,13 @@ project(daifuku_robot)
 
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_python REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
+
+add_executable(imu_throttle src/imu_throttle.cpp)
+target_compile_features(imu_throttle PRIVATE cxx_std_17)
+ament_target_dependencies(imu_throttle rclcpp sensor_msgs)
+install(TARGETS imu_throttle DESTINATION lib/${PROJECT_NAME})
 
 ament_python_install_package(daifuku_robot_launch
   PACKAGE_DIR launch/daifuku_robot_launch
@@ -30,6 +37,9 @@ install(FILES
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
+  find_package(launch_testing_ament_cmake REQUIRED)
+  add_launch_test(test/test_imu_throttle_launch.py TIMEOUT 60
+    ENV ROS_DOMAIN_ID=77 ROS_LOCALHOST_ONLY=1)
 endif()
 
 ament_package()
