@@ -164,6 +164,7 @@ jobs:
                 --cmake-args -DCMAKE_BUILD_TYPE=Release \
                 -DEMCL3D_ENABLE_VULKAN=ON -DBUILD_TESTING=OFF
               test -x install/emcl3d/lib/emcl3d/emcl3d_node
+              source install/setup.bash
               ldd install/emcl3d/lib/emcl3d/emcl3d_node | grep libvulkan
             '
 
