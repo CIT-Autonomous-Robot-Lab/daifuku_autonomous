@@ -148,6 +148,7 @@ Raspberry Pi Cat を ROS 2 Humble と standalone VI で自律移動させるワ�
   有効にしており、場が 2 本になります。メモリ判定は 1 本単位なので合計 OOM を防げません。
   compact の RAM 閾値はプロセス全体の上限ではありません。詳細は[設定の説明](src/daifuku_config/README.md)。
 - `local_cpu_share`・`global_cpu_share` は1コア基準の独立したCPU配分です。
+  局所は有限の正値で 1 を超えると補助スレッドを使えます。広域は `0 < share <= 1` です。
   反復計算は共有Mutexの外で並行します。配分を上げる場合はCPU・メモリ帯域と、
   可視化・先読み・窓の拡大を含めた制御周期を確認します。
   `early_start` の打ち切り場から外れると、再 solve の間は停止します。

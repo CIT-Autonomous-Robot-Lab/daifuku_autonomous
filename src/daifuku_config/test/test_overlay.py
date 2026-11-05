@@ -200,7 +200,10 @@ class OverlayTest(unittest.TestCase):
 
     def test_navigation_layers_use_supported_vi_parameters(self):
         root = Path(__file__).resolve().parents[1]
-        removed = {"goal_tolerance_xy", "goal_tolerance_deg", "waypoint_pause_sec"}
+        removed = {
+            "goal_tolerance_xy", "goal_tolerance_deg", "waypoint_pause_sec",
+            "safety_radius", "safety_radius_penalty",
+        }
         for path in sorted((root / "sites").glob("*/overrides.yaml")):
             with self.subTest(site=path.parent.name):
                 base = load(root / "navigation" / "vi_planner.yaml")
@@ -209,6 +212,12 @@ class OverlayTest(unittest.TestCase):
                 params = base["vi_planner"]["ros__parameters"]
                 self.assertFalse(removed.intersection(params))
                 self.assertEqual(params["scan_penalty_radius"], 0.4)
+                self.assertEqual(params["scan_penalty"], 10000)
+                self.assertEqual(params["map_penalty_radius"], 0.45)
+                self.assertEqual(
+                    params["map_penalty"],
+                    1 if path.parent.name == "tsukuba2026" else 10000,
+                )
 
 
 if __name__ == "__main__":

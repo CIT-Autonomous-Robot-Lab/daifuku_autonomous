@@ -8,8 +8,10 @@ vi_planner:
     solver: "frontier2d_sparse_compact"  # 既定 frontier2d_sparse: 省メモリ版
     compact_ram_limit_mb: 4096    # 既定 0 [MB]: RAM上限。compact_sink_dir指定時は無効
     theta_cell_num: 60           # 既定 60: 姿勢分割数。360の約数にする
-    safety_radius: 0.45           # 既定 0.2 [m]: 障害物との余裕
-    safety_radius_penalty: 10000   # 既定 30 [秒/セル]: 障害物近傍の回避を強める
+    map_penalty_radius: 0.45     # 既定 0.2 [m]: 地図障害物のペナルティ帯半径
+    map_penalty: 10000          # 既定 10000: 地図障害物近傍のペナルティ
+    scan_penalty_radius: 0.4    # 既定 0.1 [m]: スキャン障害物のペナルティ帯半幅
+    scan_penalty: 10000         # 既定 10000: スキャンのペナルティ。0で無効
     goal_margin_radius: 0.75     # 既定 0.3 [m]: 実機調整の到達許容距離0.75 m
     goal_margin_theta: 45.0      # 既定 15.0 [deg]: 実機調整の到達許容角度45度
     map_wait_sec: 60             # 既定 30 [s]: 地図の到着待ち
@@ -23,7 +25,6 @@ vi_planner:
     max_rollout_steps: 10000     # 既定 10000: 経路生成の最大手数
     path_spacing: 0.05           # 既定 0.05 [m]: 出力経路の補間間隔
     control_frequency: 10.0      # 既定 10.0 [Hz]: 指令・入力処理の周期。局所計算の周期ではない
-    scan_penalty_radius: 0.4     # 既定 0.1 [m]: スキャン障害物のペナルティ帯半幅
     local_cpu_share: 0.6         # 既定 0.6: 1コア基準の局所計算CPU秒/実時間秒
     no_action_timeout_sec: 3.0   # 既定 3.0 [s]: 姿勢・方策がないときの中断時間
     local_shape: "capsule"       # 既定 square: 進行方向に沿うカプセル形
