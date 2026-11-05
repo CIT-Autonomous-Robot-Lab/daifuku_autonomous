@@ -42,7 +42,7 @@ Mid-360       : /livox/lidar | → elevation_filter.py（仰角フィルタ）
                 → /livox/lidar_elevation → pointcloud_to_laserscan
                 → /scan_mid360_prestamp → restamp_scan.py
                 → /scan_raw → 角度フィルタ → /scan
-IMU（Mid-360）: /livox/imu → throttle（50指定、実測44Hz）
+IMU（Mid-360）: /livox/imu → imu_throttle（BEST_EFFORT、最大50Hz）
                 → /livox/imu_throttled → prepare_mid360_imu.py
                 → /imu/mid360 ┐
                               ├ ekf_node
@@ -53,8 +53,10 @@ IMU（Mid-360）: /livox/imu → throttle（50指定、実測44Hz）
 IMUだけ間引きが入るのは、rclpyが1通受けるたびに払う代金が重いためです。生の200 Hzを
 `prepare_mid360_imu.py`に直に食わせるとPi 4で1コアの24%を使い、そのうち自前の計算は
 1.7ポイントしかありません（残りは受信21ポイント・送信2.4ポイント。2026-08-09実測）。
-C++の`topic_tools throttle`を挟むと合計10%に落ちます。EKFは`frequency: 30.0`なので
-44 Hzで足ります。**この`throttle`が落ちると`/imu/mid360`ごと止まり、EKFは`imu0`が
+C++の`imu_throttle`で最大50 Hzに間引き、Python側の受信負荷を抑えます。
+入出力はBEST_EFFORT・深さ1で、古いIMUの再送待ちを避けます。元のスタンプや測定値は変えません。
+EKFは`frequency: 30.0`なので、この入力周期で足ります。
+**この`imu_throttle`が落ちると`/imu/mid360`ごと止まり、EKFは`imu0`が
 一度も来ないまま車輪だけで回ります**（エラーも警告も出ません）。
 
 **LiDARの帯（仰角と高さ）は場所ごとの`sites/<場所>/overrides.yaml`にあります。** navigationは

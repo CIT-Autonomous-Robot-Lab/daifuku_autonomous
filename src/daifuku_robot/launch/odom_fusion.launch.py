@@ -77,24 +77,20 @@ def generate_launch_description():
     odom_topic = LaunchConfiguration("odom_topic")
     base_frame = LaunchConfiguration("base_frame")
 
-    # Mid-360 の IMU は 200 Hz 固定 (ドライバ側に間引く口は無く、lddc.cpp の
-    # PollingLidarImuData がキューを空になるまで吐く)。その 200 Hz を Python の
-    # prepare_mid360_imu に直に食わせると Pi 4 で 1 コアの 24% を持っていく——
-    # **中身の計算ではなく rclpy がメッセージを 1 通受けるたびに払う代金**で、
-    # 何もしない購読だけで 21%、自前の処理はそのうち 1.7 ポイントしかない
-    # (2026-08-09 実測)。C++ のここで間引いて 10% に落とす (throttle 4.5 +
-    # prepare 5.4)。EKF は frequency: 30.0 なので 50 指定 (実測 44 Hz) で足りる。
-    # **落ちると /imu/mid360 ごと止まり、EKF は imu0 が一度も来ないまま車輪だけで
-    # 回る (エラーも警告も出ない)。** 立ち上がりの順序は問わない——generic
-    # subscription が入力トピックの出現を待つ (無い状態で 25 秒待たせても拾う)。
+    # 生の 200 Hz を C++ で最大 50 Hz に間引き、Python 前処理の負荷を抑える。
+    # BEST_EFFORT・深さ 1 で最新値を取り、RELIABLE の再送待ちを避ける。
+    # 元のメッセージとスタンプは保持する。bias_samples は間引き後の周期が前提。
     imu_throttle = Node(
         condition=IfCondition(use_mid360_imu),
-        package="topic_tools",
-        executable="throttle",
+        package="daifuku_robot",
+        executable="imu_throttle",
         name="imu_throttle",
         output="screen",
         parameters=[{"use_sim_time": use_sim_time}],
-        arguments=["messages", "/livox/imu", "50.0", "/livox/imu_throttled"],
+        remappings=[
+            ("imu_in", "/livox/imu"),
+            ("imu_out", "/livox/imu_throttled"),
+        ],
     )
 
     # Livox が出す IMU をそのまま EKF に入れられる形へ直す。ジャイロの電源投入時

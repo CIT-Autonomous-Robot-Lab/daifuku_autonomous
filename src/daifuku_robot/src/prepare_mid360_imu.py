@@ -37,7 +37,7 @@ three things have to happen before the EKF sees it.
 
 Topics are the relative imu_in / imu_out, remapped by
 odom_fusion.launch.py -- the same shape as restamp_scan.py.  imu_in is
-**not** the raw /livox/imu: a topic_tools throttle thins its 200 Hz down
+**not** the raw /livox/imu: imu_throttle thins its 200 Hz down
 first, because rclpy's per-message cost is what makes this node
 expensive, not the arithmetic below.  bias_samples assumes that thinned
 rate.
