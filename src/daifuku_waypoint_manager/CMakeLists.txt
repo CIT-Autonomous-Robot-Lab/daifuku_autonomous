@@ -7,6 +7,7 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(action_msgs REQUIRED)
+find_package(emcl3d REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav2_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
@@ -28,6 +29,7 @@ add_library(${PROJECT_NAME} SHARED
   include/daifuku_waypoint_manager/initial_pose_preset_panel.hpp
   src/waypoint_manager_panel.cpp
   src/initial_pose_preset_panel.cpp
+  src/global_estimate_pose_tool.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC
@@ -37,6 +39,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 
 ament_target_dependencies(${PROJECT_NAME}
   action_msgs
+  emcl3d
   geometry_msgs
   nav2_msgs
   nav_msgs
@@ -62,6 +65,12 @@ install(DIRECTORY config/ DESTINATION share/${PROJECT_NAME}/config)
 install(FILES plugin_description.xml DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_global_estimate_pose_tool test/test_global_estimate_pose_tool.cpp)
+  ament_target_dependencies(test_global_estimate_pose_tool emcl3d pluginlib rclcpp_action rviz_common)
+  target_link_libraries(test_global_estimate_pose_tool Qt5::Widgets)
+  set_tests_properties(test_global_estimate_pose_tool PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;ROS_DOMAIN_ID=77;ROS_LOCALHOST_ONLY=1")
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
 endif()

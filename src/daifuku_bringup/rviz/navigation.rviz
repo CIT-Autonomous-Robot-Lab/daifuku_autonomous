@@ -386,6 +386,7 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /initialpose
+    - Class: daifuku_waypoint_manager/GlobalEstimatePose
     - Class: rviz_default_plugins/SetGoal
       Topic:
         Depth: 5

@@ -8,6 +8,13 @@ RViz2 上で waypoint を作り、並べ替え・YAML 保存/読込を行い、v
 
 ## 初期姿勢プリセット
 
+`navigation.rviz` の **2D Pose Estimate** の隣に **Global Estimate Pose** を置きます。
+押すと `/emcl3d/global_localization` へ非同期に探索を要求します。探索範囲と結果の適用は
+emcl3d の設定に従い、`/initialpose` へは再送しません。ダイアログと Tool Properties の
+Status に進捗・適用の有無・失敗理由を表示します。**Cancel search** はこの探索だけを
+取り消します。**Close** は表示だけを閉じ、探索中にツールを再度押すと同じ進捗を開きます。
+ビルドには `emcl3d/action/GlobalLocalization` を提供する emcl3d が必要です。
+
 `navigation.rviz` には `initial_pose_preset_panel/InitialPosePresetPanel` も設定済みです。
 **2D Pose Estimate** で `/initialpose` を指定し、名前を入れて **Add Current** で保存、
 **Apply** で再送します。**Add Robot Pose** は現在の `map → base_link` TF を保存します。
