@@ -12,18 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Protect the reviewed map's explicit edit bounds and separate localization layer."""
+"""提供地図の画素・座標と、VIの格子上の到着条件を検査する。"""
 
-from dataclasses import dataclass
 import hashlib
-import json
 import math
 from pathlib import Path
 
 import numpy as np
-from numpy.typing import NDArray
-from PIL import Image
-from scipy import ndimage
+import pytest
 import yaml
 
 
@@ -31,136 +27,45 @@ ROOT = Path(__file__).resolve().parents[3]
 MAPS = ROOT / "src/daifuku_maps/maps/tsukuba2026"
 
 
-@dataclass(frozen=True, slots=True)
-class Stroke:
-    points: tuple[tuple[float, float], ...]
-    radius_m: float
+@pytest.mark.parametrize("name,digest", [
+    ("tsukuba2026.pgm", "35d4c51ac08f2627cf293da762482a8bff3231e3e98c04b0af94bc7487ccce44"),
+    ("tsukuba2026_modified.pgm", "3206507d8a33592f62d0c6c7fbde28e775bf4193dc06636dc128f7dbeb689df4"),
+])
+def test_provided_map_pixels_are_preserved(name: str, digest: str) -> None:
+    # Given: independent fingerprints of the supplied original and edited maps.
+    # When: the shipped asset is read.
+    actual = hashlib.sha256((MAPS / name).read_bytes()).hexdigest()
+    # Then: importing or renaming assets cannot silently change their pixels.
+    assert actual == digest
 
 
-def raster(path: Path) -> NDArray[np.uint8]:
-    with Image.open(path) as image:
-        assert image.mode == "L"
-        return np.array(image, dtype=np.uint8)
-
-
-def in_strokes(points: NDArray[np.float64], strokes: tuple[Stroke, ...],
-               resolution: float) -> NDArray[np.bool_]:
-    """Independently check metric distances, not Pillow's drawing coordinates."""
-    inside = np.zeros(len(points), dtype=np.bool_)
-    for stroke in strokes:
-        vertices = np.array(stroke.points)
-        limit = stroke.radius_m + math.sqrt(2)*resolution
-        for start, end in zip(vertices, vertices[1:]):
-            direction = end-start
-            fraction = np.clip((points-start) @ direction / (direction @ direction), 0, 1)
-            closest = start+fraction[:, None]*direction
-            inside |= np.sum((points-closest)**2, axis=1) <= limit**2
-    return inside
-
-
-def test_reviewed_pixels_follow_the_explicit_edit_mask() -> None:
-    # Given: the preserved source and the two declared manual actions.
-    manifest = json.loads((MAPS / "navigation_manual_edits.json").read_text())
-    source = raster(MAPS / manifest["source_image"])
-    mask = raster(MAPS / "navigation_reviewed_edit_mask.png")
-    expected = source.copy()
-    expected[mask > 0] = 254
-    # When: the shipped navigation raster is decoded.
-    actual = raster(MAPS / "navigation_reviewed.pgm")
-    # Then: only declared occupied/unknown cells were replaced, never a no-op.
-    assert set(np.unique(mask)) == {0, 1, 2}
-    assert np.all(source[mask == 1] == 0)
-    assert np.all(source[mask == 2] == 205)
-    np.testing.assert_array_equal(actual, expected)
-
-
-def test_fixed_regions_and_localization_remain_unchanged() -> None:
-    # Given: protected fixed geometry and the pre-review localization fingerprint.
-    manifest = json.loads((MAPS / "navigation_manual_edits.json").read_text())
-    source = raster(MAPS / manifest["source_image"])
-    protected = raster(MAPS / "navigation_reviewed_protected_mask.png") > 0
-    # When: the delivered navigation/localization assets are read.
-    actual = raster(MAPS / "navigation_reviewed.pgm")
-    localization = (MAPS / "localization_denoised.pgm").read_bytes()
-    # Then: fixed pixels and the entire localization image are preserved.
-    np.testing.assert_array_equal(actual[protected], source[protected])
-    assert hashlib.sha256(localization).hexdigest() == manifest["localization_preserved_sha256"]
-
-
-def test_edit_coordinates_stay_inside_the_hand_reviewed_strokes() -> None:
-    # Given: strokes expressed in world XY and independently decoded changed cells.
-    manifest = json.loads((MAPS / "navigation_manual_edits.json").read_text())
-    mask = raster(MAPS / "navigation_reviewed_edit_mask.png")
-    resolution = manifest["resolution"]
-    ox, oy = manifest["origin"][:2]
-    # When: image row centres are transformed using the ROS map convention.
-    for value, field in ((1, "clear_transient_traces"), (2, "restore_pavement")):
-        rows, columns = np.nonzero(mask == value)
-        points = np.column_stack((ox+(columns+.5)*resolution,
-                                  oy+(mask.shape[0]-rows-.5)*resolution))
-        strokes = tuple(
-            Stroke(tuple((float(p[0]), float(p[1])) for p in item["points"]),
-                   float(item["width_m"])/2) for item in manifest[field]
-        )
-        # Then: no flipped, shifted, or globally applied edit can pass.
-        assert np.all(in_strokes(points, strokes, resolution))
-
-
-def test_pavement_interpolation_requires_ground_support() -> None:
-    # Given: actual low-surface support, with occupied source cells excluded.
-    manifest = json.loads((MAPS / "navigation_manual_edits.json").read_text())
-    source = raster(MAPS / manifest["source_image"])
-    support = raster(MAPS / manifest["ground_support_image"]) > 0
-    mask = raster(MAPS / "navigation_reviewed_edit_mask.png")
-    # When: support distances are measured in the unchanged native grid.
-    distance = np.empty(source.shape, dtype=np.float64)
-    ndimage.distance_transform_edt(~support, sampling=manifest["resolution"], distances=distance)
-    # Then: neither unsupported floor nor an occupied support seed is accepted.
-    assert not np.any(support & (source == 0))
-    assert np.all(distance[mask == 1] <= manifest["maximum_source_ground_distance_m"]+1e-9)
-    assert np.all(distance[mask == 2] <= manifest["maximum_pavement_support_distance_m"]+1e-9)
-
-
-def test_preview_frame_and_profile_match_the_reviewed_map() -> None:
-    # Given: the original coordinate frame and selected two-map profile.
-    source = yaml.safe_load((MAPS / "navigation_connected.yaml").read_text())
-    actual = yaml.safe_load((MAPS / "navigation_reviewed.yaml").read_text())
-    profile = yaml.safe_load((ROOT / "src/daifuku_config/sites/tsukuba2026/overrides.yaml").read_text())
-    # When: the viewer preview and machine-consumed metadata are decoded.
-    pgm = raster(MAPS / actual["image"])
-    png = raster(MAPS / "navigation_reviewed.png")
-    # Then: viewing cannot disguise geometry changes or switch localization.
-    np.testing.assert_array_equal(pgm, png)
-    for field in ("resolution", "origin", "negate", "occupied_thresh", "free_thresh"):
-        assert actual[field] == source[field]
-    assert profile["site"]["map"] == {
-        "navigation": "tsukuba2026/navigation_cityhall.yaml",
-        "localization": "tsukuba2026/localization_denoised.yaml",
+def test_navigation_and_localization_keep_the_provided_world_frame() -> None:
+    # Given: the selected maps and the supplied coordinate metadata.
+    profile = yaml.safe_load((ROOT / "src/daifuku_config/sites/tsukuba2026/overrides.yaml").read_text(encoding="utf-8"))
+    # When: the public profile's map references are resolved.
+    maps = profile["site"]["map"]
+    navigation = yaml.safe_load((MAPS.parent / maps["navigation"]).read_text(encoding="utf-8"))
+    localization = yaml.safe_load((MAPS.parent / maps["localization"]).read_text(encoding="utf-8"))
+    # Then: planning uses the edit, localization uses the original in the same frame.
+    assert maps == {
+        "navigation": "tsukuba2026/tsukuba2026_modified.yaml",
+        "localization": "tsukuba2026/tsukuba2026.yaml",
+        "pointcloud": "tsukuba2026/tsukuba2026.pcd",
     }
-
-
-def test_cityhall_crop_preserves_pixels_and_glim_world_coordinates() -> None:
-    # Given: a native-resolution full map and the bounded planning map.
-    original = yaml.safe_load((MAPS / "navigation_reviewed.yaml").read_text())
-    selected = yaml.safe_load((MAPS / "navigation_cityhall.yaml").read_text())
-    source = np.flipud(raster(MAPS / original["image"]))
-    actual = np.flipud(raster(MAPS / selected["image"]))
-    # When: the new origin is transformed into original map cell offsets.
-    offset = (np.array(selected["origin"][:2])-original["origin"][:2])/original["resolution"]
-    columns, rows = np.rint(offset).astype(int)
-    np.testing.assert_allclose(offset, [columns, rows], atol=1e-9, rtol=0)
-    # Then: cropping changes extent, not any world-coordinate cell or threshold.
-    np.testing.assert_array_equal(actual, source[rows:rows+actual.shape[0],
-                                                columns:columns+actual.shape[1]])
-    np.testing.assert_array_equal(np.flipud(actual), raster(MAPS / "navigation_cityhall.png"))
-    for field in ("resolution", "negate", "occupied_thresh", "free_thresh"):
-        assert selected[field] == original[field]
+    assert navigation["image"] == "tsukuba2026_modified.pgm"
+    assert localization["image"] == "tsukuba2026.pgm"
+    assert navigation | {"image": localization["image"]} == localization
+    assert localization["resolution"] == 0.05
+    assert localization["origin"] == [-239.888, -81.802, 0.0]
+    assert localization["negate"] == 0
+    assert localization["occupied_thresh"] == 0.65
+    assert localization["free_thresh"] == 0.25
 
 
 def test_vi_arrival_region_supports_two_cell_transition_outcomes() -> None:
     # Given: the configured planner resolution and machine-consumed goal radius.
-    metadata = yaml.safe_load((MAPS / "navigation_reviewed.yaml").read_text())
-    profile = yaml.safe_load((ROOT / "src/daifuku_config/sites/tsukuba2026/overrides.yaml").read_text())
+    metadata = yaml.safe_load((MAPS / "tsukuba2026_modified.yaml").read_text(encoding="utf-8"))
+    profile = yaml.safe_load((ROOT / "src/daifuku_config/sites/tsukuba2026/overrides.yaml").read_text(encoding="utf-8"))
     parameters = profile["daifuku_navigation"]["vi_planner"]["ros__parameters"]
     resolution = metadata["resolution"] * parameters.get("map_scale", 1)
     radius = parameters["goal_margin_radius"]
@@ -181,7 +86,7 @@ def test_vi_arrival_region_supports_two_cell_transition_outcomes() -> None:
 def test_vi_arrival_angles_cover_every_discrete_action_phase() -> None:
     # Given: the actual heading cells and all configured rotation actions.
     base = yaml.safe_load((ROOT / "src/daifuku_config/navigation/vi_planner.yaml").read_text(encoding="utf-8"))
-    site = yaml.safe_load((ROOT / "src/daifuku_config/sites/tsukuba2026/overrides.yaml").read_text())
+    site = yaml.safe_load((ROOT / "src/daifuku_config/sites/tsukuba2026/overrides.yaml").read_text(encoding="utf-8"))
     parameters = (base["vi_planner"]["ros__parameters"] |
                   site["daifuku_navigation"]["vi_planner"]["ros__parameters"])
     count = int(parameters["theta_cell_num"])
@@ -208,8 +113,8 @@ def test_vi_arrival_angles_cover_every_discrete_action_phase() -> None:
 
 def test_translation_lengths_progress_without_skipping_native_cells() -> None:
     # Given: the selected planner cell size and each nonzero translation.
-    metadata = yaml.safe_load((MAPS / "navigation_cityhall.yaml").read_text())
-    profile = yaml.safe_load((ROOT / "src/daifuku_config/sites/tsukuba2026/overrides.yaml").read_text())
+    metadata = yaml.safe_load((MAPS / "tsukuba2026_modified.yaml").read_text(encoding="utf-8"))
+    profile = yaml.safe_load((ROOT / "src/daifuku_config/sites/tsukuba2026/overrides.yaml").read_text(encoding="utf-8"))
     parameters = profile["daifuku_navigation"]["vi_planner"]["ros__parameters"]
     resolution = float(np.float32(metadata["resolution"]))*parameters.get("map_scale", 1)
     # When: a full subcell/heading distribution is translated.

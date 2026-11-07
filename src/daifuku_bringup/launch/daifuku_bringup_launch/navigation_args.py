@@ -67,7 +67,7 @@ def declare_navigation_arguments(site: str | None) -> list[DeclareLaunchArgument
         "emcl2_params_file": os.path.join(loc, "emcl2.yaml"),
         "emcl3d_params_file": os.path.join(loc, "emcl3d.yaml"),
         "emcl3d_compute_backend": env_default("EMCL3D_COMPUTE_BACKEND", ""),
-        "localization": "emcl3d" if site == "tsudanuma_3d" else "emcl2",
+        "localization": "emcl3d" if site in ("tsudanuma_3d", "tsukuba2026") else "emcl2",
         "emcl2_package": "emcl2",
         "emcl2_executable": "emcl2_node",
         "emcl2_node_name": "emcl2",

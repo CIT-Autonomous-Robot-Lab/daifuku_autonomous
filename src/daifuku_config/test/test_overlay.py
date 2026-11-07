@@ -214,10 +214,19 @@ class OverlayTest(unittest.TestCase):
                 self.assertEqual(params["scan_penalty_radius"], 0.4)
                 self.assertEqual(params["scan_penalty"], 10000)
                 self.assertEqual(params["map_penalty_radius"], 0.45)
-                self.assertEqual(
-                    params["map_penalty"],
-                    1 if path.parent.name == "tsukuba2026" else 10000,
-                )
+                self.assertEqual(params["map_penalty"], 10000)
+                if path.parent.name == "tsukuba2026":
+                    reference = load(root / "navigation" / "vi_planner.yaml")
+                    overlay(
+                        reference,
+                        load(root / "sites" / "tsudanuma_3d" / "overrides.yaml")[
+                            "daifuku_navigation"
+                        ],
+                    )
+                    expected = reference["vi_planner"]["ros__parameters"]
+                    self.assertEqual(params["map_scale"], 5)
+                    expected["map_scale"] = 5
+                    self.assertEqual(params, expected)
 
 
 if __name__ == "__main__":
