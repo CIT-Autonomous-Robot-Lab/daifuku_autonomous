@@ -58,6 +58,6 @@ def test_installed_site_composes_its_maps_and_one_watcher(site, monkeypatch, tmp
     assert os.path.isfile(context.launch_configurations["map_loc"])
     assert len(watchers) == 1
     assert os.path.isfile(context.launch_configurations["params_file"])
-    if site == "tsudanuma_3d":
+    if site in ("tsudanuma_3d", "tsukuba2026"):
         assert context.launch_configurations["localization"] == "emcl3d"
         assert context.launch_configurations["map_pcd"] == str(pcd)

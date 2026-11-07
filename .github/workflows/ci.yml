@@ -51,13 +51,15 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            cargo python3-pip python3-pytest python3-numpy ros-humble-ament-cmake-python ros-humble-ament-cmake-pytest \
+            cargo git-lfs python3-pip python3-pytest python3-numpy ros-humble-ament-cmake-python ros-humble-ament-cmake-pytest \
             ros-humble-ament-lint-auto ros-humble-ament-cmake-copyright \
             ros-humble-ament-cmake-flake8 ros-humble-ament-cmake-lint-cmake \
             ros-humble-ament-cmake-xmllint ros-humble-launch-testing \
             ros-humble-launch-testing-ament-cmake ros-humble-nav2-common \
             ros-humble-diagnostic-updater ros-humble-tf2-ros
           pip3 install colcon-cargo colcon-ros-cargo
+      - name: Git LFS の地図を取得する
+        run: git lfs pull
       - name: 自前の機能パッケージと公開入口をビルドする
         run: |
           . /opt/ros/humble/setup.sh
@@ -117,6 +119,8 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
       - uses: docker/setup-buildx-action@v4
       - name: 実機用 Docker イメージをビルドする
         uses: docker/build-push-action@v7
@@ -172,6 +176,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
       - name: uv を入れる
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
