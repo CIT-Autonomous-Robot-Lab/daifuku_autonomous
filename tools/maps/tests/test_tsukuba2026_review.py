@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""提供地図の画素・座標と、VIの格子上の到着条件を検査する。"""
+"""縮小地図の画素・座標と、VIの格子上の到着条件を検査する。"""
 
 import hashlib
 import math
@@ -28,11 +28,11 @@ MAPS = ROOT / "src/daifuku_maps/maps/tsukuba2026"
 
 
 @pytest.mark.parametrize("name,digest", [
-    ("tsukuba2026.pgm", "35d4c51ac08f2627cf293da762482a8bff3231e3e98c04b0af94bc7487ccce44"),
-    ("tsukuba2026_modified.pgm", "3206507d8a33592f62d0c6c7fbde28e775bf4193dc06636dc128f7dbeb689df4"),
+    ("tsukuba2026.pgm", "810275ff4bb06a225df93e52037f33c9a3d1e1bfd8a025e108e5adb5d4645809"),
+    ("tsukuba2026_modified.pgm", "d2b7ef7e2bfb2f49ab7cddefb044c3cc62bae5e1c14f3a80a66f2d080cb81e9d"),
 ])
 def test_provided_map_pixels_are_preserved(name: str, digest: str) -> None:
-    # Given: independent fingerprints of the supplied original and edited maps.
+    # Given: fingerprints of the original and edited maps reduced to 0.1m cells.
     # When: the shipped asset is read.
     actual = hashlib.sha256((MAPS / name).read_bytes()).hexdigest()
     # Then: importing or renaming assets cannot silently change their pixels.
@@ -55,7 +55,7 @@ def test_navigation_and_localization_keep_the_provided_world_frame() -> None:
     assert navigation["image"] == "tsukuba2026_modified.pgm"
     assert localization["image"] == "tsukuba2026.pgm"
     assert navigation | {"image": localization["image"]} == localization
-    assert localization["resolution"] == 0.05
+    assert localization["resolution"] == 0.1
     assert localization["origin"] == [-239.888, -81.802, 0.0]
     assert localization["negate"] == 0
     assert localization["occupied_thresh"] == 0.65

@@ -172,7 +172,7 @@ def test_scan_defaults_follow_clock_and_driver_selection(
             action.execute(context)
     selected = context.launch_configurations
     # Then: split scans keep the leveled frame and disable default drivers in simulation.
-    separate_scan = site in ("tsukuba2025", "tsukuba2026")
+    separate_scan = site == "tsukuba2025"
     driver_enabled = driver_default == "true" and not (
         separate_scan and use_sim_time == "true"
     )

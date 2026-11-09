@@ -32,7 +32,7 @@ SCAN_PARAMETER_ARGUMENTS = (
 
 def uses_separate_localization_scan(site: str | None) -> bool:
     """走行用と自己位置推定用でスキャンを分ける場所。"""
-    return site in ("tsukuba2025", "tsukuba2026")
+    return site == "tsukuba2025"
 
 
 def declare_navigation_arguments(site: str | None) -> list[DeclareLaunchArgument]:

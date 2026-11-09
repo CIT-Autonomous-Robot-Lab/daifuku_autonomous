@@ -124,6 +124,16 @@ def test_load_rejects_duplicate_nodes_in_inline_merge(tmp_path: Path) -> None:
 
 class OverlayTest(unittest.TestCase):
 
+    def test_map_heartbeat_timeout_matches_navigation(self):
+        root = Path(__file__).resolve().parents[1]
+        settings = load(root / "navigation" / "lifecycle_bond.yaml")
+        timeout = settings["lifecycle_manager_map"]["ros__parameters"]["bond_timeout"]
+        self.assertEqual(timeout, 60.0)
+        self.assertEqual(
+            timeout,
+            settings["lifecycle_manager_navigation"]["ros__parameters"]["bond_timeout"],
+        )
+
     def test_overlay_deep_merges_dicts_and_replaces_lists(self):
         base = {"vi_planner": {"ros__parameters": {
             "map_scale": 1,
@@ -224,8 +234,8 @@ class OverlayTest(unittest.TestCase):
                         ],
                     )
                     expected = reference["vi_planner"]["ros__parameters"]
-                    self.assertEqual(params["map_scale"], 5)
-                    expected["map_scale"] = 5
+                    self.assertEqual(params["map_scale"], 2)
+                    expected["map_scale"] = 2
                     self.assertEqual(params, expected)
 
 

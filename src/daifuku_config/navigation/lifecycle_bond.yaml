@@ -1,8 +1,10 @@
 # ライフサイクルマネージャの bond タイムアウト。
 # 「既定」= nav2_lifecycle_manager (humble) の lifecycle_manager.cpp。
-# navigation.launch.py の SetParametersFromFile で、include 先
-# (nav2 navigation_launch.py) のマネージャにも注入される。
-# 経緯は README.md の「値の由来」を参照。
+# navigation/localization.launch.py の SetParametersFromFile で適用する。
+
+lifecycle_manager_map:
+  ros__parameters:
+    bond_timeout: 60.0    # 既定 4.0 [s]: 高負荷時のmap_server心拍遅延を許容する
 
 lifecycle_manager_navigation:
   ros__parameters:
@@ -12,7 +14,7 @@ lifecycle_manager_localization:
   ros__parameters:
     bond_timeout: 60.0    # 既定 4.0 [s]: 同上
 
-# ── 未設定 (既定のまま。両マネージャ共通) ──
+# ── 未設定 (既定のまま。各マネージャ共通) ──
 # node_names: [...]                    # 管理するノード名の並び。nav2 の launch が渡す
 # autostart: false                     # 起動時に自動で activate まで進めるか。launch の autostart:= が渡す
 # bond_respawn_max_duration: 10.0      # [s] 落ちたノードの再出現を待つ上限。超えると bringup を諦める
