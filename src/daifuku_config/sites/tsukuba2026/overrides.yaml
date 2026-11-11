@@ -1,31 +1,29 @@
-# GLIM measured map. The coordinate system is not the VTC2025 course frame.
-# Use navigation_tsukuba2026.launch.py for independent localization/navigation scans.
+# 提供された2026地図を使う。2025や旧GLIM地図の順路は共用しない。
+# 地図とmap_scale以外はtsudanuma_3dとそろえる。
 site:
   map:
-    navigation: tsukuba2026/navigation_cityhall.yaml  # /map: native-resolution reviewed city-hall extent.
-    localization: tsukuba2026/localization_denoised.yaml  # /map_loc: surfaces up to 5.5m.
+    navigation: tsukuba2026/tsukuba2026_modified.yaml  # /map: 提供された編集済み地図
+    localization: tsukuba2026/tsukuba2026.yaml  # /map_loc: 提供された元地図
+    pointcloud: tsukuba2026/tsukuba2026.pcd
 
-daifuku_localization:
-  emcl2:
+daifuku_perception:
+  pointcloud_to_laserscan:
     ros__parameters:
-      base_frame_id: localization_gravity       # Same frame as the localization projection.
-      footprint_frame_id: localization_gravity  # Colocated with base_footprint.
-      laser_likelihood_max_dist: 0.2            # Two 0.1m cells of wall support.
-      alpha_threshold: 0.0                     # Match the upward-ray pipeline used in 2025.
-      odom_fw_dev_per_fw: 0.01                  # Initial profile from 2025; not field-tuned.
-      odom_rot_dev_per_fw: 0.01                 # Initial profile from 2025; not field-tuned.
-      odom_rot_dev_per_rot: 0.01                # Initial profile from 2025; not field-tuned.
+      max_height: 2.00  # 既定 0.50: tsudanuma_3dと同じ計画用の高さ帯
 daifuku_navigation:
   vi_planner:
     ros__parameters:
-      map_penalty: 1                            # 既定 10000: 狭路での貪欲ロールアウトの振動を抑える
-      goal_margin_radius: 0.45                  # Keep a multi-cell final region for sampled transitions.
-      goal_margin_theta: 24.0                   # Include a heading-cell guard at floating-point boundaries.
-      value_publish_interval_ms: -1             # Disable the full value-field visualization.
-      early_start: true                         # Return once the route is solved; bound far-field work.
-      vi_threads: 4                             # Same foreground worker count as 2025.
-      stop_on_failure: true                     # Do not skip failed route points.
-      action_forward_m: [0.15, -0.15, 0.0, 0.15, 0.0, 0.15]  # 1.5 native cells; symmetric forward/back.
+      map_scale: 2  # 既定 1: 0.1mの地図をtsudanuma_3dと同じ内部0.20mで使う
+      action_names: ["forward", "back", "right", "rightfwsl", "rightfw", "left", "leftfwsl", "leftfw"]  # 既定 6手: mugimaruと同じ8手
+      action_forward_m: [0.8, -0.4, 0.0, 0.4, 0.8, 0.0, 0.4, 0.8]  # 既定 6手: mugimaruの並進量
+      action_rotation_deg: [0.0, 0.0, -45.0, -45.0, -20.0, 45.0, 45.0, 20.0]  # 既定 6手: mugimaruの旋回量
+      goal_margin_radius: 1.0  # 既定 0.5: mugimaruの到達半径
+      max_rollout_steps: 100000  # 既定 10000: 大域の回り込みを許す
+      cost_drawing_threshold: 600  # 既定 60: mugimaruの表示範囲
+      early_start: true  # 既定 false: 方策が接続した時点で開始する
+      waypoint_prefetch: true  # 既定 false: mugimaru同様8GB機を前提とする
+      waypoint_prefetch_threads: 2  # 既定 1: 4コア中の先読み負荷を抑える
   velocity_smoother:
     ros__parameters:
-      max_velocity: [0.8, 0.0, 1.0]              # Same upper limits as the 2025 profile.
+      max_velocity: [1.0, 0.0, 3.14]  # 既定 [0.4, 0.0, 1.0]: tsudanuma_3dの行動上限に合わせる
+      min_velocity: [-1.0, 0.0, -3.14]  # 既定 [-0.4, 0.0, -1.0]: 上と対

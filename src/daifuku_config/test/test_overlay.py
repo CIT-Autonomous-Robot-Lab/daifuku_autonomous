@@ -124,6 +124,16 @@ def test_load_rejects_duplicate_nodes_in_inline_merge(tmp_path: Path) -> None:
 
 class OverlayTest(unittest.TestCase):
 
+    def test_map_heartbeat_timeout_matches_navigation(self):
+        root = Path(__file__).resolve().parents[1]
+        settings = load(root / "navigation" / "lifecycle_bond.yaml")
+        timeout = settings["lifecycle_manager_map"]["ros__parameters"]["bond_timeout"]
+        self.assertEqual(timeout, 60.0)
+        self.assertEqual(
+            timeout,
+            settings["lifecycle_manager_navigation"]["ros__parameters"]["bond_timeout"],
+        )
+
     def test_overlay_deep_merges_dicts_and_replaces_lists(self):
         base = {"vi_planner": {"ros__parameters": {
             "map_scale": 1,
@@ -214,10 +224,19 @@ class OverlayTest(unittest.TestCase):
                 self.assertEqual(params["scan_penalty_radius"], 0.4)
                 self.assertEqual(params["scan_penalty"], 10000)
                 self.assertEqual(params["map_penalty_radius"], 0.45)
-                self.assertEqual(
-                    params["map_penalty"],
-                    1 if path.parent.name == "tsukuba2026" else 10000,
-                )
+                self.assertEqual(params["map_penalty"], 10000)
+                if path.parent.name == "tsukuba2026":
+                    reference = load(root / "navigation" / "vi_planner.yaml")
+                    overlay(
+                        reference,
+                        load(root / "sites" / "tsudanuma_3d" / "overrides.yaml")[
+                            "daifuku_navigation"
+                        ],
+                    )
+                    expected = reference["vi_planner"]["ros__parameters"]
+                    self.assertEqual(params["map_scale"], 2)
+                    expected["map_scale"] = 2
+                    self.assertEqual(params, expected)
 
 
 if __name__ == "__main__":
