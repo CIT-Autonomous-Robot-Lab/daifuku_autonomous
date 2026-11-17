@@ -1,58 +1,30 @@
-# tsudanuma.yaml — 津田沼 (5888x4000 @0.05m = 294.4x200m) 用の上書き。「断片」= 重ねる先の
-# 設定ファイル (perception/, navigation/nav2/, localization/) の値。値の由来・実測
-# (solve 87 秒)・既知の制約は ../../README.md、仰角フィルタは docs/setup/lidar.md。
-#   ros2 launch daifuku_navigation navigation.launch.py
-# **この地図は密ソルバでは解けない** (scale 5 の密でも 3.17GB で OOM)。内部だけ粗くし
-# (map_scale)、compact で解く。確定出力 (sink 648MB) は RAM — **4GB 機で使うなら
-# compact_sink_dir を書き戻すこと** (退避先は tmpfs でないこと)。
-# 共通設定と異なる値だけを指定する。
-# 8 手の行動は津田沼の 2 地図だけ (19F は断片の 6 手のまま。未検証)。
-
-# ── 地図 (ノードのパラメータではない) ─────────────────────────────────────
-# navigation の map:= / map_loc:= の既定。maps/ からの相対パス。**2 行とも書くこと**。
+# 津田沼の計画用回廊地図とEMCL3Dによる自己位置推定を使う。
+# PCDの取得・座標整合は daifuku_maps/maps/tsudanuma/README.md を参照。
 site:
   map:
-    navigation:   tsudanuma/map_tsudanuma.yaml   # 経路計画 (/map)
-    localization: tsudanuma/map_tsudanuma.yaml   # 自己位置推定 (/map_loc)
+    navigation: tsudanuma/navigation/tsudanuma-challenge_nav_corridor.yaml
+    localization: tsudanuma/localization/tsudanuma-challenge_loc.yaml
+    pointcloud: tsudanuma/map_tsudanuma_aligned.pcd
 
 daifuku_perception:
-  # ── スキャンの切り出し ────────────────────────────────────────────────────
-  # 仰角 0.0 なので帯は全距離で 0.275-2.50m 固定、range_max がそのまま実効の上限になる。
-  # 仰角を 5.0 へ戻すときは、max_height をどこに置くかが帯の届く距離を決める。
   pointcloud_to_laserscan:
     ros__parameters:
-      max_height: 2.50                # 断片 0.50: 樹冠・庇・看板を落とす (2026-08-26 に 4.00 から)
+      max_height: 2.00  # 既定 0.50: 樹冠・庇・看板を落とす計画用の高さ帯
 
-  # ── emcl2 ────────────────────────────────────────────────────────────────
-  # 68.2% が未観測で占有セルが 0.4% しかなく、19F と同じ alpha 崩壊の余地があるため
-  # 値は 19f.yaml から写してある。上げるほど膨張リセットが起きやすい。偽の壁でその場で
-  # 回るなら 0.1 へ、それでも回るならリセットを切る 0.0 へ (未検証)。
-daifuku_localization:
-  emcl2:
-    ros__parameters:
-      alpha_threshold: 0.2                # 断片 0.5: 19F と同じ値。0 ではないので膨張リセットは起きる
-      expansion_radius_orientation: 0.05  # 断片 0.2: リセット時の姿勢の飛びを抑える
-
-  # ── cmd_vel の頭打ち ──────────────────────────────────────────────────────
 daifuku_navigation:
   velocity_smoother:
     ros__parameters:
-      max_velocity: [1.0, 0.0, 3.14]     # 断片 [0.4, 0.0, 1.0]: VI の前進量のクリップを外す (実速度は action_forward_m が決める)
-      min_velocity: [-1.0, 0.0, -3.14]   # 断片 [-0.4, 0.0, -1.0]: 上と対
-
-  # ── 価値反復プランナ ──────────────────────────────────────────────────────
-  # map_scale / downsample_policy / action_forward_m / goal_margin_radius は**セットで
-  # 効く**。1 つでも欠けると波がゴール近傍で止まる。scale 6 は楽観でも解けない。
-  # action_names / _forward_m / _rotation_deg は**同じ長さでないと起動時に落ちる**。
+      max_velocity: [1.0, 0.0, 3.14]  # 既定 [0.4, 0.0, 1.0]: 行動上限に合わせる
+      min_velocity: [-1.0, 0.0, -3.14]  # 既定 [-0.4, 0.0, -1.0]: 上と対
   vi_planner:
     ros__parameters:
-      map_scale: 5                         # 既定 1: 内部だけ 0.25m/cell (5650 万状態)
-      downsample_policy: "optimistic"      # 既定 conservative: 保守側だと通路のセル幅が死ぬ
-      action_names: ["forward", "back", "right", "rightfw", "rightfwsl", "left", "leftfw", "leftfwsl"]  # 既定 6 手: 旋回前進を速い/遅いの 2 段にするため fwsl を足した (2026-08-26。未検証)
-      action_forward_m: [0.8, -0.4, 0.0, 0.4, 0.8, 0.0, 0.4, 0.8]  # 断片 6 手: 直進0.8m、旋回前進0.4/0.8m
-      action_rotation_deg: [0.0, 0.0, -45.0, -45.0, -20.0, 45.0, 45.0, 20.0]  # 断片 6 手: 据え切り・低速旋回45度、高速旋回20度
-      max_rollout_steps: 100000            # 断片 10000: 広域では遠い start から届かない
-      cost_drawing_threshold: 600          # 断片 60: 表示専用。色スケール上限 [ステップ≒秒] ≒480m (未計測)
-      early_start: true                    # 断片 false: 方策が繋がった時点で計算を打ち切る
-      waypoint_prefetch: true              # 断片 false: 次点を先読みする。4GB機では無効にする
-      waypoint_prefetch_threads: 2         # 既定 1: 先読みを2スレッドで計算する
+      map_scale: 2  # 既定 1: 内部解像度0.20mを維持
+      action_names: ["forward", "back", "right", "rightfwsl", "rightfw", "left", "leftfwsl", "leftfw"]  # 既定 6手: 旋回前進を2段にした8手
+      action_forward_m: [0.8, -0.4, 0.0, 0.4, 0.8, 0.0, 0.4, 0.8]  # 既定 6手: 直進0.8m、旋回前進0.4/0.8m
+      action_rotation_deg: [0.0, 0.0, -45.0, -45.0, -20.0, 45.0, 45.0, 20.0]  # 既定 6手: 据え切り・低速旋回45度、高速旋回20度
+      goal_margin_radius: 1.0  # 既定 0.5: 到達半径を5セル分に広げる
+      max_rollout_steps: 100000  # 既定 10000: 大域の回り込みを許す
+      cost_drawing_threshold: 600  # 既定 60: 広域の表示範囲を広げる
+      early_start: true  # 既定 false: 方策が接続した時点で開始する
+      waypoint_prefetch: true  # 既定 false: 場を2本保持するため8GB機を前提とする
+      waypoint_prefetch_threads: 2  # 既定 1: 4コア中の先読み負荷を抑える

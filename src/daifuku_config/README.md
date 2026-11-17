@@ -139,13 +139,14 @@ emcl2 系は別々の 2D 地図を使えます。AMCL と VI 内蔵推定は同�
 emcl3d は `/map_loc` を読まないため 2D 地図が別でも起動でき、
 自己位置推定用の PCD が解決できなければ起動を止めます。
 
-`tsudanuma` と `tsudanuma_mugimaru` は原点・解像度の違う別地図で、
-ウェイポイントを共用できません。後者の計画地図は順路から生成した 8.5 m の回廊なので、
-順路を変えたら `tools/maps/corridor_map.py` で再生成します。
+`tsudanuma` の計画地図は順路から生成した 8.5 m の回廊です。順路を変えたら、
+同じ場所の `navigation/tsudanuma-challenge_nav.yaml`（`tsudanuma-challenge_nav3_9.pgm`）を元に
+`tools/maps/corridor_map.py` で再生成します。順路の座標はこの地図の原点・解像度に合わせてあり、
+別の地図と共用できません。
 全点の自由セル・連結性・上下方向を検算してください。点が自由セルでも回廊が壁で
 分断されることがあり、この順路の半径下限は 8.0 m です。PGM の行 0 は y 最大側です。
 既知の壁内 waypoint や地図閾値は
-[地図の説明](../daifuku_navigation/maps/tsudanuma_mugimaru/README.md)と
+[地図の説明](../daifuku_maps/maps/tsudanuma/README.md)と
 `tools/maps/verify_{map_thresholds,corridor_orientation,waypoints}.py` で確認します。
 
 ## コメントと設定の所有者
@@ -256,17 +257,14 @@ teleop 終了時はゼロを送ってください。仲裁を外すときはド�
 | 場所 | 元の解像度 | `map_scale` | 内部解像度 | ソルバ | 場 1 本の目安 |
 | --- | --- | --- | --- | --- | --- |
 | `19f` | 0.05 m | 2 | 0.10 m | 密 | 約 655 MB |
-| `tsudanuma` | 0.05 m | 5 | 0.25 m | compact | sink 約 648 MB |
-| `tsudanuma_mugimaru` | 0.10 m | 2 | 0.20 m | compact | sink 約 711 MB |
+| `tsudanuma` | 0.10 m | 2 | 0.20 m | compact | sink 約 711 MB |
 
 メモリ値は場の目安で、プロセス全体のピークではありません。
 `map_scale` は VI 内部だけに効き、配信地図や外部推定器の解像度は変えません。
 大きくすれば状態数は減りますが、1 手が跨ぐセル数も減って反復が増えるため、
 solve の高速化は保証されません。計画用の自由空間を絞るほうが効く場合があります。
 
-津田沼は `map_scale: 5` と `downsample_policy: optimistic` が組です。
-保守的縮小では通路が潰れ、波が広がりません。楽観側も壁を削るため実際に通れるか確認します。
-`tsudanuma_mugimaru` は保守的縮小のままで、scale 3 へ上げません。
+`tsudanuma` は保守的縮小のままで、scale 3 へ上げません。
 未観測の少ない地図では `unknown_as_obstacle` は進入範囲の制限になりません。
 津田沼の `vi_threads: 3` は追従・推定器に 1 コアを残すためです。
 狭い通路で `map_penalty` を大きくすると隣接状態の値の揺れが 1 手の進捗を超え、
@@ -277,11 +275,11 @@ compact の `compact_ram_limit_mb: 4096` は sink を RAM に置く閾値で、�
 コンテナの SD 書き込み層なので、追従周期に響きます。4 GB 機では閾値を 2048 以下へ見直すか、
 速い実ディスクを明示します。密はディスク退避せず `MemAvailable` で起動可否を判定します。
 
-`waypoint_prefetch` は 19F と mugimaru で有効です。場が 2 本になるため、
+`waypoint_prefetch` は 19F と津田沼で有効です。場が 2 本になるため、
 **4 GB 機では無効にしてください**。メモリ判定は 1 本単位で、合計 OOM は防げません。
 無効化のために `overrides:=none` を使うと必要な自己位置調整まで失うので、
 その場所のキーを `false` にします。一致するキャッシュがなければ 1 点目は solve を待ち、
-次点も先読みが解き終わっていなければ待ちます。compact の先読みスレッドは mugimaru で 2、
+次点も先読みが解き終わっていなければ待ちます。compact の先読みスレッドは津田沼で 2、
 Pi 5 の 4 コアで 3 以上にはしません。現在の回廊・行動での実機時間と安定性は未検証です。
 
 `early_start` は compact の値バンドが地図全体を覆うと短縮になりません。

@@ -237,7 +237,6 @@ ros2 launch daifuku_bringup mapping.launch.py config_watch:=warn
 ```bash
 ros2 launch daifuku_bringup navigation.19f.launch.py
 ros2 launch daifuku_bringup navigation.tsudanuma.launch.py
-ros2 launch daifuku_bringup navigation.tsudanuma_mugimaru.launch.py
 ros2 launch daifuku_bringup navigation.tsukuba2025.launch.py
 ros2 launch daifuku_bringup navigation.tsukuba2026.launch.py
 ```

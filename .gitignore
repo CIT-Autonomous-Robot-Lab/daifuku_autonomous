@@ -25,5 +25,5 @@ src/value_iteration3/
 
 .env
 
-# 点群地図は別途取得する（maps/tsudanuma_3d/README.md）。
+# 点群地図は別途取得する（maps/tsudanuma/README.md）。
 *.pcd

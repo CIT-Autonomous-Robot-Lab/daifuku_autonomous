@@ -229,7 +229,7 @@ class OverlayTest(unittest.TestCase):
                     reference = load(root / "navigation" / "vi_planner.yaml")
                     overlay(
                         reference,
-                        load(root / "sites" / "tsudanuma_3d" / "overrides.yaml")[
+                        load(root / "sites" / "tsudanuma" / "overrides.yaml")[
                             "daifuku_navigation"
                         ],
                     )

@@ -152,10 +152,10 @@ Raspberry Pi Cat を ROS 2 Humble と standalone VI で自律移動させるワ�
   反復計算は共有Mutexの外で並行します。配分を上げる場合はCPU・メモリ帯域と、
   可視化・先読み・窓の拡大を含めた制御周期を確認します。
   `early_start` の打ち切り場から外れると、再 solve の間は停止します。
-- `tsudanuma_mugimaru` の計画地図は順路から生成した回廊です。順路変更時は地図も再生成し、
+- `tsudanuma` の計画地図は順路から生成した回廊です。順路変更時は地図も再生成し、
   自由セル・連結性・画像の上下方向を検算します。PGM の行 0 は地図の y 最大側です。
   `tools/maps/verify_{map_thresholds,corridor_orientation,waypoints}.py` を使い、
-  地図固有の既知事項は[地図の説明](src/daifuku_maps/maps/tsudanuma_mugimaru/README.md)に従います。
+  地図固有の既知事項は[地図の説明](src/daifuku_maps/maps/tsudanuma/README.md)に従います。
 - RViz に `Navigation 2` パネルを足しません。同じ `/waypoints` へ MarkerArray を出し、
   自前パネルの Path と型が衝突して設定読み込みが途中で止まります。
   `/waypoints` の表示は Path、点の表示は `/waypoint_markers` です。

@@ -2,9 +2,9 @@
 
 保存済み地図を読み込み、自己位置推定、経路計画、経路追従を起動します。
 
-津田沼でPCD地図によるEMCL3Dを使う入口は
-`navigation.tsudanuma_3d.launch.py`です。PCDは別途ダウンロードします。
-[取得・配置と起動手順](../../src/daifuku_maps/maps/tsudanuma_3d/README.md)を参照してください。
+津田沼はPCD地図によるEMCL3Dが既定で、入口は`navigation.tsudanuma.launch.py`です。
+PCDは別途ダウンロードします。
+[取得・配置と起動手順](../../src/daifuku_maps/maps/tsudanuma/README.md)を参照してください。
 
 ## tmuxで一式を起動する
 
@@ -86,15 +86,15 @@ Mid-360のIMU融合（`use_mid360_imu`）は既定の`true`のまま使ってい
 Mid-360の搭載高さ（接地面から275mm、2026-08-03実測）なので、機体を変えたら実測し
 直してください。`use_rviz`の既定は`false`です。
 
-広域地図`tsudanuma`で走らせるときは`navigation.tsudanuma.launch.py`を使います（[広域地図（map_tsudanuma）で動かす](#広域地図map_tsudanumaで動かす)）。
+津田沼で走らせるときは`navigation.tsudanuma.launch.py`を使います（[津田沼（EMCL3D）で動かす](#津田沼emcl3dで動かす)）。
 
 ## 基本起動
 
 価値反復グローバル／ローカルプランナとMid-360が既定構成です。RVizは既定では
 起動しません（実機がheadlessのため。PC側から開きます）。
 
-**自己位置推定は19Fも津田沼もEMCL2です。** `localization:=emcl2`がlaunchの既定で、
-`vi_planner`は`localizer: "external"`のままemcl2の推定姿勢を読みます。
+**自己位置推定は19FがEMCL2、津田沼がEMCL3Dです。** `vi_planner`は`localizer: "external"`のまま
+外部推定器の推定姿勢を読みます。
 
 **地図も調整も渡しません。** 走らせる場所はlaunchの名前で決まり（`navigation.19f.launch.py`なら`19f`）、
 `overrides`はその場所の`src/daifuku_config/sites/<場所>/overrides.yaml`に固定です。**地図はその
@@ -130,16 +130,15 @@ site:
 
 **同じ地図で走らせるときも2行とも書きます。** 片方だけ書けるようにすると、書き忘れが
 もう一方の地図で黙って走る形になるためです（起動時にエラーで止まります）。同梱の
-`19f`と`tsudanuma`は2行とも同じ地図です。
+`19f`は2行とも同じ地図、`tsudanuma`は別の地図です。
 
-**2枚を別にする構成は`localization:=emcl2`で使います。** `amcl`は従来の
+**2枚を別にする構成は`localization:=emcl2`または`emcl3d`で使います。** `amcl`は従来の
 起動契約を保ち、異なる2枚を指定するとエラーにします。`localization:=vi`（VIOLA）は
 `vi_planner`の地図の購読が1つしかないので、経路計画と同じ地図を使います。
 
 **`localization:=vi`（VIOLA）では`map_server_loc`を立てません。**
 同じVIノードが`/map`を使って推定し、`map→odom`を所有します。
-同梱の`19f`・`tsudanuma`・`tsudanuma_mugimaru`はemcl2を使うので、
-いずれも自己位置推定には`/map_loc`を使います。
+同梱の`19f`はemcl2で`/map_loc`を使います。`tsudanuma`のemcl3dは`/map_loc`を読まず、PCDで推定します。
 
 RVizには`Map (navigation)`と`Map (localization)`の2つの表示があります。**既定でオンなのは
 後者（`/map_loc`）です**——経路計画用の地図は手で壁を描き足したり回廊の外を塗り潰したり
@@ -284,77 +283,37 @@ CPU配分は1コア基準で`local_cpu_share: 0.6`、`global_cpu_share: 0.2`で�
 2026-08-09の上流の整理で消え、`/proc/meminfo`の値そのものが基準になりました）。値の導出は
 [`src/daifuku_config/README.md`](../../src/daifuku_config/README.md)にあります。
 
-## 広域地図（map_tsudanuma）で動かす
+## 津田沼（EMCL3D）で動かす
 
-`maps/tsudanuma/map_tsudanuma.yaml`は5888×4000セル（0.05 m/セル、294.4 m×200 m）の広域地図です。
-価値反復はゴールごとに`nx × ny × theta_cell_num`の状態空間を扱います。この地図を
-0.05 mのまま解くと状態数は14.1億に達し、既定の密ソルバは状態配列だけで79 GBを要求
-するため、起動と同時に落ちます。
+`navigation.tsudanuma.launch.py`は自己位置推定の既定が`emcl3d`です。地図は3つ使います。
 
-`src/daifuku_config/sites/tsudanuma/overrides.yaml`を`overrides:=tsudanuma`で重ねると、プランナ内部だけが
-0.25 m/セル（`map_scale: 5`、1178×800×60＝5650万状態）に粗くなり、状態配列を確保しない
-アウトオブコアソルバ（`frontier2d_sparse_compact`）へ切り替わります。確定した価値関数と方策
-（実測648 MB）はRAMに置かれます。地図サーバと自己位置推定は0.05 mのままです。
+| 役 | ファイル（`daifuku_maps`の`maps/tsudanuma/`から） |
+|---|---|
+| 経路計画（`/map`） | `navigation/tsudanuma-challenge_nav_corridor.yaml` |
+| 2D自己位置推定（`/map_loc`） | `localization/tsudanuma-challenge_loc.yaml`（`tsudanuma-challenge_loc3.pgm`） |
+| EMCL3D | `map_tsudanuma_aligned.pcd` |
 
-置き場を決めるのは`compact_sink_dir`と`compact_ram_limit_mb`で、**判定は明示指定が
-無条件に優先**です。`compact_sink_dir`が空でなければそのディレクトリへmmapし、上限は
-読みません。空のときだけ上限と比べ、超えていれば`/tmp/vi_planner_sink`へ逃がします。
-この地図は2026-08-04まで`compact_sink_dir`を明示していましたが、Raspberry Pi 5（8 GB、
-走行中の実測で空き5.6 GB）では逃がす理由がないため外しました。いまは断片の
-`compact_ram_limit_mb: 4096`に648 MBが収まることでRAMに載っています。**4 GB機で使うなら
-`compact_sink_dir`を戻してください。**
+PCDはGitに含めません。取得と座標の整合（`tools/maps/align_tsudanuma_pcd.py`）は
+[地図の説明](../../src/daifuku_maps/maps/tsudanuma/README.md)の手順で行います。
+変換後のPCDが無いと起動前の地図検査で止まります。
 
 ```bash
 ros2 launch daifuku_bringup navigation.tsudanuma.launch.py
 ```
 
-`vi_planner`の狭域追従は、全域ではなくロボット近傍のパッチだけを
-確定出力（sink）から起こします。実寸は起動ログの`vi_planner: follow patch ...`に
-MBで出るので、`local_xy_range`や`local_shape`を変更したら確認してください。
+起動後はRVizの「2D Pose Estimate」で初期位置と向きを与えます。実機では
+`use_sim_time:=false`で、実機とPCの時計を同期しておきます。
 
-狭域→広域のフィードバック（`global_sweep`）もこの地図で効きます。compactでは共有場が
-状態配列ではなくmmapの確定出力なので、伝播の粒度がセルではなく
-タイル（更新する16セル角＋遷移到達距離だけの凍結境界）になり、そこを起こして掃いて書き戻す
-形になります。変更の伝播は密・compactとも能動集合で処理します。
-収束後は全域を再投入して確認を続けるため、再確認の仕事量は地図の広さにも依存します。
-**この地図で伝播にどれだけかかるかは未計測**です。2026-08-04にPi 5で見た限りでは、
-静止したままでもタイル修復は240秒回ってなお`queued 29`のまま減りませんでした（**2026-08-20の
-上流の更新より前の観測**です。あの更新まではフロンティア系ソルバが値の「下降」しか伝播せず、
-ペナルティで上がった値は黙って止まっていたので、この固着はそれで説明がつく側にあります）。
-現在のworkerは2秒ごとに`global check (... tiles, settled=...)`を出します（密では`cells`）。
-計算自体は共有Mutexの外で実行し、取り出し・反映時だけロックを取ります。
-配分は`local_cpu_share`と`global_cpu_share`で個別に指定します。
-設定の意味は[`src/daifuku_config/README.md`](../../src/daifuku_config/README.md)を参照してください。
+計画地図は順路から生成した回廊です。順路を変えたら
+`navigation/tsudanuma-challenge_nav.yaml`（`tsudanuma-challenge_nav3_9.pgm`）を元に
+`tools/maps/corridor_map.py`で再生成し、`tools/maps/verify_{map_thresholds,corridor_orientation,waypoints}.py`で
+自由セル・連結性・上下方向を検算します（PGMの行0は地図のy最大側）。
+順路の半径下限と既知事項は[`src/daifuku_config/README.md`](../../src/daifuku_config/README.md)にあります。
 
-注意点:
-
-- `map_scale: 5`は単独では効きません。`downsample_policy: optimistic`（ブロック内にfreeが
-  1つでもあればfree）、`action_forward_m`、`goal_margin_radius`が
-  セットで、1つでも欠けると波がゴール近傍で止まります。値は
-  `src/daifuku_config/sites/tsudanuma/overrides.yaml`のコメントにそろえてあります。
-- 保守的プーリング（障害物優先。`downsample_policy`の既定）だと通路のセル幅が価値反復の
-  遷移分布（約2セル幅）を下回り、`map_scale`が4以上で波がゴール近傍から広がりません。
-  楽観側は通路を細らせない代わりに、自由セルの境界が壁へ寄ります。
-- 車体寸法と障害物回避の余裕が実際の経路で足りるか確認してください。
-- ピークRSSは`vi_planner`で実測1.60 GB（うちsinkのmmapが648 MB）です。
-  `map_scale: 3`＋保守的プーリングだった頃の広域専用ノード`vi_global_planner`の3.98 GBから
-  下がり、Raspberry Pi 4の4 GBに収まります（そのノードは2026-08-08の上流の整理で消え、
-  広域だけの構成も同じ`vi_planner`になりました）。
-  **ただしこれはsinkをディスクへ逃がしていた頃の値です。** RAM出力にした2026-08-04
-  以降は同じ648 MBが匿名メモリになり、カーネルが追い出せません。上の「Pi 4の4 GBに
-  収まる」はもう成り立たない前提です（RAM化後のピークは**未計測**）。
-  Pi 5では走行中の実測で`vi_planner`のRSSが931 MB、コンテナのピークが2.12 GiB、
-  `oom_kill`は0でした。
-- 新しいゴールを与えると、まず地図全体を解きます。BTを外した最小構成をPi 4相当の枠
-  （0.6コア、`vi_threads: 3`）で回した実測では、solveとロールアウトに87〜89秒かかりました。
-  返した経路は398姿勢で、結果はSUCCEEDEDです。同じゴールへの再計画はキャッシュヒットで
-  即座に返ります。
-- この地図は68.2%が未観測セルで、占有セルは0.4%しかありません。EMCL2やAMCLの
-  スキャンマッチングは占有セルの尤度場に依存するため、現状では自己位置推定の
-  拠り所がほとんどありません（経路計画とは別の課題です）。
-
-実測値の出どころは`src/daifuku_config/sites/tsudanuma/overrides.yaml`のヘッダと
-[`src/daifuku_config/README.md`](../../src/daifuku_config/README.md)です。
+価値反復は`map_scale: 2`で内部解像度0.20 mのcompactソルバを使い、確定出力は約711 MBです。
+`waypoint_prefetch`が有効で場を2本持つため、**8 GB機が前提**です。4 GB機では
+`src/daifuku_config/sites/tsudanuma/overrides.yaml`の`waypoint_prefetch`を`false`にしてください
+（`overrides:=none`では自己位置推定の調整まで失います）。
 
 ## ゴールを指定する
 
@@ -386,8 +345,8 @@ RVizで次の順に操作します。
 RVizを立て直したあと、「Nav2 Goal」の単発ゴール——もこれで止まります。詳細は
 [`src/daifuku_waypoint_manager/README.md`](../../src/daifuku_waypoint_manager/README.md)。
 
-`daifuku_maps/waypoints/`に津田沼の順路を版ごとに置いてあります（`v1.0`と`v1.1`が
-73点、`v1.2`が69点）。パネルの「Load YAML」で読みます（`19f`では座標が地図の外に
+`daifuku_maps/waypoints/`に津田沼の順路を版ごとに置いてあります
+（`waypoints_tsudanuma_v1.0.yaml`と`v1.1`。回廊地図の座標系）。パネルの「Load YAML」で読みます（`19f`では座標が地図の外に
 出るため使えません）。
 
 RVizのFixed Frameとwaypointの`frame_id`が一致している必要があります。ずれていると
@@ -480,13 +439,10 @@ vi_planner: dropped the truncated value function (early_start) after 30 ticks wi
 値を入れただけで、実測ではありません**（バンド幅の実測は取っていません）。
 地図の値域が丸ごと1バンドに収まると波2つで解き終わってしまい、打ち切る隙がありません。
 このとき**エラーも警告も出ず、ただ何も短くなりません**。建物1フロア程度の広さは
-こちら側の見込みで、効くのは津田沼のような広域地図です（津田沼は0.25 m/セル・
-`map_penalty: 1`なので4×2×1＝8ステップ）。**2地図とも`true`にしてあります。
+こちら側の見込みで、効くのはそれより広い地図です。**19Fと津田沼では`true`にしてあります。
 19Fは密へ戻したのでバンドが無くなり、効くようになりました**（上の600ステップの話は
 compactだった頃のものです）。前進量とペナルティを下げても
-`map_scale`を上げてもバンドは狭くなり、効きやすくなります（津田沼が
-`map_penalty: 1`なのは別の理由——貪欲ロールアウトが降下できないため——ですが、
-バンドもそのぶん狭くなります）。効いたかは上のログの`cut short` /
+`map_scale`を上げてもバンドは狭くなり、効きやすくなります。効いたかは上のログの`cut short` /
 `truncated`で判断してください。
 
 密ソルバ（`solver: "frontier2d_sparse"`に戻したとき）にはバンドが無いので、地図の

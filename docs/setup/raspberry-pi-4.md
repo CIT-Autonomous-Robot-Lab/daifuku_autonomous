@@ -111,8 +111,9 @@ Pi 4 のメモリとコア数に由来するもので、Pi 5 では緩みます�
 - **UDP だけだと TF が遅れます。** 参加者が 20 個近くになるとカーネルが飽和し、TF の
   タイムスタンプが 20 秒以上遅れてゴールが次々と中断します。同一ホスト内は SHM を
   使ってください（`ipc: host` と Fast DDS プロファイル）。
-- **価値反復プランナ。** 広域地図での所要時間とピーク RSS は
-  [`docs/usage/navigation.md`](../usage/navigation.md#広域地図map_tsudanumaで動かす) に
+- **価値反復プランナ。** 津田沼の設定は 8 GB 機が前提です（先読みで場を 2 本持つため）。
+  4 GB 機での扱いは
+  [`docs/usage/navigation.md`](../usage/navigation.md#津田沼emcl3dで動かす) に
   あります。スワップはこのための保険です。
 
 症状から引くときは[トラブルシューティング](../usage/troubleshooting.md)へ。
