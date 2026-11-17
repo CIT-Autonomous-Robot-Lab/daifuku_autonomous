@@ -63,6 +63,7 @@ pkgs.mkShell {
         ament-cmake-core
         python-cmake-module
         nav2-msgs
+        nav2-rviz-plugins
         desktop
         rviz2
         rviz-default-plugins
@@ -82,6 +83,11 @@ pkgs.mkShell {
   ROS_LOCALHOST_ONLY = "0";
 
   shellHook = ''
+    # ビルド済みの自前プラグイン・ノードを現在のNix環境へ重ねる。
+    if [[ -f "${toString ./.}/install/local_setup.bash" ]]; then
+      source "${toString ./.}/install/local_setup.bash"
+    fi
+
     # RVizのOGRE描画はGLXを使うため、QtもXWaylandに揃える。
     export QT_QPA_PLATFORM=xcb
 
