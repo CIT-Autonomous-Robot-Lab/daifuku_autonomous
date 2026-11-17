@@ -17,6 +17,7 @@ let
 in
 pkgs.mkShell {
   packages = [
+    pkgs.vcs2l
     (pkgs.rosPackages.humble.buildEnv {
       paths = with pkgs.rosPackages.humble; [
         pkgs.colcon
