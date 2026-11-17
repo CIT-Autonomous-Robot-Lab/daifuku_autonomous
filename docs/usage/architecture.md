@@ -130,7 +130,7 @@ TFと`/scan`が重なるので同時に立てません。**
 | パッケージ | ファイル | 役割 |
 | --- | --- | --- |
 | `daifuku_bringup` | `robot.launch.py` | **公開入口。** 機体ドライバとURDF、LiDAR、EKF。`driver:=original`（標準 / 自前実装 / [Pi 4](../setup/raspberry-pi-4.md)・[Pi 5](../setup/raspberry-pi-5.md)）または`driver:=raspimouse`（公式実装 / rtmouse入りのPi 4のみ） |
-| `daifuku_bringup` | `navigation.19f.launch.py`、`navigation.tsudanuma.launch.py`、`navigation.tsudanuma_mugimaru.launch.py`、`navigation.tsukuba2025.launch.py`、`navigation.tsukuba2026.launch.py` | **公開入口。** 場所を固定した自律移動。地図、自己位置推定、価値反復、`/scan`を作る段 |
+| `daifuku_bringup` | `navigation.19f.launch.py`、`navigation.tsudanuma.launch.py`、`navigation.tsukuba2025.launch.py`、`navigation.tsukuba2026.launch.py` | **公開入口。** 場所を固定した自律移動。地図、自己位置推定、価値反復、`/scan`を作る段 |
 | `daifuku_bringup` | `mapping.launch.py` | **公開入口。** 地図作成。`overrides:=<場所>`（既定`none`） |
 | `daifuku_robot` | `robot_bringup.launch.py`、`lidar_bringup.launch.py`、`odom_fusion.launch.py` | 機体、LiDARドライバと取り付け位置の静的TF、車輪オドメトリとIMUのEKF融合 |
 | `daifuku_perception` | `scan_pipeline.launch.py` | 点群（または生スキャン）→仰角フィルタ→スキャン→打ち直し→角度フィルタ→`/scan` |

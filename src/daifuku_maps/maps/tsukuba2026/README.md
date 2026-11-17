@@ -13,7 +13,7 @@ PGMの2枚はGit LFSで管理する。取得時はGit LFSを導入して`git lfs
 | 順路 | `../../waypoints/waypoints_tsukuba2026.yaml` |
 
 PGMは7233 × 4302セル、解像度0.1 m、原点は`[-239.888, -81.802, 0.0]`。
-VIでは`map_scale: 2`でtsudanuma_3dと同じ内部解像度0.20 mを使う。
+VIでは`map_scale: 2`でtsudanumaと同じ内部解像度0.20 mを使う。
 順路は提供された`waypoints.yaml`の24点をそのまま配置する。
 以前のGLIM地図・市役所参照経路とは座標が異なるため共用しない。
 
