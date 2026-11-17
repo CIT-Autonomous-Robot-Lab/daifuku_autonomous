@@ -27,3 +27,6 @@ src/value_iteration3/
 
 # 点群地図は別途取得する（maps/tsudanuma/README.md）。
 *.pcd
+
+# direnvの開発環境キャッシュ
+.direnv/
