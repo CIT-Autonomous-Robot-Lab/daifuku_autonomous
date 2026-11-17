@@ -50,20 +50,20 @@ rtmouseもMCP3204を自前で叩くので、両者が同じデバイスを取り
 
 `twist_mux`（`robot.launch.py`の`twist_mux:=true`が既定）を挟むと、ドライバが
 購読するのは`/cmd_vel`ではなく`/cmd_vel_mux`です。人が出す指令の宛先は
-`/cmd_vel_teleop`（優先度10）で、`/cmd_vel`は自律側の出力（優先度100）です。
+`/cmd_vel_teleop`（優先度100）で、`/cmd_vel`は自律側の出力（優先度10）です。
 
 ```bash
 ros2 node list | grep twist_mux
 ros2 topic hz /cmd_vel_mux          # 指令を出しているあいだだけ流れる
-ros2 topic hz /cmd_vel              # 自律側が出していれば手動は通らない
+ros2 topic hz /cmd_vel_teleop        # 手動入力が届いているか
 ```
 
-**まず疑うのは自律走行中かどうかです。** 優先度は自律側のほうが高いので、
-`/cmd_vel`が出ているあいだ`/cmd_vel_teleop`は**エラーも出さずに無視されます**
-（`control.sh stop`も同じで、止まりません）。手動へ渡すにはゴールを止めてください
-——操作パネルの「中断」、`ros2 action send_goal`を投げた端末の Ctrl-C、または
-パッドのSTART長押し（`joy_teleop`は入るときにゴールを取り消します）。自律側が
-`timeout`（0.5秒）ぶん黙れば手動が通ります。
+手動側の優先度が高いため、自律側が配信中でも手動指令は通ります。
+入力があるのに`/cmd_vel_mux`が出ない場合は、`twist_mux`の起動状態と設定を確認します。
+パネルはゴール実行中にteleopを無効化するので、「中断」で手動へ戻してください。
+パッドはSTART長押しでteleopへ入り、ゴールも取り消します。
+最後の手動指令から`timeout`（0.5秒）が過ぎると自律側へ譲るため、
+`control.sh stop`で一度ゼロを送っても、自律走行が再開する場合があります。
 
 `control.sh`の`CMD_VEL_TOPIC`は`/cmd_vel_teleop`が既定なので、`twist_mux:=false`で
 起動しているときだけ`CMD_VEL_TOPIC=/cmd_vel`を渡してください。逆に`twist_mux`

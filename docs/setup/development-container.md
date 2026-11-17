@@ -327,8 +327,9 @@ ros2 launch raspicat_bringup teleop.launch.py teleop:=key
 ```
 
 手動指令の宛先は`/cmd_vel_teleop`です。上流のteleopがどこへ出すかは未確認なので、
-使用前にトピックを確認してください。自律側の`/cmd_vel`のほうが優先度が高いため、
-手動操作へ移る前にゴールを取り消します（[日常操作](../usage/operations.md#controlshで操作する)）。
+使用前にトピックを確認してください。手動側の優先度が高く、最後の手動指令から
+0.5秒で自律側へ譲ります。手動終了後の自律走行の再開を防ぐにはゴールを取り消します
+（[日常操作](../usage/operations.md#controlshで操作する)）。
 
 GUIが表示されない場合:
 

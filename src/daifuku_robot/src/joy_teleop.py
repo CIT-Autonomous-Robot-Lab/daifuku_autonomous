@@ -31,9 +31,9 @@ robot_bringup.launch.py が joy:=true (既定) のとき joy_node と一緒に�
 長押しの時間はどれも hold_seconds (既定 2 秒)。BACK 単独だけ**離した時点**で決まる
 のは joy_buttons.HoldLatch の docstring のとおり。
 
-出す先は **/cmd_vel_teleop** (twist_mux の優先度 10 側)。/cmd_vel は自律側の
-出力で、そちらのほうが**優先度が高い** (100)。したがってこのノードの指令が通るのは
-自律側が黙っているあいだだけで、奪うのは優先度ではなくゴールの取り消しである
+出す先は **/cmd_vel_teleop** (twist_mux の優先度 100 側)。自律側の /cmd_vel は
+優先度 10 なので、手動指令が優先される。開始時のゴール取り消しは、
+手動終了後に自律走行が再開するのを防ぐために行う
 (下の「teleop 中は『出しっぱなし』にしてある」)。
 
 ## 指令は刻んで出す (加減速)
@@ -511,8 +511,8 @@ class JoyTeleop(Node):
         self._enabled = enabled
         now = time.monotonic()
         if enabled:
-            # 自律側のほうが twist_mux の優先度が高いので、取り消さないと手動が
-            # 通らない。取り消してもゴールが残っていれば切った瞬間に再開する。
+            # 手動側が優先されるが、ゴールが残ると手動終了後に自律走行が再開する。
+            # 再開を防ぐため、走行中のゴールを取り消す。
             # 実際に取り消すのは _tick で、cancel_window のあいだ繰り返す。
             self._cancel_until = now + self._cancel_window
             self._cancel_at = 0.0

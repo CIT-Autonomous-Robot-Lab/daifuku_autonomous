@@ -100,11 +100,11 @@ Raspberry Pi Cat を ROS 2 Humble と standalone VI で自律移動させるワ�
 ## 実機で守ること
 
 - `twist_mux:=true` ではドライバ入力は `/cmd_vel_mux`、自律入力は `/cmd_vel`
-  （優先度 100）、手動入力は `/cmd_vel_teleop`（10）です。手動側のゼロ指令や
-  `control.sh stop` は自律側が 0.5 秒黙るまで通りません。確実な停止はモータ電源で行います。
+  （優先度 10）、手動入力は `/cmd_vel_teleop`（100）です。手動側が優先され、
+  最後の手動指令から 0.5 秒で自律側へ譲ります。確実な停止はモータ電源で行います。
 - ゲームパッドの teleop は START 長押しで入るモードで、ボタンを離しても続きます。
   入るときに `/follow_waypoints` と `/navigate_to_pose` を取り消しますが、
-  自律側の有効期限までは手動が通りません。`twist_mux:=false` では
+  手動指令は自律側より優先されます。`twist_mux:=false` では
   `/cmd_vel_teleop` はドライバへ届きません。
 - teleop の発行側は終了時にゼロを送ります。自前ドライバは指令断でも
   `cmd_vel_timeout`（60 秒）まで最後の指令を保持します。公式ドライバの指令断時の停止は未確認です。
