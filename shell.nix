@@ -78,6 +78,9 @@ pkgs.mkShell {
     })
   ];
 
+  ROS_DOMAIN_ID = "90";
+  ROS_LOCALHOST_ONLY = "0";
+
   shellHook = ''
     # RVizのOGRE描画はGLXを使うため、QtもXWaylandに揃える。
     export QT_QPA_PLATFORM=xcb
