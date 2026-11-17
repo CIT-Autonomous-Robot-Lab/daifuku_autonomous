@@ -1,4 +1,4 @@
-{ nixosConfig ? /etc/nixos }:
+{ nixosConfig ? builtins.getEnv "HOME" + "/nixos-config" }:
 
 let
   configuration = builtins.getFlake (toString nixosConfig);
