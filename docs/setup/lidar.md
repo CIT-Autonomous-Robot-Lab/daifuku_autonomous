@@ -28,8 +28,23 @@ navigation / mapping が include）。理由は次の節。
 こと**（既定は環境変数`LIDAR` / `LIDAR_DRIVER`から来るので、`.env`に1行書けば
 揃います）。食い違うとエラーも警告も出ないまま`/scan`が空になります。
 
-既定の`src/daifuku_config/perception/scan_filter.yaml`は、コネクタがある後方50度
-（+155度から-155度まで、±180度をまたぐ範囲）を除外します。
+Mid-360では、仰角フィルタ内で後方の直方体に入る点群を除去します。
+LiDAR原点で前が+x、左が+y、上が+zとして、境界を含む次の範囲を消します。
+
+- x: -0.60〜-0.10 m（後方10 cmから、さらに奥へ50 cm）
+- y: -0.20〜+0.20 m（左右各20 cm、幅40 cm）
+- z: +0.10〜+0.50 m（取り付け高さから上へ10〜50 cm、高さ40 cm）
+
+設定は`src/daifuku_config/perception/mid360_elevation.yaml`の
+`exclusion_box_enabled`と`exclusion_box_min_*`・`exclusion_box_max_*`です。
+仰角を重力方向で判定するときも、ボックスは入力のセンサー座標に固定します。
+出力は`/livox/lidar_elevation`で、生点群`/livox/lidar`はそのままです。
+`elevation_filter:=false`ではボックス除去も無効になります。
+
+後段の`scan_filter_enabled`はMid-360では既定で無効です。
+2D LiDARでは既定で有効にし、`src/daifuku_config/perception/scan_filter.yaml`の
+後方80度（+140度から-140度まで、±180度をまたぐ範囲）の除去を使います。
+つくば2025の専用スキャン構成は、従来の機体周囲のスキャンボックスを使います。
 
 センサーごとのトピックの流れは次のとおりです。
 
@@ -41,7 +56,7 @@ mapping）の受け持ちです。
 Mid-360       : /livox/lidar | → elevation_filter.py（仰角フィルタ）
                 → /livox/lidar_elevation → pointcloud_to_laserscan
                 → /scan_mid360_prestamp → restamp_scan.py
-                → /scan_raw → 角度フィルタ → /scan
+                → /scan_raw → relay → /scan
 IMU（Mid-360）: /livox/imu → imu_throttle（BEST_EFFORT、最大50Hz）
                 → /livox/imu_throttled → prepare_mid360_imu.py
                 → /imu/mid360 ┐

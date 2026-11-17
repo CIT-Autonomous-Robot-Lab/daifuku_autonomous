@@ -78,7 +78,9 @@ def declare_navigation_arguments(site: str | None) -> list[DeclareLaunchArgument
         "lidar_driver": env_default("LIDAR_DRIVER", "true"),
         "elevation_filter": "true",
         "restamp_cloud": "false",
-        "scan_filter_enabled": "true",
+        "scan_filter_enabled": "true" if separate_localization_scan else PythonExpression([
+            "'", LaunchConfiguration("lidar"), "' == '2d'",
+        ]),
         "mid360_elevation_params_file": os.path.join(perception, "mid360_elevation.yaml"),
         "mid360_scan_params_file": os.path.join(perception, "mid360_scan.yaml"),
         "scan_filter_params_file": os.path.join(perception, "scan_filter.yaml"),

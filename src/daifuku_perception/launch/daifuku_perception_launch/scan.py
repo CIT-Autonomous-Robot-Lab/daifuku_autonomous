@@ -30,7 +30,7 @@ from launch.actions import (
     IncludeLaunchDescription,
 )
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PythonExpression
 
 
 def _arg_specs():
@@ -56,7 +56,7 @@ def _arg_specs():
         # 断片が持つ min_height: 0.275 と同じ切り方。切る角度を実際に狭めるのは
         # overrides/ の側。
         ("elevation_filter", "true",
-         "点群を仰角で切るか (勾配の床を落とす。lidar:=mid360 のときだけ効く)。"),
+         "点群の仰角・ボックス除去を有効にするか (lidar:=mid360 のときだけ効く)。"),
         ("restamp_cloud", "false",
          "仰角フィルタで点群の時刻を受信時刻へ直すか。TF 投影より前に効く。"
          "つくばの実機構成で有効。シミュレータ・バッグでは false。"),
@@ -65,8 +65,11 @@ def _arg_specs():
         ("mid360_scan_params_file", os.path.join(sensors, "mid360_scan.yaml"),
          "pointcloud_to_laserscan の設定 (点群からスキャンへの変換)。"),
 
-        ("scan_filter_enabled", "true",
-         "コネクタのある後方を落とす角度フィルタ (laser_filters) を通すか。"),
+        ("scan_filter_enabled", PythonExpression([
+            "'", LaunchConfiguration("lidar"), "' == '2d'",
+        ]),
+         "後段のスキャンフィルタを通すか。既定は2dのみ有効。"
+         "mid360は点群のボックス除去を使う。"),
         ("scan_filter_params_file", os.path.join(sensors, "scan_filter.yaml"),
          "角度フィルタの設定ファイル。"),
     ]

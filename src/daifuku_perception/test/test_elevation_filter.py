@@ -25,8 +25,83 @@ import pytest
 import rclpy
 from rclpy.time import Time
 from sensor_msgs.msg import PointCloud2, PointField
-from geometry_msgs.msg import TransformStamped
+from geometry_msgs.msg import Quaternion, TransformStamped
 from tf2_ros import Buffer
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+@pytest.mark.parametrize("rotated", [False, True])
+@pytest.mark.parametrize("coordinate_format", ["f", "d"])
+def test_exclusion_box_removes_inclusive_sensor_bounds_and_preserves_other_points(
+    enabled: bool, rotated: bool, coordinate_format: str, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    specification = importlib.util.spec_from_file_location(
+        "tested_box_elevation", Path(__file__).resolve().parents[1] / "src/elevation_filter.py",
+    )
+    assert specification is not None and specification.loader is not None
+    module = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(module)
+    config = (
+        Path(__file__).resolve().parents[2]
+        / "daifuku_config/perception/mid360_elevation.yaml"
+    )
+    rclpy.init(args=[
+        "--ros-args", "--params-file", str(config),
+        "-p", f"exclusion_box_enabled:={str(enabled).lower()}",
+        "-p", "min_elevation_deg:=-90.0",
+    ])
+    node = module.ElevationFilter()
+    captured: list[PointCloud2] = []
+    monkeypatch.setattr(node, "_publisher", SimpleNamespace(publish=captured.append))
+    inside = [
+        (-0.35, 0.0, 0.30),
+        (-0.60, 0.0, 0.30), (-0.10, 0.0, 0.30),
+        (-0.35, -0.20, 0.30), (-0.35, 0.20, 0.30),
+        (-0.35, 0.0, 0.10), (-0.35, 0.0, 0.50),
+        (-0.60, -0.20, 0.10), (-0.10, 0.20, 0.50),
+    ]
+    outside = [
+        (-0.601, 0.0, 0.30), (-0.099, 0.0, 0.30),
+        (-0.35, -0.201, 0.30), (-0.35, 0.201, 0.30),
+        (-0.35, 0.0, 0.099), (-0.35, 0.0, 0.501),
+        (0.35, 0.0, 0.30), (-5.0, 0.0, 0.30),
+    ]
+    record_format = "<" + coordinate_format * 3 + "I"
+    coordinate_size = struct.calcsize(coordinate_format)
+    records = [
+        struct.pack(record_format, *point, index)
+        for index, point in enumerate(inside + outside)
+    ]
+    cloud = PointCloud2()
+    cloud.header.frame_id = "livox_frame"
+    cloud.header.stamp.sec = 123
+    cloud.height, cloud.width = 1, len(records)
+    cloud.point_step = struct.calcsize(record_format)
+    cloud.row_step = cloud.point_step * cloud.width
+    datatype = PointField.FLOAT32 if coordinate_format == "f" else PointField.FLOAT64
+    cloud.fields = [
+        PointField(name=name, offset=index * coordinate_size, datatype=datatype, count=1)
+        for index, name in enumerate(("x", "y", "z"))
+    ] + [
+        PointField(
+            name="intensity", offset=3 * coordinate_size, datatype=PointField.UINT32, count=1,
+        ),
+    ]
+    cloud.data = b"".join(records)
+    try:
+        # Flip the elevation axes: the self-return box must still follow the sensor.
+        rotation = Quaternion(y=1.0, w=0.0) if rotated else None
+        node._filter(cloud, rotation)
+
+        assert len(captured) == 1
+        assert bytes(captured[0].data) == b"".join(records[len(inside):] if enabled else records)
+        assert captured[0].width == (len(outside) if enabled else len(records))
+        assert captured[0].row_step == captured[0].width * cloud.point_step
+        assert captured[0].header.frame_id == "livox_frame"
+        assert captured[0].header.stamp.sec == 123
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
 
 
 @pytest.mark.parametrize("restamp_cloud", [None, False, True])

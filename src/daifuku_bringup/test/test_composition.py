@@ -158,11 +158,12 @@ def test_navigation_sentinel_watches_new_custom_fragments(tmp_path, monkeypatch)
 @pytest.mark.parametrize("site", [None, *params.available_overrides()])
 @pytest.mark.parametrize("use_sim_time", ["true", "false"])
 @pytest.mark.parametrize("driver_default", ["true", "false"])
+@pytest.mark.parametrize("lidar_default", ["urg", "2d", "mid360"])
 def test_scan_defaults_follow_clock_and_driver_selection(
-    monkeypatch, site, use_sim_time, driver_default,
+    monkeypatch, site, use_sim_time, driver_default, lidar_default,
 ):
     # Given: a selected site, environment defaults and an explicit clock argument.
-    monkeypatch.setenv("LIDAR", "urg")
+    monkeypatch.setenv("LIDAR", lidar_default)
     monkeypatch.setenv("LIDAR_DRIVER", driver_default)
     context = LaunchContext()
     context.launch_configurations["use_sim_time"] = use_sim_time
@@ -176,7 +177,10 @@ def test_scan_defaults_follow_clock_and_driver_selection(
     driver_enabled = driver_default == "true" and not (
         separate_scan and use_sim_time == "true"
     )
-    assert selected["lidar"] == ("mid360" if separate_scan else "urg")
+    assert selected["lidar"] == ("mid360" if separate_scan else lidar_default)
+    assert (selected["scan_filter_enabled"].lower() == "true") == (
+        separate_scan or lidar_default == "2d"
+    )
     assert (selected["lidar_driver"].lower() == "true") == driver_enabled
     assert (selected["leveling"] == "true") == separate_scan
     assert (selected["use_system_monitor"] == "true") == (not separate_scan)

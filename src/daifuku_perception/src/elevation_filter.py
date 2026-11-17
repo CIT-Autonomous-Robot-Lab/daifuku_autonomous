@@ -38,6 +38,9 @@ sets its axes using the acquisition-time TF rotation, without translating
 the origin or changing the output coordinates. A gravity-aligned frame
 keeps the elevation band level while the robot rolls or pitches.
 
+An optional exclusion box removes self returns in the input sensor frame,
+before the elevation rotation. Its six faces are included in the removal.
+
 Topics are the relative cloud_in / cloud_out, remapped by
 scan_pipeline.launch.py -- the same shape as restamp_scan.py.
 """
@@ -63,12 +66,26 @@ class ElevationFilter(Node):
         super().__init__("elevation_filter")
         self._restamp_cloud = self.declare_parameter("restamp_cloud", False).value
         self._elevation_frame = self.declare_parameter("elevation_frame", "").value
+        self._box_enabled = self.declare_parameter("exclusion_box_enabled", False).value
+        self._box_min = tuple(
+            self.declare_parameter(f"exclusion_box_min_{axis}", value).value
+            for axis, value in zip(("x", "y", "z"), (-0.60, -0.20, 0.10))
+        )
+        self._box_max = tuple(
+            self.declare_parameter(f"exclusion_box_max_{axis}", value).value
+            for axis, value in zip(("x", "y", "z"), (-0.10, 0.20, 0.50))
+        )
+        if self._box_enabled and any(
+            not math.isfinite(lower) or not math.isfinite(upper) or lower > upper
+            for lower, upper in zip(self._box_min, self._box_max)
+        ):
+            raise RuntimeError("invalid exclusion box bounds")
         self._tf_wait = None
         if self._elevation_frame:
             self._tf_buffer = Buffer()
             self._tf_listener = TransformListener(self._tf_buffer, self)
         # Declared wide open so this node is a pass-through until a
-        # parameter file narrows it. src/daifuku_config/config/perception/mid360_elevation.yaml
+        # parameter file narrows it. src/daifuku_config/perception/mid360_elevation.yaml
         # holds the real values.
         min_deg = self.declare_parameter("min_elevation_deg", -90.0).value
         max_deg = self.declare_parameter("max_elevation_deg", 90.0).value
@@ -252,6 +269,12 @@ class ElevationFilter(Node):
         # NaN coordinates compare false, so they drop out here the same way
         # pointcloud_to_laserscan would drop them.
         keep = np.isfinite(z)
+        if self._box_enabled:
+            # The box follows the sensor, even when elevation uses gravity axes.
+            inside_box = np.ones(keep.shape, dtype=bool)
+            for axis, lower, upper in zip(("x", "y", "z"), self._box_min, self._box_max):
+                inside_box &= (points[axis] >= lower) & (points[axis] <= upper)
+            keep &= ~inside_box
         if self._far_range > 0:
             floor = np.where(
                 radius > self._far_range, self._far_min_slope,
