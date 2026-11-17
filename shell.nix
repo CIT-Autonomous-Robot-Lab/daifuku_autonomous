@@ -1,11 +1,35 @@
-{ nixosConfig ? builtins.getEnv "HOME" + "/nixos-config" }:
+{ system ? builtins.currentSystem }:
 
 let
-  configuration = builtins.getFlake (toString nixosConfig);
-  rosShell = configuration.devShells.${builtins.currentSystem}.ros2-humble;
+  # NixOSの設定とは独立して、ROSと対応するnixpkgsを固定する。
+  rosOverlay = builtins.fetchTarball {
+    url = "https://github.com/lopsided98/nix-ros-overlay/archive/971fa9ca86c79a4997e7c6b2f9df0cb754e7256a.tar.gz";
+    sha256 = "sha256-LxoRIHc9WMcpcGpfmj1sYbwuBa8HjHenE+3N2iUgKTg=";
+  };
+  nixpkgs = builtins.fetchTarball {
+    url = "https://github.com/NixOS/nixpkgs/archive/7a0f122f5090cf4c2ade2a13a0e229d4e19ba71f.tar.gz";
+    sha256 = "sha256-ZoxIApko70jCdbH3l20HWXOBaT2HZd87orzd2yJ9dVE=";
+  };
+  pkgs = import nixpkgs {
+    inherit system;
+    overlays = [ (import (rosOverlay + "/overlay.nix")) ];
+  };
 in
-rosShell.overrideAttrs (old: {
-  shellHook = (old.shellHook or "") + ''
+pkgs.mkShell {
+  packages = [
+    (pkgs.rosPackages.humble.buildEnv {
+      paths = with pkgs.rosPackages.humble; [
+        pkgs.colcon
+        ament-cmake-core
+        python-cmake-module
+        desktop
+        rviz2
+        rviz-default-plugins
+      ];
+    })
+  ];
+
+  shellHook = ''
     # RVizのOGRE描画はGLXを使うため、QtもXWaylandに揃える。
     export QT_QPA_PLATFORM=xcb
 
@@ -32,4 +56,4 @@ rosShell.overrideAttrs (old: {
       unset _ros_xauth _ros_xauth_files
     fi
   '';
-})
+}
