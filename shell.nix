@@ -15,10 +15,19 @@ let
     overlays = [
       (import (rosOverlay + "/overlay.nix"))
       (_: prev: {
-        # Humbleのlaunch_testingはpytest 9で削除されたpathフックを使う。
-        pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
-          (_: pythonPrev: { pytest = pythonPrev.pytest_8_3; })
-        ];
+        # pytest全体は下げず、Humbleの収集フックだけを現在のPath APIへ合わせる。
+        rosPackages = prev.rosPackages // {
+          humble = prev.rosPackages.humble.overrideScope (_: rosPrev: {
+            launch-testing = rosPrev.launch-testing.overrideAttrs (old: {
+              postPatch = (old.postPatch or "") + ''
+                substituteInPlace launch_testing/pytest/hooks.py \
+                  --replace-fail 'def pytest_pycollect_makemodule(path, parent):' \
+                  'def pytest_pycollect_makemodule(module_path, parent):
+                    path = module_path'
+              '';
+            });
+          });
+        };
       })
     ];
   };
