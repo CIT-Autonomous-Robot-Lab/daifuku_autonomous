@@ -209,7 +209,7 @@ Ubuntu 22.04 前提で Pi 5 では使えないので、その場合も ROS 側�
 GPU利用時は`compose.vulkan.yaml`を最後に重ねます。通常構成はCPU専用のままです。
 ホストはV3DカーネルドライバとDRM render nodeが必要です。Pi 5のGPUは
 [Mesa V3DV](https://docs.mesa3d.org/drivers/v3d.html)で使います。
-Jammy標準Mesaに依存せず、GPUイメージのarm64版ではPi 5対応Mesaをソースからビルドします。
+GPUイメージには`shell.nix`で固定したMesaを同梱します。
 ホストのMesaライブラリはコンテナへコピーしません。
 
 ホストでGPUノードとそのGIDを確認し、リポジトリルートの`.env`へ設定します。

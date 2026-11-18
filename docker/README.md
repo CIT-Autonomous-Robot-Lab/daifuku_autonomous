@@ -5,22 +5,34 @@
 | ディレクトリ | 用途 | 詳細 |
 |---|---|---|
 | [`raspberrypi/`](raspberrypi) | 実機Raspberry Pi（`arm64`）とPC（`amd64`）で動く実行専用のヘッドレス環境。RVizは含まない | [README](raspberrypi/README.md) / [Docker環境](../docs/setup/docker.md) |
-| [`dev/`](dev) | PC側の開発環境。ROS 2 Desktop Full、Raspberry Pi Cat公式のPC用ワークスペース、GUI（RViz） | [README](dev/README.md) / [GUI付き開発コンテナ](../docs/setup/development-container.md) |
+| [`dev/`](dev) | PC側の開発環境。ROS 2 HumbleとGUI（RViz・rqt） | [README](dev/README.md) / [GUI付き開発コンテナ](../docs/setup/development-container.md) |
 | `common/` | 両方が使う共通部分（後述） | — |
 
 2つは排他ではありません。実機で`raspberrypi/`を動かし、同じLAN上のPCで`dev/`から
 RVizで見る、というのが通常の使い方です。`ROS_DOMAIN_ID`の既定はどちらも`90`です。
+
+依存はルートの`shell.nix`でホストと共有します。Docker内でNix環境を実現し、
+最終イメージにはその依存だけを取り出します。ホストにNixを入れる必要はありません。
+実機用は描画を含まないプロファイル、開発用はRViz・rqtを加えたプロファイルです。
+依存を追加するときは`shell.nix`を編集し、イメージを作り直します。
+
+取得・コンパイル済みのNixストアとDBは、ベースイメージとCPUアーキテクチャごとの
+ビルドキャッシュに一緒に保持します。同時更新はロックで防ぎます。
+このキャッシュは最終イメージへ入れず、実現した依存だけをコピーします。
+取得通信はHTTP/1.1を使います。NixのHTTP/2による並列NAR取得で進捗が止まる
+現象を避けるためです。
 
 ## common/
 
 | ファイル | 使う側 | 内容 |
 |---|---|---|
 | `entrypoint.sh` | 両イメージ | `/ros_entrypoint.sh`として入る。ROS 2と、存在するオーバーレイを読み、**前回の`docker exec`の残骸を止めてから**コマンドを実行する |
+| `build-nix-environment.sh` | 両イメージのビルド | 固定したNix依存を取り出し、ビルド用のダウンロード・中間生成物を最終イメージから分離する |
 | `lib/compose.sh` | ホスト側のbashスクリプト | Docker CLIへの到達手段の決定とCompose呼び出し。dot-sourceして使う |
 
-オーバーレイの集合はイメージごとに違いますが互いに素なので、`entrypoint.sh`は
-「あればsourceする」形にして1つにまとめてあります。存在しないものは飛ばすため、
-どちらのイメージでも読み込む順序と結果は分けていた頃と同じです。
+ワークスペースは`install/local_setup.bash`でNix環境へ重ねます。
+過去の`setup.bash`が記録した古いROS環境へ戻らないようにするためです。
+初回ビルド前は存在しないオーバーレイを飛ばし、ビルドコマンドでは旧installを読みません。
 
 `lib/compose.sh`への相対パスは呼び出し元の深さによって変わるので、各スクリプトが
 `BASH_SOURCE`から組み立てます。

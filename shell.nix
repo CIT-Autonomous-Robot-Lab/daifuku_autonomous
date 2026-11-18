@@ -1,4 +1,4 @@
-{ system ? builtins.currentSystem }:
+{ system ? builtins.currentSystem, gui ? true, vulkan ? false }:
 
 let
   # NixOSの設定とは独立して、ROSと対応するnixpkgsを固定する。
@@ -14,7 +14,7 @@ let
     inherit system;
     overlays = [
       (import (rosOverlay + "/overlay.nix"))
-      (_: prev: {
+      (final: prev: {
         # pytest全体は下げず、Humbleの収集フックだけを現在のPath APIへ合わせる。
         rosPackages = prev.rosPackages // {
           humble = prev.rosPackages.humble.overrideScope (_: rosPrev: {
@@ -28,10 +28,42 @@ let
             });
           });
         };
+        # PCLは点群の入出力・フィルター・近傍検索に使うため、描画用のVTKとQtを外す。
+        pclWithQt5 = prev.pclWithQt5.overrideAttrs (old: {
+          nativeBuildInputs = final.lib.subtractLists [
+            final.qt5.wrapQtAppsHook
+          ] old.nativeBuildInputs;
+          buildInputs = final.lib.subtractLists [
+            final.qt5.qtbase final.libxt
+          ] old.buildInputs;
+          propagatedBuildInputs = final.lib.subtractLists [
+            final.vtkWithQt5
+          ] old.propagatedBuildInputs;
+          cmakeFlags = old.cmakeFlags ++ [
+            "-DWITH_VTK=OFF"
+            "-DWITH_QT=NO"
+            "-DWITH_OPENGL=OFF"
+            "-DWITH_GLEW=OFF"
+            "-DBUILD_visualization=OFF"
+            "-DBUILD_apps=OFF"
+            "-DBUILD_tools=OFF"
+            "-DBUILD_examples=OFF"
+            "-DBUILD_features=OFF"
+            "-DBUILD_keypoints=OFF"
+            "-DBUILD_outofcore=OFF"
+            "-DBUILD_people=OFF"
+            "-DBUILD_recognition=OFF"
+            "-DBUILD_registration=OFF"
+            "-DBUILD_segmentation=OFF"
+            "-DBUILD_stereo=OFF"
+            "-DBUILD_surface=OFF"
+            "-DBUILD_tracking=OFF"
+          ];
+        });
       })
     ];
   };
-  # Dockerと同じSDKを使い、Livoxドライバがリンクする共有ライブラリを用意する。
+  # ホストとDockerで同じSDKを使い、Livoxドライバのリンク先をそろえる。
   livoxSdk2 = pkgs.stdenv.mkDerivation {
     pname = "livox-sdk2";
     version = "1.3.1";
@@ -61,10 +93,26 @@ let
     touch "$out/share/ament_index/resource_index/packages/rclrs"
   '';
 in
-pkgs.mkShell {
+pkgs.mkShell ({
   packages = [
+    pkgs.bashInteractive
+    pkgs.cacert
+    pkgs.coreutils
+    pkgs.curl
+    pkgs.findutils
+    pkgs.gawk
+    pkgs.git
+    pkgs.gnugrep
+    pkgs.gnused
+    pkgs.iproute2
+    pkgs.iputils
+    pkgs.procps
+    pkgs.util-linux
     pkgs.vcs2l
     livoxSdk2
+    pkgs.apr
+    pkgs.aprutil
+    pkgs.cmake
     pkgs.cargo
     pkgs.rustc
     pkgs.cargo-ament-build
@@ -77,14 +125,53 @@ pkgs.mkShell {
           colcon-ros-cargo
         ]))
         rclrsSource
+        ament-cmake-auto
+        ament-cmake-copyright
         ament-cmake-core
+        ament-cmake-flake8
+        ament-cmake-lint-cmake
+        ament-cmake-pytest
+        ament-cmake-xmllint
+        ament-copyright
+        ament-flake8
+        ament-lint-auto
+        ament-lint-cmake
+        ament-xmllint
+        launch-testing-ament-cmake
         python-cmake-module
+        ros-base
+        diagnostic-updater
+        grid-map-msgs
+        joint-state-publisher
+        joy
+        laser-filters
+        nav2-amcl
+        nav2-common
+        nav2-lifecycle-manager
+        nav2-map-server
         nav2-msgs
+        nav2-velocity-smoother
+        pcl-conversions
+        pointcloud-to-laserscan
+        realsense2-camera
+        robot-localization
+        robot-state-publisher
+        rosbag2
+        slam-toolbox
+        teleop-twist-joy
+        teleop-twist-keyboard
+        topic-tools
+        twist-mux
+        urdf
+        urg-node
+        xacro
+      ] ++ pkgs.lib.optionals gui (with pkgs.rosPackages.humble; [
+        pkgs.python3Packages.pyqt5
         nav2-rviz-plugins
-        desktop
+        rqt-gui-py
         rviz2
         rviz-default-plugins
-      ];
+      ]);
       # colcon-ros-cargoは従来のrust_packages索引からメッセージクレートを探す。
       postBuild = ''
         mkdir -p "$out/share/ament_index/resource_index/rust_packages"
@@ -94,6 +181,21 @@ pkgs.mkShell {
         done
       '';
     })
+  ] ++ pkgs.lib.optionals gui [
+    pkgs.arp-scan
+    pkgs.bash-completion
+    pkgs.gdb
+    pkgs.mesa
+    pkgs.nano
+    pkgs.openssh
+    pkgs.tmux
+    pkgs.xterm
+  ] ++ pkgs.lib.optionals vulkan [
+    pkgs.glslang
+    pkgs.mesa
+    pkgs.vulkan-headers
+    pkgs.vulkan-loader
+    pkgs.vulkan-tools
   ];
 
   ROS_DOMAIN_ID = "90";
@@ -131,4 +233,9 @@ pkgs.mkShell {
       unset _ros_xauth _ros_xauth_files
     fi
   '';
-}
+} // pkgs.lib.optionalAttrs gui {
+  # 空のコンテナでも英数字・日本語を表示できるフォント設定を共有する。
+  FONTCONFIG_FILE = pkgs.makeFontsConf {
+    fontDirectories = [ pkgs.dejavu_fonts pkgs.noto-fonts-cjk-sans ];
+  };
+})

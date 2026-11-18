@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
 # `docker compose up` のたびに走るワークスペースビルド。ソースは compose が
 # マウントし、前回の build/ はホストに残るので差分だけが建て直される。
-# ROS と ros2_rust のオーバーレイは /ros_entrypoint.sh が読み込み済み。
+# shell.nixの環境は /ros_entrypoint.sh が読み込み済み。
 #
 # **パッケージは名前で選ばない。** src/ にあるものは全部建て、建てられないものだけを
 # 下の SKIP_PACKAGES で外す。パッケージを足してもこのファイルは直さなくてよい
 # (Pi で建たないものを足したときだけ SKIP_PACKAGES に足す)。
 #
-# **rosdep はここでは回さない** (apt の解決はイメージ側の責務。回すとネットワークが
-# 要るうえ apt の状態が毎回変わる)。**新しい apt 依存を足したら
-# `docker compose build` からやり直すこと。**
+# 依存はshell.nixで固定する。追加時は `docker compose build` で反映する。
 set -eo pipefail
 
 WS="${ROS_WS:-/opt/ros_ws}"
@@ -18,15 +16,14 @@ WS="${ROS_WS:-/opt/ros_ws}"
 BUILD_JOBS="${BUILD_JOBS:-4}"
 REPOS_FILE="${WS}/daifuku_autonomous.repos"
 
-# **Pi では建てないもの。** 実機イメージ (ros:humble-ros-base) に rqt と RViz が
+# **Pi では建てないもの。** 実機プロファイルに rqt と RViz が
 # 無いので、この 2 つを建てるとビルドが落ちる。
 SKIP_PACKAGES=(daifuku_rqt daifuku_waypoint_manager)
 
 cd "${WS}"
 mkdir -p src
 
-# クレートのレジストリは build/ に置く (up をまたいで残る。イメージ側の
-# /opt/cargo にはツールチェーンしか入っていない)。
+# クレートのレジストリはbuild/に置く。Nixストアのツールチェーンは読み取り専用で使う。
 export CARGO_HOME="${WS}/build/.cargo"
 mkdir -p "${CARGO_HOME}"
 
@@ -106,8 +103,6 @@ awk '$1 == "vi_planner" && $3 ~ /cargo/ {found=1} END {exit !found}' <<<"${pkg_l
 # 旧 install を読み込む前に、パッケージ移動や削除・改名の残骸を整理する。
 bash /usr/local/lib/daifuku/workspace-layout.sh prepare <<<"${pkg_list}"
 
-MULTIARCH="$(dpkg-architecture -qDEB_HOST_MULTIARCH)"
-
 # --symlink-install なので launch や yaml は install/ から src/ への symlink になり、
 # 直しただけならビルドは要らない。
 colcon build --base-paths src --merge-install --symlink-install \
@@ -117,14 +112,7 @@ colcon build --base-paths src --merge-install --symlink-install \
     --cmake-args -DROS_EDITION=ROS2 \
                  -DEMCL3D_ENABLE_VULKAN="${EMCL3D_ENABLE_VULKAN:-OFF}" \
                  -DDISTRO_ROS="${ROS_DISTRO}" \
-                 "-DCMAKE_LIBRARY_PATH=/opt/ros/${ROS_DISTRO}/lib;/usr/lib/${MULTIARCH};/lib/${MULTIARCH}" \
-                 "-DCMAKE_INCLUDE_PATH=/usr/include;/usr/include/eigen3;/usr/include/pcl-1.12" \
-                 "-DCMAKE_CXX_FLAGS=-O2 -I/usr/include/eigen3" \
-                 -DEigen3_DIR=/usr/share/eigen3/cmake \
-                 -DOPENSSL_ROOT_DIR=/usr \
-                 -DOPENSSL_INCLUDE_DIR=/usr/include \
-                 -DOPENSSL_CRYPTO_LIBRARY="/usr/lib/${MULTIARCH}/libcrypto.so" \
-                 -DOPENSSL_SSL_LIBRARY="/usr/lib/${MULTIARCH}/libssl.so"
+                 -DCMAKE_BUILD_TYPE=Release
 
 bash /usr/local/lib/daifuku/workspace-layout.sh commit
 

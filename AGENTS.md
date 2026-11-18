@@ -39,7 +39,9 @@ Raspberry Pi Cat を ROS 2 Humble と standalone VI で自律移動させるワ�
   機能パッケージどうしを公開入口として使わず、合成は `daifuku_bringup` に寄せます。
   設定の実体と合成規則（Python は `src/daifuku_config/daifuku_config/`）は
   `daifuku_config` に置き、そこから機能パッケージの実装を import しません。
-- Windows は編集ホストです。ビルド・ROS の確認は Docker または Ubuntu 22.04 で行います。
+- Windows は編集ホストです。ビルド・ROS の確認は Docker、Ubuntu 22.04、
+  または `shell.nix` を使う NixOS で行います。Dockerの依存をaptやrosdepへ分散させず、
+  ホストと同じ `shell.nix` にそろえます。
   再ビルドと再起動の判断表は[日常操作](docs/usage/operations.md#設定変更を反映する)に
   一本化します。Pi の再起動では `workspace-build` が走らず、コンパイル済みコードは更新されません。
 - 新規・移動したファイルは symlink の作成にビルドが必要です。移動・改名後は古い
@@ -50,7 +52,7 @@ Raspberry Pi Cat を ROS 2 Humble と standalone VI で自律移動させるワ�
   ソース実行ビットに依存させません。ラッパーは share の実装を実行するので、
   `--symlink-install` では Python の編集も再ビルドなしで反映されます。
   起動名を追加したら CMake の生成対象と CI のインストール確認を揃えます。
-- Pi の ROS base イメージでは `daifuku_rqt` と `daifuku_waypoint_manager` を
+- Pi のヘッドレスプロファイルでは `daifuku_rqt` と `daifuku_waypoint_manager` を
   `SKIP_PACKAGES` から外しません。rqt/RViz が無くビルドできないためです。
   `daifuku_bringup`、`daifuku_robot`、`daifuku_config` は実機でも必須です。
 

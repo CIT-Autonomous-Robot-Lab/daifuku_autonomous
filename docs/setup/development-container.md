@@ -1,16 +1,14 @@
 # GUI付き開発コンテナ
 
-公式ドキュメントのPC側環境（Ubuntu 22.04、ROS 2 Humble、`raspicat-pc.repos`）を
-Dockerで再現する開発環境です。ロボット用EthernetはDHCPを使用せず、
+ルートの`shell.nix`と同じROS 2 Humble環境をDockerで使います。
+ロボット用EthernetはDHCPを使用せず、
 `192.168.1.0/24`の固定IPで構成します。
 
 ## 構成
 
-- ROS 2 Humble Desktop Full
-- `CIT-Autonomous-Robot-Lab/raspicat2` のPC用ワークスペース
-  （再現性のため確認済みコミット`500a20c`に固定）
-- `raspicat_ros`、`raspicat_description`、`raspicat_slam_navigation`、
-  `raspicat_speak2`、`raspicat_setup_scripts`
+- ROS 2 Humbleと、ワークスペースのビルド・実行に必要な依存
+- `daifuku_autonomous.repos`で取得するRaspberry Pi Catのパッケージ
+- Livox SDK2、Rust・colconのツールチェーン
 - RVizなどのGUI（Linux X11、WSLg、またはWindows X Server）
 - ROS 2通信用のhost network
 
@@ -187,15 +185,16 @@ bash docker/dev/tools/linux/shell.sh
 
 ```bash
 build-autonomous
-source install/setup.bash
+source install/local_setup.bash
 ros2 pkg list | grep raspicat
 ros2 pkg prefix daifuku_bringup
 ros2 topic list
 ```
 
 ワークスペース全体はコンテナの`/workspaces/daifuku_autonomous`へマウントされます。
-公式PC環境は`/opt/raspicat2`です。
-このリポジトリの`build`、`install`、`log`はDockerボリュームに保存されます。
+Raspberry Pi Catのパッケージもこのワークスペースでビルドします。
+`build`、`install`、`log`はホストのリポジトリ直下に保存されます。
+依存を追加するときは`shell.nix`を編集し、イメージを作り直してください。
 
 実機と同じ`ROS_DOMAIN_ID=90`、Fast DDSのUDPv4通信が既定です。実機との通信確認:
 
