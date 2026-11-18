@@ -9,7 +9,8 @@ fi
 
 mkdir -p build install
 layout="$({
-  printf '%s\n' "$PWD"
+  # 同じ配置でもROS環境を替えたら、旧コンパイラ・ライブラリの参照を捨てる。
+  printf '%s\n' "$PWD" "${CMAKE_PREFIX_PATH:-}"
   cat # stdin は colcon list のパッケージ名・配置・種類。
   find src -type d \( -name .git -o -name target -o -name build \
     -o -name install -o -name log -o -name .venv -o -name __pycache__ \

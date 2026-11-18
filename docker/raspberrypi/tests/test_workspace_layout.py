@@ -93,6 +93,21 @@ def test_content_edits_and_generated_caches_keep_incremental_outputs(workspace: 
         assert (workspace / 'build' / package / 'cached').exists()
 
 
+def test_underlay_change_cleans_outputs_but_preserves_cargo(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: 別のROS環境で成功したビルドと取得済みクレート。
+    monkeypatch.setenv('CMAKE_PREFIX_PATH', '/opt/ros/humble')
+    baseline(workspace)
+    monkeypatch.setenv('CMAKE_PREFIX_PATH', '/nix/store/new-ros-env')
+    # When: 同じワークスペースを新しい環境でビルドする。
+    layout(workspace, 'prepare', package_list(workspace))
+    # Then: 旧環境を参照する生成物を捨て、ダウンロード済みクレートは残す。
+    assert not (workspace / 'install' / 'old').exists()
+    assert not (workspace / 'build' / 'changing').exists()
+    assert (workspace / 'build' / '.cargo' / 'download').read_text() == 'crate'
+
+
 @pytest.mark.parametrize('change', ['move', 'rename', 'remove', 'file', 'metadata', 'add'])
 def test_layout_changes_clean_generated_outputs(workspace: Path, change: str) -> None:
     # Given: 成功済み構成にパッケージ・ファイル構成の変更を加える。
@@ -198,7 +213,7 @@ def test_builder_entrypoint_does_not_source_old_workspace(tmp_path: Path) -> Non
     # Given: 古い overlay は source すると失敗する。
     install = tmp_path / 'install'
     install.mkdir()
-    _ = (install / 'setup.bash').write_text('exit 91\n')
+    _ = (install / 'local_setup.bash').write_text('exit 91\n')
     executable = tmp_path / 'build-workspace'
     _ = executable.write_text('#!/bin/sh\nexit 0\n')
     executable.chmod(0o755)
