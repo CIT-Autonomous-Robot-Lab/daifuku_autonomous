@@ -12,7 +12,15 @@ let
   };
   pkgs = import nixpkgs {
     inherit system;
-    overlays = [ (import (rosOverlay + "/overlay.nix")) ];
+    overlays = [
+      (import (rosOverlay + "/overlay.nix"))
+      (_: prev: {
+        # Humbleのlaunch_testingはpytest 9で削除されたpathフックを使う。
+        pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
+          (_: pythonPrev: { pytest = pythonPrev.pytest_8_3; })
+        ];
+      })
+    ];
   };
   # Dockerと同じSDKを使い、Livoxドライバがリンクする共有ライブラリを用意する。
   livoxSdk2 = pkgs.stdenv.mkDerivation {
