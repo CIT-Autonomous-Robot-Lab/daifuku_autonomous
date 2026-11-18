@@ -56,7 +56,7 @@ if [[ ${#missing[@]} -ne 0 ]]; then
 fi
 
 # livox_ros_driver2 は ROS 2 用の manifest と launch を上流で別名に置いている。
-cp src/livox_ros_driver2/package_ROS2.xml src/livox_ros_driver2/package.xml
+cp --remove-destination src/livox_ros_driver2/package_ROS2.xml src/livox_ros_driver2/package.xml
 rm -rf src/livox_ros_driver2/launch
 # Windows/Podman のバインドマウントは一部の Unix タイムスタンプを設定できない。
 mkdir -p src/livox_ros_driver2/launch
