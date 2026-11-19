@@ -23,12 +23,12 @@ export NIX_CONFIG="$(
     'experimental-features = nix-command flakes' \
     'sandbox = false' \
     'http2 = false' \
-    'extra-substituters = https://ros.cachix.org https://cache.numtide.com' \
-    'extra-trusted-public-keys = ros.cachix.org-1:dSyZxI8geDCJrwgvCOHDoAfOm5sV1wCPjBkKL+38Rvo= niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g='
+    'extra-substituters = https://attic.iid.ciirc.cvut.cz/ros https://ros.cachix.org https://cache.numtide.com' \
+    'extra-trusted-public-keys = ros:JR95vUYsShSqfA1VTYoFt1Nz6uXasm5QrcOsGry9f6Q= ros.cachix.org-1:dSyZxI8geDCJrwgvCOHDoAfOm5sV1wCPjBkKL+38Rvo= niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g='
 )"
 
 mkdir -p "${image_root}/opt/daifuku"
-nix print-dev-env --file /tmp/nix-env/shell.nix \
+nix print-dev-env --print-build-logs --file /tmp/nix-env/shell.nix \
   --arg gui "${gui}" --arg vulkan "${vulkan}" \
   --max-jobs "${BUILD_JOBS:-2}" --cores "${BUILD_JOBS:-2}" \
   --profile "${profile}" >"${image_root}/opt/daifuku/nix-env.bash"
