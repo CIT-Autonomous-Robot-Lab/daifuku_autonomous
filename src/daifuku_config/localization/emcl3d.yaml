@@ -24,7 +24,7 @@ emcl3d:
     min_range: 0.5                      # 既定 0.0 [m]: 機体自身の反射を落とす。**未検証**
     max_range: 70.0                     # 既定 100.0 [m]: Mid-360 の測距上限 (pointcloud_to_laserscan の range_max と同じ)
     max_input_points: 2000000           # 既定 同左
-    max_eval_points: 2000               # 既定 同左: Pi で 1 回の更新に見る点の上限
+    max_eval_points: 1500               # 既定 2000: Pi で 1 回の追跡更新に見る点の上限
     min_valid_points: 20                # 既定 同左
 
     # [x, y, z, roll, pitch, yaw]。起動時の初期姿勢 (RViz の 2D Pose Estimate で上書きする)。

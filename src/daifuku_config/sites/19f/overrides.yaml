@@ -30,4 +30,3 @@ daifuku_navigation:
       action_rotation_deg: [0.0, 0.0, -45.0, -30.0, 45.0, 30.0]  # 断片 [0, 0, -30, -30, 30, 30]: 据え切りを45度に拡大
       cost_drawing_threshold: 100          # 断片 60: 表示専用。色スケール上限 [ステップ≒秒] ≒50m
       early_start: true                    # 断片 false: 方策が繋がった時点で solve を打ち切る。密なので効く。ログの cut short / truncated で見る (未検証)
-      waypoint_prefetch: true              # 断片 false: 点あたり 29 秒の停止が消える代わりに場が 2 本 (655MB x2 = 1.31GB) + 1 コア。**Pi 4 (4GB) では外すこと**
