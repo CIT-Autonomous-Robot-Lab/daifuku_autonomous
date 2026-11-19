@@ -62,6 +62,7 @@ _UNBOUNDED_DEG = 89.9
 
 
 class ElevationFilter(Node):
+
     def __init__(self):
         super().__init__('elevation_filter')
         self._restamp_cloud = self.declare_parameter('restamp_cloud', False).value

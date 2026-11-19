@@ -38,6 +38,7 @@ def main() -> None:
     from tf2_msgs.msg import TFMessage
 
     class GravityFrame(Node):
+
         def __init__(self):
             super().__init__('localization_gravity_publisher')
             self.publisher = self.create_publisher(TFMessage, '/tf', 100)

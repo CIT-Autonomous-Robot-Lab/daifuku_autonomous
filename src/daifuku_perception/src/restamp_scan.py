@@ -34,6 +34,7 @@ from sensor_msgs.msg import LaserScan
 
 
 class RestampScan(Node):
+
     def __init__(self):
         super().__init__('restamp_scan')
         # Publisher is reliable so both reliable and best-effort

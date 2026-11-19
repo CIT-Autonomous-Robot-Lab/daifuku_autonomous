@@ -54,6 +54,7 @@ STANDARD_GRAVITY = 9.80665
 
 
 class PrepareMid360Imu(Node):
+
     def __init__(self):
         super().__init__('prepare_mid360_imu')
         gyro_variance = self.declare_parameter('gyro_variance', 4.0e-4).value

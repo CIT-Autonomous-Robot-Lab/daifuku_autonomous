@@ -99,6 +99,7 @@ def _read_first_int(path):
 
 
 class SystemMonitor(Node):
+
     def __init__(self):
         super().__init__('system_monitor')
         period = self.declare_parameter('update_period', 1.0).value
