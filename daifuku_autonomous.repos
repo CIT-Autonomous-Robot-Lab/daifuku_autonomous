@@ -14,7 +14,7 @@ repositories:
   src/value_iteration3:
     type: git
     url: https://github.com/NOPLAB/value_iteration3.git
-    version: 5356c858d3f5154c9aae91c3b80b79e40be3d4f7
+    version: 3046d4fc69354b5cc74fc90f4f3165a6c0a2fd05
   src/raspicat_ros:
     type: git
     url: https://github.com/CIT-Autonomous-Robot-Lab/raspicat_ros.git
