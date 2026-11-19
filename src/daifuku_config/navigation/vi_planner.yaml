@@ -25,7 +25,7 @@ vi_planner:
     max_rollout_steps: 10000     # 既定 10000: 経路生成の最大手数
     path_spacing: 0.05           # 既定 0.05 [m]: 出力経路の補間間隔
     control_frequency: 10.0      # 既定 10.0 [Hz]: 指令・入力処理の周期。局所計算の周期ではない
-    local_cpu_share: 0.6         # 既定 0.6: CPUスレッド数換算の局所配分。1超で並列化
+    local_cpu_share: 4.0         # 既定 0.6: CPUスレッド数換算の局所配分。1超で並列化
     local_shape: "capsule"       # 既定 square: 進行方向に沿うカプセル形
     local_xy_range: 3.0          # 既定 1.0 [m]: 追従窓を前後3 mへ広げる
     local_xy_range_lat: 2.0      # 既定 0.0 [m]: 追従窓の横半径
