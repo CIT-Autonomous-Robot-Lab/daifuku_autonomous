@@ -30,26 +30,26 @@ def leveling_rotation(
 
 
 def main() -> None:
-    import rclpy
     from geometry_msgs.msg import TransformStamped
     from nav_msgs.msg import Odometry
+    import rclpy
     from rclpy.node import Node
     from rclpy.qos import qos_profile_sensor_data
     from tf2_msgs.msg import TFMessage
 
     class GravityFrame(Node):
         def __init__(self):
-            super().__init__("localization_gravity_publisher")
-            self.publisher = self.create_publisher(TFMessage, "/tf", 100)
+            super().__init__('localization_gravity_publisher')
+            self.publisher = self.create_publisher(TFMessage, '/tf', 100)
             self.announced = False
-            self.create_subscription(Odometry, "/odom", self.receive, qos_profile_sensor_data)
+            self.create_subscription(Odometry, '/odom', self.receive, qos_profile_sensor_data)
 
         def receive(self, message: Odometry) -> None:
             rotation = message.pose.pose.orientation
             transform = TransformStamped()
             transform.header.stamp = message.header.stamp
             transform.header.frame_id = message.child_frame_id
-            transform.child_frame_id = "localization_gravity"
+            transform.child_frame_id = 'localization_gravity'
             # Default translation is zero. Use no global position or yaw feedback.
             (transform.transform.rotation.x, transform.transform.rotation.y,
              transform.transform.rotation.z, transform.transform.rotation.w) = leveling_rotation(
@@ -59,7 +59,7 @@ def main() -> None:
             output.transforms = [transform]
             self.publisher.publish(output)
             if not self.announced:
-                self.get_logger().info("GRAVITY_FRAME_READY parent=" + message.child_frame_id)
+                self.get_logger().info('GRAVITY_FRAME_READY parent=' + message.child_frame_id)
                 self.announced = True
 
     rclpy.init()
@@ -74,5 +74,5 @@ def main() -> None:
             rclpy.shutdown()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

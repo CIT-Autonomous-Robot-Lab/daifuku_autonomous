@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""ウェイポイント YAML の読み込み (ROS に依存しない)。
+"""ウェイポイント YAML の読み込み (ROS に依存しない).
 
 書式は daifuku_waypoint_manager パネルが保存するものと同じ
 (frame_id + waypoints[].position/orientation)。パネルは RViz プラグインで
@@ -37,7 +37,7 @@ import yaml
 
 
 def load_waypoint_document(path):
-    """ウェイポイントの YAML を (frame_id, 点の並び) で返す。
+    """ウェイポイントの YAML を (frame_id, 点の並び) で返す.
 
     各点は ((x, y, z), (qx, qy, qz, qw))。ROS の型は持たないので、
     開発ホストでも rclpy 無しで検算できる。
@@ -51,49 +51,49 @@ def load_waypoint_document(path):
     # 注記を持っていて、ロケールが C の環境 (実機のコンテナは LANG を持たない)
     # では既定の encoding が ASCII になり、**読み込みごと失敗する**。
     # daifuku_config/params.py が同じ理由で明示しているのと同じ。
-    with open(path, encoding="utf-8") as handle:
+    with open(path, encoding='utf-8') as handle:
         document = yaml.safe_load(handle)
     if not isinstance(document, dict):
-        raise ValueError("top level is not a mapping")
+        raise ValueError('top level is not a mapping')
 
-    frame_id = document.get("frame_id")
+    frame_id = document.get('frame_id')
     if not frame_id or not isinstance(frame_id, str):
-        raise ValueError("missing or invalid frame_id")
-    entries = document.get("waypoints")
+        raise ValueError('missing or invalid frame_id')
+    entries = document.get('waypoints')
     if not entries:
-        raise ValueError("no waypoints")
+        raise ValueError('no waypoints')
     if not isinstance(entries, list):
-        raise ValueError("waypoints is not a sequence")
+        raise ValueError('waypoints is not a sequence')
 
     poses = []
     for index, entry in enumerate(entries):
         try:
-            position = entry["position"]
-            orientation = entry["orientation"]
+            position = entry['position']
+            orientation = entry['orientation']
             xyz = (
-                float(position["x"]),
-                float(position["y"]),
-                float(position.get("z", 0.0)),
+                float(position['x']),
+                float(position['y']),
+                float(position.get('z', 0.0)),
             )
             quat = (
-                float(orientation["x"]),
-                float(orientation["y"]),
-                float(orientation["z"]),
-                float(orientation["w"]),
+                float(orientation['x']),
+                float(orientation['y']),
+                float(orientation['z']),
+                float(orientation['w']),
             )
         except (KeyError, TypeError, ValueError) as exc:
-            raise ValueError("waypoint %d: %s" % (index, exc)) from exc
+            raise ValueError('waypoint %d: %s' % (index, exc)) from exc
         _validate_pose(index, xyz, quat)
         poses.append((xyz, quat))
     return frame_id, poses
 
 
 def _validate_pose(index, xyz, quat):
-    """有限でない座標と、長さが 0 のクォータニオンを弾く (パネルと同じ判定)。"""
+    """有限でない座標と、長さが 0 のクォータニオンを弾く (パネルと同じ判定)."""
     if not all(math.isfinite(v) for v in xyz):
-        raise ValueError("waypoint %d: position is not finite" % index)
+        raise ValueError('waypoint %d: position is not finite' % index)
     norm_squared = quat[0] ** 2 + quat[1] ** 2 + quat[2] ** 2 + quat[3] ** 2
     if not math.isfinite(norm_squared) or norm_squared < 1e-12:
         raise ValueError(
-            "waypoint %d: orientation is not a usable quaternion" % index
+            'waypoint %d: orientation is not a usable quaternion' % index
         )

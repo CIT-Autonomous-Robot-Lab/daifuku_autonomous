@@ -49,9 +49,9 @@ def _read_cpu_times():
     there on SD reads, but the core is available for another thread.
     """
     out = {}
-    with open("/proc/stat") as handle:
+    with open('/proc/stat') as handle:
         for line in handle:
-            if not line.startswith("cpu"):
+            if not line.startswith('cpu'):
                 break
             fields = line.split()
             values = [int(v) for v in fields[1:]]
@@ -69,20 +69,20 @@ def _read_process_times(watch):
     characters and a composed node shows up as component_container.
     """
     out = {}
-    for pid in os.listdir("/proc"):
+    for pid in os.listdir('/proc'):
         if not pid.isdigit():
             continue
         try:
-            with open("/proc/%s/cmdline" % pid, "rb") as handle:
-                cmdline = handle.read().decode("utf-8", "replace").replace("\0", " ")
+            with open('/proc/%s/cmdline' % pid, 'rb') as handle:
+                cmdline = handle.read().decode('utf-8', 'replace').replace('\0', ' ')
             name = next((w for w in watch if w in cmdline), None)
             if name is None:
                 continue
-            with open("/proc/%s/stat" % pid) as handle:
+            with open('/proc/%s/stat' % pid) as handle:
                 stat = handle.read()
             # The comm field is parenthesised and may itself contain spaces and
             # parentheses, so split after the last ')' rather than on spaces.
-            fields = stat.rpartition(")")[2].split()
+            fields = stat.rpartition(')')[2].split()
             # After comm, field 0 is state; utime and stime are 11 and 12.
             out[name] = out.get(name, 0) + int(fields[11]) + int(fields[12])
         except (OSError, IndexError, ValueError, StopIteration):
@@ -100,35 +100,35 @@ def _read_first_int(path):
 
 class SystemMonitor(Node):
     def __init__(self):
-        super().__init__("system_monitor")
-        period = self.declare_parameter("update_period", 1.0).value
-        self._warn = self.declare_parameter("warn_percent", 85.0).value
-        self._error = self.declare_parameter("error_percent", 95.0).value
+        super().__init__('system_monitor')
+        period = self.declare_parameter('update_period', 1.0).value
+        self._warn = self.declare_parameter('warn_percent', 85.0).value
+        self._error = self.declare_parameter('error_percent', 95.0).value
         self._watch = self.declare_parameter(
-            "watch",
+            'watch',
             [
-                "vi_planner",
-                "velocity_smoother",
-                "amcl",
-                "emcl2",
-                "emcl3d",
-                "livox_ros_driver2",
-                "component_container",
+                'vi_planner',
+                'velocity_smoother',
+                'amcl',
+                'emcl2',
+                'emcl3d',
+                'livox_ros_driver2',
+                'component_container',
             ],
         ).value
 
-        self._clock_ticks = os.sysconf("SC_CLK_TCK")
+        self._clock_ticks = os.sysconf('SC_CLK_TCK')
         self._period = period
         self._prev_cpu = _read_cpu_times()
         self._prev_proc = _read_process_times(self._watch)
 
-        self._cpu_pub = self.create_publisher(Float32, "~/cpu_percent", 10)
-        self._temp_pub = self.create_publisher(Float32, "~/temperature", 10)
+        self._cpu_pub = self.create_publisher(Float32, '~/cpu_percent', 10)
+        self._temp_pub = self.create_publisher(Float32, '~/temperature', 10)
 
         self._updater = diagnostic_updater.Updater(self, period=period)
         self._updater.setHardwareID(os.uname().nodename)
-        self._updater.add("CPU", self._cpu_task)
-        self._updater.add("Nodes", self._process_task)
+        self._updater.add('CPU', self._cpu_task)
+        self._updater.add('Nodes', self._process_task)
 
     def _cpu_task(self, stat):
         current = _read_cpu_times()
@@ -140,9 +140,9 @@ class SystemMonitor(Node):
             percents[name] = 100.0 * (busy - prev[0]) / (total - prev[1])
         self._prev_cpu = current
 
-        overall = percents.pop("cpu", None)
+        overall = percents.pop('cpu', None)
         if overall is None:
-            stat.summary(DiagnosticStatus.OK, "measuring")
+            stat.summary(DiagnosticStatus.OK, 'measuring')
             return stat
 
         if overall >= self._error:
@@ -151,21 +151,21 @@ class SystemMonitor(Node):
             level = DiagnosticStatus.WARN
         else:
             level = DiagnosticStatus.OK
-        stat.summary(level, "%.1f%%" % overall)
-        stat.add("total", "%.1f%%" % overall)
+        stat.summary(level, '%.1f%%' % overall)
+        stat.add('total', '%.1f%%' % overall)
         for name in sorted(percents):
-            stat.add(name, "%.1f%%" % percents[name])
+            stat.add(name, '%.1f%%' % percents[name])
 
         try:
-            with open("/proc/loadavg") as handle:
-                stat.add("loadavg", " ".join(handle.read().split()[:3]))
+            with open('/proc/loadavg') as handle:
+                stat.add('loadavg', ' '.join(handle.read().split()[:3]))
         except (OSError, ValueError):
             pass
 
-        milli = _read_first_int("/sys/class/thermal/thermal_zone0/temp")
+        milli = _read_first_int('/sys/class/thermal/thermal_zone0/temp')
         if milli is not None:
             celsius = milli / 1000.0
-            stat.add("temperature", "%.1f degC" % celsius)
+            stat.add('temperature', '%.1f degC' % celsius)
             self._temp_pub.publish(Float32(data=celsius))
 
         self._cpu_pub.publish(Float32(data=float(overall)))
@@ -180,16 +180,16 @@ class SystemMonitor(Node):
                 continue
             seconds = (current[name] - prev) / float(self._clock_ticks)
             # Above 100% means several threads ran; the Pi has four cores.
-            stat.add(name, "%.1f%%" % (100.0 * seconds / self._period))
+            stat.add(name, '%.1f%%' % (100.0 * seconds / self._period))
             found.append(name)
         self._prev_proc = current
 
         if not found:
             # Not an error: the container's PID namespace legitimately holds
             # none of these when only the driver stack is up.
-            stat.summary(DiagnosticStatus.OK, "no watched process in this namespace")
+            stat.summary(DiagnosticStatus.OK, 'no watched process in this namespace')
         else:
-            stat.summary(DiagnosticStatus.OK, "%d process(es)" % len(found))
+            stat.summary(DiagnosticStatus.OK, '%d process(es)' % len(found))
         return stat
 
 
@@ -206,5 +206,5 @@ def main(args=None):
             rclpy.shutdown()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

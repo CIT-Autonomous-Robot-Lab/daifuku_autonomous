@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""config_sentinel が設定の書き換えをどう申告するかを確かめる。
+"""config_sentinel が設定の書き換えをどう申告するかを確かめる.
 
 launch_testing の統合テスト (`colcon test` が拾う。実機も Docker も要らない)。
 見張りが返す**終了コードは launch を落とす合図そのもの**なので、ノードを本当に
@@ -48,15 +48,15 @@ import pytest
 # 走っている機体と同じ領域に出ないようにする。config_sentinel は名前を変えられるが、
 # 隣の test_site_manager_launch.py が立てる site_manager は名前が固定なので、
 # 実機の上で colcon test を回すと本物と 2 つになる。
-TEST_DOMAIN_ID = "77"
+TEST_DOMAIN_ID = '77'
 
 # 見張らせる部分木。daifuku_navigation でも daifuku_robot でもよいが、
 # 指紋の対象 (config_root) が空でないほうが試験として意味がある。
-PACKAGE = "daifuku_navigation"
+PACKAGE = 'daifuku_navigation'
 
 
 class _Exited:
-    """OnProcessExit が handler へ渡すもののうち、handler が見るのは 1 つだけ。"""
+    """OnProcessExit が handler へ渡すもののうち、handler が見るのは 1 つだけ."""
 
     def __init__(self, returncode):
         self.returncode = returncode
@@ -65,38 +65,38 @@ class _Exited:
 @pytest.mark.launch_test
 def generate_test_description():
     sentinel = Node(
-        package="daifuku_config",
-        executable="config_sentinel",
-        name="config_sentinel_test",
-        output="screen",
+        package='daifuku_config',
+        executable='config_sentinel',
+        name='config_sentinel_test',
+        output='screen',
         parameters=[{
-            "package": PACKAGE,
-            "config_root": params.config_root(PACKAGE),
-            "site": params.read_site_file(params.site_file()),
+            'package': PACKAGE,
+            'config_root': params.config_root(PACKAGE),
+            'site': params.read_site_file(params.site_file()),
             # わざと嘘の指紋。これで「起動時と設定が違う」状態になる。
-            "digest": "stale",
+            'digest': 'stale',
             # 固定した構成も設定ファイルの変更では終了する。
-            "follow": False,
-            "watch_site": False,
-            "action": "shutdown",
+            'follow': False,
+            'watch_site': False,
+            'action': 'shutdown',
             # 既定は 30 秒。そのままだとテストがその間ただ待つ。
-            "min_uptime_sec": 0.0,
-            "poll_period": 0.2,
+            'min_uptime_sec': 0.0,
+            'poll_period': 0.2,
             # /odom は誰も出さない。既定の 10 秒を待たずに「静止」と見なさせる
             # (_still の「来ないなら止まっている扱い」の側に入る)。
-            "odom_grace_sec": 0.0,
+            'odom_grace_sec': 0.0,
         }],
     )
     return (
         launch.LaunchDescription([
-            SetEnvironmentVariable("ROS_DOMAIN_ID", TEST_DOMAIN_ID),
-            SetEnvironmentVariable("ROS_LOCALHOST_ONLY", "1"),
+            SetEnvironmentVariable('ROS_DOMAIN_ID', TEST_DOMAIN_ID),
+            SetEnvironmentVariable('ROS_LOCALHOST_ONLY', '1'),
             sentinel,
             # 見張りが終わっても launch を畳ませない番人 (上の docstring)。
             launch_testing.util.KeepAliveProc(),
             launch_testing.actions.ReadyToTest(),
         ]),
-        {"sentinel": sentinel},
+        {'sentinel': sentinel},
     )
 
 
@@ -126,5 +126,5 @@ class TestSentinelExitCode(unittest.TestCase):
             emitted = params._on_sentinel_exit(_Exited(returncode), None)
             self.assertFalse(
                 any(isinstance(action, EmitEvent) for action in emitted),
-                f"rc={returncode} で launch を落としています",
+                f'rc={returncode} で launch を落としています',
             )

@@ -80,35 +80,25 @@ import sys
 import threading
 import time
 
-from geometry_msgs.msg import TransformStamped
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import TransformStamped, Twist
 from nav_msgs.msg import Odometry
-from raspimouse_msgs.msg import Leds
-from raspimouse_msgs.msg import Switches
+from raspimouse_msgs.msg import Leds, Switches
 import rclpy
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
-from rclpy.lifecycle import LifecycleNode
-from rclpy.lifecycle import LifecycleState
-from rclpy.lifecycle import TransitionCallbackReturn
-from rclpy.qos import DurabilityPolicy
-from rclpy.qos import QoSProfile
-from std_msgs.msg import Bool
-from std_msgs.msg import Int16
+from rclpy.lifecycle import LifecycleNode, LifecycleState, TransitionCallbackReturn
+from rclpy.qos import DurabilityPolicy, QoSProfile
+from std_msgs.msg import Bool, Int16
 from std_srvs.srv import SetBool
 from tf2_ros import TransformBroadcaster
 
-from .backend import Hardware
-from .backend import LEFT
-from .backend import RIGHT
-from .backend import Wiring
-from .backend import create_backend
+from .backend import create_backend, Hardware, LEFT, RIGHT, Wiring
 
 # Index into the GPIO line bundle opened by the backend; the first two are the
 # direction lines, so LEFT/RIGHT double as their indices.
 MOTOR_ENABLE = 2
 
-SIDE_NAMES = ("left", "right")
+SIDE_NAMES = ('left', 'right')
 
 # How far past "max_step_frequency for the whole interval" a pulse delta may
 # land before it is treated as noise rather than motion.  Only has to separate
@@ -146,59 +136,59 @@ class RaspicatDriver(LifecycleNode):
     """cmd_vel in, odom out, with the hardware hidden behind a backend."""
 
     def __init__(self):
-        super().__init__("raspicat_driver")
+        super().__init__('raspicat_driver')
 
-        self.declare_parameter("model", "auto")
+        self.declare_parameter('model', 'auto')
 
-        self.declare_parameter("use_pulse_counters", True)
-        self.declare_parameter("odometry_scale_left_wheel", 1.0)
-        self.declare_parameter("odometry_scale_right_wheel", 1.0)
-        self.declare_parameter("wheel_diameter", 0.2)
-        self.declare_parameter("wheel_tread", 0.35)
-        self.declare_parameter("pulses_per_revolution", 1073.0)
-        self.declare_parameter("steps_per_revolution", 447.0)
-        self.declare_parameter("odom_hz", 50.0)
-        self.declare_parameter("initial_motor_power", False)
-        self.declare_parameter("cmd_vel_timeout", 60.0)
-        self.declare_parameter("publish_tf", True)
-        self.declare_parameter("odom_frame_id", "odom")
-        self.declare_parameter("odom_child_frame_id", "base_footprint")
-        self.declare_parameter("odom_frame_prefix", "")
+        self.declare_parameter('use_pulse_counters', True)
+        self.declare_parameter('odometry_scale_left_wheel', 1.0)
+        self.declare_parameter('odometry_scale_right_wheel', 1.0)
+        self.declare_parameter('wheel_diameter', 0.2)
+        self.declare_parameter('wheel_tread', 0.35)
+        self.declare_parameter('pulses_per_revolution', 1073.0)
+        self.declare_parameter('steps_per_revolution', 447.0)
+        self.declare_parameter('odom_hz', 50.0)
+        self.declare_parameter('initial_motor_power', False)
+        self.declare_parameter('cmd_vel_timeout', 60.0)
+        self.declare_parameter('publish_tf', True)
+        self.declare_parameter('odom_frame_id', 'odom')
+        self.declare_parameter('odom_child_frame_id', 'base_footprint')
+        self.declare_parameter('odom_frame_prefix', '')
 
-        self.declare_parameter("min_step_frequency", 5.0)
-        self.declare_parameter("max_step_frequency", 10000.0)
+        self.declare_parameter('min_step_frequency', 5.0)
+        self.declare_parameter('max_step_frequency', 10000.0)
 
-        self.declare_parameter("gpiochip_label", "")
-        self.declare_parameter("gpiochip_device", "")
-        self.declare_parameter("gpio_direction_left", 16)
-        self.declare_parameter("gpio_direction_right", 6)
-        self.declare_parameter("gpio_motor_enable", 5)
-        self.declare_parameter("direction_left_forward_level", 0)
-        self.declare_parameter("direction_right_forward_level", 1)
+        self.declare_parameter('gpiochip_label', '')
+        self.declare_parameter('gpiochip_device', '')
+        self.declare_parameter('gpio_direction_left', 16)
+        self.declare_parameter('gpio_direction_right', 6)
+        self.declare_parameter('gpio_motor_enable', 5)
+        self.declare_parameter('direction_left_forward_level', 0)
+        self.declare_parameter('direction_right_forward_level', 1)
 
-        self.declare_parameter("pwmchip_match", "")
-        self.declare_parameter("pwmchip_path", "")
-        self.declare_parameter("pwm_channel_left", 0)
-        self.declare_parameter("pwm_channel_right", 1)
+        self.declare_parameter('pwmchip_match', '')
+        self.declare_parameter('pwmchip_path', '')
+        self.declare_parameter('pwm_channel_left', 0)
+        self.declare_parameter('pwm_channel_right', 1)
 
-        self.declare_parameter("use_leds", True)
-        self.declare_parameter("use_switches", True)
-        self.declare_parameter("use_buzzer", True)
-        self.declare_parameter("gpio_leds", [25, 24, 23, 18])
-        self.declare_parameter("gpio_switches", [20, 26, 21])
-        self.declare_parameter("gpio_buzzer", 19)
-        self.declare_parameter("switch_pull_up", True)
-        self.declare_parameter("switches_hz", 10.0)
-        self.declare_parameter("buzzer_pwm_channel", -1)
-        self.declare_parameter("buzzer_max_frequency", 5000.0)
+        self.declare_parameter('use_leds', True)
+        self.declare_parameter('use_switches', True)
+        self.declare_parameter('use_buzzer', True)
+        self.declare_parameter('gpio_leds', [25, 24, 23, 18])
+        self.declare_parameter('gpio_switches', [20, 26, 21])
+        self.declare_parameter('gpio_buzzer', 19)
+        self.declare_parameter('switch_pull_up', True)
+        self.declare_parameter('switches_hz', 10.0)
+        self.declare_parameter('buzzer_pwm_channel', -1)
+        self.declare_parameter('buzzer_max_frequency', 5000.0)
 
-        self.declare_parameter("i2c_bus", "/dev/i2c-1")
-        self.declare_parameter("i2c_address_left", 0x10)
-        self.declare_parameter("i2c_address_right", 0x11)
-        self.declare_parameter("counter_error_limit", 5)
-        self.declare_parameter("counter_retry_period", 1.0)
+        self.declare_parameter('i2c_bus', '/dev/i2c-1')
+        self.declare_parameter('i2c_address_left', 0x10)
+        self.declare_parameter('i2c_address_right', 0x11)
+        self.declare_parameter('counter_error_limit', 5)
+        self.declare_parameter('counter_retry_period', 1.0)
 
-        self.declare_parameter("allow_rtmouse", False)
+        self.declare_parameter('allow_rtmouse', False)
 
         self._motor_group = MutuallyExclusiveCallbackGroup()
         self._odom_group = MutuallyExclusiveCallbackGroup()
@@ -235,44 +225,44 @@ class RaspicatDriver(LifecycleNode):
         """Pick the backend, claim the hardware and create every entity."""
         try:
             wiring = self._load_parameters()
-            self._backend = create_backend(self.get_parameter("model").value)
+            self._backend = create_backend(self.get_parameter('model').value)
             self._backend.preflight(wiring, self.get_logger())
-            self._hardware = self._backend.open(wiring, self.get_logger())
+            self._hardware = self._backend.open_hardware(wiring, self.get_logger())
         except Exception as exc:
             # rclpy swallows an exception here and reports ERROR with no
             # message, so catch it while we still know what happened.
-            self.get_logger().error("configure failed: %s" % exc)
+            self.get_logger().error('configure failed: %s' % exc)
             self._hardware.close()
             return TransitionCallbackReturn.FAILURE
 
         self._reset_state()
         self._arm_directions()
 
-        self._odom_pub = self.create_lifecycle_publisher(Odometry, "odom", 10)
+        self._odom_pub = self.create_lifecycle_publisher(Odometry, 'odom', 10)
         self._tf_broadcaster = TransformBroadcaster(self)
         self._cmd_vel_sub = self.create_subscription(
-            Twist, "cmd_vel", self._on_cmd_vel, 10, callback_group=self._motor_group
+            Twist, 'cmd_vel', self._on_cmd_vel, 10, callback_group=self._motor_group
         )
         self._motor_power_srv = self.create_service(
             SetBool,
-            "motor_power",
+            'motor_power',
             self._on_motor_power,
             callback_group=self._motor_group,
         )
         self._leds_sub = self.create_subscription(
-            Leds, "leds", self._on_leds, 10, callback_group=self._aux_group
+            Leds, 'leds', self._on_leds, 10, callback_group=self._aux_group
         )
         self._buzzer_sub = self.create_subscription(
-            Int16, "buzzer", self._on_buzzer, 10, callback_group=self._aux_group
+            Int16, 'buzzer', self._on_buzzer, 10, callback_group=self._aux_group
         )
-        self._switches_pub = self.create_lifecycle_publisher(Switches, "switches", 10)
+        self._switches_pub = self.create_lifecycle_publisher(Switches, 'switches', 10)
         # Not a lifecycle publisher: the state has to reach the LEDs from
         # on_deactivate and teardown too, and a lifecycle publisher drops
         # exactly those (leaving the last "on" as the newest thing anyone can
         # read).  Latched so a subscriber that comes up later still knows.
         self._motor_power_pub = self.create_publisher(
             Bool,
-            "motor_power_state",
+            'motor_power_state',
             QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL),
         )
 
@@ -294,15 +284,15 @@ class RaspicatDriver(LifecycleNode):
 
         self._set_motor_power(False)
         self.get_logger().info(
-            "configured: model=%s (%s) gpiochip=%s pwmchip=%s counters=%s"
+            'configured: model=%s (%s) gpiochip=%s pwmchip=%s counters=%s'
             % (self._backend.name, self._backend.soc, self._hardware.gpiochip_path,
-               self._hardware.pwmchip_path, "on" if self._use_pulse_counters else "off")
+               self._hardware.pwmchip_path, 'on' if self._use_pulse_counters else 'off')
         )
         self.get_logger().info(
-            "peripherals: leds=%s switches=%s buzzer=%s"
-            % ("on" if self._hardware.leds is not None else "off",
-               "on" if self._hardware.switches is not None else "off",
-               self._hardware.buzzer_kind or "off")
+            'peripherals: leds=%s switches=%s buzzer=%s'
+            % ('on' if self._hardware.leds is not None else 'off',
+               'on' if self._hardware.switches is not None else 'off',
+               self._hardware.buzzer_kind or 'off')
         )
         return TransitionCallbackReturn.SUCCESS
 
@@ -316,7 +306,7 @@ class RaspicatDriver(LifecycleNode):
         self._watchdog_timer.reset()
         self._switches_timer.reset()
         self._set_motor_power(self._initial_motor_power)
-        self.get_logger().info("activated")
+        self.get_logger().info('activated')
         return TransitionCallbackReturn.SUCCESS
 
     def on_deactivate(self, state: LifecycleState) -> TransitionCallbackReturn:
@@ -347,7 +337,7 @@ class RaspicatDriver(LifecycleNode):
 
     def on_error(self, state: LifecycleState) -> TransitionCallbackReturn:
         """Never leave the wheels turning because a transition failed."""
-        self.get_logger().error("error processing; stopping motors")
+        self.get_logger().error('error processing; stopping motors')
         self.teardown()
         return TransitionCallbackReturn.SUCCESS
 
@@ -395,92 +385,92 @@ class RaspicatDriver(LifecycleNode):
     def _load_parameters(self):
         """Read every parameter into attributes and return the Wiring."""
         get = self.get_parameter
-        self._use_pulse_counters = get("use_pulse_counters").value
+        self._use_pulse_counters = get('use_pulse_counters').value
         self._scale = (
-            get("odometry_scale_left_wheel").value,
-            get("odometry_scale_right_wheel").value,
+            get('odometry_scale_left_wheel').value,
+            get('odometry_scale_right_wheel').value,
         )
-        self._wheel_diameter = get("wheel_diameter").value
-        self._wheel_tread = get("wheel_tread").value
+        self._wheel_diameter = get('wheel_diameter').value
+        self._wheel_tread = get('wheel_tread').value
         # Two separate numbers, and on this robot they differ by 2.40: what the
         # encoder counts is not what the control board is commanded in.
         # Crossing them makes the robot travel at the wrong speed while odom
         # reports the commanded one, which nothing but a tape measure can see.
-        self._pulses_per_revolution = get("pulses_per_revolution").value
-        self._steps_per_revolution = get("steps_per_revolution").value
-        self._odom_hz = get("odom_hz").value
+        self._pulses_per_revolution = get('pulses_per_revolution').value
+        self._steps_per_revolution = get('steps_per_revolution').value
+        self._odom_hz = get('odom_hz').value
         # Longest interval still worth integrating cmd_vel over.  Generous
         # against scheduling jitter, well under the ~1 s an I2C adapter takes
         # to give up on a stuck bus.
         self._max_odom_dt = max(5.0 / max(self._odom_hz, 1.0), 0.2)
-        self._initial_motor_power = get("initial_motor_power").value
-        self._cmd_vel_timeout = get("cmd_vel_timeout").value
-        self._publish_tf = get("publish_tf").value
-        self._min_step = get("min_step_frequency").value
-        self._max_step = get("max_step_frequency").value
-        self._counter_error_limit = get("counter_error_limit").value
-        self._counter_retry_period = get("counter_retry_period").value
-        self._switches_hz = get("switches_hz").value
+        self._initial_motor_power = get('initial_motor_power').value
+        self._cmd_vel_timeout = get('cmd_vel_timeout').value
+        self._publish_tf = get('publish_tf').value
+        self._min_step = get('min_step_frequency').value
+        self._max_step = get('max_step_frequency').value
+        self._counter_error_limit = get('counter_error_limit').value
+        self._counter_retry_period = get('counter_retry_period').value
+        self._switches_hz = get('switches_hz').value
         # Every edge costs an ioctl and, in the software buzzer, a spin to the
         # microsecond -- so the ceiling is a CPU budget, not a musical one.
-        self._buzzer_max = get("buzzer_max_frequency").value
+        self._buzzer_max = get('buzzer_max_frequency').value
 
-        prefix = get("odom_frame_prefix").value
-        self._odom_frame = get("odom_frame_id").value
-        self._base_frame = get("odom_child_frame_id").value
+        prefix = get('odom_frame_prefix').value
+        self._odom_frame = get('odom_frame_id').value
+        self._base_frame = get('odom_child_frame_id').value
         if prefix:
-            self._odom_frame = "%s/%s" % (prefix, self._odom_frame)
-            self._base_frame = "%s/%s" % (prefix, self._base_frame)
+            self._odom_frame = '%s/%s' % (prefix, self._odom_frame)
+            self._base_frame = '%s/%s' % (prefix, self._base_frame)
 
         if self._wheel_diameter <= 0.0 or self._wheel_tread <= 0.0:
-            raise ValueError("wheel_diameter and wheel_tread must be positive")
+            raise ValueError('wheel_diameter and wheel_tread must be positive')
         if self._pulses_per_revolution <= 0.0:
-            raise ValueError("pulses_per_revolution must be positive")
+            raise ValueError('pulses_per_revolution must be positive')
         if self._steps_per_revolution <= 0.0:
-            raise ValueError("steps_per_revolution must be positive")
+            raise ValueError('steps_per_revolution must be positive')
         # The message has a fixed number of fields, so a short list here would
         # otherwise become an IndexError inside a callback.
-        if len(get("gpio_leds").value) != 4:
-            raise ValueError("gpio_leds must have 4 entries (Leds has led0..led3)")
-        if len(get("gpio_switches").value) != 3:
+        if len(get('gpio_leds').value) != 4:
+            raise ValueError('gpio_leds must have 4 entries (Leds has led0..led3)')
+        if len(get('gpio_switches').value) != 3:
             raise ValueError(
-                "gpio_switches must have 3 entries (Switches has switch0..switch2)"
+                'gpio_switches must have 3 entries (Switches has switch0..switch2)'
             )
 
         self._forward_level = (
-            get("direction_left_forward_level").value,
-            get("direction_right_forward_level").value,
+            get('direction_left_forward_level').value,
+            get('direction_right_forward_level').value,
         )
 
         return Wiring(
-            gpiochip_label=get("gpiochip_label").value,
-            gpiochip_device=get("gpiochip_device").value,
+            gpiochip_label=get('gpiochip_label').value,
+            gpiochip_device=get('gpiochip_device').value,
             gpio_direction=(
-                get("gpio_direction_left").value,
-                get("gpio_direction_right").value,
+                get('gpio_direction_left').value,
+                get('gpio_direction_right').value,
             ),
-            gpio_motor_enable=get("gpio_motor_enable").value,
-            pwmchip_match=get("pwmchip_match").value,
-            pwmchip_path=get("pwmchip_path").value,
+            gpio_motor_enable=get('gpio_motor_enable').value,
+            pwmchip_match=get('pwmchip_match').value,
+            pwmchip_path=get('pwmchip_path').value,
             pwm_channel=(
-                get("pwm_channel_left").value,
-                get("pwm_channel_right").value,
+                get('pwm_channel_left').value,
+                get('pwm_channel_right').value,
             ),
-            i2c_bus=get("i2c_bus").value,
+            i2c_bus=get('i2c_bus').value,
             i2c_address=(
-                get("i2c_address_left").value,
-                get("i2c_address_right").value,
+                get('i2c_address_left').value,
+                get('i2c_address_right').value,
             ),
             use_pulse_counters=self._use_pulse_counters,
-            allow_rtmouse=get("allow_rtmouse").value,
-            gpio_leds=tuple(get("gpio_leds").value),
-            gpio_switches=tuple(get("gpio_switches").value),
-            gpio_buzzer=get("gpio_buzzer").value,
-            switch_pull_up=get("switch_pull_up").value,
-            buzzer_pwm_channel=get("buzzer_pwm_channel").value,
-            use_leds=get("use_leds").value,
-            use_switches=get("use_switches").value,
-            use_buzzer=get("use_buzzer").value,
+            allow_rtmouse=get('allow_rtmouse').value,
+            gpio_leds=tuple(get('gpio_leds').value),
+            gpio_switches=tuple(get('gpio_switches').value),
+            gpio_buzzer=get('gpio_buzzer').value,
+            switch_pull_up=get('switch_pull_up').value,
+            buzzer_pwm_channel=get('buzzer_pwm_channel').value,
+            use_leds=get('use_leds').value,
+            use_switches=get('use_switches').value,
+            use_buzzer=get('use_buzzer').value,
         )
 
     def _reset_state(self):
@@ -524,8 +514,8 @@ class RaspicatDriver(LifecycleNode):
         self._forward = [True, True]
         if self._hardware.gpio is None:
             return
-        self._hardware.gpio.set(LEFT, self._forward_level[LEFT])
-        self._hardware.gpio.set(RIGHT, self._forward_level[RIGHT])
+        self._hardware.gpio.set_value(LEFT, self._forward_level[LEFT])
+        self._hardware.gpio.set_value(RIGHT, self._forward_level[RIGHT])
 
     # -- motor path (motor callback group) ---------------------------------
 
@@ -585,7 +575,7 @@ class RaspicatDriver(LifecycleNode):
                 try:
                     clock.stop()
                 except OSError as exc:
-                    self.get_logger().error("step clock stop failed: %s" % exc)
+                    self.get_logger().error('step clock stop failed: %s' % exc)
                     return
             self._last_frequency[side] = 0.0
             return
@@ -597,9 +587,9 @@ class RaspicatDriver(LifecycleNode):
         if gpio is not None and forward != self._forward[side]:
             level = self._forward_level[side] if forward else 1 - self._forward_level[side]
             try:
-                gpio.set(side, level)
+                gpio.set_value(side, level)
             except OSError as exc:
-                self.get_logger().error("direction line write failed: %s" % exc)
+                self.get_logger().error('direction line write failed: %s' % exc)
                 return
         # _read_counters signs each delta with this, from the other thread.
         with self._state_lock:
@@ -609,7 +599,7 @@ class RaspicatDriver(LifecycleNode):
             try:
                 clock.set_frequency(abs(frequency))
             except OSError as exc:
-                self.get_logger().error("step clock write failed: %s" % exc)
+                self.get_logger().error('step clock write failed: %s' % exc)
                 return
         self._last_frequency[side] = frequency
 
@@ -626,7 +616,7 @@ class RaspicatDriver(LifecycleNode):
                     try:
                         clock.stop()
                     except OSError as exc:
-                        self.get_logger().error("step clock stop failed: %s" % exc)
+                        self.get_logger().error('step clock stop failed: %s' % exc)
                         self._last_frequency[side] = None
                         continue
                 self._last_frequency[side] = 0.0
@@ -635,9 +625,9 @@ class RaspicatDriver(LifecycleNode):
         if self._hardware.gpio is None:
             return
         try:
-            self._hardware.gpio.set(MOTOR_ENABLE, 1 if enabled else 0)
+            self._hardware.gpio.set_value(MOTOR_ENABLE, 1 if enabled else 0)
         except OSError as exc:
-            self.get_logger().error("motor enable write failed: %s" % exc)
+            self.get_logger().error('motor enable write failed: %s' % exc)
             return
         self._motor_power = bool(enabled)
         if self._motor_power_pub is not None:
@@ -647,12 +637,12 @@ class RaspicatDriver(LifecycleNode):
                 self._last_cmd_time = time.monotonic()
         else:
             self._stop_motors()
-        self.get_logger().info("motors %s" % ("on" if enabled else "off"))
+        self.get_logger().info('motors %s' % ('on' if enabled else 'off'))
 
     def _on_motor_power(self, request, response):
         self._set_motor_power(request.data)
         response.success = True
-        response.message = "Motors are on" if request.data else "Motors are off"
+        response.message = 'Motors are on' if request.data else 'Motors are off'
         return response
 
     def _check_watchdog(self):
@@ -665,7 +655,7 @@ class RaspicatDriver(LifecycleNode):
             return
         with self._state_lock:
             self._watchdog_tripped = True
-        self.get_logger().warning("no cmd_vel for %.1f s; stopping motors" % idle)
+        self.get_logger().warning('no cmd_vel for %.1f s; stopping motors' % idle)
         self._stop_motors()
 
     # -- LEDs, buzzer and switches (aux callback group) --------------------
@@ -679,7 +669,7 @@ class RaspicatDriver(LifecycleNode):
             leds.set_many((msg.led0, msg.led1, msg.led2, msg.led3))
         except OSError as exc:
             self.get_logger().error(
-                "LED write failed: %s" % exc, throttle_duration_sec=5.0
+                'LED write failed: %s' % exc, throttle_duration_sec=5.0
             )
 
     def _on_buzzer(self, msg):
@@ -690,7 +680,7 @@ class RaspicatDriver(LifecycleNode):
         frequency = float(msg.data)
         if frequency > self._buzzer_max:
             self.get_logger().warning(
-                "buzzer asked for %.0f Hz; capped at buzzer_max_frequency (%.0f Hz)"
+                'buzzer asked for %.0f Hz; capped at buzzer_max_frequency (%.0f Hz)'
                 % (frequency, self._buzzer_max),
                 throttle_duration_sec=5.0,
             )
@@ -702,7 +692,7 @@ class RaspicatDriver(LifecycleNode):
                 buzzer.set_frequency(frequency)
         except OSError as exc:
             self.get_logger().error(
-                "buzzer write failed: %s" % exc, throttle_duration_sec=5.0
+                'buzzer write failed: %s' % exc, throttle_duration_sec=5.0
             )
 
     def _silence_buzzer(self):
@@ -711,7 +701,7 @@ class RaspicatDriver(LifecycleNode):
         try:
             self._hardware.buzzer.stop()
         except OSError as exc:
-            self.get_logger().error("buzzer stop failed: %s" % exc)
+            self.get_logger().error('buzzer stop failed: %s' % exc)
 
     def _clear_leds(self):
         if self._hardware.leds is None:
@@ -719,7 +709,7 @@ class RaspicatDriver(LifecycleNode):
         try:
             self._hardware.leds.set_many((False, False, False, False))
         except OSError as exc:
-            self.get_logger().error("LED write failed: %s" % exc)
+            self.get_logger().error('LED write failed: %s' % exc)
 
     def _publish_switches(self):
         """Publish the three push switches.  True is pressed, as raspimouse has it."""
@@ -730,7 +720,7 @@ class RaspicatDriver(LifecycleNode):
             levels = switches.read()
         except OSError as exc:
             self.get_logger().error(
-                "switch read failed: %s" % exc, throttle_duration_sec=5.0
+                'switch read failed: %s' % exc, throttle_duration_sec=5.0
             )
             return
         message = Switches()
@@ -775,7 +765,7 @@ class RaspicatDriver(LifecycleNode):
             # by up to a full second of travel, so drop the interval instead.
             if dt > self._max_odom_dt:
                 self.get_logger().warning(
-                    "odom interval stretched to %.2f s; not integrating cmd_vel over it" % dt
+                    'odom interval stretched to %.2f s; not integrating cmd_vel over it' % dt
                 )
             else:
                 self._pose[0] += linear * math.cos(self._pose[2]) * dt
@@ -875,7 +865,7 @@ class RaspicatDriver(LifecycleNode):
             if self._counter_degraded:
                 self._counter_degraded = False
                 self.get_logger().info(
-                    "pulse counters answered again; odometry back on encoders"
+                    'pulse counters answered again; odometry back on encoders'
                 )
             return None
 
@@ -891,7 +881,7 @@ class RaspicatDriver(LifecycleNode):
                 self._counter_degraded = True
                 self._counter_retry_at = time.monotonic() + self._counter_retry_period
                 self.get_logger().error(
-                    "pulse counters failed %d times (%s); integrating cmd_vel instead"
+                    'pulse counters failed %d times (%s); integrating cmd_vel instead'
                     % (self._counter_errors, exc)
                 )
             return None
@@ -925,8 +915,8 @@ class RaspicatDriver(LifecycleNode):
                 # the interval's real travel is lost, which is worth far less
                 # than the pose.
                 self.get_logger().warning(
-                    "%s pulse delta %d exceeds the %d possible in %.3f s; "
-                    "dropping the interval" % (SIDE_NAMES[side], delta, int(limit), dt),
+                    '%s pulse delta %d exceeds the %d possible in %.3f s; '
+                    'dropping the interval' % (SIDE_NAMES[side], delta, int(limit), dt),
                     throttle_duration_sec=5.0,
                 )
                 delta = 0
@@ -962,5 +952,5 @@ def main():
     return 0
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     sys.exit(main())

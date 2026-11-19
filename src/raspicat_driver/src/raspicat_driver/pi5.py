@@ -33,23 +33,22 @@ raspimouse` cannot work on this model and `driver:=original` is the only
 option (docs/setup/raspberry-pi-5.md).
 """
 
-from .backend import Backend
-from .backend import rtmouse_present
+from .backend import Backend, rtmouse_present
 
 
 class Pi5Backend(Backend):
     """RP1 hardware identity."""
 
-    name = "pi5"
-    soc = "BCM2712 + RP1"
-    gpiochip_label = "pinctrl-rp1"
-    pwmchip_match = "98000.pwm"
+    name = 'pi5'
+    soc = 'BCM2712 + RP1'
+    gpiochip_label = 'pinctrl-rp1'
+    pwmchip_match = '98000.pwm'
 
     def preflight(self, wiring, logger):
         """Warn about a loaded rtmouse; it cannot reach RP1, so it cannot fight us."""
         super().preflight(wiring, logger)
         if rtmouse_present():
             logger.warning(
-                "rtmouse is loaded, which cannot work on a Pi 5 (it ioremap()s BCM2711 "
-                "registers). Harmless here, but /dev/rt* will not do anything."
+                'rtmouse is loaded, which cannot work on a Pi 5 (it ioremap()s BCM2711 '
+                'registers). Harmless here, but /dev/rt* will not do anything.'
             )

@@ -64,7 +64,7 @@ class SoftwareBuzzer:
         self._closing = False
         self._wake = threading.Event()
         self._thread = threading.Thread(
-            target=self._run, name="raspicat_buzzer", daemon=True
+            target=self._run, name='raspicat_buzzer', daemon=True
         )
         self._thread.start()
 
@@ -124,7 +124,7 @@ class SoftwareBuzzer:
 
     def _write(self, level):
         try:
-            self._line.set(0, level)
+            self._line.set_value(0, level)
         except OSError:
             # Nothing above can act on a failed beep, and this runs thousands
             # of times a second -- so give up on the tone instead of logging.

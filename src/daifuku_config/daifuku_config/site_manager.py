@@ -12,44 +12,44 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""任意の次回起動用 site 選択を検査・保存・告知する。
+"""任意の次回起動用 site 選択を検査・保存・告知する.
 
 機体からは自動起動しない。実行中の固定プロファイルは変更しない。
 """
 
 import os
 
-import rclpy
 from rcl_interfaces.msg import SetParametersResult
+import rclpy
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from std_msgs.msg import String
 
 from . import params
-from .site_bus import LATCHED, SITE_TOPIC, encode_site
+from .site_bus import encode_site, LATCHED, SITE_TOPIC
 
 
 def validate(site):
-    """選択先を保存する前に、全機能の override を検査する。"""
+    """選択先を保存する前に、全機能の override を検査する."""
     if not params.is_site(site):
-        return False, f"場所の名前になっていません: {site!r}"
+        return False, f'場所の名前になっていません: {site!r}'
     try:
         path = params.overrides_path(site)
     except RuntimeError as exc:
         return False, str(exc)
     if not os.path.isfile(path):
-        available = ", ".join(params.available_overrides()) or "(なし)"
-        return False, f"そんな場所はありません: {site} ({path} が無い)。選べるのは {available}"
+        available = ', '.join(params.available_overrides()) or '(なし)'
+        return False, f'そんな場所はありません: {site} ({path} が無い)。選べるのは {available}'
 
     for package in params.KNOWN_PACKAGES:
         ok, reason = params.precheck(site, package, params.config_root(package))
         if not ok:
-            return False, f"{package}: {reason}"
-    return True, ""
+            return False, f'{package}: {reason}'
+    return True, ''
 
 
 def write_site(path, site):
-    """src/daifuku_config/site を書く。**書きかけを読ませない。**
+    """src/daifuku_config/site を書く。**書きかけを読ませない。**.
 
     ファイルは名前 1 語しか持たないので書式は無い (説明は
     src/daifuku_config/README.md)。temp + rename にしてあるのは、読み手
@@ -61,35 +61,35 @@ def write_site(path, site):
     届かなくなる**。
     """
     real = os.path.realpath(path)
-    tmp = os.path.join(os.path.dirname(real) or ".", ".site.tmp")
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.write(site + "\n")
+    tmp = os.path.join(os.path.dirname(real) or '.', '.site.tmp')
+    with open(tmp, 'w', encoding='utf-8') as f:
+        f.write(site + '\n')
     os.replace(tmp, real)
 
 
 class SiteManager(Node):
-    """src/daifuku_config/site の読み書きと告知。"""
+    """src/daifuku_config/site の読み書きと告知."""
 
     def __init__(self):
-        super().__init__("site_manager")
+        super().__init__('site_manager')
 
         default_file = params.site_file()
-        self._file = self.declare_parameter("site_file", default_file).value
-        self._period = self.declare_parameter("poll_period", 2.0).value
+        self._file = self.declare_parameter('site_file', default_file).value
+        self._period = self.declare_parameter('poll_period', 2.0).value
 
         current = params.read_site_file(os.path.realpath(self._file))
         self._site = current
         # ファイルが真実。パラメータはその写しで、**宣言のときだけは検査しない** —
         # ここで投げると機体が上がらなくなるし、壊れているなら sentinel も
         # precheck で止まるので、立て直しには進まない。
-        self.declare_parameter("site", current)
-        ok, reason = validate(current) if current else (False, "src/daifuku_config/site が空です")
+        self.declare_parameter('site', current)
+        ok, reason = validate(current) if current else (False, 'src/daifuku_config/site が空です')
         if ok:
-            self.get_logger().info(f"site: {current} ({self._file})")
+            self.get_logger().info(f'site: {current} ({self._file})')
         else:
             self.get_logger().error(
-                f"src/daifuku_config/site の値が使えません ({reason})。"
-                "このまま流しますが、切り替えは通らないままです。"
+                f'src/daifuku_config/site の値が使えません ({reason})。'
+                'このまま流しますが、切り替えは通らないままです。'
             )
 
         self._pub = self.create_publisher(String, SITE_TOPIC, LATCHED)
@@ -107,7 +107,7 @@ class SiteManager(Node):
         self._pub.publish(msg)
 
     def _on_set(self, parameters):
-        """site:= を受けて、通れば書く。
+        """site:= を受けて、通れば書く.
 
         **Humble の rclpy はこのコールバックしか持たない** (値が入る前に呼ばれる
         add_on_set_parameters_callback だけで、入った後の post 版は Humble には
@@ -115,30 +115,30 @@ class SiteManager(Node):
         ファイルには一切触らない**ので、外から見た結果は変わらない。
         """
         for param in parameters:
-            if param.name != "site":
+            if param.name != 'site':
                 continue
-            site = (param.value or "").strip()
+            site = (param.value or '').strip()
             if self._syncing:
                 continue
             if site == self._site:
                 continue
             ok, reason = validate(site)
             if not ok:
-                self.get_logger().error(f"site:={site} は受け付けません: {reason}")
+                self.get_logger().error(f'site:={site} は受け付けません: {reason}')
                 return SetParametersResult(successful=False, reason=reason)
             try:
                 write_site(self._file, site)
             except OSError as err:
-                self.get_logger().error(f"src/daifuku_config/site を書けません: {err}")
+                self.get_logger().error(f'src/daifuku_config/site を書けません: {err}')
                 return SetParametersResult(successful=False, reason=str(err))
             self.get_logger().warning(
-                f"site: {self._site} -> {site} (src/daifuku_config/site を書きました)")
+                f'site: {self._site} -> {site} (src/daifuku_config/site を書きました)')
             self._site = site
             self._publish()
         return SetParametersResult(successful=True)
 
     def _poll(self):
-        """素手で直されたときのために読み直す。
+        """素手で直されたときのために読み直す.
 
         検査に通らない値でも**そのまま流す**。ここで握り潰すと、人が書いた値と
         流れている値が食い違ったまま黙るので、どちらも見えなくなる。立て直しの
@@ -150,15 +150,15 @@ class SiteManager(Node):
         ok, reason = validate(site)
         if ok:
             self.get_logger().warning(
-                f"site: {self._site} -> {site} (src/daifuku_config/site が変わりました)")
+                f'site: {self._site} -> {site} (src/daifuku_config/site が変わりました)')
         else:
             self.get_logger().error(
-                f"src/daifuku_config/site が {site} になりましたが、この場所では立ちません: {reason}"
+                f'src/daifuku_config/site が {site} になりましたが、この場所では立ちません: {reason}'
             )
         self._site = site
         self._syncing = True
         try:
-            self.set_parameters([Parameter("site", Parameter.Type.STRING, site)])
+            self.set_parameters([Parameter('site', Parameter.Type.STRING, site)])
         finally:
             self._syncing = False
         self._publish()
@@ -177,5 +177,5 @@ def main(args=None):
             rclpy.shutdown()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

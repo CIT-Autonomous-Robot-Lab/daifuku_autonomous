@@ -11,12 +11,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""実ノードの判定を仮想時刻で進め、再起動条件を確かめる。"""
+"""実ノードの判定を仮想時刻で進め、再起動条件を確かめる."""
 
-from daifuku_config import monitoring
+from daifuku_config import config_sentinel, monitoring, params
 from daifuku_config.config_sentinel import ConfigSentinel
-from daifuku_config import config_sentinel
-from daifuku_config import params
 from launch import LaunchContext
 from nav_msgs.msg import Odometry
 import pytest
@@ -33,21 +31,21 @@ class Log:
 
 @pytest.fixture
 def sentinel(tmp_path, monkeypatch):
-    path = tmp_path / "params.yaml"
-    path.write_text("node:\n  ros__parameters:\n    value: 1\n", encoding="utf-8")
-    monkeypatch.setattr(config_sentinel.time, "monotonic", lambda: 100.0)
+    path = tmp_path / 'params.yaml'
+    path.write_text('node:\n  ros__parameters:\n    value: 1\n', encoding='utf-8')
+    monkeypatch.setattr(config_sentinel.time, 'monotonic', lambda: 100.0)
     node = ConfigSentinel.__new__(ConfigSentinel)
-    node._package = "daifuku_robot"
+    node._package = 'daifuku_robot'
     node._config_root = str(tmp_path)
     node._packages = None
     node._files = []
-    node._params_dir = ""
-    node._site = ""
+    node._params_dir = ''
+    node._site = ''
     node._watch_site = False
     node._follow = False
-    node._announced = ""
-    node._digest = monitoring.config_digest("", node._package, str(tmp_path))
-    node._action = "shutdown"
+    node._announced = ''
+    node._digest = monitoring.config_digest('', node._package, str(tmp_path))
+    node._action = 'shutdown'
     node._no_manager_said = False
     node._started = 0.0
     node._min_uptime = 0.0
@@ -61,121 +59,121 @@ def sentinel(tmp_path, monkeypatch):
     node._last_odom = None
     node._last_moving = None
     node.exit_requested = False
-    monkeypatch.setattr(node, "get_logger", lambda: Log())
+    monkeypatch.setattr(node, 'get_logger', lambda: Log())
     return node, path
 
 
 def test_fixed_profile_file_change_requests_restart(sentinel):
     node, path = sentinel
-    path.write_text("node:\n  ros__parameters:\n    value: 2\n", encoding="utf-8")
+    path.write_text('node:\n  ros__parameters:\n    value: 2\n', encoding='utf-8')
     node._poll()
     assert node.exit_requested
 
 
 def test_fixed_profile_ignores_new_site_announcement(sentinel):
     node, _path = sentinel
-    node._announced = "other"
+    node._announced = 'other'
     node._poll()
     assert not node.exit_requested
 
 
 def test_moving_robot_waits_until_stationary(sentinel, monkeypatch):
     node, path = sentinel
-    path.write_text("node:\n  ros__parameters:\n    value: 2\n", encoding="utf-8")
+    path.write_text('node:\n  ros__parameters:\n    value: 2\n', encoding='utf-8')
     odom = Odometry()
     odom.twist.twist.linear.x = 0.3
     node._on_odom(odom)
     node._poll()
     assert not node.exit_requested
-    monkeypatch.setattr(config_sentinel.time, "monotonic", lambda: 104.0)
+    monkeypatch.setattr(config_sentinel.time, 'monotonic', lambda: 104.0)
     node._poll()
     assert node.exit_requested
 
 
 def test_invalid_selected_file_prevents_restart(sentinel):
     node, path = sentinel
-    path.write_text("node: [", encoding="utf-8")
+    path.write_text('node: [', encoding='utf-8')
     node._poll()
     assert not node.exit_requested
 
 
 def test_new_custom_fragment_blocks_restart_until_duplicate_is_fixed(sentinel, tmp_path):
     node, _path = sentinel
-    root = tmp_path / "navigation"
+    root = tmp_path / 'navigation'
     root.mkdir()
-    (root / "vi_planner.yaml").write_text("vi_planner: {}\n", encoding="utf-8")
-    custom = tmp_path / "custom"
+    (root / 'vi_planner.yaml').write_text('vi_planner: {}\n', encoding='utf-8')
+    custom = tmp_path / 'custom'
     custom.mkdir()
-    (custom / "smoother.yaml").write_text("velocity_smoother: {}\n", encoding="utf-8")
-    node._package = "daifuku_navigation"
+    (custom / 'smoother.yaml').write_text('velocity_smoother: {}\n', encoding='utf-8')
+    node._package = 'daifuku_navigation'
     node._config_root = str(root)
     node._params_dir = str(custom)
     node._digest = monitoring.config_digest(
-        "", node._package, node._config_root, params_dir=node._params_dir,
+        '', node._package, node._config_root, params_dir=node._params_dir,
     )
 
-    added = custom / "added.yaml"
-    added.write_text("velocity_smoother: {}\n", encoding="utf-8")
+    added = custom / 'added.yaml'
+    added.write_text('velocity_smoother: {}\n', encoding='utf-8')
     node._poll()
     assert not node.exit_requested
 
-    added.write_text("map_server: {}\n", encoding="utf-8")
+    added.write_text('map_server: {}\n', encoding='utf-8')
     node._poll()
     assert node.exit_requested
 
 
 def test_warn_only_does_not_restart(sentinel):
     node, path = sentinel
-    node._action = "warn"
-    path.write_text("node:\n  ros__parameters:\n    value: 2\n", encoding="utf-8")
+    node._action = 'warn'
+    path.write_text('node:\n  ros__parameters:\n    value: 2\n', encoding='utf-8')
     node._poll()
     assert not node.exit_requested
 
 
 def test_reusable_defaults_ignore_site_and_environment(monkeypatch):
-    monkeypatch.setenv("OVERRIDES", "another_site")
+    monkeypatch.setenv('OVERRIDES', 'another_site')
     action = params.declare_args()[0]
-    assert "".join(part.text for part in action.default_value) == "none"
+    assert ''.join(part.text for part in action.default_value) == 'none'
 
 
 def test_site_entry_can_set_a_fixed_default():
-    action = params.declare_args(default_overrides="tsukuba2025")[0]
-    assert "".join(part.text for part in action.default_value) == "tsukuba2025"
+    action = params.declare_args(default_overrides='tsukuba2025')[0]
+    assert ''.join(part.text for part in action.default_value) == 'tsukuba2025'
 
 
 def test_composition_applies_only_owned_overlays_and_replaces_lists(tmp_path, monkeypatch):
     from daifuku_config import paths
     from daifuku_config.overlay import load
 
-    root = tmp_path / "navigation"
+    root = tmp_path / 'navigation'
     root.mkdir()
-    base = root / "planner.yaml"
+    base = root / 'planner.yaml'
     base.write_text(
-        "vi_planner:\n  ros__parameters:\n    actions: [1, 2]\n    speed: 1\n",
-        encoding="utf-8",
+        'vi_planner:\n  ros__parameters:\n    actions: [1, 2]\n    speed: 1\n',
+        encoding='utf-8',
     )
-    site = tmp_path / "sites" / "selected"
+    site = tmp_path / 'sites' / 'selected'
     site.mkdir(parents=True)
-    (site / "overrides.yaml").write_text(
-        "daifuku_navigation:\n  vi_planner:\n    ros__parameters:\n"
-        "      actions: [3]\n      speed: 2\n"
-        "daifuku_mapping:\n  slam_toolbox:\n    ros__parameters:\n      speed: 99\n",
-        encoding="utf-8",
+    (site / 'overrides.yaml').write_text(
+        'daifuku_navigation:\n  vi_planner:\n    ros__parameters:\n'
+        '      actions: [3]\n      speed: 2\n'
+        'daifuku_mapping:\n  slam_toolbox:\n    ros__parameters:\n      speed: 99\n',
+        encoding='utf-8',
     )
-    extra = tmp_path / "extra.yaml"
+    extra = tmp_path / 'extra.yaml'
     extra.write_text(
-        "daifuku_navigation:\n  vi_planner:\n    ros__parameters:\n      speed: 4\n",
-        encoding="utf-8",
+        'daifuku_navigation:\n  vi_planner:\n    ros__parameters:\n      speed: 4\n',
+        encoding='utf-8',
     )
-    monkeypatch.setattr(paths, "_share", lambda: str(tmp_path))
+    monkeypatch.setattr(paths, '_share', lambda: str(tmp_path))
     context = LaunchContext()
-    context.launch_configurations.update(overrides="selected", extra_params_file=str(extra))
+    context.launch_configurations.update(overrides='selected', extra_params_file=str(extra))
     result, actions = params.compose_path(
-        context, str(base), name="planner", package="daifuku_navigation", config_root=str(root),
+        context, str(base), name='planner', package='daifuku_navigation', config_root=str(root),
     )
     try:
-        assert load(result) == {"vi_planner": {
-            "ros__parameters": {"actions": [3], "speed": 4},
+        assert load(result) == {'vi_planner': {
+            'ros__parameters': {'actions': [3], 'speed': 4},
         }}
         assert actions
     finally:
@@ -187,16 +185,16 @@ def test_composition_applies_only_owned_overlays_and_replaces_lists(tmp_path, mo
 def test_top_level_gets_exactly_one_sentinel(tmp_path):
     context = LaunchContext()
     context.launch_configurations.update(
-        overrides="none", extra_params_file="", config_watch="shutdown",
+        overrides='none', extra_params_file='', config_watch='shutdown',
     )
     actions = params.sentinel_actions(
-        context, package="daifuku_robot", config_root=str(tmp_path),
-        packages=["daifuku_robot"], files=[], watch_site=False,
+        context, package='daifuku_robot', config_root=str(tmp_path),
+        packages=['daifuku_robot'], files=[], watch_site=False,
     )
     from launch_ros.actions import Node
 
     assert sum(isinstance(action, Node) for action in actions) == 1
     with pytest.raises(RuntimeError):
         params.sentinel_actions(
-            context, package="daifuku_robot", config_root=str(tmp_path),
+            context, package='daifuku_robot', config_root=str(tmp_path),
         )

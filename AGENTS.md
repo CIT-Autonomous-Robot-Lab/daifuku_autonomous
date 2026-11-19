@@ -185,8 +185,8 @@ Raspberry Pi Cat を ROS 2 Humble と standalone VI で自律移動させるワ�
 - `site_manager` / `config_sentinel` の launch テストは実機ノードと隔離します。
   `ROS_DOMAIN_ID=77` と `ROS_LOCALHOST_ONLY=1` を外しません。
   テストは `daifuku_config` パッケージ内に置きます。
-- lint は個別指定を保ち、`ament_lint_common` や pep257 を戻しません。
-  移植 C++ の書式と日本語 docstring に合わないためです。`ament_python` では
+- lint は個別指定を保ち、`ament_lint_common` や独立した pep257 テストを戻しません。
+  Python は各 ROS 版の `ament_flake8` 規約を満たし、警告を除外して差分を隠しません。`ament_python` では
   `test_depend` だけでなく実行する `test/test_*.py` が必要です。
   CMake パッケージの Python には `ament_cmake_flake8` を使います。
 - 新規 `.py` / `.cpp` / `.hpp` の Apache-2.0 ヘッダはファイル先頭のコメント塊に置きます。

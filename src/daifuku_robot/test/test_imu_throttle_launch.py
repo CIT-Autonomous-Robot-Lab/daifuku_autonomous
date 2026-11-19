@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""実ノードのセンサーQoS、間引き周期、IMUメッセージの保持を確認する。"""
+"""実ノードのセンサーQoS、間引き周期、IMUメッセージの保持を確認する."""
 
 import time
 import unittest
@@ -24,52 +24,52 @@ import launch_testing.actions
 import launch_testing.asserts
 import pytest
 import rclpy
-from rclpy.qos import QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
+from rclpy.qos import qos_profile_sensor_data, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Imu
 
 
 @pytest.mark.launch_test
 def generate_test_description():
     process = Node(
-        package="daifuku_robot", executable="imu_throttle",
-        name="qa_imu_throttle", output="screen",
-        remappings=[("imu_in", "/qa_imu_in"), ("imu_out", "/qa_imu_out")],
+        package='daifuku_robot', executable='imu_throttle',
+        name='qa_imu_throttle', output='screen',
+        remappings=[('imu_in', '/qa_imu_in'), ('imu_out', '/qa_imu_out')],
     )
     return LaunchDescription([
-        SetEnvironmentVariable("ROS_DOMAIN_ID", "77"),
-        SetEnvironmentVariable("ROS_LOCALHOST_ONLY", "1"),
+        SetEnvironmentVariable('ROS_DOMAIN_ID', '77'),
+        SetEnvironmentVariable('ROS_LOCALHOST_ONLY', '1'),
         process,
         launch_testing.actions.ReadyToTest(),
-    ]), {"process": process}
+    ]), {'process': process}
 
 
 class TestImuThrottle(unittest.TestCase):
 
     def test_sensor_qos_throttles_without_changing_samples(self):
         rclpy.init()
-        node = rclpy.create_node("imu_throttle_test")
+        node = rclpy.create_node('imu_throttle_test')
         received = []
         sent = {}
-        publisher = node.create_publisher(Imu, "/qa_imu_in", QoSProfile(depth=10))
+        publisher = node.create_publisher(Imu, '/qa_imu_in', QoSProfile(depth=10))
         subscription = node.create_subscription(
-            Imu, "/qa_imu_out", received.append, qos_profile_sensor_data,
+            Imu, '/qa_imu_out', received.append, qos_profile_sensor_data,
         )
         try:
             deadline = time.monotonic() + 10
             while publisher.get_subscription_count() == 0 or (
-                node.count_publishers("/qa_imu_out") == 0
+                node.count_publishers('/qa_imu_out') == 0
             ):
-                self.assertLess(time.monotonic(), deadline, "throttle discovery timed out")
+                self.assertLess(time.monotonic(), deadline, 'throttle discovery timed out')
                 rclpy.spin_once(node, timeout_sec=0.01)
 
             # The input must remain BEST_EFFORT even when its source is RELIABLE.
-            inputs = node.get_subscriptions_info_by_topic("/qa_imu_in")
+            inputs = node.get_subscriptions_info_by_topic('/qa_imu_in')
             self.assertEqual(len(inputs), 1)
             self.assertEqual(inputs[0].qos_profile.reliability, ReliabilityPolicy.BEST_EFFORT)
 
             def publish():
                 message = Imu()
-                message.header.frame_id = "livox_frame"
+                message.header.frame_id = 'livox_frame'
                 message.header.stamp.sec = 123
                 message.header.stamp.nanosec = len(sent)
                 message.angular_velocity.z = len(sent) * 0.01

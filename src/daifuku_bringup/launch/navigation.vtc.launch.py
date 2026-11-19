@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""vtc の自律移動を組み立てる公開入口。"""
+"""vtc の自律移動を組み立てる公開入口."""
 
 import os
 import sys

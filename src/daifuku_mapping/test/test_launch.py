@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""SLAM 部品は入力スキャンを消費するだけで、機体や監視を重ねない。"""
+"""SLAM 部品は入力スキャンを消費するだけで、機体や監視を重ねない."""
 
 from pathlib import Path
 
@@ -24,7 +24,7 @@ from launch_ros.actions import Node
 
 def test_mapping_component_only_starts_slam():
     # Given: the actual component, evaluated without starting any ROS process.
-    source = Path(__file__).resolve().parents[1] / "launch" / "mapping.launch.py"
+    source = Path(__file__).resolve().parents[1] / 'launch' / 'mapping.launch.py'
     context = LaunchContext()
     description = PythonLaunchDescriptionSource(str(source)).get_launch_description(context)
     # When: declarations and parameter composition run with their defaults.
@@ -44,4 +44,4 @@ def test_mapping_component_only_starts_slam():
             ),
         )
         for node in nodes
-    ] == [("slam_toolbox", "async_slam_toolbox_node")]
+    ] == [('slam_toolbox', 'async_slam_toolbox_node')]

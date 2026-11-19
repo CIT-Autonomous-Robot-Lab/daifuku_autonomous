@@ -37,28 +37,24 @@ after HOLD_LIMIT even while a key is held.  See README.md.
 import math
 
 from diagnostic_msgs.msg import DiagnosticArray
-from geometry_msgs.msg import PoseStamped
-from geometry_msgs.msg import Twist
-from lifecycle_msgs.msg import State
-from lifecycle_msgs.msg import Transition
-from lifecycle_msgs.srv import ChangeState
-from lifecycle_msgs.srv import GetState
+from geometry_msgs.msg import PoseStamped, Twist
+from lifecycle_msgs.msg import State, Transition
+from lifecycle_msgs.srv import ChangeState, GetState
 from nav2_msgs.action import NavigateToPose
-from python_qt_binding.QtCore import QEvent
-from python_qt_binding.QtCore import QTimer
-from python_qt_binding.QtCore import Qt
-from python_qt_binding.QtCore import Signal
-from python_qt_binding.QtWidgets import QApplication
-from python_qt_binding.QtWidgets import QCheckBox
-from python_qt_binding.QtWidgets import QComboBox
-from python_qt_binding.QtWidgets import QDoubleSpinBox
-from python_qt_binding.QtWidgets import QGridLayout
-from python_qt_binding.QtWidgets import QGroupBox
-from python_qt_binding.QtWidgets import QHBoxLayout
-from python_qt_binding.QtWidgets import QLabel
-from python_qt_binding.QtWidgets import QPushButton
-from python_qt_binding.QtWidgets import QVBoxLayout
-from python_qt_binding.QtWidgets import QWidget
+from python_qt_binding.QtCore import QEvent, Qt, QTimer, Signal
+from python_qt_binding.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QDoubleSpinBox,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 from rclpy.action import ActionClient
 from rqt_gui_py.plugin import Plugin
 from std_srvs.srv import SetBool
@@ -80,16 +76,16 @@ TELEOP_HZ = 10.0
 # quiet -- that is why teleop is disabled while a goal is running.  robot_bringup
 # launches the mux by default; with twist_mux:=false nothing subscribes here and
 # the pad silently does nothing -- see src/daifuku_config/README.md.
-TELEOP_CMD_VEL_TOPIC = "/cmd_vel_teleop"
+TELEOP_CMD_VEL_TOPIC = '/cmd_vel_teleop'
 
-DRIVER_NODES = ["raspicat_driver", "raspimouse"]
+DRIVER_NODES = ['raspicat_driver', 'raspimouse']
 
 LIFECYCLE_LABELS = {
-    State.PRIMARY_STATE_UNKNOWN: "unknown",
-    State.PRIMARY_STATE_UNCONFIGURED: "unconfigured",
-    State.PRIMARY_STATE_INACTIVE: "inactive",
-    State.PRIMARY_STATE_ACTIVE: "active",
-    State.PRIMARY_STATE_FINALIZED: "finalized",
+    State.PRIMARY_STATE_UNKNOWN: 'unknown',
+    State.PRIMARY_STATE_UNCONFIGURED: 'unconfigured',
+    State.PRIMARY_STATE_INACTIVE: 'inactive',
+    State.PRIMARY_STATE_ACTIVE: 'active',
+    State.PRIMARY_STATE_FINALIZED: 'finalized',
 }
 
 
@@ -127,7 +123,7 @@ def _result_or_none(future):
 
 def _success_text(future):
     response = _result_or_none(future)
-    return "成功" if response is not None and response.success else "失敗"
+    return '成功' if response is not None and response.success else '失敗'
 
 
 class ControlPanelWidget(QWidget):
@@ -140,8 +136,8 @@ class ControlPanelWidget(QWidget):
 
     def __init__(self, node):
         super(ControlPanelWidget, self).__init__()
-        self.setObjectName("RaspicatControlPanel")
-        self.setWindowTitle("Raspicat Control Panel")
+        self.setObjectName('RaspicatControlPanel')
+        self.setWindowTitle('Raspicat Control Panel')
 
         self._node = node
         self._goal_handle = None
@@ -156,10 +152,10 @@ class ControlPanelWidget(QWidget):
         self._build_ui()
 
         self._cmd_vel_pub = node.create_publisher(Twist, TELEOP_CMD_VEL_TOPIC, 10)
-        self._nav_client = ActionClient(node, NavigateToPose, "navigate_to_pose")
-        self._motor_client = node.create_client(SetBool, "/motor_power")
+        self._nav_client = ActionClient(node, NavigateToPose, 'navigate_to_pose')
+        self._motor_client = node.create_client(SetBool, '/motor_power')
         self._diag_sub = node.create_subscription(
-            DiagnosticArray, "/diagnostics", self._on_diagnostics, 10
+            DiagnosticArray, '/diagnostics', self._on_diagnostics, 10
         )
         self._rebuild_lifecycle_clients()
 
@@ -191,43 +187,43 @@ class ControlPanelWidget(QWidget):
         layout.addStretch(1)
 
     def _build_navigation_group(self):
-        group = QGroupBox("ゴール")
+        group = QGroupBox('ゴール')
         layout = QGridLayout(group)
 
         self._goal_x = QDoubleSpinBox()
         self._goal_x.setRange(-1000.0, 1000.0)
         self._goal_x.setDecimals(2)
-        self._goal_x.setSuffix(" m")
+        self._goal_x.setSuffix(' m')
         self._goal_y = QDoubleSpinBox()
         self._goal_y.setRange(-1000.0, 1000.0)
         self._goal_y.setDecimals(2)
-        self._goal_y.setSuffix(" m")
+        self._goal_y.setSuffix(' m')
         self._goal_yaw = QDoubleSpinBox()
         self._goal_yaw.setRange(-180.0, 180.0)
         self._goal_yaw.setDecimals(1)
-        self._goal_yaw.setSuffix(" deg")
+        self._goal_yaw.setSuffix(' deg')
 
-        layout.addWidget(QLabel("x"), 0, 0)
+        layout.addWidget(QLabel('x'), 0, 0)
         layout.addWidget(self._goal_x, 0, 1)
-        layout.addWidget(QLabel("y"), 0, 2)
+        layout.addWidget(QLabel('y'), 0, 2)
         layout.addWidget(self._goal_y, 0, 3)
-        layout.addWidget(QLabel("yaw"), 0, 4)
+        layout.addWidget(QLabel('yaw'), 0, 4)
         layout.addWidget(self._goal_yaw, 0, 5)
 
-        self._send_goal_button = QPushButton("送信")
+        self._send_goal_button = QPushButton('送信')
         self._send_goal_button.clicked.connect(self._send_goal)
-        self._cancel_goal_button = QPushButton("中断")
+        self._cancel_goal_button = QPushButton('中断')
         self._cancel_goal_button.clicked.connect(self._cancel_goal)
         self._cancel_goal_button.setEnabled(False)
         layout.addWidget(self._send_goal_button, 1, 0, 1, 3)
         layout.addWidget(self._cancel_goal_button, 1, 3, 1, 3)
 
-        self._goal_label = QLabel("idle")
+        self._goal_label = QLabel('idle')
         layout.addWidget(self._goal_label, 2, 0, 1, 6)
         return group
 
     def _build_driver_group(self):
-        group = QGroupBox("ドライバ")
+        group = QGroupBox('ドライバ')
         layout = QGridLayout(group)
 
         self._driver_combo = QComboBox()
@@ -236,16 +232,16 @@ class ControlPanelWidget(QWidget):
         self._driver_combo.currentTextChanged.connect(
             lambda _text: self._rebuild_lifecycle_clients()
         )
-        layout.addWidget(QLabel("ノード名"), 0, 0)
+        layout.addWidget(QLabel('ノード名'), 0, 0)
         layout.addWidget(self._driver_combo, 0, 1, 1, 3)
 
-        self._lifecycle_label = QLabel("状態: 未取得")
+        self._lifecycle_label = QLabel('状態: 未取得')
         layout.addWidget(self._lifecycle_label, 1, 0, 1, 4)
 
         transitions = [
-            ("configure", Transition.TRANSITION_CONFIGURE),
-            ("activate", Transition.TRANSITION_ACTIVATE),
-            ("deactivate", Transition.TRANSITION_DEACTIVATE),
+            ('configure', Transition.TRANSITION_CONFIGURE),
+            ('activate', Transition.TRANSITION_ACTIVATE),
+            ('deactivate', Transition.TRANSITION_DEACTIVATE),
         ]
         for column, (label, transition_id) in enumerate(transitions):
             button = QPushButton(label)
@@ -254,35 +250,35 @@ class ControlPanelWidget(QWidget):
             )
             layout.addWidget(button, 2, column)
 
-        motor_on = QPushButton("モータ ON")
+        motor_on = QPushButton('モータ ON')
         motor_on.clicked.connect(lambda: self._set_motor_power(True))
-        motor_off = QPushButton("モータ OFF")
+        motor_off = QPushButton('モータ OFF')
         motor_off.clicked.connect(lambda: self._set_motor_power(False))
         layout.addWidget(motor_on, 3, 0, 1, 2)
         layout.addWidget(motor_off, 3, 2, 1, 2)
 
-        self._service_label = QLabel("")
+        self._service_label = QLabel('')
         self._service_label.setWordWrap(True)
         layout.addWidget(self._service_label, 4, 0, 1, 4)
         return group
 
     def _build_teleop_group(self):
-        self._teleop_group = QGroupBox("teleop")
+        self._teleop_group = QGroupBox('teleop')
         layout = QGridLayout(self._teleop_group)
 
         self._linear_speed = QDoubleSpinBox()
         self._linear_speed.setRange(0.0, 1.0)
         self._linear_speed.setSingleStep(0.05)
         self._linear_speed.setValue(0.15)
-        self._linear_speed.setSuffix(" m/s")
+        self._linear_speed.setSuffix(' m/s')
         self._angular_speed = QDoubleSpinBox()
         self._angular_speed.setRange(0.0, 3.0)
         self._angular_speed.setSingleStep(0.1)
         self._angular_speed.setValue(0.6)
-        self._angular_speed.setSuffix(" rad/s")
-        layout.addWidget(QLabel("並進"), 0, 0)
+        self._angular_speed.setSuffix(' rad/s')
+        layout.addWidget(QLabel('並進'), 0, 0)
         layout.addWidget(self._linear_speed, 0, 1)
-        layout.addWidget(QLabel("旋回"), 0, 2)
+        layout.addWidget(QLabel('旋回'), 0, 2)
         layout.addWidget(self._angular_speed, 0, 3)
 
         # The pad gets a grid of its own.  Sharing the group's columns would tie
@@ -297,11 +293,11 @@ class ControlPanelWidget(QWidget):
         # Press and hold.  A click that only fired once would leave the robot
         # driving until the driver's 60 s cmd_vel_timeout expired.
         directions = [
-            ("▲", 0, 1, 1.0, 0.0),
-            ("◀", 1, 0, 0.0, 1.0),
-            ("■", 1, 1, 0.0, 0.0),
-            ("▶", 1, 2, 0.0, -1.0),
-            ("▼", 2, 1, -1.0, 0.0),
+            ('▲', 0, 1, 1.0, 0.0),
+            ('◀', 1, 0, 0.0, 1.0),
+            ('■', 1, 1, 0.0, 0.0),
+            ('▶', 1, 2, 0.0, -1.0),
+            ('▼', 2, 1, -1.0, 0.0),
         ]
         for label, row, column, linear, angular in directions:
             button = _SquareButton(label)
@@ -325,11 +321,11 @@ class ControlPanelWidget(QWidget):
         pad_row_layout.addStretch(1)
         layout.addWidget(pad_row, 1, 0, 1, 4)
 
-        self._keyboard_checkbox = QCheckBox("矢印キーで操作 (このパネルに入力があるとき)")
+        self._keyboard_checkbox = QCheckBox('矢印キーで操作 (このパネルに入力があるとき)')
         self._keyboard_checkbox.toggled.connect(self._on_keyboard_toggled)
         layout.addWidget(self._keyboard_checkbox, 2, 0, 1, 4)
 
-        self._teleop_label = QLabel("停止中")
+        self._teleop_label = QLabel('停止中')
         layout.addWidget(self._teleop_label, 3, 0, 1, 4)
         return self._teleop_group
 
@@ -342,12 +338,12 @@ class ControlPanelWidget(QWidget):
 
     def _send_goal(self):
         if not self._nav_client.server_is_ready():
-            self.goal_state_changed.emit("navigate_to_pose のサーバがいません")
+            self.goal_state_changed.emit('navigate_to_pose のサーバがいません')
             return
 
         goal = NavigateToPose.Goal()
         pose = PoseStamped()
-        pose.header.frame_id = "map"
+        pose.header.frame_id = 'map'
         pose.header.stamp = self._node.get_clock().now().to_msg()
         pose.pose.position.x = self._goal_x.value()
         pose.pose.position.y = self._goal_y.value()
@@ -357,7 +353,7 @@ class ControlPanelWidget(QWidget):
         goal.pose = pose
 
         self._set_goal_active(True)
-        self.goal_state_changed.emit("送信しました")
+        self.goal_state_changed.emit('送信しました')
         future = self._nav_client.send_goal_async(goal)
         future.add_done_callback(self._on_goal_response)
 
@@ -366,14 +362,14 @@ class ControlPanelWidget(QWidget):
             goal_handle = future.result()
         except Exception as exc:  # noqa: BLE001 - surfaced in the UI
             self._goal_handle = None
-            self.goal_state_changed.emit("送信に失敗: %s" % exc)
+            self.goal_state_changed.emit('送信に失敗: %s' % exc)
             return
         if not goal_handle.accepted:
             self._goal_handle = None
-            self.goal_state_changed.emit("拒否されました")
+            self.goal_state_changed.emit('拒否されました')
             return
         self._goal_handle = goal_handle
-        self.goal_state_changed.emit("走行中")
+        self.goal_state_changed.emit('走行中')
         goal_handle.get_result_async().add_done_callback(self._on_goal_result)
 
     def _on_goal_result(self, future):
@@ -381,12 +377,12 @@ class ControlPanelWidget(QWidget):
         try:
             status = future.result().status
         except Exception as exc:  # noqa: BLE001 - surfaced in the UI
-            self.goal_state_changed.emit("結果の取得に失敗: %s" % exc)
+            self.goal_state_changed.emit('結果の取得に失敗: %s' % exc)
             return
         # GoalStatus: 4 SUCCEEDED, 5 CANCELED, 6 ABORTED.
         self.goal_state_changed.emit(
-            {4: "完了", 5: "中断しました", 6: "失敗 (ABORTED)"}.get(
-                status, "終了 (status=%d)" % status
+            {4: '完了', 5: '中断しました', 6: '失敗 (ABORTED)'}.get(
+                status, '終了 (status=%d)' % status
             )
         )
 
@@ -394,12 +390,12 @@ class ControlPanelWidget(QWidget):
         if self._goal_handle is None:
             self._set_goal_active(False)
             return
-        self.goal_state_changed.emit("中断を要求しました")
+        self.goal_state_changed.emit('中断を要求しました')
         self._goal_handle.cancel_goal_async()
 
     def _show_goal_state(self, text):
         self._goal_label.setText(text)
-        finished = text not in ("送信しました", "走行中", "中断を要求しました")
+        finished = text not in ('送信しました', '走行中', '中断を要求しました')
         if finished:
             self._set_goal_active(False)
 
@@ -429,20 +425,20 @@ class ControlPanelWidget(QWidget):
         combo box only ever holds a couple of names -- leaking two idle
         clients is cheaper than the race.
         """
-        name = self._driver_combo.currentText().strip("/ ")
+        name = self._driver_combo.currentText().strip('/ ')
         if not name:
             return
         if name not in self._lifecycle_clients:
             self._lifecycle_clients[name] = (
-                self._node.create_client(ChangeState, "/%s/change_state" % name),
-                self._node.create_client(GetState, "/%s/get_state" % name),
+                self._node.create_client(ChangeState, '/%s/change_state' % name),
+                self._node.create_client(GetState, '/%s/get_state' % name),
             )
         self._change_state_client, self._get_state_client = self._lifecycle_clients[name]
 
     def _poll_lifecycle_state(self):
         client = self._get_state_client
         if client is None or not client.service_is_ready():
-            self._lifecycle_label.setText("状態: サービスがいません")
+            self._lifecycle_label.setText('状態: サービスがいません')
             return
         future = client.call_async(GetState.Request())
         future.add_done_callback(self._on_lifecycle_state)
@@ -457,19 +453,19 @@ class ControlPanelWidget(QWidget):
 
     def _show_lifecycle_state(self, state_id):
         self._lifecycle_label.setText(
-            "状態: %s" % LIFECYCLE_LABELS.get(state_id, "unknown")
+            '状態: %s' % LIFECYCLE_LABELS.get(state_id, 'unknown')
         )
 
     def _change_state(self, transition_id):
         client = self._change_state_client
         if client is None or not client.service_is_ready():
-            self.service_answered.emit("change_state のサービスがいません")
+            self.service_answered.emit('change_state のサービスがいません')
             return
         request = ChangeState.Request()
         request.transition.id = transition_id
-        self.service_answered.emit("遷移を要求しました")
+        self.service_answered.emit('遷移を要求しました')
         client.call_async(request).add_done_callback(
-            lambda f: self.service_answered.emit("遷移 " + _success_text(f))
+            lambda f: self.service_answered.emit('遷移 ' + _success_text(f))
         )
 
     def _set_motor_power(self, enabled):
@@ -477,12 +473,12 @@ class ControlPanelWidget(QWidget):
         # so it lands at /motor_power -- not under the node name.
         if not self._motor_client.service_is_ready():
             self.service_answered.emit(
-                "motor_power がいません (ドライバが configure 済みか確認)"
+                'motor_power がいません (ドライバが configure 済みか確認)'
             )
             return
-        self.service_answered.emit("モータ %s を要求しました" % ("ON" if enabled else "OFF"))
+        self.service_answered.emit('モータ %s を要求しました' % ('ON' if enabled else 'OFF'))
         self._motor_client.call_async(SetBool.Request(data=enabled)).add_done_callback(
-            lambda f: self.service_answered.emit("モータ " + _success_text(f))
+            lambda f: self.service_answered.emit('モータ ' + _success_text(f))
         )
 
     # -- teleop ------------------------------------------------------------
@@ -498,7 +494,7 @@ class ControlPanelWidget(QWidget):
         self._held_seconds = 0.0
         self._zero_bursts = 0
         self._teleop_label.setText(
-            "vx %.2f m/s  wz %.2f rad/s" % (self._twist.linear.x, self._twist.angular.z)
+            'vx %.2f m/s  wz %.2f rad/s' % (self._twist.linear.x, self._twist.angular.z)
         )
 
     def _stop_teleop(self):
@@ -510,7 +506,7 @@ class ControlPanelWidget(QWidget):
         # over WiFi would otherwise leave the robot driving for cmd_vel_timeout.
         self._zero_bursts = 3
         self._cmd_vel_pub.publish(self._twist)
-        self._teleop_label.setText("停止中")
+        self._teleop_label.setText('停止中')
 
     def _publish_teleop(self):
         """Publish only while driving, plus the trailing zeros.
@@ -525,7 +521,7 @@ class ControlPanelWidget(QWidget):
             self._held_seconds += 1.0 / TELEOP_HZ
             if self._held_seconds >= HOLD_LIMIT:
                 self._stop_teleop()
-                self._teleop_label.setText("連続 %.0f 秒で自動停止しました" % HOLD_LIMIT)
+                self._teleop_label.setText('連続 %.0f 秒で自動停止しました' % HOLD_LIMIT)
                 return
             self._cmd_vel_pub.publish(self._twist)
         elif self._zero_bursts > 0:
@@ -627,11 +623,11 @@ class ControlPanel(Plugin):
 
     def __init__(self, context):
         super(ControlPanel, self).__init__(context)
-        self.setObjectName("ControlPanel")
+        self.setObjectName('ControlPanel')
         self._widget = ControlPanelWidget(context.node)
         if context.serial_number() > 1:
             self._widget.setWindowTitle(
-                "%s (%d)" % (self._widget.windowTitle(), context.serial_number())
+                '%s (%d)' % (self._widget.windowTitle(), context.serial_number())
             )
         context.add_widget(self._widget)
 
@@ -640,20 +636,20 @@ class ControlPanel(Plugin):
 
     def save_settings(self, plugin_settings, instance_settings):
         x, y, yaw = self._widget.goal_pose()
-        instance_settings.set_value("goal_x", x)
-        instance_settings.set_value("goal_y", y)
-        instance_settings.set_value("goal_yaw", yaw)
-        instance_settings.set_value("driver", self._widget.driver_name())
+        instance_settings.set_value('goal_x', x)
+        instance_settings.set_value('goal_y', y)
+        instance_settings.set_value('goal_yaw', yaw)
+        instance_settings.set_value('driver', self._widget.driver_name())
 
     def restore_settings(self, plugin_settings, instance_settings):
         values = []
-        for key in ("goal_x", "goal_y", "goal_yaw"):
+        for key in ('goal_x', 'goal_y', 'goal_yaw'):
             value = instance_settings.value(key)
             try:
                 values.append(float(value))
             except (TypeError, ValueError):
                 values.append(0.0)
         self._widget.set_goal_pose(*values)
-        driver = instance_settings.value("driver")
+        driver = instance_settings.value('driver')
         if driver:
             self._widget.set_driver_name(driver)

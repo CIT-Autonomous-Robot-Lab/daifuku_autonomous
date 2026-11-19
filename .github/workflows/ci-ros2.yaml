@@ -29,7 +29,7 @@ jobs:
           read -r -a packages_py <<< "$PKGS_PY"
           read -r -a packages_cmake <<< "$PKGS_CMAKE"
           ament_copyright "${packages_all[@]}"
-          ament_flake8 "${packages_py[@]}"
+          ament_flake8 --config .flake8 "${packages_py[@]}"
           ament_lint_cmake "${packages_cmake[@]}"
           ament_xmllint "${packages_cmake[@]}"
 
@@ -82,7 +82,7 @@ jobs:
           . "/opt/ros/${{ matrix.ros_distro }}/setup.sh"
           . install/setup.sh
           read -r -a packages <<< "$PACKAGES"
-          colcon test --packages-select "${packages[@]}"
+          colcon test --packages-select "${packages[@]}" --python-testing pytest
           colcon test-result --all --verbose
       - name: インストールされたノードの実行権限
         run: |

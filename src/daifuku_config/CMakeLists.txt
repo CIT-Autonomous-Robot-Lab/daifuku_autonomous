@@ -25,6 +25,8 @@ foreach(ENTRY_MODULE site_manager config_sentinel)
 endforeach()
 
 if(BUILD_TESTING)
+  set(ament_cmake_flake8_CONFIG_FILE
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../.flake8")
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
   find_package(ament_cmake_pytest REQUIRED)

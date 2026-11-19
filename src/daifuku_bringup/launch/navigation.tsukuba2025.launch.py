@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""tsukuba2025 の自律移動を組み立てる公開入口。"""
+"""tsukuba2025 の自律移動を組み立てる公開入口."""
 
 import os
 import sys
@@ -21,4 +21,4 @@ from daifuku_bringup_launch.composition import generate_navigation  # noqa: E402
 
 
 def generate_launch_description():
-    return generate_navigation("tsukuba2025")
+    return generate_navigation('tsukuba2025')

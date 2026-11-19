@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""スキャンを受け取って地図を作る。機体・スキャン生成・監視は呼び元が所有する。"""
+"""スキャンを受け取って地図を作る。機体・スキャン生成・監視は呼び元が所有する."""
 
 import os
 
@@ -23,32 +23,32 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    config_root = params.config_root("daifuku_mapping")
+    config_root = params.config_root('daifuku_mapping')
     return LaunchDescription([
-        DeclareLaunchArgument("namespace", default_value=""),
-        DeclareLaunchArgument("use_sim_time", default_value="false"),
+        DeclareLaunchArgument('namespace', default_value=''),
+        DeclareLaunchArgument('use_sim_time', default_value='false'),
         DeclareLaunchArgument(
-            "slam_params_file",
-            default_value=os.path.join(config_root, "slam_toolbox.yaml"),
+            'slam_params_file',
+            default_value=os.path.join(config_root, 'slam_toolbox.yaml'),
         ),
         *params.declare_args(),
         OpaqueFunction(
             function=params.compose,
             kwargs={
-                "package": "daifuku_mapping",
-                "config_root": config_root,
-                "targets": ["slam_params_file"],
+                'package': 'daifuku_mapping',
+                'config_root': config_root,
+                'targets': ['slam_params_file'],
             },
         ),
         Node(
-            package="slam_toolbox",
-            executable="async_slam_toolbox_node",
-            name="slam_toolbox",
-            namespace=LaunchConfiguration("namespace"),
-            output="screen",
+            package='slam_toolbox',
+            executable='async_slam_toolbox_node',
+            name='slam_toolbox',
+            namespace=LaunchConfiguration('namespace'),
+            output='screen',
             parameters=[
-                LaunchConfiguration("slam_params_file"),
-                {"use_sim_time": LaunchConfiguration("use_sim_time")},
+                LaunchConfiguration('slam_params_file'),
+                {'use_sim_time': LaunchConfiguration('use_sim_time')},
             ],
         ),
     ])

@@ -11,42 +11,43 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""全公開プロファイルの実ファイルで設定合成と監視の配線を検査する。"""
+"""全公開プロファイルの実ファイルで設定合成と監視の配線を検査する."""
 
 import os
 from pathlib import Path
 
-from daifuku_bringup_launch import composition
 from daifuku_config import params
-from daifuku_navigation_launch import nav2_params
 from launch import LaunchContext
 from launch.actions import DeclareLaunchArgument, OpaqueFunction, SetLaunchConfiguration
 from launch_ros.actions import Node
 import pytest
 
+from daifuku_bringup_launch import composition
+from daifuku_navigation_launch import nav2_params
 
-@pytest.mark.parametrize("site", params.available_overrides())
+
+@pytest.mark.parametrize('site', params.available_overrides())
 def test_installed_site_composes_its_maps_and_one_watcher(
     site: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
 ) -> None:
     # Given: installed settings/assets and the actual fixed-site entry defaults.
     # PCD assets are acquired separately, so use a file at that boundary in CI.
-    pcd = tmp_path / "map.pcd"
+    pcd = tmp_path / 'map.pcd'
     pcd.touch()
     map_path = nav2_params._map_path
     monkeypatch.setattr(
-        nav2_params, "_map_path",
-        lambda declared: str(pcd) if str(declared).endswith(".pcd") else map_path(declared),
+        nav2_params, '_map_path',
+        lambda declared: str(pcd) if str(declared).endswith('.pcd') else map_path(declared),
     )
     context = LaunchContext()
     for action in composition.generate_navigation(site).entities:
         if isinstance(action, DeclareLaunchArgument):
             action.execute(context)
-    if site == "tsukuba2025":
+    if site == 'tsukuba2025':
         # This profile ships only 2D maps. Require an explicit aligned PCD.
-        with pytest.raises(RuntimeError, match="PCD.*決まりません"):
+        with pytest.raises(RuntimeError, match='PCD.*決まりません'):
             nav2_params.resolve_map(context)
-        context.launch_configurations["map_pcd"] = str(pcd)
+        context.launch_configurations['map_pcd'] = str(pcd)
     # When: real composition, map checks and fingerprint generation run without processes.
     generated = []
     for action in composition._assemble_navigation(context, site=site):
@@ -58,15 +59,15 @@ def test_installed_site_composes_its_maps_and_one_watcher(
                     result.execute(context)
     watchers = [
         action for action in generated
-        if isinstance(action, Node) and action.node_package == "daifuku_config"
+        if isinstance(action, Node) and action.node_package == 'daifuku_config'
     ]
     # Then: both declared maps resolve and one top-level watcher owns the selected scope.
-    assert context.launch_configurations["overrides"] == site
-    assert os.path.isfile(context.launch_configurations["map"])
-    assert os.path.isfile(context.launch_configurations["map_loc"])
+    assert context.launch_configurations['overrides'] == site
+    assert os.path.isfile(context.launch_configurations['map'])
+    assert os.path.isfile(context.launch_configurations['map_loc'])
     assert len(watchers) == 1
-    assert os.path.isfile(context.launch_configurations["params_file"])
-    assert context.launch_configurations["localization"] == "emcl3d"
-    assert context.launch_configurations["map_pcd"] == str(pcd)
-    emcl3d = params.load(context.launch_configurations["emcl3d_params_file"])
-    assert emcl3d["emcl3d"]["ros__parameters"]["cloud_topic"] == "/livox/lidar_elevation"
+    assert os.path.isfile(context.launch_configurations['params_file'])
+    assert context.launch_configurations['localization'] == 'emcl3d'
+    assert context.launch_configurations['map_pcd'] == str(pcd)
+    emcl3d = params.load(context.launch_configurations['emcl3d_params_file'])
+    assert emcl3d['emcl3d']['ros__parameters']['cloud_topic'] == '/livox/lidar_elevation'

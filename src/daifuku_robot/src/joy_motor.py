@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""モータ電源の状態。joy_teleop がサービス呼び出しの前後で使う。
+"""モータ電源の状態。joy_teleop がサービス呼び出しの前後で使う.
 
 自前実装 (driver:=original) は /motor_power_state を出すので、来ていればそれが
 答え。公式実装 (driver:=raspimouse) は出さないので、そのときだけ自分が投げた
@@ -21,7 +21,7 @@
 
 
 class MotorPower:
-    """ドライバが出す実状態と、自分が投げた要求の写し。"""
+    """ドライバが出す実状態と、自分が投げた要求の写し."""
 
     def __init__(self, start_state=False):
         self._requested = bool(start_state)
@@ -35,7 +35,7 @@ class MotorPower:
         self._actual = bool(value)
 
     def begin_request(self, wanted):
-        """要求を投げる直前。通らなければ revert_request。"""
+        """要求を投げる直前。通らなければ revert_request."""
         self.pending = True
         self._requested = bool(wanted)
 
@@ -43,6 +43,6 @@ class MotorPower:
         self.pending = False
 
     def revert_request(self):
-        """サービスが拒んだ / 落ちた。写しを使う構成で次の長押しが逆にならないように戻す。"""
+        """サービスが拒んだ / 落ちた。写しを使う構成で次の長押しが逆にならないように戻す."""
         self.pending = False
         self._requested = not self._requested

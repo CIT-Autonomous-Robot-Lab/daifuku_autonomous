@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""ControlPanelWidget が並べる GroupBox。ROS コールバックは持たない。"""
+"""ControlPanelWidget が並べる GroupBox。ROS コールバックは持たない."""
 
 from python_qt_binding.QtWidgets import (
     QGroupBox,
@@ -26,23 +26,23 @@ from python_qt_binding.QtWidgets import (
 
 
 class StatusGroup(QGroupBox):
-    """system_monitor が出す /diagnostics を CPU とプロセス表に映す。"""
+    """system_monitor が出す /diagnostics を CPU とプロセス表に映す."""
 
     def __init__(self, parent=None):
-        super(StatusGroup, self).__init__("稼働状況", parent)
+        super(StatusGroup, self).__init__('稼働状況', parent)
         layout = QVBoxLayout(self)
 
         self._cpu_bar = QProgressBar()
         self._cpu_bar.setRange(0, 100)
-        self._cpu_bar.setFormat("CPU %p%")
+        self._cpu_bar.setFormat('CPU %p%')
         layout.addWidget(self._cpu_bar)
 
-        self._cpu_detail = QLabel("system_monitor を待っています")
+        self._cpu_detail = QLabel('system_monitor を待っています')
         self._cpu_detail.setWordWrap(True)
         layout.addWidget(self._cpu_detail)
 
         self._node_table = QTableWidget(0, 2)
-        self._node_table.setHorizontalHeaderLabels(["プロセス", "CPU"])
+        self._node_table.setHorizontalHeaderLabels(['プロセス', 'CPU'])
         rows = self._node_table.verticalHeader()
         rows.setVisible(False)
         rows.setMinimumSectionSize(rows.defaultSectionSize() * 2 // 3)
@@ -58,26 +58,26 @@ class StatusGroup(QGroupBox):
 
     def show_diagnostics(self, message):
         for status in message.status:
-            values = dict((kv.key, kv.value) for kv in status.values)
-            if status.name.endswith("CPU"):
+            values = {kv.key: kv.value for kv in status.values}
+            if status.name.endswith('CPU'):
                 self._show_cpu(status, values)
-            elif status.name.endswith("Nodes"):
+            elif status.name.endswith('Nodes'):
                 self._show_node_table(values)
 
     def _show_cpu(self, status, values):
-        total = values.get("total", "")
+        total = values.get('total', '')
         try:
-            self._cpu_bar.setValue(int(float(total.rstrip("%"))))
+            self._cpu_bar.setValue(int(float(total.rstrip('%'))))
         except ValueError:
             pass
         extras = [status.message]
-        for key in ("loadavg", "temperature"):
+        for key in ('loadavg', 'temperature'):
             if key in values:
-                extras.append("%s %s" % (key, values[key]))
-        cores = sorted(k for k in values if k.startswith("cpu"))
+                extras.append('%s %s' % (key, values[key]))
+        cores = sorted(k for k in values if k.startswith('cpu'))
         if cores:
-            extras.append(" ".join("%s %s" % (k, values[k]) for k in cores))
-        self._cpu_detail.setText(" / ".join(extras))
+            extras.append(' '.join('%s %s' % (k, values[k]) for k in cores))
+        self._cpu_detail.setText(' / '.join(extras))
 
     def _show_node_table(self, values):
         self._node_table.setRowCount(len(values))

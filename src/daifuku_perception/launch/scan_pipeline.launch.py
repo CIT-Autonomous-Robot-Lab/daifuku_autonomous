@@ -37,6 +37,7 @@
 import os
 import sys
 
+from daifuku_config import params
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.conditions import IfCondition, UnlessCondition
@@ -49,29 +50,28 @@ _LAUNCH_DIR = os.path.dirname(os.path.realpath(__file__))
 if _LAUNCH_DIR not in sys.path:
     sys.path.insert(0, _LAUNCH_DIR)
 
-from daifuku_config import params  # noqa: E402
 from daifuku_perception_launch import scan as scan_common  # noqa: E402
 
 
 def generate_launch_description():
-    config_root = params.config_root("daifuku_perception")
+    config_root = params.config_root('daifuku_perception')
 
-    lidar = LaunchConfiguration("lidar")
-    lidar_driver = LaunchConfiguration("lidar_driver")
-    restamp_enabled = LaunchConfiguration("restamp_scan")
-    use_sim_time = LaunchConfiguration("use_sim_time")
-    cloud_topic = LaunchConfiguration("cloud_topic")
-    filtered_cloud_topic = LaunchConfiguration("filtered_cloud_topic")
-    scan_prestamp_topic = LaunchConfiguration("scan_prestamp_topic")
-    node_namespace = LaunchConfiguration("node_namespace")
-    scan_raw_topic = LaunchConfiguration("scan_raw_topic")
-    scan_topic = LaunchConfiguration("scan_topic")
-    base_frame = LaunchConfiguration("base_frame")
-    scan_filter_enabled = LaunchConfiguration("scan_filter_enabled")
-    scan_filter_params_file = LaunchConfiguration("scan_filter_params_file")
-    mid360_scan_params_file = LaunchConfiguration("mid360_scan_params_file")
-    mid360_elevation_params_file = LaunchConfiguration("mid360_elevation_params_file")
-    elevation_filter = LaunchConfiguration("elevation_filter")
+    lidar = LaunchConfiguration('lidar')
+    lidar_driver = LaunchConfiguration('lidar_driver')
+    restamp_enabled = LaunchConfiguration('restamp_scan')
+    use_sim_time = LaunchConfiguration('use_sim_time')
+    cloud_topic = LaunchConfiguration('cloud_topic')
+    filtered_cloud_topic = LaunchConfiguration('filtered_cloud_topic')
+    scan_prestamp_topic = LaunchConfiguration('scan_prestamp_topic')
+    node_namespace = LaunchConfiguration('node_namespace')
+    scan_raw_topic = LaunchConfiguration('scan_raw_topic')
+    scan_topic = LaunchConfiguration('scan_topic')
+    base_frame = LaunchConfiguration('base_frame')
+    scan_filter_enabled = LaunchConfiguration('scan_filter_enabled')
+    scan_filter_params_file = LaunchConfiguration('scan_filter_params_file')
+    mid360_scan_params_file = LaunchConfiguration('mid360_scan_params_file')
+    mid360_elevation_params_file = LaunchConfiguration('mid360_elevation_params_file')
+    elevation_filter = LaunchConfiguration('elevation_filter')
 
     is_mid360 = PythonExpression(["'", lidar, "' == 'mid360'"])
     use_elevation_filter = PythonExpression([
@@ -89,44 +89,44 @@ def generate_launch_description():
     # 変換したあとの z だけなので、仰角は元の点が持っていた情報として先に使う。
     elevation_filter_node = Node(
         condition=IfCondition(use_elevation_filter),
-        package="daifuku_perception",
-        executable="elevation_filter.py",
-        name=LaunchConfiguration("elevation_filter_name"),
-        output="screen",
+        package='daifuku_perception',
+        executable='elevation_filter.py',
+        name=LaunchConfiguration('elevation_filter_name'),
+        output='screen',
         namespace=node_namespace,
         parameters=[
             mid360_elevation_params_file,
             {
-                "use_sim_time": use_sim_time,
-                "restamp_cloud": ParameterValue(
-                    LaunchConfiguration("restamp_cloud"), value_type=bool),
+                'use_sim_time': use_sim_time,
+                'restamp_cloud': ParameterValue(
+                    LaunchConfiguration('restamp_cloud'), value_type=bool),
             },
         ],
         remappings=[
-            ("cloud_in", cloud_topic),
-            ("cloud_out", filtered_cloud_topic),
+            ('cloud_in', cloud_topic),
+            ('cloud_out', filtered_cloud_topic),
         ],
     )
 
     pointcloud_to_laserscan = Node(
         condition=IfCondition(is_mid360),
-        package="pointcloud_to_laserscan",
-        executable="pointcloud_to_laserscan_node",
-        name=LaunchConfiguration("projection_name"),
-        output="screen",
+        package='pointcloud_to_laserscan',
+        executable='pointcloud_to_laserscan_node',
+        name=LaunchConfiguration('projection_name'),
+        output='screen',
         namespace=node_namespace,
         parameters=[
             mid360_scan_params_file,
-            {"use_sim_time": use_sim_time, "target_frame": base_frame},
+            {'use_sim_time': use_sim_time, 'target_frame': base_frame},
         ],
         remappings=[
             # 仰角フィルタを外したときは点群を直接受ける (relay は挟まない)。
-            ("cloud_in", PythonExpression([
+            ('cloud_in', PythonExpression([
                 "'", filtered_cloud_topic, "' if '", elevation_filter,
                 "'.lower() == 'true' else '", cloud_topic, "'",
             ])),
             # restamp を挟まないときはここから直接 scan_raw_topic に出す。
-            ("scan", PythonExpression([
+            ('scan', PythonExpression([
                 "'", scan_prestamp_topic, "' if '", restamp_enabled,
                 "'.lower() == 'true' else '", scan_raw_topic, "'",
             ])),
@@ -135,15 +135,15 @@ def generate_launch_description():
 
     restamp_scan = Node(
         condition=IfCondition(use_restamp),
-        package="daifuku_perception",
-        executable="restamp_scan.py",
-        name="restamp_scan",
-        output="screen",
+        package='daifuku_perception',
+        executable='restamp_scan.py',
+        name='restamp_scan',
+        output='screen',
         namespace=node_namespace,
-        parameters=[{"use_sim_time": use_sim_time}],
+        parameters=[{'use_sim_time': use_sim_time}],
         remappings=[
-            ("scan_in", scan_prestamp_topic),
-            ("scan_out", scan_raw_topic),
+            ('scan_in', scan_prestamp_topic),
+            ('scan_out', scan_raw_topic),
         ],
     )
 
@@ -151,23 +151,23 @@ def generate_launch_description():
     # 無効にした場合も下流が /scan を見られるよう relay で素通しする。
     scan_filter = Node(
         condition=IfCondition(scan_filter_enabled),
-        package="laser_filters",
-        executable="scan_to_scan_filter_chain",
-        name=LaunchConfiguration("scan_filter_name"),
-        output="screen",
+        package='laser_filters',
+        executable='scan_to_scan_filter_chain',
+        name=LaunchConfiguration('scan_filter_name'),
+        output='screen',
         namespace=node_namespace,
-        parameters=[scan_filter_params_file, {"use_sim_time": use_sim_time}],
+        parameters=[scan_filter_params_file, {'use_sim_time': use_sim_time}],
         remappings=[
-            ("scan", scan_raw_topic),
-            ("scan_filtered", scan_topic),
+            ('scan', scan_raw_topic),
+            ('scan_filtered', scan_topic),
         ],
     )
     scan_relay = Node(
         condition=UnlessCondition(scan_filter_enabled),
-        package="topic_tools",
-        executable="relay",
-        name="unfiltered_scan_relay",
-        output="screen",
+        package='topic_tools',
+        executable='relay',
+        name='unfiltered_scan_relay',
+        output='screen',
         namespace=node_namespace,
         arguments=[scan_raw_topic, scan_topic],
     )
@@ -177,35 +177,35 @@ def generate_launch_description():
         # 宣言して素通しする)。ここで足すのは親も子もそれぞれの意味で持つ分。
         *scan_common.declare_args(),
         *params.declare_args(),
-        DeclareLaunchArgument("use_sim_time", default_value="false"),
+        DeclareLaunchArgument('use_sim_time', default_value='false'),
         # 複数の変換経路は名前空間と中間トピックも分ける。
-        DeclareLaunchArgument("cloud_topic", default_value="/livox/lidar"),
-        DeclareLaunchArgument("filtered_cloud_topic",
-                              default_value="/livox/lidar_elevation"),
-        DeclareLaunchArgument("scan_prestamp_topic",
-                              default_value="/scan_mid360_prestamp"),
-        DeclareLaunchArgument("node_namespace", default_value=""),
-        DeclareLaunchArgument("elevation_filter_name", default_value="elevation_filter"),
-        DeclareLaunchArgument("projection_name", default_value="pointcloud_to_laserscan"),
-        DeclareLaunchArgument("scan_filter_name", default_value="scan_to_scan_filter_chain"),
-        DeclareLaunchArgument("restamp_scan", default_value=lidar_driver),
+        DeclareLaunchArgument('cloud_topic', default_value='/livox/lidar'),
+        DeclareLaunchArgument('filtered_cloud_topic',
+                              default_value='/livox/lidar_elevation'),
+        DeclareLaunchArgument('scan_prestamp_topic',
+                              default_value='/scan_mid360_prestamp'),
+        DeclareLaunchArgument('node_namespace', default_value=''),
+        DeclareLaunchArgument('elevation_filter_name', default_value='elevation_filter'),
+        DeclareLaunchArgument('projection_name', default_value='pointcloud_to_laserscan'),
+        DeclareLaunchArgument('scan_filter_name', default_value='scan_to_scan_filter_chain'),
+        DeclareLaunchArgument('restamp_scan', default_value=lidar_driver),
         # ここだけで完結する引数 (親は素通ししない)。
         DeclareLaunchArgument(
-            "scan_raw_topic",
-            default_value="/scan_raw",
-            description="どちらの LiDAR でも生スキャンを集約するトピック。"
-                        "**lidar:=2d では機体側 (lidar_bringup.launch.py) の同名の "
-                        "引数と揃えること** (あちらの出口)。",
+            'scan_raw_topic',
+            default_value='/scan_raw',
+            description='どちらの LiDAR でも生スキャンを集約するトピック。'
+                        '**lidar:=2d では機体側 (lidar_bringup.launch.py) の同名の '
+                        '引数と揃えること** (あちらの出口)。',
         ),
         DeclareLaunchArgument(
-            "scan_topic",
-            default_value="/scan",
-            description="角度フィルタ後のトピック。SLAM と Nav2 の入力。",
+            'scan_topic',
+            default_value='/scan',
+            description='角度フィルタ後のトピック。SLAM と Nav2 の入力。',
         ),
         DeclareLaunchArgument(
-            "base_frame",
-            default_value="base_footprint",
-            description="pointcloud_to_laserscan が点群を落とし込むフレーム。",
+            'base_frame',
+            default_value='base_footprint',
+            description='pointcloud_to_laserscan が点群を落とし込むフレーム。',
         ),
 
         # 選んだ構成で実際に読むファイルの存在確認。
@@ -217,12 +217,12 @@ def generate_launch_description():
         OpaqueFunction(
             function=params.compose,
             kwargs={
-                "package": "daifuku_perception",
-                "config_root": config_root,
-                "targets": [
-                    "scan_filter_params_file",
-                    "mid360_scan_params_file",
-                    "mid360_elevation_params_file",
+                'package': 'daifuku_perception',
+                'config_root': config_root,
+                'targets': [
+                    'scan_filter_params_file',
+                    'mid360_scan_params_file',
+                    'mid360_elevation_params_file',
                 ],
             },
         ),
