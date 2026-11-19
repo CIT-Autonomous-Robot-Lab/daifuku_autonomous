@@ -1,7 +1,7 @@
 { system ? builtins.currentSystem, gui ? true, vulkan ? false }:
 
 let
-  # NixOSの設定とは独立して、ROSと対応するnixpkgsを固定する。
+  # ROSと対応するnixpkgsを固定する。
   rosOverlay = builtins.fetchTarball {
     url = "https://github.com/lopsided98/nix-ros-overlay/archive/971fa9ca86c79a4997e7c6b2f9df0cb754e7256a.tar.gz";
     sha256 = "sha256-LxoRIHc9WMcpcGpfmj1sYbwuBa8HjHenE+3N2iUgKTg=";
