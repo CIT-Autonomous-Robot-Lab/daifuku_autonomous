@@ -50,7 +50,10 @@ def test_fixed_site_ignores_global_site_and_environment(monkeypatch, tmp_path):
     assert context.launch_configurations["overrides"] == "19f"
 
 
-def test_dual_scan_uses_isolated_topics_and_localization_frame(monkeypatch, tmp_path):
+@pytest.mark.parametrize("backend", ["", "emcl2"])
+def test_dual_scan_only_runs_for_2d_localization(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, backend: str,
+) -> None:
     # Given: a Tsukuba composition with its two explicit source profiles.
     monkeypatch.setattr(params, "config_root", lambda package: str(tmp_path))
     monkeypatch.setattr(params, "site_meta", lambda context: {})
@@ -59,6 +62,8 @@ def test_dual_scan_uses_isolated_topics_and_localization_frame(monkeypatch, tmp_
         navigation_args, "get_package_share_directory", lambda package: str(tmp_path),
     )
     context = LaunchContext()
+    if backend:
+        context.launch_configurations["localization"] = backend
     for action in composition.generate_navigation("tsukuba2025").entities:
         if isinstance(action, DeclareLaunchArgument):
             action.execute(context)
@@ -71,8 +76,14 @@ def test_dual_scan_uses_isolated_topics_and_localization_frame(monkeypatch, tmp_
         name: perform_substitutions(context, normalize_to_list_of_substitutions(value))
         for name, value in include.launch_arguments
     } for include in includes]
-    scan = next(arguments for arguments in bundles if arguments.get("scan_topic") == "/scan_loc")
+    scans = [arguments for arguments in bundles if arguments.get("scan_topic") == "/scan_loc"]
+    if not backend:
+        assert scans == []
+        assert context.launch_configurations["leveling"].lower() == "false"
+        return
     # Then: localization keeps the leveled projection and distinct intermediate topics.
+    scan, = scans
+    assert context.launch_configurations["leveling"].lower() == "true"
     assert scan["projection_name"] == "pointcloud_to_laserscan_loc"
     assert scan["base_frame"] == "localization_gravity"
     assert scan["scan_raw_topic"] == "/scan_loc_raw"
@@ -182,7 +193,7 @@ def test_scan_defaults_follow_clock_and_driver_selection(
         separate_scan or lidar_default == "2d"
     )
     assert (selected["lidar_driver"].lower() == "true") == driver_enabled
-    assert (selected["leveling"] == "true") == separate_scan
+    assert selected["leveling"].lower() == "false"
     assert (selected["use_system_monitor"] == "true") == (not separate_scan)
     assert (selected["restamp_cloud"].lower() == "true") == (
         separate_scan and driver_enabled and use_sim_time == "false"

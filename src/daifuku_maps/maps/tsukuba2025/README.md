@@ -63,6 +63,11 @@
 
 ## 起動
 
+この場所もEMCL3Dが既定です。3D地図は同梱していないので、EMCL3Dを使う場合は
+計画地図と座標を合わせたPCDを`map_pcd:=/path/to/aligned.pcd`で指定してください。
+EMCL3Dに入るのは走行用の仰角フィルタ後の点群で、位置推定用の2D投影は起動しません。
+以下の手順は、保存済みの2D地図と専用の`/scan_loc`を使うEMCL2構成です。
+
 新規ファイルのinstall反映には、既存のROS環境で一度ビルドする。
 
 ```bash
@@ -84,7 +89,7 @@ Pi上では依存と新規ファイルを反映してから起動する。
 docker compose build
 docker compose up -d
 docker compose exec ros2 /ros_entrypoint.sh \
-  ros2 launch daifuku_bringup navigation.tsukuba2025.launch.py
+  ros2 launch daifuku_bringup navigation.tsukuba2025.launch.py localization:=emcl2
 ```
 
 実機では両系統の仰角フィルタで点群の時刻を受信時刻へ直してからTF投影する。
@@ -108,7 +113,7 @@ docker compose exec ros2 /ros_entrypoint.sh ros2 topic pub --once /initialpose \
 ### シミュレーション
 
 ```bash
-ros2 launch daifuku_bringup navigation.tsukuba2025.launch.py use_sim_time:=true
+ros2 launch daifuku_bringup navigation.tsukuba2025.launch.py use_sim_time:=true localization:=emcl2
 ```
 
 この場合の`lidar_driver`は既定`false`となり、点群とスキャンの時刻を保持する。

@@ -14,6 +14,7 @@
 """全公開プロファイルの実ファイルで設定合成と監視の配線を検査する。"""
 
 import os
+from pathlib import Path
 
 from daifuku_bringup_launch import composition
 from daifuku_config import params
@@ -25,7 +26,9 @@ import pytest
 
 
 @pytest.mark.parametrize("site", params.available_overrides())
-def test_installed_site_composes_its_maps_and_one_watcher(site, monkeypatch, tmp_path):
+def test_installed_site_composes_its_maps_and_one_watcher(
+    site: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
     # Given: installed settings/assets and the actual fixed-site entry defaults.
     # PCD assets are acquired separately, so use a file at that boundary in CI.
     pcd = tmp_path / "map.pcd"
@@ -39,6 +42,11 @@ def test_installed_site_composes_its_maps_and_one_watcher(site, monkeypatch, tmp
     for action in composition.generate_navigation(site).entities:
         if isinstance(action, DeclareLaunchArgument):
             action.execute(context)
+    if site == "tsukuba2025":
+        # This profile ships only 2D maps. Require an explicit aligned PCD.
+        with pytest.raises(RuntimeError, match="PCD.*決まりません"):
+            nav2_params.resolve_map(context)
+        context.launch_configurations["map_pcd"] = str(pcd)
     # When: real composition, map checks and fingerprint generation run without processes.
     generated = []
     for action in composition._assemble_navigation(context, site=site):
@@ -58,6 +66,7 @@ def test_installed_site_composes_its_maps_and_one_watcher(site, monkeypatch, tmp
     assert os.path.isfile(context.launch_configurations["map_loc"])
     assert len(watchers) == 1
     assert os.path.isfile(context.launch_configurations["params_file"])
-    if site in ("tsudanuma", "tsukuba2026"):
-        assert context.launch_configurations["localization"] == "emcl3d"
-        assert context.launch_configurations["map_pcd"] == str(pcd)
+    assert context.launch_configurations["localization"] == "emcl3d"
+    assert context.launch_configurations["map_pcd"] == str(pcd)
+    emcl3d = params.load(context.launch_configurations["emcl3d_params_file"])
+    assert emcl3d["emcl3d"]["ros__parameters"]["cloud_topic"] == "/livox/lidar_elevation"

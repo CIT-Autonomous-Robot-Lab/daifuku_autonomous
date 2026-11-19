@@ -1,8 +1,7 @@
 # 19f.yaml — 19F (915x577 @0.05m = 45.8x28.9m) 用の上書き。
 # 「断片」= 重ねる先の設定ファイルの値 (perception/, navigation/nav2/, localization/)。
 # 値の由来・実測・経緯は ../../README.md、仰角フィルタは docs/setup/lidar.md。
-# 自己位置推定は津田沼と同じ emcl2 (launch の既定)。VI は外部の推定姿勢を読む。
-#   ros2 launch daifuku_navigation navigation.launch.py localization:=emcl2
+# VI は外部の推定姿勢を読む。2D 地図を使う場合は localization:=emcl2 を明示する。
 # 未指定のパラメータは共通設定を使う。
 # 8 手の行動は津田沼の 2 地図だけ (屋内で 1 手 0.8m は曲がりきれない見込み。未検証)。
 
@@ -12,7 +11,7 @@ site:
   map:
     navigation:   19f/map_19f.yaml   # 経路計画 (/map)。vi_planner と global_costmap
     localization: 19f/map_19f.yaml   # 自己位置推定 (/map_loc)。emcl2
-    pointcloud:   19f/map_19f.pcd    # 任意: localization:=emcl3d の点群地図。2026-10-19 に map_19f の座標へ変換済み (元の GLIM 出力から yaw -23.80 度, t=(2.153, -2.231, -0.056)m。床の z は概算)
+    pointcloud:   19f/map_19f.pcd    # EMCL3D 用。map_19f へ変換済み (元の GLIM 出力から yaw -23.80 度, t=(2.153, -2.231, -0.056)m。床の z は概算)
 
 
   # ── cmd_vel の頭打ち ──────────────────────────────────────────────────────

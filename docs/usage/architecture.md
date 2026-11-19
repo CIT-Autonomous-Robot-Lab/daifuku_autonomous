@@ -170,9 +170,10 @@ navigation / mapping / `scan_pipeline`のlaunchが`scan.py`の1つの表から
 
 ## 自己位置推定
 
-- `localization:=emcl2`（既定）: 外部パッケージ`emcl2`が`map -> odom`を推定
-- `localization:=emcl3d`: 外部パッケージ`emcl3d`が`/livox/lidar`とPCD地図（`site: map: pointcloud:`）で
+- `localization:=emcl3d`（場所別入口の既定）: 外部パッケージ`emcl3d`が仰角フィルタ後の
+  `/livox/lidar_elevation`とPCD地図（`site: map: pointcloud:`または`map_pcd:=`）で
   `map -> odom`を推定（6DoF）。経路計画の`/map`は2D地図のまま
+- `localization:=emcl2`: 外部パッケージ`emcl2`が2Dスキャンで`map -> odom`を推定
 - `localization:=amcl`: Nav2標準`nav2_amcl`を使用
 - `localization:=vi`: **emcl2を立てず**、`vi_planner`自身が推定する（上流のVIOLA）。
   `map_server`は残る。`map -> odom`を出すのも`vi_planner`（`publish_tf`）で、

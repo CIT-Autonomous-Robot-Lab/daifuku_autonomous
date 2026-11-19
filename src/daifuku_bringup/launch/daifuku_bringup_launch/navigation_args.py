@@ -14,6 +14,7 @@
 """navigation の公開引数と、場所ごとに異なる既定値。"""
 
 import os
+from typing import Final
 
 from ament_index_python.packages import get_package_share_directory
 from daifuku_config import env_default, params
@@ -28,6 +29,7 @@ LOCALIZATION_PARAMETER_ARGUMENTS = (
 SCAN_PARAMETER_ARGUMENTS = (
     "mid360_elevation_params_file", "mid360_scan_params_file", "scan_filter_params_file",
 )
+LOCALIZERS_USING_SCAN: Final = ("amcl", "emcl", "emcl2")
 
 
 def uses_separate_localization_scan(site: str | None) -> bool:
@@ -67,12 +69,13 @@ def declare_navigation_arguments(site: str | None) -> list[DeclareLaunchArgument
         "emcl2_params_file": os.path.join(loc, "emcl2.yaml"),
         "emcl3d_params_file": os.path.join(loc, "emcl3d.yaml"),
         "emcl3d_compute_backend": env_default("EMCL3D_COMPUTE_BACKEND", ""),
-        "localization": "emcl3d" if site in ("tsudanuma", "tsukuba2026") else "emcl2",
+        # 固定サイトは共通。外部の2D地図を指定する VTC だけは従来の推定器を使う。
+        "localization": "emcl3d" if site is not None else "emcl2",
         "emcl2_package": "emcl2",
         "emcl2_executable": "emcl2_node",
         "emcl2_node_name": "emcl2",
         "velocity_smoother": "true",
-        "leveling": "true" if separate_localization_scan else "false",
+        "leveling": "false",
 
         "lidar": "mid360" if separate_localization_scan else env_default("LIDAR", "mid360"),
         "lidar_driver": env_default("LIDAR_DRIVER", "true"),
@@ -87,6 +90,9 @@ def declare_navigation_arguments(site: str | None) -> list[DeclareLaunchArgument
     }
     if separate_localization_scan and site is not None:
         directory = os.path.join(config, "sites", site)
+        defaults["leveling"] = PythonExpression([
+            "'", LaunchConfiguration("localization"), f"' in {LOCALIZERS_USING_SCAN!r}",
+        ])
         for name in SCAN_PARAMETER_ARGUMENTS:
             defaults[name] = os.path.join(directory, "navigation_scan.yaml")
         defaults["localization_scan_params_file"] = os.path.join(

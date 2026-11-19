@@ -25,6 +25,7 @@ setsid ros2 run robot_state_publisher robot_state_publisher \
 pids+=("$!")
 setsid ros2 launch daifuku_bringup navigation.tsukuba2025.launch.py \
     use_sim_time:=true lidar:=mid360 lidar_driver:=false \
+    localization:=emcl2 \
     use_rviz:=false config_watch:=off use_respawn:=false \
     >"$OUT/navigation.log" 2>&1 &
 pids+=("$!")

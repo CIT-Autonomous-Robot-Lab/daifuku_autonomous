@@ -2,9 +2,11 @@
 
 保存済み地図を読み込み、自己位置推定、経路計画、経路追従を起動します。
 
-津田沼はPCD地図によるEMCL3Dが既定で、入口は`navigation.tsudanuma.launch.py`です。
-PCDは別途ダウンロードします。
-[取得・配置と起動手順](../../src/daifuku_maps/maps/tsudanuma/README.md)を参照してください。
+場所別の `navigation.<場所>.launch.py` は、すべてPCD地図を使うEMCL3Dが既定です。
+19FのPCDは同梱です。[津田沼](../../src/daifuku_maps/maps/tsudanuma/README.md)と
+[つくば2026](../../src/daifuku_maps/maps/tsukuba2026/README.md)は別途配置し、
+[つくば2025](../../src/daifuku_maps/maps/tsukuba2025/README.md)は座標を合わせたPCDを
+`map_pcd:=`で指定します。
 
 ## tmuxで一式を起動する
 
@@ -27,7 +29,7 @@ docker compose up -d
 ```bash
 cd ~/daifuku_autonomous
 tmux new-session -d -s nav -c "$PWD" -n nav
-tmux send-keys -t nav:nav 'docker compose exec ros2 /ros_entrypoint.sh ros2 launch daifuku_bringup navigation.19f.launch.py use_sim_time:=false localization:=emcl2' Enter
+tmux send-keys -t nav:nav 'docker compose exec ros2 /ros_entrypoint.sh ros2 launch daifuku_bringup navigation.19f.launch.py use_sim_time:=false' Enter
 
 tmux new-window -t nav -c "$PWD" -n motor
 tmux send-keys -t nav:motor 'bash tools/control.sh motor on'
@@ -40,7 +42,7 @@ tmux attach -t nav
 
 | 窓 | 中身 | 操作 |
 |---|---|---|
-| `nav` | 価値反復プランナ（経路計画・追従）、emcl2（自己位置推定）、地図サーバ | 終了は`Ctrl-C` |
+| `nav` | 価値反復プランナ（経路計画・追従）、emcl3d（自己位置推定）、地図サーバ | 終了は`Ctrl-C` |
 | `motor` | モーター電源 | `Enter`で実行。止めるときは同じ窓で`control.sh stop` |
 | `check` | ノードとトピックの確認 | |
 
@@ -138,7 +140,7 @@ site:
 
 **`localization:=vi`（VIOLA）では`map_server_loc`を立てません。**
 同じVIノードが`/map`を使って推定し、`map→odom`を所有します。
-同梱の`19f`はemcl2で`/map_loc`を使います。`tsudanuma`のemcl3dは`/map_loc`を読まず、PCDで推定します。
+既定のEMCL3Dでは`map_server_loc`を立てず、PCDで推定します。
 
 RVizには`Map (navigation)`と`Map (localization)`の2つの表示があります。**既定でオンなのは
 後者（`/map_loc`）です**——経路計画用の地図は手で壁を描き足したり回廊の外を塗り潰したり
@@ -148,7 +150,7 @@ RVizには`Map (navigation)`と`Map (localization)`の2つの表示がありま�
 経路計画が「なぜそこを通らないか」を見たいときだけ`Map (navigation)`をオンにしてください。
 
 **`localization:=amcl`も`/map_loc`を使います。** `daifuku_localization`が
-自己位置推定用のmap serverとAMCLを起動します。`vi`では`/map_loc`を出さないので、
+自己位置推定用のmap serverとAMCLを起動します。EMCL3DとVIでは`/map_loc`を出さないので、
 RVizの表示は`Map (navigation)`へ切り替えます。
 
 `map:=`を明示することもできますが、`site: map:`と別のファイルを指していると**起動時に
@@ -160,19 +162,18 @@ RVizの表示は`Map (navigation)`へ切り替えます。
 
 ```bash
 ros2 launch daifuku_bringup navigation.19f.launch.py \
-  use_sim_time:=false localization:=emcl2
+  use_sim_time:=false
 ```
 
-**コマンドはLiDARの構成によらず同じです。** `/scan`を出すのは機体側なので、
-Mid-360でも2D LiDARでもこちらは変わりません。RVizを同じ端末から開く場合は
-`use_rviz:=true`を渡します。
+EMCL3DはMid-360の点群を使います。2D LiDARだけで走る場合は
+`lidar:=2d localization:=emcl2`を明示します。RVizを同じ端末から開く場合は`use_rviz:=true`を渡します。
 
 軽量Docker環境:
 
 ```bash
 docker compose exec ros2 \
   /ros_entrypoint.sh ros2 launch daifuku_bringup navigation.19f.launch.py \
-  use_sim_time:=false localization:=emcl2
+  use_sim_time:=false
 ```
 
 ## 自己位置推定を選ぶ
@@ -188,15 +189,17 @@ ros2 launch daifuku_bringup navigation.19f.launch.py \
 
 ### `localization:=emcl3d`（点群地図での6DoF推定）
 
-emcl2の代わりに外部パッケージ`emcl3d`（`NOPLAB/emcl3d`）を立てます。`/scan`ではなく
-`/livox/lidar`の3D点群をPCDの点群地図と照合し、`map -> odom`と`mcl_pose`を出します
+外部パッケージ`emcl3d`（`NOPLAB/emcl3d`）を立てます。`/scan`ではなく、仰角フィルタ後・
+2D投影前の`/livox/lidar_elevation`をPCDの点群地図と照合し、`map -> odom`と`mcl_pose`を出します
 （`vi_planner`はそのまま`mcl_pose`を読む）。地図は`overrides`の`site: map: pointcloud:`
 （`19f`は`19f/map_19f.pcd`）か`map_pcd:=`で、経路計画用の`/map`は従来どおり2D地図です。
 **PCDの座標が2D地図と揃っていないと、推定は合っていても経路がずれます**（19Fは未検証）。
 
 ```bash
-ros2 launch daifuku_bringup navigation.19f.launch.py localization:=emcl3d
+ros2 launch daifuku_bringup navigation.19f.launch.py
 ```
+
+`elevation_filter:=false`を指定すると、既定の購読先は生点群の`/livox/lidar`に戻ります。
 
 ### `localization:=vi`（プランナ内蔵の推定器）
 
@@ -208,8 +211,7 @@ ros2 launch daifuku_bringup navigation.19f.launch.py localization:=emcl3d
 （`src/daifuku_config/navigation/vi_planner.yaml`）の既定は`external`（＝外部の推定を読む）で、
 そのまま`localization:=vi`を渡すと**起動時に止まります**。
 
-**同梱の3地図はいずれも`external`のままです。** 19Fの`belief`上書きも外してあり、
-通常は`localization:=emcl2`で起動します。内蔵推定器を試すときだけ`localizer`を
+**同梱の地図はいずれも`external`のままです。** 内蔵推定器を試すときだけ`localizer`を
 下の値へ変更し、`localization:=vi`と組み合わせてください。
 
 | 値 | 中身 |

@@ -11,10 +11,7 @@ emcl3d:
     map_frame: map                      # 既定 同左
     odom_frame: odom                    # 既定 同左
     base_frame: base_footprint          # 既定 base_link: URDF に base_link が無い (emcl2 と同じ)
-    # Mid-360 の生の点群をそのまま食わせる (scan_pipeline の仰角フィルタや帯は通さない)。
-    # emcl3d は「header.stamp に deskew 済み」を前提にするが、Livox の 1 フレーム 0.1 秒の
-    # 歪みはこの機体の速度 (0.5m/s) で最大 5cm なので、そのまま入れている。**未検証**。
-    cloud_topic: /livox/lidar           # 既定 /points
+    cloud_topic: /livox/lidar_elevation  # 既定 points: 仰角フィルタ後、2D 投影前の点群。deskew はしない
     publish_tf: true                    # 既定 同左: map -> odom を出す。他の推定器と同時に立てないこと
 
     max_cloud_age: 1.0                  # 既定 同左 [s]

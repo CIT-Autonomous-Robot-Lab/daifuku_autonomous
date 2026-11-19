@@ -21,15 +21,15 @@ from launch import LaunchContext, LaunchDescription
 from launch.actions import (
     GroupAction, IncludeLaunchDescription, OpaqueFunction,
 )
-from launch.conditions import IfCondition
+from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
-from launch_ros.actions import Node
-from launch_ros.actions import SetParametersFromFile
+from launch_ros.actions import Node, SetParametersFromFile, SetRemap
 from launch_ros.descriptions import ParameterValue
 
 from .navigation_args import (
     LOCALIZATION_PARAMETER_ARGUMENTS,
+    LOCALIZERS_USING_SCAN,
     NAVIGATION_PARAMETER_ARGUMENTS,
     SCAN_PARAMETER_ARGUMENTS,
     declare_navigation_arguments,
@@ -88,7 +88,10 @@ def _source_parameter_files(
 def _assemble_navigation(context: LaunchContext, *, site: str | None):
     """場所の検査、設定合成、地図解決、監視、機能接続の順に実行する。"""
     validate_site(context, site=site)
-    separate_localization_scan = uses_separate_localization_scan(site)
+    separate_localization_scan = (
+        uses_separate_localization_scan(site)
+        and value(context, "localization") in LOCALIZERS_USING_SCAN
+    )
     navigation_root = params.config_root("daifuku_navigation")
     localization_root = params.config_root("daifuku_localization")
     source_files = _source_parameter_files(
@@ -147,6 +150,9 @@ def _assemble_navigation(context: LaunchContext, *, site: str | None):
         *scan_pipelines,
         GroupAction([
             SetParametersFromFile(LaunchConfiguration("bond_params_file")),
+            # フィルタを外した場合は、フィルタ出力を購読する推定器だけ生点群へ戻す。
+            SetRemap(src="/livox/lidar_elevation", dst="/livox/lidar",
+                     condition=UnlessCondition(LaunchConfiguration("elevation_filter"))),
             include_component("daifuku_localization", "localization.launch.py", localization),
         ]),
         include_component("daifuku_navigation", "navigation.launch.py", navigation),

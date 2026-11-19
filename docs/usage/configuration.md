@@ -44,7 +44,7 @@
 ```bash
 ros2 launch daifuku_bringup navigation.19f.launch.py
 ros2 launch daifuku_bringup navigation.tsudanuma.launch.py
-ros2 launch daifuku_bringup navigation.tsukuba2025.launch.py
+ros2 launch daifuku_bringup navigation.tsukuba2025.launch.py map_pcd:=/path/to/aligned.pcd
 ros2 launch daifuku_bringup navigation.tsukuba2026.launch.py
 ```
 
@@ -67,7 +67,7 @@ ros2 launch daifuku_bringup navigation.tsukuba2026.launch.py
 | `emcl3d_compute_backend` | 空（環境変数`EMCL3D_COMPUTE_BACKEND`、未設定ならYAML） | `cpu` / `vulkan`。明示時はYAMLより優先。GPUビルドとPi 5の設定は[Pi 5](../setup/raspberry-pi-5.md#emcl3dをgpuで実行する)を参照 |
 | `map_pcd` | 空（`overrides`の`site: map: pointcloud:`から導く） | `localization:=emcl3d`が読む点群地図（PCD）のパス。明示すると宣言と同じファイルかを見る。**`emcl3d`で決まらなければ起動時に止まる**。他の`localization`では読まない |
 | `bond_params_file` | `src/daifuku_config/navigation/lifecycle_bond.yaml` | ライフサイクルマネージャのbondタイムアウト |
-| `localization` | `emcl2` | `emcl2` / `emcl` / `emcl3d` / `amcl` / `vi` |
+| `localization` | 場所別は`emcl3d`、外部2D地図のVTC入口は`emcl2` | `emcl2` / `emcl` / `emcl3d` / `amcl` / `vi` |
 | `velocity_smoother` | `true` | `velocity_smoother`を`vi_planner`と`twist_mux`の間に残すか。`false`にするとnavigation側のlifecycleノードが1つも無くなる |
 | `use_rviz` | `false` | RVizを起動するか。実機はheadlessのため既定は`false`で、表示はPC側から開く |
 | `use_system_monitor` | `true` | CPUを`/diagnostics`へ出す`system_monitor`を起動するか。1Hzで`/proc`を読むだけだがDDS参加者が1つ増えるので、ディスカバリの切り分け時は`false`にする |

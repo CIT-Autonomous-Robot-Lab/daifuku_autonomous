@@ -122,7 +122,7 @@ daifuku_navigation:
 `overrides:=none` です。このとき、または `site.map` が無いときは `map:=` が必須で、
 既定の場所の地図へは落としません。VTC の生成地図も `overrides:=none` を明示します。
 
-`site.map` のパスは `daifuku_navigation` の `maps/` からの相対パスか絶対パスです。
+`site.map` のパスは `daifuku_maps` の `maps/` からの相対パスか絶対パスです。
 
 | 役 | launch 引数 | 用途 |
 | --- | --- | --- |
@@ -136,8 +136,9 @@ daifuku_navigation:
 emcl2 系は別々の 2D 地図を使えます。AMCL と VI 内蔵推定は同一地図に限られます。
 `map_server_loc` に設定節を足しません。地図パスは launch が直接渡し、
 キー名で書き換える `RewrittenYaml` が両方を同じ地図にするのを避けます。
-emcl3d は `/map_loc` を読まないため 2D 地図が別でも起動でき、
-自己位置推定用の PCD が解決できなければ起動を止めます。
+場所別入口の既定は emcl3d です。`/map_loc` は読まず、仰角フィルタ後の点群を
+PCD と照合します。自己位置推定用の PCD が解決できなければ起動を止めます。
+同梱・配布された PCD がない場合は、計画地図と座標を合わせた PCD を `map_pcd:=` で渡します。
 
 `tsudanuma` の計画地図は順路から生成した 8.5 m の回廊です。順路を変えたら、
 同じ場所の `navigation/tsudanuma-challenge_nav.yaml`（`tsudanuma-challenge_nav3_9.pgm`）を元に

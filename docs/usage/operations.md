@@ -231,13 +231,13 @@ ros2 launch daifuku_bringup mapping.launch.py config_watch:=warn
 
 ## 走らせる場所を切り替える
 
-19Fと津田沼のように場所が変わると、**LiDARの帯（仰角と高さ）・`emcl2`と価値反復の調整・
-地図**が3つとも変わります。navigationではこれを**launchの名前**で選びます。
+navigationでは**launchの名前**で地図と場所別の調整を選びます。
+自己位置推定はどの場所でもEMCL3Dが既定です。
 
 ```bash
 ros2 launch daifuku_bringup navigation.19f.launch.py
 ros2 launch daifuku_bringup navigation.tsudanuma.launch.py
-ros2 launch daifuku_bringup navigation.tsukuba2025.launch.py
+ros2 launch daifuku_bringup navigation.tsukuba2025.launch.py map_pcd:=/path/to/aligned.pcd
 ros2 launch daifuku_bringup navigation.tsukuba2026.launch.py
 ```
 
