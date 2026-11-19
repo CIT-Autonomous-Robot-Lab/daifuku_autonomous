@@ -4,7 +4,7 @@
 
 | ディレクトリ | 用途 | 詳細 |
 |---|---|---|
-| [`raspberrypi/`](raspberrypi) | 実機Raspberry Pi（`arm64`）とPC（`amd64`）で動く実行専用のヘッドレス環境。RVizは含まない | [README](raspberrypi/README.md) / [Docker環境](../docs/setup/docker.md) |
+| [`raspberrypi/`](raspberrypi) | 実機Raspberry Pi（`arm64`）とPC（`amd64`）で動く実機向けヘッドレス環境。RVizは含まない | [README](raspberrypi/README.md) / [Docker環境](../docs/setup/docker.md) |
 | [`dev/`](dev) | PC側の開発環境。ROS 2 HumbleとGUI（RViz・rqt） | [README](dev/README.md) / [GUI付き開発コンテナ](../docs/setup/development-container.md) |
 | `common/` | 両方が使う共通部分（後述） | — |
 
@@ -16,11 +16,17 @@ RVizで見る、というのが通常の使い方です。`ROS_DOMAIN_ID`の既�
 実機用は描画を含まないプロファイル、開発用はRViz・rqtを加えたプロファイルです。
 依存を追加するときは`shell.nix`を編集し、イメージを作り直します。
 
+ワークスペースをコンテナ内でビルドする入口は維持しています。
+RustはLinux用の標準ライブラリを使い、Wasm/BPF用とコンパイラ内部の開発用情報を外します。
+初回はRustコンパイラのビルドも伴います。LLVM/Clangは同じバージョンの共有ライブラリと
+組み込みヘッダーを使い、ワークスペースで使わない静的アーカイブを取り込みません。
+
 取得・コンパイル済みのNixストアとDBは、ベースイメージとCPUアーキテクチャごとの
 ビルドキャッシュに一緒に保持します。同時更新はロックで防ぎます。
 このキャッシュは最終イメージへ入れず、実現した依存だけをコピーします。
-取得通信はHTTP/1.1を使います。NixのHTTP/2による並列NAR取得で進捗が止まる
-現象を避けるためです。
+同じ内容のファイルはhardlinkで共有し、コピー先でも出力間の共有を保ちます。
+取得通信はHTTP/1.1に固定します。未取得の依存を一括取得するときに起きる
+接続エラーは、Dockerの既定ネットワークでは解消を確認できていません。
 
 ## common/
 
