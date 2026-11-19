@@ -14,13 +14,6 @@ site:
     localization: 19f/map_19f.yaml   # 自己位置推定 (/map_loc)。emcl2
     pointcloud:   19f/map_19f.pcd    # 任意: localization:=emcl3d の点群地図。2026-10-19 に map_19f の座標へ変換済み (元の GLIM 出力から yaw -23.80 度, t=(2.153, -2.231, -0.056)m。床の z は概算)
 
-  # ── emcl2 ────────────────────────────────────────────────────────────────
-  # 有効ビームの 28% が地図の壁を貫通する。**地図を取り直したら 2 つとも消すこと**。
-daifuku_localization:
-  emcl2:
-    ros__parameters:
-      alpha_threshold: 0.2                # 断片 0.5: alpha が 0.0-0.4 に張り付くため
-      expansion_radius_orientation: 0.05  # 断片 0.2: リセット時の姿勢の飛びを抑える
 
   # ── cmd_vel の頭打ち ──────────────────────────────────────────────────────
 daifuku_navigation:
