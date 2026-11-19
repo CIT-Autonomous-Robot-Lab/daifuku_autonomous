@@ -236,6 +236,7 @@ class OverlayTest(unittest.TestCase):
                     expected = reference["vi_planner"]["ros__parameters"]
                     self.assertEqual(params["map_scale"], 2)
                     expected["map_scale"] = 2
+                    expected["waypoint_prefetch"] = False
                     self.assertEqual(params, expected)
 
 
