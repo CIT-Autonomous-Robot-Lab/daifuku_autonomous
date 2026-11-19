@@ -78,7 +78,7 @@ def _shared_arg_specs():
         ("publish_lidar_tf", "true",
          "base_footprint -> livox_frame を static_transform_publisher で配信するか "
          "(lidar:=mid360 のときだけ効く)。"),
-        ("lidar_x", "0.0", None),
+        ("lidar_x", "0.20", None),
         ("lidar_y", "0.0", None),
         # 実測 275 mm (2026-08-03)。base_footprint (接地面) から Mid-360 まで。
         ("lidar_z", "0.275", None),
