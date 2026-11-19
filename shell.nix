@@ -92,6 +92,49 @@ let
     ln -s ${ros2Rust}/rclrs/package.xml "$out/share/rclrs/package.xml"
     touch "$out/share/ament_index/resource_index/packages/rclrs"
   '';
+  # bindgenと描画が使う共有ABIを保ち、LLVM/Clangの静的アーカイブを持ち込まない。
+  llvm = pkgs.llvmPackages.libclang.libllvm;
+  llvmRuntime = pkgs.runCommand "${llvm.pname}-${llvm.version}-lib" {} ''
+    mkdir -p "$out/lib"
+    cp -a ${llvm.lib}/lib/libLLVM.so* "$out/lib/"
+  '';
+  libclangRuntime = (pkgs.replaceDirectDependencies {
+    drv = pkgs.llvmPackages.libclang.lib;
+    replacements = [{
+      oldDependency = llvm.lib;
+      newDependency = llvmRuntime;
+    }];
+  }).overrideAttrs (old: {
+    buildCommand = old.buildCommand + ''
+      find "$out/lib" -maxdepth 1 -type f -name '*.a' -delete
+    '';
+  });
+  withSharedLibraries = drv: pkgs.replaceDependencies {
+    inherit drv;
+    replacements = [
+      { oldDependency = llvm.lib; newDependency = llvmRuntime; }
+      { oldDependency = pkgs.llvmPackages.libclang.lib; newDependency = libclangRuntime; }
+    ];
+  };
+  # Linux用のビルドにWasm/BPFやrustc内部の開発用情報は持ち込まない。
+  minimalRustc = (pkgs.rustc-unwrapped.override {
+    enableRustcDev = false;
+  }).overrideAttrs (old: {
+    configureFlags = builtins.filter
+      (flag: !(pkgs.lib.hasPrefix "--target=" flag))
+      old.configureFlags
+      ++ [ "--target=${pkgs.stdenv.targetPlatform.rust.rustcTargetSpec}" ];
+  });
+  rustc = pkgs.rustc.override {
+    rustc-unwrapped = (pkgs.replaceDirectDependencies {
+      drv = minimalRustc;
+      replacements = [{ oldDependency = llvm.lib; newDependency = llvmRuntime; }];
+    }) // {
+      inherit (minimalRustc)
+        pname version src llvm llvmPackages targetPlatforms
+        targetPlatformsWithHostTools badTargetPlatforms meta tests;
+    };
+  };
 in
 pkgs.mkShell ({
   packages = [
@@ -113,12 +156,16 @@ pkgs.mkShell ({
     pkgs.apr
     pkgs.aprutil
     pkgs.cmake
-    pkgs.cargo
-    pkgs.rustc
+    # Cargoのラッパーも同じRustを参照させ、旧コンパイラを残さない。
+    (pkgs.replaceDirectDependencies {
+      drv = pkgs.cargo;
+      replacements = [{ oldDependency = pkgs.rustc; newDependency = rustc; }];
+    })
+    rustc
     pkgs.cargo-ament-build
     pkgs.pkg-config
-    pkgs.llvmPackages.libclang
-    (pkgs.rosPackages.humble.buildEnv {
+    libclangRuntime
+    (withSharedLibraries (pkgs.rosPackages.humble.buildEnv {
       paths = with pkgs.rosPackages.humble; [
         (pkgs.colcon.withExtensions (with pkgs.python3Packages; [
           colcon-cargo
@@ -180,19 +227,19 @@ pkgs.mkShell ({
           touch "$out/share/ament_index/resource_index/rust_packages/''${package_dir##*/}"
         done
       '';
-    })
+    }))
   ] ++ pkgs.lib.optionals gui [
     pkgs.arp-scan
     pkgs.bash-completion
     pkgs.gdb
-    pkgs.mesa
+    (withSharedLibraries pkgs.mesa)
     pkgs.nano
     pkgs.openssh
     pkgs.tmux
     pkgs.xterm
   ] ++ pkgs.lib.optionals vulkan [
     pkgs.glslang
-    pkgs.mesa
+    (withSharedLibraries pkgs.mesa)
     pkgs.vulkan-headers
     pkgs.vulkan-loader
     pkgs.vulkan-tools
@@ -200,6 +247,7 @@ pkgs.mkShell ({
 
   ROS_DOMAIN_ID = "90";
   ROS_LOCALHOST_ONLY = "0";
+  LIBCLANG_PATH = "${libclangRuntime}/lib";
 
   shellHook = ''
     # ビルド済みの自前プラグイン・ノードを現在のNix環境へ重ねる。
