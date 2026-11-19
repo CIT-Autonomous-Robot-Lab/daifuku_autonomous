@@ -6,6 +6,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      publish_arm64:
+        description: Raspberry Pi用arm64イメージをGHCRへ公開する
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -15,6 +20,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  publish-arm64:
+    needs: [lint, ros, workspace-build, vulkan-build, map-tools, simulator]
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && inputs.publish_arm64)
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/publish-arm64.yml
+
   lint:
     runs-on: ubuntu-latest
     container: ros:humble-ros-base

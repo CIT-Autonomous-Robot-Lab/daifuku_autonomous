@@ -28,6 +28,24 @@ RustはLinux用の標準ライブラリを使い、Wasm/BPF用とコンパイラ
 取得通信はHTTP/1.1に固定します。未取得の依存を一括取得するときに起きる
 接続エラーは、Dockerの既定ネットワークでは解消を確認できていません。
 
+## Raspberry Pi用イメージの公開
+
+通常CIがすべて成功すると、`main`更新時にGitHub Actionsのarm64ランナーで
+実機用イメージをビルドし、GHCRへ公開します。QEMUでの代行ビルドは使いません。
+同じイメージで`build-workspace`が成功してからpushします。
+
+公開先は`ghcr.io/cit-autonomous-robot-lab/daifuku_autonomous:arm64`です。
+コミットを固定する`sha-<40桁のコミットSHA>-arm64`タグも作ります。
+PR実行では公開せず、手動公開は次の入口を使います。
+
+```bash
+gh workflow run ci.yml --ref main -f publish_arm64=true
+```
+
+`--ref`で別のブランチを選ぶ場合はSHAタグだけを公開し、`arm64`タグを更新しません。
+イメージは依存環境です。実機では従来どおりソースをマウントしてビルドします。
+GHCRのパッケージが非公開の場合は、取得側で`read:packages`権限の認証が必要です。
+
 ## common/
 
 | ファイル | 使う側 | 内容 |
