@@ -16,5 +16,5 @@ elevation_filter:
     exclusion_box_max_x: -0.00  # 既定 -0.10 [m]: LiDAR位置の手前側
     exclusion_box_min_y: -0.18  # 既定 -0.20 [m]: LiDAR右側18cm
     exclusion_box_max_y: 0.18   # 既定 0.20 [m]: LiDAR左側18cm
-    exclusion_box_min_z: -0.40  # 既定 0.10 [m]: LiDAR取り付け高さから下40cm
+    exclusion_box_min_z: -0.275  # 既定 0.10 [m]: LiDAR取り付け高さから下27.5cm
     exclusion_box_max_z: 0.50   # 既定 同左 [m]: LiDAR取り付け高さから上50cm
