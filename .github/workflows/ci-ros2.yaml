@@ -1,0 +1,124 @@
+name: ROS 2
+
+on:
+  workflow_call:
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    container: ros:humble-ros-base
+    defaults:
+      run:
+        shell: bash
+    env:
+      PKGS_ALL: src/daifuku_config src/daifuku_bringup src/daifuku_robot src/daifuku_perception src/daifuku_localization src/daifuku_navigation src/daifuku_mapping src/daifuku_maps src/daifuku_rqt src/daifuku_waypoint_manager src/raspicat_driver
+      PKGS_PY: src/daifuku_config src/daifuku_bringup src/daifuku_robot src/daifuku_perception src/daifuku_localization src/daifuku_navigation src/daifuku_mapping src/daifuku_rqt src/raspicat_driver
+      PKGS_CMAKE: src/daifuku_config src/daifuku_bringup src/daifuku_robot src/daifuku_perception src/daifuku_localization src/daifuku_navigation src/daifuku_mapping src/daifuku_maps src/daifuku_waypoint_manager
+    steps:
+      - uses: actions/checkout@v4
+      - name: linter を入れる
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ros-humble-ament-copyright ros-humble-ament-flake8 \
+            ros-humble-ament-lint-cmake ros-humble-ament-xmllint
+      - name: lint
+        run: |
+          . /opt/ros/humble/setup.sh
+          read -r -a packages_all <<< "$PKGS_ALL"
+          read -r -a packages_py <<< "$PKGS_PY"
+          read -r -a packages_cmake <<< "$PKGS_CMAKE"
+          ament_copyright "${packages_all[@]}"
+          ament_flake8 "${packages_py[@]}"
+          ament_lint_cmake "${packages_cmake[@]}"
+          ament_xmllint "${packages_cmake[@]}"
+
+  test:
+    name: ${{ matrix.ros_distro }} / ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        ros_distro: [humble, jazzy, lyrical]
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    container: ros:${{ matrix.ros_distro }}-ros-base
+    defaults:
+      run:
+        shell: bash
+    env:
+      ROS_DOMAIN_ID: "77"
+      ROS_LOCALHOST_ONLY: "1"
+      PIP_BREAK_SYSTEM_PACKAGES: "1"
+      PACKAGES: daifuku_config daifuku_maps daifuku_perception daifuku_localization daifuku_navigation daifuku_mapping raspicat_driver daifuku_robot daifuku_bringup
+    steps:
+      - uses: actions/checkout@v4
+      - name: 構成テストの依存を入れる
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            cargo git-lfs python3-pip python3-pytest python3-numpy \
+            "ros-${ROS_DISTRO}-ament-cmake-python" "ros-${ROS_DISTRO}-ament-cmake-pytest" \
+            "ros-${ROS_DISTRO}-ament-lint-auto" "ros-${ROS_DISTRO}-ament-cmake-copyright" \
+            "ros-${ROS_DISTRO}-ament-cmake-flake8" "ros-${ROS_DISTRO}-ament-cmake-lint-cmake" \
+            "ros-${ROS_DISTRO}-ament-cmake-xmllint" "ros-${ROS_DISTRO}-launch-testing" \
+            "ros-${ROS_DISTRO}-launch-testing-ament-cmake" "ros-${ROS_DISTRO}-nav2-common" \
+            "ros-${ROS_DISTRO}-diagnostic-updater" "ros-${ROS_DISTRO}-tf2-ros"
+          pip3 install colcon-cargo colcon-ros-cargo
+      - name: Git LFS の地図を取得する
+        run: git -c safe.directory="$GITHUB_WORKSPACE" lfs pull
+      - name: 自前の機能パッケージと公開入口をビルドする
+        run: |
+          . "/opt/ros/${{ matrix.ros_distro }}/setup.sh"
+          read -r -a packages <<< "$PACKAGES"
+          colcon build --packages-select "${packages[@]}"
+      - name: Docker の永続ビルドキャッシュと構成変更を検査する
+        if: matrix.ros_distro == 'humble'
+        run: |
+          . "/opt/ros/${{ matrix.ros_distro }}/setup.sh"
+          install -D docker/common/workspace-layout.sh /usr/local/lib/daifuku/workspace-layout.sh
+          python3 -m pytest -q docker/raspberrypi/tests
+      - name: ROS ノード・設定監視・起動構成を検査する
+        run: |
+          . "/opt/ros/${{ matrix.ros_distro }}/setup.sh"
+          . install/setup.sh
+          read -r -a packages <<< "$PACKAGES"
+          colcon test --packages-select "${packages[@]}"
+          colcon test-result --all --verbose
+      - name: インストールされたノードの実行権限
+        run: |
+          for name in $(grep -rhoP 'executable="\K[\w]+\.py' src/*/launch | sort -u) config_sentinel site_manager; do
+            entries=$(find install -path "*/lib/*/$name")
+            test -n "$entries"
+            for entry in $entries; do
+              test -x "$entry"
+              echo "ok $entry"
+            done
+          done
+      - name: 全場所の設定と地図を検査する
+        run: |
+          . "/opt/ros/${{ matrix.ros_distro }}/setup.sh"
+          . install/setup.sh
+          python3 - <<'PY'
+          import os
+          from launch import LaunchContext
+          from daifuku_config import params
+          from daifuku_navigation_launch import nav2_params
+
+          sites = params.available_overrides()
+          assert sites, "sites/ is empty"
+          for site in sites:
+              for package in params.CONFIG_DIRS:
+                  ok, why = params.precheck(site, package, params.config_root(package))
+                  assert ok, f"{site} x {package}: {why}"
+              context = LaunchContext()
+              context.launch_configurations.update(overrides=site, extra_params_file="")
+              for role, path in nav2_params.declared_maps(context).items():
+                  assert os.path.isfile(path), f"{site} map:{role}: {path}"
+              print(f"ok {site}")
+          context = LaunchContext()
+          context.launch_configurations.update(
+              params_dir=os.path.join(params.config_root("daifuku_navigation"), "nav2"),
+              params_file="",
+          )
+          nav2_params.fragments_resolver(context)
+          PY

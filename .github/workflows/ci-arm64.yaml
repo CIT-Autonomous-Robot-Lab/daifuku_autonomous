@@ -7,7 +7,6 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-24.04-arm
-    # 初回はROSとRustの固定依存もソースから構築する。
     timeout-minutes: 180
     permissions:
       contents: read
@@ -34,6 +33,13 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha,scope=raspberrypi-arm64
           cache-to: type=gha,scope=raspberrypi-arm64,mode=max
+      - uses: actions/cache@v5.0.3
+        with:
+          path: |
+            build/.cargo/registry
+            build/.cargo/git
+          key: cargo-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('src/**/Cargo.lock', 'daifuku_autonomous.repos') }}
+          restore-keys: cargo-${{ runner.os }}-${{ runner.arch }}-
       - name: arm64と実機用ワークスペースのビルドを確認する
         env:
           IMAGE: ${{ steps.image.outputs.name }}:sha-${{ github.sha }}-arm64

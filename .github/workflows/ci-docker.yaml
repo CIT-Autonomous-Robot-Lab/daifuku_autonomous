@@ -1,0 +1,73 @@
+name: Docker
+
+on:
+  workflow_call:
+
+jobs:
+  workspace-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: docker/setup-buildx-action@v4
+      - name: 実機用 Docker イメージをビルドする
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/raspberrypi/Dockerfile
+          load: true
+          tags: daifuku-autonomous:ci
+          cache-from: type=gha,scope=raspberrypi
+          cache-to: type=gha,scope=raspberrypi,mode=max
+      - uses: actions/cache@v5.0.3
+        with:
+          path: |
+            build/.cargo/registry
+            build/.cargo/git
+          key: cargo-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('src/**/Cargo.lock', 'daifuku_autonomous.repos') }}
+          restore-keys: cargo-${{ runner.os }}-${{ runner.arch }}-
+      - name: 実機と同じ入口でワークスペース全体をビルドする
+        run: |
+          docker image inspect daifuku-autonomous:ci --format 'Image bytes={{.Size}}'
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -e HOME=/tmp -e ROS_HOME=/tmp/ros -e ROS_LOG_DIR=/tmp/ros/log \
+            -e ROS_DOMAIN_ID=77 -e ROS_LOCALHOST_ONLY=1 \
+            -e BUILD_JOBS=2 -e MAKEFLAGS=-j2 -e CARGO_BUILD_JOBS=2 \
+            -v "$GITHUB_WORKSPACE:/opt/ros_ws" \
+            daifuku-autonomous:ci build-workspace
+
+  vulkan-build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v4
+      - name: Pi 5用Mesaを含むarm64 GPUイメージをビルドする
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/raspberrypi/Dockerfile
+          target: vulkan
+          load: true
+          tags: daifuku-autonomous:ci-vulkan
+          cache-from: type=gha,scope=raspberrypi-vulkan-arm64
+          cache-to: type=gha,scope=raspberrypi-vulkan-arm64,mode=max
+      - name: 固定したEMCL3DをVulkan有効でコンパイルする
+        run: |
+          docker image inspect daifuku-autonomous:ci-vulkan --format 'Image bytes={{.Size}}'
+          docker run --rm --entrypoint bash \
+            -v "$GITHUB_WORKSPACE:/opt/ros_ws" \
+            daifuku-autonomous:ci-vulkan -lc '
+              set -eo pipefail
+              source /opt/ros/humble/setup.bash
+              vcs import . < daifuku_autonomous.repos
+              colcon build --packages-select emcl3d --parallel-workers 2 \
+                --cmake-args -DCMAKE_BUILD_TYPE=Release \
+                -DEMCL3D_ENABLE_VULKAN=ON -DBUILD_TESTING=OFF
+              test -x install/emcl3d/lib/emcl3d/emcl3d_node
+              source install/setup.bash
+              ldd install/emcl3d/lib/emcl3d/emcl3d_node | grep libvulkan
+            '
