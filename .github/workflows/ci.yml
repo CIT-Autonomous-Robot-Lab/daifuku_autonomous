@@ -149,6 +149,7 @@ jobs:
           cache-to: type=gha,scope=raspberrypi,mode=max
       - name: 実機と同じ入口でワークスペース全体をビルドする
         run: |
+          docker image inspect daifuku-autonomous:ci --format 'Image bytes={{.Size}}'
           docker run --rm \
             --user "$(id -u):$(id -g)" \
             -e HOME=/tmp -e ROS_HOME=/tmp/ros -e ROS_LOG_DIR=/tmp/ros/log \
