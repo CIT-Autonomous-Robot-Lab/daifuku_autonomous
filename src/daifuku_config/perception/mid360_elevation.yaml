@@ -12,9 +12,9 @@ elevation_filter:
     min_elevation_deg: 0.0    # 既定 -90.0 (制限なし) [deg]: これより下を向いた点を捨てる。勾配対策はこれを上げる
     max_elevation_deg: 90.0   # 既定 同左 (制限なし) [deg]: これより上を向いた点を捨てる。近くの天井・庇よけ
     exclusion_box_enabled: true  # 既定 false: コネクタ等の自己反射を点群の段階で除去する
-    exclusion_box_min_x: -0.60  # 既定 同左 [m]: LiDAR後方10cmから奥行き50cmの奥側
-    exclusion_box_max_x: -0.10  # 既定 同左 [m]: LiDAR後方10cmの手前側
-    exclusion_box_min_y: -0.20  # 既定 同左 [m]: LiDAR右側20cm
-    exclusion_box_max_y: 0.20   # 既定 同左 [m]: LiDAR左側20cm
-    exclusion_box_min_z: 0.10   # 既定 同左 [m]: LiDAR取り付け高さから上10cm
+    exclusion_box_min_x: -0.45  # 既定 -0.60 [m]: LiDAR後方45cmの奥側
+    exclusion_box_max_x: -0.00  # 既定 -0.10 [m]: LiDAR位置の手前側
+    exclusion_box_min_y: -0.18  # 既定 -0.20 [m]: LiDAR右側18cm
+    exclusion_box_max_y: 0.18   # 既定 0.20 [m]: LiDAR左側18cm
+    exclusion_box_min_z: -0.40  # 既定 0.10 [m]: LiDAR取り付け高さから下40cm
     exclusion_box_max_z: 0.50   # 既定 同左 [m]: LiDAR取り付け高さから上50cm
