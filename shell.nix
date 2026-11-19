@@ -28,6 +28,12 @@ let
             });
           });
         };
+        # GraphBLASのJITはCを使うため、Fortranラッパーを実行時の依存へ残さない。
+        suitesparse = prev.suitesparse.overrideAttrs (old: {
+          cmakeFlags = old.cmakeFlags ++ [
+            "-DCMAKE_C_COMPILER=${final.stdenv.cc}/bin/cc"
+          ];
+        });
         # PCLは点群の入出力・フィルター・近傍検索に使うため、描画用のVTKとQtを外す。
         pclWithQt5 = prev.pclWithQt5.overrideAttrs (old: {
           nativeBuildInputs = final.lib.subtractLists [
