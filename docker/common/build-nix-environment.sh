@@ -35,12 +35,15 @@ nix print-dev-env --file /tmp/nix-env/shell.nix \
 
 # coreutilsなども、このプロファイルと同じ固定バージョンを使う。
 source "${image_root}/opt/daifuku/nix-env.bash"
+# 同一ヘッダーやライブラリを共有し、コピー先でも出力間のhardlinkを保つ。
+nix-store --optimise
 mkdir -p "${image_root}"/{bin,etc/ssl/certs,opt/ros/humble,root,run,tmp,usr/local/bin,usr/local/lib/daifuku}
 chmod 1777 "${image_root}/tmp"
 mkdir -p "${image_root}/nix/store"
-while IFS= read -r store_path; do
-  # ビルド用キャッシュから、最終イメージに必要な依存だけを取り出す。
-  cp -a "${store_path}" "${image_root}/nix/store/"
+mapfile -t store_paths < <(nix-store --query --requisites "${profile}")
+# cpを出力ごとに呼ぶと、別の出力と共有するhardlinkが通常ファイルへ戻る。
+cp -a "${store_paths[@]}" "${image_root}/nix/store/"
+for store_path in "${store_paths[@]}"; do
   if [[ -f "${store_path}/etc/ssl/certs/ca-bundle.crt" ]]; then
     cp "${store_path}/etc/ssl/certs/ca-bundle.crt" \
       "${image_root}/etc/ssl/certs/ca-certificates.crt"
@@ -53,7 +56,7 @@ while IFS= read -r store_path; do
   if [[ "${gui}" == true && -f "${store_path}/lib/dri/swrast_dri.so" ]]; then
     ln -s "${store_path}" "${image_root}/run/opengl-driver"
   fi
-done < <(nix-store --query --requisites "${profile}")
+done
 test -s "${image_root}/etc/ssl/certs/ca-certificates.crt"
 if [[ "${gui}" == true ]]; then
   mkdir -p "${image_root}/etc/fonts"
