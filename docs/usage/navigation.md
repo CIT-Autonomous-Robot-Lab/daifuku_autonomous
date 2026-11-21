@@ -190,8 +190,9 @@ ros2 launch daifuku_bringup navigation.19f.launch.py \
 ### `localization:=emcl3d`（点群地図での6DoF推定）
 
 外部パッケージ`emcl3d`（`NOPLAB/emcl3d`）を立てます。`/scan`ではなく、仰角フィルタ後・
-2D投影前の`/livox/lidar_elevation`をPCDの点群地図と照合し、`map -> odom`と`mcl_pose`を出します
-（`vi_planner`はそのまま`mcl_pose`を読む）。地図は`overrides`の`site: map: pointcloud:`
+2D投影前の`/livox/lidar_elevation`をPCDの点群地図と照合し、`map -> odom`のTFと
+`/mcl_pose`を出します。`vi_planner`は`map -> odom -> base_footprint`のTFから姿勢を取得します。
+地図は`overrides`の`site: map: pointcloud:`
 （`19f`は`19f/map_19f.pcd`）か`map_pcd:=`で、経路計画用の`/map`は従来どおり2D地図です。
 **PCDの座標が2D地図と揃っていないと、推定は合っていても経路がずれます**（19Fは未検証）。
 

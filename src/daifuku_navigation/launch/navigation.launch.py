@@ -17,7 +17,7 @@ import os
 from daifuku_config import params
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, GroupAction, OpaqueFunction
-from launch.conditions import IfCondition
+from launch.conditions import IfCondition, UnlessCondition
 from launch.substitutions import LaunchConfiguration as LC
 from launch.substitutions import PythonExpression
 from launch_ros.actions import Node, PushRosNamespace, SetParametersFromFile
@@ -76,15 +76,19 @@ def generate_launch_description():
                  name='lifecycle_manager_map', output='screen',
                  parameters=[{'use_sim_time': sim, 'autostart': LC('autostart'),
                               'node_names': ['map_server']}]),
+            Node(package='daifuku_navigation', executable='tf_pose.py',
+                 condition=UnlessCondition(vi_localization), remappings=tf,
+                 parameters=[{'use_sim_time': sim}], **common),
             Node(package='vi_planner', executable='vi_planner', name='vi_planner',
                  parameters=[configured, {
                      'use_sim_time': sim, 'standalone': True, 'follow': True,
                      'publish_tf': ParameterValue(vi_localization, value_type=bool),
                      'pose_topic': PythonExpression([
-                         "'initialpose' if ", vi_localization,
-                         " else ('amcl_pose' if '", LC('localization'),
-                         "' == 'amcl' else 'mcl_pose')",
+                         "'initialpose' if ", vi_localization, " else 'vi_pose_from_tf'",
                      ]),
+                     'external_pose_max_age_sec': ParameterValue(PythonExpression([
+                         '0.0 if ', vi_localization, ' else 0.5',
+                     ]), value_type=float),
                      'scan_topic': LC('scan_topic'),
                  }], remappings=tf + [('cmd_vel', PythonExpression([
                      "'cmd_vel_nav' if '", smooth,

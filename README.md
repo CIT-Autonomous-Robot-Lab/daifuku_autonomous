@@ -33,11 +33,11 @@
                                                             |
     +-------------------------------------------------------+
     |
-    +--> [emcl3d] -- /mcl_pose ----------------------------------+
-    |        ^                                                   |
-    |        +-- (file) -- PCD map                               |
-    |        +-- /initialpose -- [RViz]                          |
-    |                                                            v
+    +--> [emcl3d] -- map -> odom (TF)
+    |        ^
+    |        +-- (file) -- PCD map
+    |        +-- /initialpose -- [RViz]
+    |
     +--> [pointcloud_to_laserscan]                          [vi_planner]
              |                                                    ^ ^
           /scan_mid360_prestamp                                   | |
@@ -74,6 +74,8 @@ base_footprint --(mid360_static_transform: /tf_static)--> livox_frame
 EMCL3D は `/odom` や `/livox/imu` を直接読むのではなく、点群の時刻で
 `odom -> base_footprint` と `base_footprint -> livox_frame` の TF を参照します。
 Mid-360 の IMU を使わない場合は、機体ドライバが `/odom` と `odom -> base_footprint` を出します。
+外部推定時の `vi_planner` は、推定器の姿勢トピックではなく `map -> base_footprint` の
+TF を使います。最新の共通時刻から 0.5 秒以上古いか、更新が途切れた場合は追従を止めます。
 
 ### ゴールから駆動まで
 
@@ -104,7 +106,7 @@ Mid-360 の IMU を使わない場合は、機体ドライバが `/odom` と `od
 Navigation with EMCL2:
 2D localization map -- (file) --> [map_server_loc] -- /map_loc --> [emcl2]
 /scan (or /scan_loc) --------------------------------------------> [emcl2]
-[emcl2] -- /mcl_pose --> [vi_planner]
+[emcl2] -- map -> odom (TF) --> map -> base_footprint (TF) --> [vi_planner]
 
 Mapping instead of navigation:
 /scan ------------------------> [slam_toolbox] -- /map --> Occupancy grid
