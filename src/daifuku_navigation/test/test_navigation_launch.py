@@ -62,12 +62,12 @@ def _load(source):
     return module
 
 
-@pytest.mark.parametrize('backend,publish_tf,pose_topic', [
-    ('vi', True, 'initialpose'), ('emcl2', False, 'mcl_pose'),
-    ('amcl', False, 'amcl_pose'),
+@pytest.mark.parametrize('backend,publish_tf,pose_topic,max_age', [
+    ('vi', True, 'initialpose', 0.0), ('emcl2', False, 'vi_pose_from_tf', 0.5),
+    ('emcl3d', False, 'vi_pose_from_tf', 0.5), ('amcl', False, 'vi_pose_from_tf', 0.5),
 ])
 def test_navigation_has_one_vi_with_selected_tf_owner(
-    monkeypatch, tmp_path, backend, publish_tf, pose_topic,
+    monkeypatch, tmp_path, backend, publish_tf, pose_topic, max_age,
 ):
     # Given: the planner reads a real parameter file without an estimator process.
     root = Path(get_package_share_directory('daifuku_navigation'))
@@ -88,6 +88,9 @@ def test_navigation_has_one_vi_with_selected_tf_owner(
     # When: the one VI node resolves its parameters, without starting a process.
     planners = [node for node in nodes if node.node_package == 'vi_planner']
     assert len(planners) == 1
+    adapters = [node for node in nodes if node.node_package == 'daifuku_navigation'
+                and node.condition.evaluate(context)]
+    assert len(adapters) == int(not publish_tf)
     planner = planners[0]
     planner._perform_substitutions(context)
     context.extend_locals({'ros_specific_arguments': {
@@ -102,5 +105,6 @@ def test_navigation_has_one_vi_with_selected_tf_owner(
     parameters = next(iter(document.values()))['ros__parameters']
     assert parameters['publish_tf'] is publish_tf
     assert parameters['pose_topic'] == pose_topic
+    assert parameters['external_pose_max_age_sec'] == max_age
     assert parameters['standalone'] is True
     assert parameters['follow'] is True

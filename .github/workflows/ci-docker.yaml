@@ -38,6 +38,14 @@ jobs:
             -e BUILD_JOBS=2 -e MAKEFLAGS=-j2 -e CARGO_BUILD_JOBS=2 \
             -v "$GITHUB_WORKSPACE:/opt/ros_ws" \
             daifuku-autonomous:ci build-workspace
+      - name: 地図補正が途切れたときに追従が止まることを検査する
+        run: |
+          docker run --rm --network none \
+            --user "$(id -u):$(id -g)" \
+            -e HOME=/tmp -e ROS_HOME=/tmp/ros -e ROS_LOG_DIR=/tmp/ros/log \
+            -e ROS_DOMAIN_ID=77 -e ROS_LOCALHOST_ONLY=1 \
+            -v "$GITHUB_WORKSPACE:/opt/ros_ws:ro" \
+            daifuku-autonomous:ci python3 docker/raspberrypi/tests/check_tf_follow.py
 
   vulkan-build:
     runs-on: ubuntu-24.04-arm

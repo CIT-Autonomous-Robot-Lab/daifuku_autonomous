@@ -13,7 +13,12 @@
 
 """VI の TF 所有と、選択した外部推定器の起動条件を検査する."""
 
-from ament_index_python.packages import get_package_prefix, PackageNotFoundError
+from pathlib import Path
+from xml.etree import ElementTree
+
+from ament_index_python.packages import (
+    get_package_prefix, get_package_share_directory, PackageNotFoundError,
+)
 from daifuku_config import value
 from daifuku_config.params import load
 
@@ -99,11 +104,19 @@ def validate_localization(context, *args, **kwargs):
 def validate_vi_package(context, *args, **kwargs):
     """Require the standalone navigation provider before starting nodes."""
     try:
-        get_package_prefix('vi_planner')
+        share = Path(get_package_share_directory('vi_planner'))
     except PackageNotFoundError as exc:
         raise RuntimeError(
             'vi_planner package is not available.\n'
-            'Import value_iteration3 (vcs import src < daifuku_autonomous.repos) and '
+            'Import value_iteration3 (vcs import . < daifuku_autonomous.repos) and '
             'build it (colcon build --packages-select vi_planner) before launching.'
         ) from exc
+    if value(context, 'localization') != 'vi':
+        manifest = ElementTree.parse(share / 'package.xml')
+        if manifest.find('./export/stamped_external_pose') is None:
+            raise RuntimeError(
+                'This vi_planner build cannot expire TF-derived robot poses. '
+                'Update value_iteration3 and rebuild vi_planner before using external '
+                'localization.'
+            )
     return []
