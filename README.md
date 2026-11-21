@@ -75,7 +75,8 @@ EMCL3D は `/odom` や `/livox/imu` を直接読むのではなく、点群の�
 `odom -> base_footprint` と `base_footprint -> livox_frame` の TF を参照します。
 Mid-360 の IMU を使わない場合は、機体ドライバが `/odom` と `odom -> base_footprint` を出します。
 外部推定時の `vi_planner` は、推定器の姿勢トピックではなく `map -> base_footprint` の
-TF を使います。最新の共通時刻から 0.5 秒以上古いか、更新が途切れた場合は追従を止めます。
+TF を使います。TF の最新共通時刻と地図補正の更新を確認し、どちらかが 0.5 秒以上古く
+なると追従を止めます。
 
 ### ゴールから駆動まで
 

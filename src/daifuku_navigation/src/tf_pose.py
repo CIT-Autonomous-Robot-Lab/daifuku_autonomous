@@ -28,17 +28,30 @@ class TfPose(Node):
         self._buffer = Buffer(node=self)
         self._listener = TransformListener(self._buffer, self)
         self._publisher = self.create_publisher(PoseWithCovarianceStamped, 'vi_pose_from_tf', 1)
+        self._map_update: tuple[Time, Time] | None = None
         self._timer = self.create_timer(0.05, self._publish_pose)
 
     def _publish_pose(self) -> None:
+        try:
+            map_to_odom = self._buffer.lookup_transform('map', 'odom', Time())
+        except TransformException:
+            return
+
+        map_stamp = Time.from_msg(map_to_odom.header.stamp)
+        if self._map_update is None or map_stamp != self._map_update[0]:
+            self._map_update = (map_stamp, self.get_clock().now())
+        _, map_seen = self._map_update
         try:
             transform = self._buffer.lookup_transform('map', 'base_footprint', Time())
         except TransformException:
             return
 
         msg = PoseWithCovarianceStamped()
-        # Preserve the common TF timestamp; a lookup is not a new measurement.
+        # AMCL can postdate map→odom. Advancing odom must not renew an old map correction.
         msg.header = transform.header
+        common_stamp = Time.from_msg(transform.header.stamp)
+        if map_seen.nanoseconds < common_stamp.nanoseconds:
+            msg.header.stamp = map_seen.to_msg()
         translation = transform.transform.translation
         msg.pose.pose.position.x = translation.x
         msg.pose.pose.position.y = translation.y
