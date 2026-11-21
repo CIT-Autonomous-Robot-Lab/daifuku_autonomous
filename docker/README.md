@@ -4,23 +4,61 @@
 
 | ディレクトリ | 用途 | 詳細 |
 |---|---|---|
-| [`raspberrypi/`](raspberrypi) | 実機Raspberry Pi（`arm64`）とPC（`amd64`）で動く実行専用のヘッドレス環境。RVizは含まない | [README](raspberrypi/README.md) / [Docker環境](../docs/setup/docker.md) |
-| [`dev/`](dev) | PC側の開発環境。ROS 2 Desktop Full、Raspberry Pi Cat公式のPC用ワークスペース、GUI（RViz） | [README](dev/README.md) / [GUI付き開発コンテナ](../docs/setup/development-container.md) |
+| [`raspberrypi/`](raspberrypi) | 実機Raspberry Pi（`arm64`）とPC（`amd64`）で動く実機向けヘッドレス環境。RVizは含まない | [README](raspberrypi/README.md) / [Docker環境](../docs/setup/docker.md) |
+| [`dev/`](dev) | PC側の開発環境。ROS 2 HumbleとGUI（RViz・rqt） | [README](dev/README.md) / [GUI付き開発コンテナ](../docs/setup/development-container.md) |
 | `common/` | 両方が使う共通部分（後述） | — |
 
 2つは排他ではありません。実機で`raspberrypi/`を動かし、同じLAN上のPCで`dev/`から
 RVizで見る、というのが通常の使い方です。`ROS_DOMAIN_ID`の既定はどちらも`90`です。
+
+依存はルートの`shell.nix`でホストと共有します。Docker内でNix環境を実現し、
+最終イメージにはその依存だけを取り出します。ホストにNixを入れる必要はありません。
+実機用はRViz・rqtを追加しないプロファイル、開発用はそれらを加えたプロファイルです。
+依存を追加するときは`shell.nix`を編集し、イメージを作り直します。
+
+ワークスペースをコンテナ内でビルドする入口は維持しています。
+サイズよりビルド時間を優先し、Rust・LLVM/Clang・Mesa・PCL・SuiteSparseは
+固定版の既定パッケージを使います。設定の上書きによる再コンパイルを避け、
+公開バイナリキャッシュを再利用します。
+Humbleのpytest互換修正は、この環境へ載せるlaunch_testingだけに限定します。
+ROS全体の依存を差し替えてキャッシュを無効にしないためです。
+
+取得・コンパイル済みのNixストアとDBは、ベースイメージとCPUアーキテクチャごとの
+ビルドキャッシュに一緒に保持します。同時更新はロックで防ぎます。
+このキャッシュは最終イメージへ入れず、実現した依存だけをコピーします。
+同じ内容のファイルはhardlinkで共有し、コピー先でも出力間の共有を保ちます。
+取得通信はHTTP/1.1に固定します。未取得の依存を一括取得するときに起きる
+接続エラーは、Dockerの既定ネットワークでは解消を確認できていません。
+
+## Raspberry Pi用イメージの公開
+
+通常CIがすべて成功すると、`main`更新時にGitHub Actionsのarm64ランナーで
+実機用イメージをビルドし、GHCRへ公開します。QEMUでの代行ビルドは使いません。
+同じイメージで`build-workspace`が成功してからpushします。
+
+公開先は`ghcr.io/cit-autonomous-robot-lab/daifuku_autonomous:arm64`です。
+コミットを固定する`sha-<40桁のコミットSHA>-arm64`タグも作ります。
+PR実行では公開せず、手動公開は次の入口を使います。
+
+```bash
+gh workflow run ci.yml --ref main -f publish_arm64=true
+```
+
+`--ref`で別のブランチを選ぶ場合はSHAタグだけを公開し、`arm64`タグを更新しません。
+イメージは依存環境です。実機では従来どおりソースをマウントしてビルドします。
+GHCRのパッケージが非公開の場合は、取得側で`read:packages`権限の認証が必要です。
 
 ## common/
 
 | ファイル | 使う側 | 内容 |
 |---|---|---|
 | `entrypoint.sh` | 両イメージ | `/ros_entrypoint.sh`として入る。ROS 2と、存在するオーバーレイを読み、**前回の`docker exec`の残骸を止めてから**コマンドを実行する |
+| `build-nix-environment.sh` | 両イメージのビルド | 固定したNix依存を取り出し、ビルド用のダウンロード・中間生成物を最終イメージから分離する |
 | `lib/compose.sh` | ホスト側のbashスクリプト | Docker CLIへの到達手段の決定とCompose呼び出し。dot-sourceして使う |
 
-オーバーレイの集合はイメージごとに違いますが互いに素なので、`entrypoint.sh`は
-「あればsourceする」形にして1つにまとめてあります。存在しないものは飛ばすため、
-どちらのイメージでも読み込む順序と結果は分けていた頃と同じです。
+ワークスペースは`install/local_setup.bash`でNix環境へ重ねます。
+過去の`setup.bash`が記録した古いROS環境へ戻らないようにするためです。
+初回ビルド前は存在しないオーバーレイを飛ばし、ビルドコマンドでは旧installを読みません。
 
 `lib/compose.sh`への相対パスは呼び出し元の深さによって変わるので、各スクリプトが
 `BASH_SOURCE`から組み立てます。

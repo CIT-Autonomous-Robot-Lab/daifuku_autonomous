@@ -100,7 +100,7 @@ bash tools/control.sh help
 |---|---|---|
 | `CONTROL_SERVICE` | `ros2` | Composeサービス名 |
 | `MOTOR_SERVICE` | `/motor_power` | モーター電源サービス |
-| `CMD_VEL_TOPIC` | `/cmd_vel_teleop` | 速度指令トピック。仲裁（`twist_mux`）の手動側の入口で、**優先度は自律側のほうが上**（自律走行中は`teleop`も`stop`も効かない。先にゴールを取り消すこと）。`twist_mux:=false`で起動したなら`/cmd_vel` |
+| `CMD_VEL_TOPIC` | `/cmd_vel_teleop` | 速度指令トピック。仲裁（`twist_mux`）の手動側の入口で、**手動100、自律10で手動が優先**。最後の手動指令から0.5秒で自律側へ譲るため、再開を防ぐにはゴールを取り消す。`twist_mux:=false`で起動したなら`/cmd_vel` |
 | `ROS_TIMEOUT` | `10` | ROS操作のタイムアウト秒数 |
 | `TELEOP_LINEAR_SPEED` | `0.2` | キーボード操作の並進速度 m/s |
 | `TELEOP_ANGULAR_SPEED` | `1.0` | キーボード操作の旋回速度 rad/s |
@@ -231,13 +231,13 @@ ros2 launch daifuku_bringup mapping.launch.py config_watch:=warn
 
 ## 走らせる場所を切り替える
 
-19Fと津田沼のように場所が変わると、**LiDARの帯（仰角と高さ）・`emcl2`と価値反復の調整・
-地図**が3つとも変わります。navigationではこれを**launchの名前**で選びます。
+navigationでは**launchの名前**で地図と場所別の調整を選びます。
+自己位置推定はどの場所でもEMCL3Dが既定です。
 
 ```bash
 ros2 launch daifuku_bringup navigation.19f.launch.py
 ros2 launch daifuku_bringup navigation.tsudanuma.launch.py
-ros2 launch daifuku_bringup navigation.tsukuba2025.launch.py
+ros2 launch daifuku_bringup navigation.tsukuba2025.launch.py map_pcd:=/path/to/aligned.pcd
 ros2 launch daifuku_bringup navigation.tsukuba2026.launch.py
 ```
 

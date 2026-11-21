@@ -32,17 +32,16 @@ both would own the direction lines, and the wheels can turn the wrong way with
 the motors enabled.  Hence the refusal below.
 """
 
-from .backend import Backend
-from .backend import rtmouse_present
+from .backend import Backend, rtmouse_present
 
 
 class Pi4Backend(Backend):
     """BCM2711 hardware identity, plus the rtmouse exclusion."""
 
-    name = "pi4"
-    soc = "BCM2711"
-    gpiochip_label = "pinctrl-bcm2835"
-    pwmchip_match = "fe20c000.pwm"
+    name = 'pi4'
+    soc = 'BCM2711'
+    gpiochip_label = 'pinctrl-bcm2835'
+    pwmchip_match = 'fe20c000.pwm'
 
     def preflight(self, wiring, logger):
         """Refuse to share the motor path with rtmouse, or the PWM with the buzzer."""
@@ -53,25 +52,25 @@ class Pi4Backend(Backend):
             # ALT5 route to channel 1, i.e. the right motor's, so muxing it
             # would step that wheel on every beep.
             raise RuntimeError(
-                "a Pi 4 has no PWM channel to spare for the buzzer: the two channels of "
-                "the pwm block are the step clocks, and GPIO19 is a second route to the "
+                'a Pi 4 has no PWM channel to spare for the buzzer: the two channels of '
+                'the pwm block are the step clocks, and GPIO19 is a second route to the '
                 "right motor's. Leave buzzer_pwm_channel at -1 (the line is toggled in "
-                "software instead)."
+                'software instead).'
             )
         if not rtmouse_present():
             return
         if wiring.allow_rtmouse:
             logger.warning(
-                "rtmouse is loaded and allow_rtmouse is true: this driver and rtmouse "
-                "now both own GPIO 16/6/5 and the PWM block. Expect wrong-direction "
-                "motion."
+                'rtmouse is loaded and allow_rtmouse is true: this driver and rtmouse '
+                'now both own GPIO 16/6/5 and the PWM block. Expect wrong-direction '
+                'motion.'
             )
             return
         raise RuntimeError(
-            "rtmouse is loaded on this host. It writes the GPIO and PWM registers "
-            "directly, so it would fight this driver for the direction lines and the "
-            "step clock. Use driver:=raspimouse instead, or remove rtmouse "
-            "(rmmod rtmouse and delete /etc/modules-load.d/rtmouse.conf; images can be "
-            "built with create_image.py --no-rtmouse). Set allow_rtmouse:=true only to "
-            "override this on purpose."
+            'rtmouse is loaded on this host. It writes the GPIO and PWM registers '
+            'directly, so it would fight this driver for the direction lines and the '
+            'step clock. Use driver:=raspimouse instead, or remove rtmouse '
+            '(rmmod rtmouse and delete /etc/modules-load.d/rtmouse.conf; images can be '
+            'built with create_image.py --no-rtmouse). Set allow_rtmouse:=true only to '
+            'override this on purpose.'
         )

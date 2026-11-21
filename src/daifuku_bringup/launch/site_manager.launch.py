@@ -10,7 +10,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""次回の場所を選ぶ任意のサービス。稼働中の機体や地図は切り替えない。"""
+"""次回の場所を選ぶ任意のサービス。稼働中の機体や地図は切り替えない."""
 
 from launch import LaunchDescription
 from launch_ros.actions import Node
@@ -18,6 +18,6 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     return LaunchDescription([
-        Node(package="daifuku_config", executable="site_manager", name="site_manager",
-             output="screen"),
+        Node(package='daifuku_config', executable='site_manager', name='site_manager',
+             output='screen'),
     ])

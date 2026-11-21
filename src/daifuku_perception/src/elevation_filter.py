@@ -38,6 +38,9 @@ sets its axes using the acquisition-time TF rotation, without translating
 the origin or changing the output coordinates. A gravity-aligned frame
 keeps the elevation band level while the robot rolls or pitches.
 
+An optional exclusion box removes self returns in the input sensor frame,
+before the elevation rotation. Its six faces are included in the removal.
+
 Topics are the relative cloud_in / cloud_out, remapped by
 scan_pipeline.launch.py -- the same shape as restamp_scan.py.
 """
@@ -59,43 +62,58 @@ _UNBOUNDED_DEG = 89.9
 
 
 class ElevationFilter(Node):
+
     def __init__(self):
-        super().__init__("elevation_filter")
-        self._restamp_cloud = self.declare_parameter("restamp_cloud", False).value
-        self._elevation_frame = self.declare_parameter("elevation_frame", "").value
+        super().__init__('elevation_filter')
+        self._restamp_cloud = self.declare_parameter('restamp_cloud', False).value
+        self._elevation_frame = self.declare_parameter('elevation_frame', '').value
+        self._box_enabled = self.declare_parameter('exclusion_box_enabled', False).value
+        self._box_min = tuple(
+            self.declare_parameter(f'exclusion_box_min_{axis}', value).value
+            for axis, value in zip(('x', 'y', 'z'), (-0.60, -0.20, 0.10))
+        )
+        self._box_max = tuple(
+            self.declare_parameter(f'exclusion_box_max_{axis}', value).value
+            for axis, value in zip(('x', 'y', 'z'), (-0.10, 0.20, 0.50))
+        )
+        if self._box_enabled and any(
+            not math.isfinite(lower) or not math.isfinite(upper) or lower > upper
+            for lower, upper in zip(self._box_min, self._box_max)
+        ):
+            raise RuntimeError('invalid exclusion box bounds')
         self._tf_wait = None
         if self._elevation_frame:
             self._tf_buffer = Buffer()
             self._tf_listener = TransformListener(self._tf_buffer, self)
         # Declared wide open so this node is a pass-through until a
-        # parameter file narrows it. src/daifuku_config/config/perception/mid360_elevation.yaml
+        # parameter file narrows it. src/daifuku_config/perception/mid360_elevation.yaml
         # holds the real values.
-        min_deg = self.declare_parameter("min_elevation_deg", -90.0).value
-        max_deg = self.declare_parameter("max_elevation_deg", 90.0).value
-        self._far_range = self.declare_parameter("far_range_m", 0.0).value
-        far_min_deg = self.declare_parameter("far_min_elevation_deg", min_deg).value
+        min_deg = self.declare_parameter('min_elevation_deg', -90.0).value
+        max_deg = self.declare_parameter('max_elevation_deg', 90.0).value
+        self._far_range = self.declare_parameter('far_range_m', 0.0).value
+        far_min_deg = self.declare_parameter('far_min_elevation_deg', min_deg).value
         if self._far_range < 0 or (self._far_range > 0 and far_min_deg > max_deg):
-            raise RuntimeError("invalid far-range elevation band")
+            raise RuntimeError('invalid far-range elevation band')
         self._far_min_slope = (
             -math.inf if far_min_deg <= -_UNBOUNDED_DEG
             else math.tan(math.radians(far_min_deg))
         )
-        self._distant_range = self.declare_parameter("distant_range_m", 0.0).value
+        self._distant_range = self.declare_parameter('distant_range_m', 0.0).value
         distant_min_deg = self.declare_parameter(
-            "distant_min_elevation_deg", far_min_deg).value
+            'distant_min_elevation_deg', far_min_deg).value
         if (not math.isfinite(self._distant_range) or self._distant_range < 0
                 or (self._distant_range > 0 and (
                     self._far_range <= 0 or self._distant_range <= self._far_range
                     or not math.isfinite(distant_min_deg) or distant_min_deg > max_deg))):
-            raise RuntimeError("invalid distant-range elevation band")
+            raise RuntimeError('invalid distant-range elevation band')
         self._distant_min_slope = (
             -math.inf if distant_min_deg <= -_UNBOUNDED_DEG
             else math.tan(math.radians(distant_min_deg))
         )
         if min_deg > max_deg:
             raise RuntimeError(
-                "min_elevation_deg (%g) is above max_elevation_deg (%g), "
-                "which empties every scan." % (min_deg, max_deg)
+                'min_elevation_deg (%g) is above max_elevation_deg (%g), '
+                'which empties every scan.' % (min_deg, max_deg)
             )
         self._min_slope = (
             None if min_deg <= -_UNBOUNDED_DEG else math.tan(math.radians(min_deg))
@@ -104,8 +122,8 @@ class ElevationFilter(Node):
             None if max_deg >= _UNBOUNDED_DEG else math.tan(math.radians(max_deg))
         )
         self.get_logger().info(
-            "keeping elevations %.2f..%.2f deg "
-            "(effective floor: %.2fm at 10m, %.2fm at 30m above the sensor)"
+            'keeping elevations %.2f..%.2f deg '
+            '(effective floor: %.2fm at 10m, %.2fm at 30m above the sensor)'
             % (
                 min_deg,
                 max_deg,
@@ -115,12 +133,12 @@ class ElevationFilter(Node):
         )
         if self._far_range > 0:
             self.get_logger().info(
-                "beyond %.2fm keeping elevations %.2f..%.2f deg"
+                'beyond %.2fm keeping elevations %.2f..%.2f deg'
                 % (self._far_range, far_min_deg, max_deg)
             )
         if self._distant_range > 0:
             self.get_logger().info(
-                "beyond %.2fm keeping elevations %.2f..%.2f deg"
+                'beyond %.2fm keeping elevations %.2f..%.2f deg'
                 % (self._distant_range, distant_min_deg, max_deg)
             )
 
@@ -134,9 +152,9 @@ class ElevationFilter(Node):
         pub_qos = QoSProfile(depth=5)
         sub_qos = QoSProfile(depth=5)
         sub_qos.reliability = ReliabilityPolicy.BEST_EFFORT
-        self._publisher = self.create_publisher(PointCloud2, "cloud_out", pub_qos)
+        self._publisher = self.create_publisher(PointCloud2, 'cloud_out', pub_qos)
         self._subscription = self.create_subscription(
-            PointCloud2, "cloud_in", self._callback, sub_qos)
+            PointCloud2, 'cloud_in', self._callback, sub_qos)
 
     def _point_dtype(self, message):
         """Structured dtype covering one point, padding included.
@@ -161,7 +179,7 @@ class ElevationFilter(Node):
         for field in message.fields:
             if field.datatype not in numpy_type:
                 raise RuntimeError(
-                    "unsupported PointField datatype %d on field %r"
+                    'unsupported PointField datatype %d on field %r'
                     % (field.datatype, field.name)
                 )
             names.append(field.name)
@@ -171,18 +189,18 @@ class ElevationFilter(Node):
             )
             offsets.append(field.offset)
 
-        for required in ("x", "y", "z"):
+        for required in ('x', 'y', 'z'):
             if required not in names:
                 raise RuntimeError(
-                    "cloud has no %r field, so elevation cannot be computed "
-                    "(fields: %s)" % (required, ", ".join(names))
+                    'cloud has no %r field, so elevation cannot be computed '
+                    '(fields: %s)' % (required, ', '.join(names))
                 )
 
         self._dtype = np.dtype({
-            "names": names,
-            "formats": formats,
-            "offsets": offsets,
-            "itemsize": message.point_step,
+            'names': names,
+            'formats': formats,
+            'offsets': offsets,
+            'itemsize': message.point_step,
         })
         self._dtype_key = key
         return self._dtype
@@ -197,7 +215,7 @@ class ElevationFilter(Node):
             # coordinates, so pass the cloud through untouched instead.
             if not self._warned_bigendian:
                 self.get_logger().error(
-                    "cloud is big-endian; passing it through unfiltered")
+                    'cloud is big-endian; passing it through unfiltered')
                 self._warned_bigendian = True
             self._publisher.publish(message)
             return
@@ -234,9 +252,9 @@ class ElevationFilter(Node):
             buffer=message.data,
             strides=(message.row_step, message.point_step),
         ).reshape(-1)
-        x = points["x"]
-        y = points["y"]
-        z = points["z"]
+        x = points['x']
+        y = points['y']
+        z = points['z']
         if rotation is not None:
             qx, qy, qz, qw = rotation.x, rotation.y, rotation.z, rotation.w
             matrix = np.array([
@@ -252,6 +270,12 @@ class ElevationFilter(Node):
         # NaN coordinates compare false, so they drop out here the same way
         # pointcloud_to_laserscan would drop them.
         keep = np.isfinite(z)
+        if self._box_enabled:
+            # The box follows the sensor, even when elevation uses gravity axes.
+            inside_box = np.ones(keep.shape, dtype=bool)
+            for axis, lower, upper in zip(('x', 'y', 'z'), self._box_min, self._box_max):
+                inside_box &= (points[axis] >= lower) & (points[axis] <= upper)
+            keep &= ~inside_box
         if self._far_range > 0:
             floor = np.where(
                 radius > self._far_range, self._far_min_slope,
@@ -274,7 +298,7 @@ class ElevationFilter(Node):
         # 260KB, against 0.03ms here -- at 10Hz that alone was half a core).
         # A numpy array is not an option; it is not a Sequence, so the same
         # block rejects it outright.
-        message.data = array.array("B", kept.tobytes())
+        message.data = array.array('B', kept.tobytes())
         # Filtering breaks any row structure, so the cloud comes out
         # unordered (height 1) regardless of how it went in.
         message.height = 1
@@ -297,5 +321,5 @@ def main(args=None):
             rclpy.shutdown()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

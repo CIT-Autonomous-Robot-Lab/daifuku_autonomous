@@ -207,23 +207,25 @@ Ubuntu 22.04 前提で Pi 5 では使えないので、その場合も ROS 側�
 ### EMCL3DをGPUで実行する
 
 GPU利用時は`compose.vulkan.yaml`を最後に重ねます。通常構成はCPU専用のままです。
-ホストはV3DカーネルドライバとDRM render nodeが必要です。Pi 5のGPUは
+ホストはV3DカーネルドライバとDRM render/primary nodeが必要です。Pi 5のGPUは
 [Mesa V3DV](https://docs.mesa3d.org/drivers/v3d.html)で使います。
-Jammy標準Mesaに依存せず、GPUイメージのarm64版ではPi 5対応Mesaをソースからビルドします。
+GPUイメージには`shell.nix`で固定したMesaを同梱します。
 ホストのMesaライブラリはコンテナへコピーしません。
 
 ホストでGPUノードとそのGIDを確認し、リポジトリルートの`.env`へ設定します。
-`renderD128`とは限らないので、実際のV3Dノードを指定してください。
+`renderD128`とは限らないので、実際のV3DノードのGIDを使ってください。
+Mesaはprimary nodeも参照するため、`/dev/dri`全体と両ノードのグループ権限を渡します。
+render nodeだけではGPUを使えても`MESA: error: Opening  failed`が出ます。
 
 ```bash
-ls -l /dev/dri/renderD*
-stat -c '%g' /dev/dri/renderD128
+ls -l /dev/dri/
+stat -c '%n %g' /dev/dri/renderD128 /dev/dri/card*
 ```
 
 ```dotenv
 COMPOSE_FILE=docker/raspberrypi/compose.common.yaml:docker/raspberrypi/compose.original.yaml:docker/raspberrypi/compose.vulkan.yaml
-DRI_RENDER_DEVICE=/dev/dri/renderD128
-RENDER_GID=上のstatで確認した数値
+RENDER_GID=renderノードのGID
+VIDEO_GID=primaryノードのGID
 EMCL3D_COMPUTE_BACKEND=vulkan
 ```
 

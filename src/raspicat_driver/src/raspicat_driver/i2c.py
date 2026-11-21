@@ -35,15 +35,15 @@ _I2C_M_RD = 0x0001
 
 class _I2cMsg(ctypes.Structure):
     _fields_ = [
-        ("addr", ctypes.c_uint16),
-        ("flags", ctypes.c_uint16),
-        ("len", ctypes.c_uint16),
-        ("buf", ctypes.POINTER(ctypes.c_uint8)),
+        ('addr', ctypes.c_uint16),
+        ('flags', ctypes.c_uint16),
+        ('len', ctypes.c_uint16),
+        ('buf', ctypes.POINTER(ctypes.c_uint8)),
     ]
 
 
 class _I2cRdwrData(ctypes.Structure):
-    _fields_ = [("msgs", ctypes.POINTER(_I2cMsg)), ("nmsgs", ctypes.c_uint32)]
+    _fields_ = [('msgs', ctypes.POINTER(_I2cMsg)), ('nmsgs', ctypes.c_uint32)]
 
 
 class PulseCounter:

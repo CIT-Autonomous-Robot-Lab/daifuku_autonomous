@@ -1,0 +1,35 @@
+name: Map tools
+
+on:
+  workflow_call:
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          python-version: "3.12"
+          working-directory: tools/maps
+          enable-cache: true
+      - name: 地図ツールの固定依存を準備する
+        run: uv sync --project tools/maps --locked --group test --extra usd
+      - name: map_19f を USD にして焼き戻す
+        run: |
+          uv run --project tools/maps --no-sync python tools/maps/map_to_usd.py \
+            src/daifuku_maps/maps/19f/map_19f.yaml -o "$RUNNER_TEMP/world.usda"
+          uv run --project tools/maps --no-sync python tools/maps/verify_usda.py \
+            src/daifuku_maps/maps/19f/map_19f.yaml "$RUNNER_TEMP/world.usda" free
+      - name: 回廊の向きと順路の書式
+        run: |
+          uv run --project tools/maps --no-sync python tools/maps/verify_corridor_orientation.py
+          uv run --project tools/maps --no-sync python tools/maps/verify_waypoints.py
+      - name: 順路間引き・地形補正・点群ワールドの回帰テスト
+        run: |
+          uv run --project tools/maps --no-sync python -m pytest -q \
+            tools/maps/tests/test_thin_tsukuba2025.py \
+            tools/maps/tests/test_add_terrain_hazards.py \
+            tools/maps/tests/test_pcd_to_world.py

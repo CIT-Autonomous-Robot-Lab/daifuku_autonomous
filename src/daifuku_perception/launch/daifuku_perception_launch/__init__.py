@@ -11,4 +11,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""スキャン変換を組み込む launch の共有部品。"""
+"""スキャン変換を組み込む launch の共有部品."""

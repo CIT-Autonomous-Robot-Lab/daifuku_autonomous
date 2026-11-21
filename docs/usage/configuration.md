@@ -44,7 +44,7 @@
 ```bash
 ros2 launch daifuku_bringup navigation.19f.launch.py
 ros2 launch daifuku_bringup navigation.tsudanuma.launch.py
-ros2 launch daifuku_bringup navigation.tsukuba2025.launch.py
+ros2 launch daifuku_bringup navigation.tsukuba2025.launch.py map_pcd:=/path/to/aligned.pcd
 ros2 launch daifuku_bringup navigation.tsukuba2026.launch.py
 ```
 
@@ -67,7 +67,7 @@ ros2 launch daifuku_bringup navigation.tsukuba2026.launch.py
 | `emcl3d_compute_backend` | 空（環境変数`EMCL3D_COMPUTE_BACKEND`、未設定ならYAML） | `cpu` / `vulkan`。明示時はYAMLより優先。GPUビルドとPi 5の設定は[Pi 5](../setup/raspberry-pi-5.md#emcl3dをgpuで実行する)を参照 |
 | `map_pcd` | 空（`overrides`の`site: map: pointcloud:`から導く） | `localization:=emcl3d`が読む点群地図（PCD）のパス。明示すると宣言と同じファイルかを見る。**`emcl3d`で決まらなければ起動時に止まる**。他の`localization`では読まない |
 | `bond_params_file` | `src/daifuku_config/navigation/lifecycle_bond.yaml` | ライフサイクルマネージャのbondタイムアウト |
-| `localization` | `emcl2` | `emcl2` / `emcl` / `emcl3d` / `amcl` / `vi` |
+| `localization` | 場所別は`emcl3d`、外部2D地図のVTC入口は`emcl2` | `emcl2` / `emcl` / `emcl3d` / `amcl` / `vi` |
 | `velocity_smoother` | `true` | `velocity_smoother`を`vi_planner`と`twist_mux`の間に残すか。`false`にするとnavigation側のlifecycleノードが1つも無くなる |
 | `use_rviz` | `false` | RVizを起動するか。実機はheadlessのため既定は`false`で、表示はPC側から開く |
 | `use_system_monitor` | `true` | CPUを`/diagnostics`へ出す`system_monitor`を起動するか。1Hzで`/proc`を読むだけだがDDS参加者が1つ増えるので、ディスカバリの切り分け時は`false`にする |
@@ -122,7 +122,7 @@ navigationとmappingの公開launchは`/scan`を作る段の引数を持ちま�
 | `driver` | `raspimouse` | 本体ドライバ。`raspimouse`（公式実装。rtmouseが要る。Pi 4のみ）または`original`（自前実装。Pi 4 / Pi 5） |
 | `model` | 空（`raspicat_driver.yaml`の`model`に従う。既定は`auto`） | `driver:=original`のときの機種。`pi4` / `pi5` / `auto`。`driver:=raspimouse`に渡すとエラーになる |
 | `params_file` | 空（`driver:=`に応じて`src/daifuku_config/robot/robot/`から選ぶ） | ドライバのパラメータファイル |
-| `twist_mux` | `true` | 速度指令の仲裁を挟むか。`true`だと**ドライバが購読するのは`/cmd_vel`ではなく`/cmd_vel_mux`**になり、人が出す指令は`/cmd_vel_teleop`（優先度10）へ。自律側の`/cmd_vel`が優先度100で**上**なので、自律走行中は手動が通らない。`false`で全員が`/cmd_vel`へ書く従来の配線に戻る |
+| `twist_mux` | `true` | 速度指令の仲裁を挟むか。`true`だと**ドライバが購読するのは`/cmd_vel`ではなく`/cmd_vel_mux`**になり、人が出す指令は`/cmd_vel_teleop`（優先度100）へ。自律側の`/cmd_vel`は優先度10で、手動が優先される。最後の手動指令から0.5秒で自律側へ譲る。`false`で全員が`/cmd_vel`へ書く従来の配線に戻る |
 | `twist_mux_params_file` | 空（`src/daifuku_config/robot/robot/twist_mux.yaml`） | `twist_mux`のパラメータファイル |
 | `joy` | `true` | ゲームパッドでの手動走行を立てるか。`joy_node`と`joy_teleop`が上がり、STARTの2秒長押しでteleopの入/切、BACK単体の2秒長押しでモータ電源の入/切、START+BACK同時2秒でウェイポイント巡回を始める（[ゲームパッドで操作する](joystick.md)）。挿していなくても他のノードは動く |
 | `joy_teleop_params_file` | 空（`src/daifuku_config/robot/robot/joy_teleop.yaml`） | ゲームパッドのパラメータファイル。`joy_node`と`joy_teleop`の両方に渡る |

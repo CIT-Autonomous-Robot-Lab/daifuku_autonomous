@@ -49,7 +49,7 @@ def pwmchips():
 
     Also used to make the "no such pwmchip" error say what there was instead.
     """
-    base = "/sys/class/pwm"
+    base = '/sys/class/pwm'
     found = {}
     if not os.path.isdir(base):
         return found
@@ -57,9 +57,9 @@ def pwmchips():
         path = os.path.join(base, name)
         # The class entry is a symlink into /sys/devices, and the device link
         # points at the platform device -- the SoC address lives in both.
-        found[path] = "%s %s" % (
+        found[path] = '%s %s' % (
             os.path.realpath(path),
-            os.path.realpath(os.path.join(path, "device")),
+            os.path.realpath(os.path.join(path, 'device')),
         )
     return found
 
@@ -83,59 +83,59 @@ class StepClock:
     INITIAL_PERIOD_NS = 1000000
 
     def __init__(self, chip_dir, channel, settle_timeout=2.0):
-        self._dir = os.path.join(chip_dir, "pwm%d" % channel)
+        self._dir = os.path.join(chip_dir, 'pwm%d' % channel)
         self._chip_dir = chip_dir
         self._channel = channel
         self._period_ns = 0
         self._enabled = False
         if not os.path.isdir(self._dir):
-            sysfs_write(os.path.join(chip_dir, "export"), channel)
+            sysfs_write(os.path.join(chip_dir, 'export'), channel)
             deadline = time.monotonic() + settle_timeout
             while not os.path.isdir(self._dir):
                 if time.monotonic() > deadline:
-                    raise OSError("%s did not appear after export" % self._dir)
+                    raise OSError('%s did not appear after export' % self._dir)
                 time.sleep(0.01)
         # udev has to chown the attributes that export just created, and it may
         # not have run yet, so the first write tolerates EACCES for a moment.
         # (Reading needs no ownership -- the attributes are world-readable.)
-        period_ns = self._read("period")
+        period_ns = self._read('period')
         if period_ns:
-            self._write("duty_cycle", 0, tolerate_eacces=settle_timeout)
+            self._write('duty_cycle', 0, tolerate_eacces=settle_timeout)
         else:
             period_ns = self.INITIAL_PERIOD_NS
-            self._write("period", period_ns, tolerate_eacces=settle_timeout)
-            self._write("duty_cycle", 0)
+            self._write('period', period_ns, tolerate_eacces=settle_timeout)
+            self._write('duty_cycle', 0)
         self._period_ns = period_ns
 
     def set_frequency(self, freq_hz):
         """Set the step frequency.  0 or less stops the clock (duty 0)."""
         if freq_hz <= 0:
-            self._write("duty_cycle", 0)
+            self._write('duty_cycle', 0)
             return
         period_ns = int(round(1e9 / freq_hz))
         if period_ns != self._period_ns:
             # duty must never exceed period, so collapse it before shrinking
             # the period and restore it afterwards.
-            self._write("duty_cycle", 0)
-            self._write("period", period_ns)
+            self._write('duty_cycle', 0)
+            self._write('period', period_ns)
             self._period_ns = period_ns
-        self._write("duty_cycle", period_ns // 2)
+        self._write('duty_cycle', period_ns // 2)
         if not self._enabled:
-            self._write("enable", 1)
+            self._write('enable', 1)
             self._enabled = True
 
     def stop(self):
         """Hold the clock low without disabling the channel (no re-arm glitch)."""
-        self._write("duty_cycle", 0)
+        self._write('duty_cycle', 0)
 
     def close(self):
         """Stop, disable and unexport the channel.  Safe to call twice."""
         try:
             self.stop()
             if self._enabled:
-                self._write("enable", 0)
+                self._write('enable', 0)
                 self._enabled = False
-            sysfs_write(os.path.join(self._chip_dir, "unexport"), self._channel)
+            sysfs_write(os.path.join(self._chip_dir, 'unexport'), self._channel)
         except OSError:
             pass
 
@@ -152,8 +152,8 @@ def sysfs_write(path, value, tolerate_eacces=0.0):
     deadline = time.monotonic() + tolerate_eacces
     while True:
         try:
-            with open(path, "w") as handle:
-                handle.write("%d" % value)
+            with open(path, 'w') as handle:
+                handle.write('%d' % value)
             return
         except PermissionError:
             if time.monotonic() >= deadline:
@@ -165,5 +165,5 @@ def sysfs_write(path, value, tolerate_eacces=0.0):
             # 22] Invalid argument".  Every one of these attributes fails that
             # way for its own reason, so say which one it was.
             raise OSError(
-                error.errno, "%s (wrote %d)" % (error.strerror, value), path
+                error.errno, '%s (wrote %d)' % (error.strerror, value), path
             ) from error

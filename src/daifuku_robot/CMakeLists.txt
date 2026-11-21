@@ -8,7 +8,7 @@ find_package(sensor_msgs REQUIRED)
 
 add_executable(imu_throttle src/imu_throttle.cpp)
 target_compile_features(imu_throttle PRIVATE cxx_std_17)
-ament_target_dependencies(imu_throttle rclcpp sensor_msgs)
+target_link_libraries(imu_throttle PRIVATE rclcpp::rclcpp ${sensor_msgs_TARGETS})
 install(TARGETS imu_throttle DESTINATION lib/${PROJECT_NAME})
 
 ament_python_install_package(daifuku_robot_launch
@@ -35,6 +35,8 @@ install(FILES
 )
 
 if(BUILD_TESTING)
+  set(ament_cmake_flake8_CONFIG_FILE
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../.flake8")
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
   find_package(launch_testing_ament_cmake REQUIRED)

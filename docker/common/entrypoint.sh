@@ -22,8 +22,8 @@ do
      [[ "${1:-}" == build-autonomous && "${ws}" == "${AUTONOMOUS_WS:-/workspaces/daifuku_autonomous}" ]]; then
     continue
   fi
-  if [[ -f "${ws}/install/setup.bash" ]]; then
-    source "${ws}/install/setup.bash"
+  if [[ -f "${ws}/install/local_setup.bash" ]]; then
+    source "${ws}/install/local_setup.bash"
   fi
 done
 

@@ -12,68 +12,68 @@
 # limitations under the License.
 
 
-"""選択した構成の変更を検査し、静止後に再起動を要求する。"""
+"""選択した構成の変更を検査し、静止後に再起動を要求する."""
 
 import sys
 import time
 
-import rclpy
-import yaml
 from nav_msgs.msg import Odometry
+import rclpy
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from std_msgs.msg import String
+import yaml
 
 from . import monitoring, paths
-from .site_bus import LATCHED, SITE_TOPIC, decode_site
+from .site_bus import decode_site, LATCHED, SITE_TOPIC
 
 
 class ConfigSentinel(Node):
-    """起動時の設定と今の設定を見比べる。"""
+    """起動時の設定と今の設定を見比べる."""
 
     def __init__(self):
-        super().__init__("config_sentinel")
+        super().__init__('config_sentinel')
 
-        self._package = self.declare_parameter("package", "").value
-        self._config_root = self.declare_parameter("config_root", "").value
-        self._site = self.declare_parameter("site", "").value
-        self._digest = self.declare_parameter("digest", "").value
-        self._packages = self.declare_parameter("packages", Parameter.Type.STRING_ARRAY).value
-        self._files = self.declare_parameter("files", Parameter.Type.STRING_ARRAY).value or []
-        self._params_dir = self.declare_parameter("params_dir", "").value
-        self._watch_site = self.declare_parameter("watch_site", False).value
+        self._package = self.declare_parameter('package', '').value
+        self._config_root = self.declare_parameter('config_root', '').value
+        self._site = self.declare_parameter('site', '').value
+        self._digest = self.declare_parameter('digest', '').value
+        self._packages = self.declare_parameter('packages', Parameter.Type.STRING_ARRAY).value
+        self._files = self.declare_parameter('files', Parameter.Type.STRING_ARRAY).value or []
+        self._params_dir = self.declare_parameter('params_dir', '').value
+        self._watch_site = self.declare_parameter('watch_site', False).value
         # follow は場所告知への追随だけを制御する。固定構成のファイル変更は監視する。
-        self._follow = self.declare_parameter("follow", False).value
+        self._follow = self.declare_parameter('follow', False).value
         # warn は設定変更を知らせるだけにする。
-        self._action = self.declare_parameter("action", "shutdown").value
+        self._action = self.declare_parameter('action', 'shutdown').value
 
-        self._period = self.declare_parameter("poll_period", 2.0).value
+        self._period = self.declare_parameter('poll_period', 2.0).value
         # 上がった直後に落ちる輪を作らないための猶予。**この長さのあいだは
         # どんな変化でも落ちない。**
-        self._min_uptime = self.declare_parameter("min_uptime_sec", 30.0).value
-        self._repeat = self.declare_parameter("repeat_sec", 30.0).value
+        self._min_uptime = self.declare_parameter('min_uptime_sec', 30.0).value
+        self._repeat = self.declare_parameter('repeat_sec', 30.0).value
 
         # 静止の判定。ジャイロのバイアスを起動後の静止区間から測る都合で、
         # **走行中に立て直してはいけない** (docs/setup/lidar.md)。
-        self._require_still = self.declare_parameter("require_still", True).value
-        self._still_speed = self.declare_parameter("still_speed", 0.02).value
-        self._still_yaw_rate = self.declare_parameter("still_yaw_rate", 0.05).value
-        self._still_seconds = self.declare_parameter("still_seconds", 3.0).value
-        odom_topic = self.declare_parameter("odom_topic", "/odom").value
+        self._require_still = self.declare_parameter('require_still', True).value
+        self._still_speed = self.declare_parameter('still_speed', 0.02).value
+        self._still_yaw_rate = self.declare_parameter('still_yaw_rate', 0.05).value
+        self._still_seconds = self.declare_parameter('still_seconds', 3.0).value
+        odom_topic = self.declare_parameter('odom_topic', '/odom').value
         # /odom が来ないまま待ち続けると、切り替えが黙って効かないのと同じになる。
         # この時間を過ぎたら「判定できないので止まっているものとして扱う」。
-        self._odom_grace = self.declare_parameter("odom_grace_sec", 10.0).value
+        self._odom_grace = self.declare_parameter('odom_grace_sec', 10.0).value
 
         self._started = time.monotonic()
         self._last_moving = None
         self._last_odom = None
-        self._announced = ""
+        self._announced = ''
         self._said_at = 0.0
         self._no_manager_said = False
         self.exit_requested = False
 
         if not self._package or not self._config_root:
-            raise RuntimeError("package と config_root は必須です")
+            raise RuntimeError('package と config_root は必須です')
 
         # 固定した構成は、次回選択用の告知を購読しない。
         if self._site and self._watch_site and self._follow:
@@ -83,9 +83,9 @@ class ConfigSentinel(Node):
 
         self.get_logger().info(
             f"config_sentinel: {self._package} / site={self._site or '(なし)'} / "
-            f"digest={self._digest} / "
-            + ("設定が変わったら立て直します" if self._following() else
-               "変化は言うだけで、立て直しはしません")
+            f'digest={self._digest} / '
+            + ('設定が変わったら立て直します' if self._following() else
+               '変化は言うだけで、立て直しはしません')
         )
 
     # ── 入力 ──────────────────────────────────────────────────────────────
@@ -95,7 +95,7 @@ class ConfigSentinel(Node):
         if site is None:
             # 壊れた告知は前の値を保つ。読めないものを場所が変わったと見なすと
             # 立て直しが止まらなくなる。
-            self.get_logger().warning(f"{SITE_TOPIC} を読めません: {msg.data!r}")
+            self.get_logger().warning(f'{SITE_TOPIC} を読めません: {msg.data!r}')
             return
         self._announced = site
 
@@ -114,10 +114,10 @@ class ConfigSentinel(Node):
     # ── 判定 ──────────────────────────────────────────────────────────────
 
     def _following(self):
-        return self._action == "shutdown"
+        return self._action == 'shutdown'
 
     def _still(self):
-        """機体が止まっているか。
+        """機体が止まっているか.
 
         /odom が一度も来ない (あるいは途絶えた) ときは**止まっているものとして
         扱う**。ここで待ち続けると、オドメトリが死んでいるだけで切り替えが
@@ -125,16 +125,16 @@ class ConfigSentinel(Node):
         """
         now = time.monotonic()
         if self._last_odom is None or now - self._last_odom > self._odom_grace:
-            return True, "/odom が来ていないので静止として扱います"
+            return True, '/odom が来ていないので静止として扱います'
         if self._last_moving is None:
-            return True, ""
+            return True, ''
         waited = now - self._last_moving
         if waited >= self._still_seconds:
-            return True, ""
-        return False, f"機体が動いています (静止 {waited:.1f}s / {self._still_seconds}s)"
+            return True, ''
+        return False, f'機体が動いています (静止 {waited:.1f}s / {self._still_seconds}s)'
 
     def _changes(self):
-        """起動時から変わったものを並べる。
+        """起動時から変わったものを並べる.
 
         Returns:
             (理由の並び, 切り替え先の場所)。壊れて読めないときは
@@ -153,23 +153,23 @@ class ConfigSentinel(Node):
             )
         except (OSError, yaml.YAMLError, RuntimeError) as err:
             # 書きかけを読んだだけかもしれないので、これを立て直しの理由にしない。
-            return [f"設定ファイルを読めません: {err}"], None
+            return [f'設定ファイルを読めません: {err}'], None
         if now != self._digest:
-            reasons.append(f"設定値が書き変わりました (digest {self._digest} -> {now})")
+            reasons.append(f'設定値が書き変わりました (digest {self._digest} -> {now})')
 
         return reasons, target
 
     # ── 本体 ──────────────────────────────────────────────────────────────
 
     def _say(self, reasons, tail):
-        """同じことを毎周期は言わない (repeat_sec ごと)。"""
+        """同じことを毎周期は言わない (repeat_sec ごと)."""
         now = time.monotonic()
         if now - self._said_at < self._repeat:
             return
         self._said_at = now
         self.get_logger().error(
-            f"起動したときの設定と今の設定が違います ({self._package}):\n  "
-            + "\n  ".join(reasons) + "\n" + tail
+            f'起動したときの設定と今の設定が違います ({self._package}):\n  '
+            + '\n  '.join(reasons) + '\n' + tail
         )
 
     def _poll(self):
@@ -181,8 +181,8 @@ class ConfigSentinel(Node):
                 and time.monotonic() - self._started > 60.0):
             self._no_manager_said = True
             self.get_logger().warning(
-                f"{SITE_TOPIC} に誰も出していません。site_manager が居ないので、"
-                "**場所の切り替えは検出できません** (設定値の書き換えは見ています)。"
+                f'{SITE_TOPIC} に誰も出していません。site_manager が居ないので、'
+                '**場所の切り替えは検出できません** (設定値の書き換えは見ています)。'
             )
 
         reasons, target = self._changes()
@@ -190,11 +190,11 @@ class ConfigSentinel(Node):
             return
 
         if target is None:
-            self._say(reasons, "壊れているあいだは何もしません (直れば続きから見ます)。")
+            self._say(reasons, '壊れているあいだは何もしません (直れば続きから見ます)。')
             return
 
         if not self._following():
-            self._say(reasons, "action:=warn なので終了しません。反映には立て直してください。")
+            self._say(reasons, 'action:=warn なので終了しません。反映には立て直してください。')
             return
 
         ok, reason = monitoring.precheck(
@@ -202,24 +202,24 @@ class ConfigSentinel(Node):
             packages=self._packages, files=self._files, params_dir=self._params_dir,
         )
         if not ok:
-            self._say(reasons, f"**この設定では立ち上がらないので、立て直しません**: {reason}")
+            self._say(reasons, f'**この設定では立ち上がらないので、立て直しません**: {reason}')
             return
 
         uptime = time.monotonic() - self._started
         if uptime < self._min_uptime:
-            self._say(reasons, f"起動直後なので待ちます ({uptime:.0f}s / {self._min_uptime:.0f}s)。")
+            self._say(reasons, f'起動直後なので待ちます ({uptime:.0f}s / {self._min_uptime:.0f}s)。')
             return
 
         if self._require_still:
             still, note = self._still()
             if not still:
-                self._say(reasons, f"{note}。止まったら立て直します。")
+                self._say(reasons, f'{note}。止まったら立て直します。')
                 return
             if note:
                 self.get_logger().warning(note)
 
         self.get_logger().warning(
-            "設定が変わったので立て直します:\n  " + "\n  ".join(reasons)
+            '設定が変わったので立て直します:\n  ' + '\n  '.join(reasons)
         )
         self.exit_requested = True
 
@@ -244,5 +244,5 @@ def main(args=None):
         sys.exit(paths.SENTINEL_RESTART_CODE)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

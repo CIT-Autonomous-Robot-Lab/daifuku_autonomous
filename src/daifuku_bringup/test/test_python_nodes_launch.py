@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""インストール済みラッパーから実ノードを起動し、ROS の応答まで確認する。"""
+"""インストール済みラッパーから実ノードを起動し、ROS の応答まで確認する."""
 
 import unittest
 
@@ -22,32 +22,31 @@ import launch_testing
 import launch_testing.actions
 import launch_testing.asserts
 import pytest
-import rclpy
 from rcl_interfaces.srv import GetParameters
-
+import rclpy
 
 NODES = (
-    ("daifuku_perception", "elevation_filter.py", "qa_elevation"),
-    ("daifuku_perception", "restamp_scan.py", "qa_restamp"),
-    ("daifuku_localization", "localization_gravity.py", "qa_gravity"),
-    ("daifuku_bringup", "system_monitor.py", "qa_monitor"),
-    ("daifuku_robot", "prepare_mid360_imu.py", "qa_imu"),
+    ('daifuku_perception', 'elevation_filter.py', 'qa_elevation'),
+    ('daifuku_perception', 'restamp_scan.py', 'qa_restamp'),
+    ('daifuku_localization', 'localization_gravity.py', 'qa_gravity'),
+    ('daifuku_bringup', 'system_monitor.py', 'qa_monitor'),
+    ('daifuku_robot', 'prepare_mid360_imu.py', 'qa_imu'),
 )
 
 
 @pytest.mark.launch_test
 def generate_test_description():
     processes = [
-        Node(package=package, executable=executable, name=name, output="screen",
-             parameters=[{"use_sim_time": True}])
+        Node(package=package, executable=executable, name=name, output='screen',
+             parameters=[{'use_sim_time': True}])
         for package, executable, name in NODES
     ]
     return LaunchDescription([
-        SetEnvironmentVariable("ROS_DOMAIN_ID", "77"),
-        SetEnvironmentVariable("ROS_LOCALHOST_ONLY", "1"),
+        SetEnvironmentVariable('ROS_DOMAIN_ID', '77'),
+        SetEnvironmentVariable('ROS_LOCALHOST_ONLY', '1'),
         *processes,
         launch_testing.actions.ReadyToTest(),
-    ]), {"processes": processes}
+    ]), {'processes': processes}
 
 
 class TestInstalledPythonNodes(unittest.TestCase):
@@ -55,13 +54,13 @@ class TestInstalledPythonNodes(unittest.TestCase):
     def test_each_node_answers_its_parameter_service(self):
         # Given: the real executables, isolated from any physical robot.
         rclpy.init()
-        node = rclpy.create_node("installed_python_nodes_test")
+        node = rclpy.create_node('installed_python_nodes_test')
         try:
             for _package, _executable, name in NODES:
-                client = node.create_client(GetParameters, f"/{name}/get_parameters")
+                client = node.create_client(GetParameters, f'/{name}/get_parameters')
                 self.assertTrue(client.wait_for_service(timeout_sec=15), name)
                 request = GetParameters.Request()
-                request.names = ["use_sim_time"]
+                request.names = ['use_sim_time']
                 # When: a request reaches the running node, not a source-file import.
                 future = client.call_async(request)
                 rclpy.spin_until_future_complete(node, future, timeout_sec=15)

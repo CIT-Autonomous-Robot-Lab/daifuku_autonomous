@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""場所の告知 (/daifuku/site) のトピック名と QoS。
+"""場所の告知 (/daifuku/site) のトピック名と QoS.
 
 site_manager が出して config_sentinel が読む。**絶対名にしてある** —
 namespace:= を付けた構成でも、機体側と自律移動側が同じ 1 本を見なければ
@@ -28,7 +28,7 @@ from rclpy.qos import (
     QoSReliabilityPolicy,
 )
 
-SITE_TOPIC = "/daifuku/site"
+SITE_TOPIC = '/daifuku/site'
 
 LATCHED = QoSProfile(
     depth=1,
@@ -39,20 +39,20 @@ LATCHED = QoSProfile(
 
 
 def encode_site(site, path):
-    """site_manager が流す JSON。キー順を固定して指紋と見比べやすくする。"""
+    """site_manager が流す JSON。キー順を固定して指紋と見比べやすくする."""
     return json.dumps(
-        {"site": site, "file": path},
+        {'site': site, 'file': path},
         ensure_ascii=False, sort_keys=True,
     )
 
 
 def decode_site(data):
-    """告知の JSON から場所の名前を取る。壊れていれば None。"""
+    """告知の JSON から場所の名前を取る。壊れていれば None."""
     try:
         body = json.loads(data)
     except json.JSONDecodeError:
         return None
     if not isinstance(body, dict):
         return None
-    site = body.get("site")
+    site = body.get('site')
     return site if isinstance(site, str) else None

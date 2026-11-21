@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""overrides の合成規則。launch も DDS も立てない。"""
+"""overrides の合成規則。launch も DDS も立てない."""
 
 import importlib.util
 import os
+from pathlib import Path
 import tempfile
 import unittest
-from pathlib import Path
 
 import pytest
 
@@ -29,9 +29,9 @@ def _load_overlay():
         return module
     except ImportError:
         path = (
-            Path(__file__).resolve().parents[1] / "daifuku_config" / "overlay.py"
+            Path(__file__).resolve().parents[1] / 'daifuku_config' / 'overlay.py'
         )
-        spec = importlib.util.spec_from_file_location("daifuku_overlay", path)
+        spec = importlib.util.spec_from_file_location('daifuku_overlay', path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         return module
@@ -49,76 +49,76 @@ select = _overlay_mod.select
 
 
 def test_fragment_owners_rejects_duplicate_node_in_one_file(tmp_path: Path) -> None:
-    fragment = tmp_path / "navigation.yaml"
+    fragment = tmp_path / 'navigation.yaml'
     fragment.write_text(
-        "vi_planner:\n  ros__parameters:\n    map_scale: 2\n"
-        "vi_planner:\n  ros__parameters:\n    local_cpu_share: 0.6\n",
-        encoding="utf-8",
+        'vi_planner:\n  ros__parameters:\n    map_scale: 2\n'
+        'vi_planner:\n  ros__parameters:\n    local_cpu_share: 0.6\n',
+        encoding='utf-8',
     )
 
-    with pytest.raises(_overlay_mod.yaml.YAMLError, match="duplicate key"):
+    with pytest.raises(_overlay_mod.yaml.YAMLError, match='duplicate key'):
         fragment_owners([str(fragment)])
 
 
-@pytest.mark.parametrize("section", [42, False, 0, "", [], ["vi_planner"]])
+@pytest.mark.parametrize('section', [42, False, 0, '', [], ['vi_planner']])
 def test_audit_tree_reports_invalid_package_section(
     tmp_path: Path, section: int | bool | str | list[str],
 ) -> None:
-    site = tmp_path / "sites" / "example"
+    site = tmp_path / 'sites' / 'example'
     site.mkdir(parents=True)
-    path = site / "overrides.yaml"
+    path = site / 'overrides.yaml'
     path.write_text(
-        _overlay_mod.yaml.safe_dump({"daifuku_navigation": section}),
-        encoding="utf-8",
+        _overlay_mod.yaml.safe_dump({'daifuku_navigation': section}),
+        encoding='utf-8',
     )
 
     problems = audit_tree(str(tmp_path))
 
     assert len(problems) == 1
     assert str(path) in problems[0]
-    assert "daifuku_navigation" in problems[0]
+    assert 'daifuku_navigation' in problems[0]
 
 
 def test_load_preserves_yaml_merge_override(tmp_path: Path) -> None:
-    path = tmp_path / "params.yaml"
+    path = tmp_path / 'params.yaml'
     path.write_text(
-        "defaults: &defaults\n  map_scale: 2\n"
-        "vi_planner:\n  ros__parameters:\n"
-        "    <<: *defaults\n    map_scale: 3\n",
-        encoding="utf-8",
+        'defaults: &defaults\n  map_scale: 2\n'
+        'vi_planner:\n  ros__parameters:\n'
+        '    <<: *defaults\n    map_scale: 3\n',
+        encoding='utf-8',
     )
 
     body = load(path)
 
-    assert body["vi_planner"]["ros__parameters"]["map_scale"] == 3
+    assert body['vi_planner']['ros__parameters']['map_scale'] == 3
 
 
 def test_load_preserves_nested_merge_alias(tmp_path: Path) -> None:
-    path = tmp_path / "params.yaml"
+    path = tmp_path / 'params.yaml'
     path.write_text(
-        "holder:\n  defaults: &defaults\n"
-        "    <<: {map_scale: 2}\n    map_scale: 3\n"
-        "vi_planner:\n  <<: *defaults\n"
-        "another:\n  <<: *defaults\n",
-        encoding="utf-8",
+        'holder:\n  defaults: &defaults\n'
+        '    <<: {map_scale: 2}\n    map_scale: 3\n'
+        'vi_planner:\n  <<: *defaults\n'
+        'another:\n  <<: *defaults\n',
+        encoding='utf-8',
     )
 
     body = load(path)
 
-    assert body["holder"]["defaults"] == {"map_scale": 3}
-    assert body["vi_planner"] == {"map_scale": 3}
-    assert body["another"] == {"map_scale": 3}
+    assert body['holder']['defaults'] == {'map_scale': 3}
+    assert body['vi_planner'] == {'map_scale': 3}
+    assert body['another'] == {'map_scale': 3}
 
 
 def test_load_rejects_duplicate_nodes_in_inline_merge(tmp_path: Path) -> None:
-    path = tmp_path / "params.yaml"
+    path = tmp_path / 'params.yaml'
     path.write_text(
-        "<<: {vi_planner: {ros__parameters: {map_scale: 2}}, "
-        "vi_planner: {ros__parameters: {map_scale: 3}}}\n",
-        encoding="utf-8",
+        '<<: {vi_planner: {ros__parameters: {map_scale: 2}}, '
+        'vi_planner: {ros__parameters: {map_scale: 3}}}\n',
+        encoding='utf-8',
     )
 
-    with pytest.raises(_overlay_mod.yaml.YAMLError, match="duplicate key"):
+    with pytest.raises(_overlay_mod.yaml.YAMLError, match='duplicate key'):
         load(path)
 
 
@@ -126,82 +126,82 @@ class OverlayTest(unittest.TestCase):
 
     def test_map_heartbeat_timeout_matches_navigation(self):
         root = Path(__file__).resolve().parents[1]
-        settings = load(root / "navigation" / "lifecycle_bond.yaml")
-        timeout = settings["lifecycle_manager_map"]["ros__parameters"]["bond_timeout"]
+        settings = load(root / 'navigation' / 'lifecycle_bond.yaml')
+        timeout = settings['lifecycle_manager_map']['ros__parameters']['bond_timeout']
         self.assertEqual(timeout, 60.0)
         self.assertEqual(
             timeout,
-            settings["lifecycle_manager_navigation"]["ros__parameters"]["bond_timeout"],
+            settings['lifecycle_manager_navigation']['ros__parameters']['bond_timeout'],
         )
 
     def test_overlay_deep_merges_dicts_and_replaces_lists(self):
-        base = {"vi_planner": {"ros__parameters": {
-            "map_scale": 1,
-            "action_forward_m": [0.5, 0.0],
+        base = {'vi_planner': {'ros__parameters': {
+            'map_scale': 1,
+            'action_forward_m': [0.5, 0.0],
         }}}
-        extra = {"vi_planner": {"ros__parameters": {
-            "map_scale": 2,
-            "action_forward_m": [0.8],
+        extra = {'vi_planner': {'ros__parameters': {
+            'map_scale': 2,
+            'action_forward_m': [0.8],
         }}}
         overlay(base, extra)
-        params = base["vi_planner"]["ros__parameters"]
-        self.assertEqual(params["map_scale"], 2)
-        self.assertEqual(params["action_forward_m"], [0.8])
+        params = base['vi_planner']['ros__parameters']
+        self.assertEqual(params['map_scale'], 2)
+        self.assertEqual(params['action_forward_m'], [0.8])
 
     def test_check_sections_rejects_unknown_package(self):
         with self.assertRaises(RuntimeError) as caught:
-            check_sections({"daifuku_stak": {}}, "overrides:19f")
-        self.assertIn("知らないパッケージ名", str(caught.exception))
+            check_sections({'daifuku_stak': {}}, 'overrides:19f')
+        self.assertIn('知らないパッケージ名', str(caught.exception))
 
     def test_check_sections_accepts_site_and_known_packages(self):
         check_sections(
-            {"site": {"map": {}}, "daifuku_navigation": {"emcl2": {}}},
-            "ok",
+            {'site': {'map': {}}, 'daifuku_navigation': {'emcl2': {}}},
+            'ok',
         )
 
     def test_select_returns_subtree(self):
-        body = {"daifuku_navigation": {"emcl2": {"ros__parameters": {"x": 1}}}}
-        selected = select(body, "t", "daifuku_navigation")
-        self.assertEqual(selected["emcl2"]["ros__parameters"]["x"], 1)
-        self.assertEqual(select(body, "t", "daifuku_robot"), {})
+        body = {'daifuku_navigation': {'emcl2': {'ros__parameters': {'x': 1}}}}
+        selected = select(body, 't', 'daifuku_navigation')
+        self.assertEqual(selected['emcl2']['ros__parameters']['x'], 1)
+        self.assertEqual(select(body, 't', 'daifuku_robot'), {})
 
     def test_reject_unknown_nodes(self):
         with tempfile.TemporaryDirectory() as tmp:
-            declared = Path(tmp) / "emcl2.yaml"
-            declared.write_text("emcl2:\n  ros__parameters: {}\n", encoding="utf-8")
-            reject_unknown_nodes([("ov", {"emcl2": {}})], set(), tmp)
+            declared = Path(tmp) / 'emcl2.yaml'
+            declared.write_text('emcl2:\n  ros__parameters: {}\n', encoding='utf-8')
+            reject_unknown_nodes([('ov', {'emcl2': {}})], set(), tmp)
             with self.assertRaises(RuntimeError) as caught:
-                reject_unknown_nodes([("ov", {"emcl3": {}})], set(), tmp)
-            self.assertIn("emcl3", str(caught.exception))
+                reject_unknown_nodes([('ov', {'emcl3': {}})], set(), tmp)
+            self.assertIn('emcl3', str(caught.exception))
 
     def test_config_files_skips_unreadable(self):
         with tempfile.TemporaryDirectory() as tmp:
-            real = Path(tmp) / "ok.yaml"
-            real.write_text("n: {}\n", encoding="utf-8")
+            real = Path(tmp) / 'ok.yaml'
+            real.write_text('n: {}\n', encoding='utf-8')
             found, stale = config_files(tmp)
-            self.assertEqual([os.path.basename(p) for p in found], ["ok.yaml"])
+            self.assertEqual([os.path.basename(p) for p in found], ['ok.yaml'])
             self.assertEqual(stale, [])
 
     def test_fragment_owners_detects_duplicate(self):
         with tempfile.TemporaryDirectory() as tmp:
-            a = Path(tmp) / "a.yaml"
-            b = Path(tmp) / "b.yaml"
-            a.write_text("same:\n  ros__parameters: {}\n", encoding="utf-8")
-            b.write_text("same:\n  ros__parameters: {}\n", encoding="utf-8")
+            a = Path(tmp) / 'a.yaml'
+            b = Path(tmp) / 'b.yaml'
+            a.write_text('same:\n  ros__parameters: {}\n', encoding='utf-8')
+            b.write_text('same:\n  ros__parameters: {}\n', encoding='utf-8')
             with self.assertRaises(RuntimeError) as caught:
                 fragment_owners([str(a), str(b)])
-            self.assertIn("same", str(caught.exception))
+            self.assertIn('same', str(caught.exception))
 
     def test_audit_tree_accepts_repo_config(self):
-        root = Path(__file__).resolve().parents[3] / "src" / "daifuku_config"
+        root = Path(__file__).resolve().parents[3] / 'src' / 'daifuku_config'
         if not root.is_dir():
-            self.skipTest("src/daifuku_config が無い")
+            self.skipTest('src/daifuku_config が無い')
         problems = audit_tree(str(root))
-        self.assertEqual(problems, [], "\n".join(problems))
+        self.assertEqual(problems, [], '\n'.join(problems))
 
     def test_load_empty_is_dict(self):
-        with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as handle:
-            handle.write("")
+        with tempfile.NamedTemporaryFile('w', suffix='.yaml', delete=False) as handle:
+            handle.write('')
             path = handle.name
         try:
             self.assertEqual(load(path), {})
@@ -211,33 +211,34 @@ class OverlayTest(unittest.TestCase):
     def test_navigation_layers_use_supported_vi_parameters(self):
         root = Path(__file__).resolve().parents[1]
         removed = {
-            "goal_tolerance_xy", "goal_tolerance_deg", "waypoint_pause_sec",
-            "safety_radius", "safety_radius_penalty",
+            'goal_tolerance_xy', 'goal_tolerance_deg', 'waypoint_pause_sec',
+            'safety_radius', 'safety_radius_penalty',
         }
-        for path in sorted((root / "sites").glob("*/overrides.yaml")):
+        for path in sorted((root / 'sites').glob('*/overrides.yaml')):
             with self.subTest(site=path.parent.name):
-                base = load(root / "navigation" / "vi_planner.yaml")
-                extra = load(path).get("daifuku_navigation", {})
+                base = load(root / 'navigation' / 'vi_planner.yaml')
+                extra = load(path).get('daifuku_navigation', {})
                 overlay(base, extra)
-                params = base["vi_planner"]["ros__parameters"]
+                params = base['vi_planner']['ros__parameters']
                 self.assertFalse(removed.intersection(params))
-                self.assertEqual(params["scan_penalty_radius"], 0.4)
-                self.assertEqual(params["scan_penalty"], 10000)
-                self.assertEqual(params["map_penalty_radius"], 0.45)
-                self.assertEqual(params["map_penalty"], 10000)
-                if path.parent.name == "tsukuba2026":
-                    reference = load(root / "navigation" / "vi_planner.yaml")
+                self.assertEqual(params['scan_penalty_radius'], 0.4)
+                self.assertEqual(params['scan_penalty'], 10000)
+                self.assertEqual(params['map_penalty_radius'], 0.45)
+                self.assertEqual(params['map_penalty'], 10000)
+                if path.parent.name == 'tsukuba2026':
+                    reference = load(root / 'navigation' / 'vi_planner.yaml')
                     overlay(
                         reference,
-                        load(root / "sites" / "tsudanuma" / "overrides.yaml")[
-                            "daifuku_navigation"
+                        load(root / 'sites' / 'tsudanuma' / 'overrides.yaml')[
+                            'daifuku_navigation'
                         ],
                     )
-                    expected = reference["vi_planner"]["ros__parameters"]
-                    self.assertEqual(params["map_scale"], 2)
-                    expected["map_scale"] = 2
+                    expected = reference['vi_planner']['ros__parameters']
+                    self.assertEqual(params['map_scale'], 2)
+                    expected['map_scale'] = 2
+                    expected['waypoint_prefetch'] = False
                     self.assertEqual(params, expected)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     unittest.main()

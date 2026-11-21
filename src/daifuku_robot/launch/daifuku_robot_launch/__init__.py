@@ -11,4 +11,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""機体 launch の共有部品。設定の合成は daifuku_config が持つ。"""
+"""機体 launch の共有部品。設定の合成は daifuku_config が持つ."""

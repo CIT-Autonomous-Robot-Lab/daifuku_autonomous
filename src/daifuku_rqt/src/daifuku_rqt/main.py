@@ -25,9 +25,9 @@ from rqt_gui.main import Main
 
 def main():
     return Main().main(
-        sys.argv, standalone="daifuku_rqt.control_panel.ControlPanel"
+        sys.argv, standalone='daifuku_rqt.control_panel.ControlPanel'
     )
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     sys.exit(main())

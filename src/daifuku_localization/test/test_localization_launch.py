@@ -10,7 +10,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""実際の launch action から自己位置推定の所有者と入力を確認する。"""
+"""実際の launch action から自己位置推定の所有者と入力を確認する."""
 
 import importlib.util
 from pathlib import Path
@@ -26,10 +26,10 @@ import yaml
 
 @pytest.fixture
 def component():
-    source = Path(get_package_share_directory("daifuku_localization")) / (
-        "launch/localization.launch.py"
+    source = Path(get_package_share_directory('daifuku_localization')) / (
+        'launch/localization.launch.py'
     )
-    specification = importlib.util.spec_from_file_location("localization_component", source)
+    specification = importlib.util.spec_from_file_location('localization_component', source)
     assert specification is not None and specification.loader is not None
     module = importlib.util.module_from_spec(specification)
     specification.loader.exec_module(module)
@@ -39,30 +39,30 @@ def component():
 def test_vi_localization_adds_no_second_estimator(component):
     # Given: VI navigation already owns map->odom.
     context = LaunchContext()
-    context.launch_configurations["localization"] = "vi"
+    context.launch_configurations['localization'] = 'vi'
     # When: the localization component selects its nodes.
     nodes = component.localization_nodes(context)
     # Then: it neither duplicates VI nor introduces another estimator/map server.
     assert nodes == []
 
 
-@pytest.mark.parametrize("backend,estimator", [
-    ("amcl", "nav2_amcl"), ("emcl2", "emcl2"), ("emcl3d", "emcl3d"),
+@pytest.mark.parametrize('backend,estimator', [
+    ('amcl', 'nav2_amcl'), ('emcl2', 'emcl2'), ('emcl3d', 'emcl3d'),
 ])
 def test_selected_estimator_reads_localization_scan(component, backend, estimator, tmp_path):
     # Given: distinct planning and localization scans and an empty estimator config.
-    configuration = tmp_path / "parameters.yaml"
-    configuration.write_text("{}\n")
+    configuration = tmp_path / 'parameters.yaml'
+    configuration.write_text('{}\n')
     context = LaunchContext()
     context.launch_configurations.update({
-        "localization": backend, "use_sim_time": "true", "use_respawn": "false",
-        "log_level": "info", "autostart": "true", "map_loc": "/localization.yaml",
-        "map_pcd": "/localization.pcd", "emcl2_package": "emcl2",
-        "emcl2_executable": "emcl2_node", "emcl2_node_name": "emcl2",
-        "localization_scan_topic": "/scan_loc",
-        "emcl3d_compute_backend": "",
+        'localization': backend, 'use_sim_time': 'true', 'use_respawn': 'false',
+        'log_level': 'info', 'autostart': 'true', 'map_loc': '/localization.yaml',
+        'map_pcd': '/localization.pcd', 'emcl2_package': 'emcl2',
+        'emcl2_executable': 'emcl2_node', 'emcl2_node_name': 'emcl2',
+        'localization_scan_topic': '/scan_loc',
+        'emcl3d_compute_backend': '',
         **{name: str(configuration) for name in (
-            "amcl_params_file", "emcl2_params_file", "emcl3d_params_file",
+            'amcl_params_file', 'emcl2_params_file', 'emcl3d_params_file',
         )},
     })
     # When: substitutions are resolved without starting any hardware process.
@@ -72,22 +72,22 @@ def test_selected_estimator_reads_localization_scan(component, backend, estimato
     ) == estimator)
     selected._perform_substitutions(context)
     # Then: only the chosen estimator is present; 2D estimators use the dedicated scan.
-    assert all(isinstance(node, Node) and node.node_package != "vi_planner" for node in nodes)
-    if backend != "emcl3d":
-        assert ("scan", "/scan_loc") in selected.expanded_remapping_rules
-        assert ("map", "map_loc") in selected.expanded_remapping_rules
+    assert all(isinstance(node, Node) and node.node_package != 'vi_planner' for node in nodes)
+    if backend != 'emcl3d':
+        assert ('scan', '/scan_loc') in selected.expanded_remapping_rules
+        assert ('map', 'map_loc') in selected.expanded_remapping_rules
 
 
-@pytest.mark.parametrize("backend", ["", "cpu", "vulkan"])
+@pytest.mark.parametrize('backend', ['', 'cpu', 'vulkan'])
 def test_emcl3d_compute_selection_overrides_yaml_only_when_explicit(component, backend, tmp_path):
     # Given: a YAML selection distinct from an explicit CPU override.
-    configuration = tmp_path / "parameters.yaml"
-    configuration.write_text("emcl3d:\n  ros__parameters:\n    compute_backend: vulkan\n")
+    configuration = tmp_path / 'parameters.yaml'
+    configuration.write_text('emcl3d:\n  ros__parameters:\n    compute_backend: vulkan\n')
     context = LaunchContext()
     context.launch_configurations.update({
-        "localization": "emcl3d", "use_sim_time": "false", "use_respawn": "false",
-        "log_level": "info", "map_pcd": "/map.pcd",
-        "emcl3d_params_file": str(configuration), "emcl3d_compute_backend": backend,
+        'localization': 'emcl3d', 'use_sim_time': 'false', 'use_respawn': 'false',
+        'log_level': 'info', 'map_pcd': '/map.pcd',
+        'emcl3d_params_file': str(configuration), 'emcl3d_compute_backend': backend,
     })
     # When: the actual Node action resolves its parameters.
     node = component.localization_nodes(context)[0]
@@ -95,8 +95,8 @@ def test_emcl3d_compute_selection_overrides_yaml_only_when_explicit(component, b
     resolved = {}
     for entry in evaluated:
         if isinstance(entry, Path):
-            resolved.update(yaml.safe_load(entry.read_text())["emcl3d"]["ros__parameters"])
+            resolved.update(yaml.safe_load(entry.read_text())['emcl3d']['ros__parameters'])
         else:
             resolved.update(entry)
     # Then: an empty argument preserves YAML; an explicit selection takes precedence.
-    assert resolved["compute_backend"] == (backend or "vulkan")
+    assert resolved['compute_backend'] == (backend or 'vulkan')

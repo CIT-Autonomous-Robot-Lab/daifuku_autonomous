@@ -93,6 +93,21 @@ def test_content_edits_and_generated_caches_keep_incremental_outputs(workspace: 
         assert (workspace / 'build' / package / 'cached').exists()
 
 
+def test_underlay_change_cleans_outputs_but_preserves_cargo(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: 別のROS環境で成功したビルドと取得済みクレート。
+    monkeypatch.setenv('CMAKE_PREFIX_PATH', '/opt/ros/humble')
+    baseline(workspace)
+    monkeypatch.setenv('CMAKE_PREFIX_PATH', '/nix/store/new-ros-env')
+    # When: 同じワークスペースを新しい環境でビルドする。
+    layout(workspace, 'prepare', package_list(workspace))
+    # Then: 旧環境を参照する生成物を捨て、ダウンロード済みクレートは残す。
+    assert not (workspace / 'install' / 'old').exists()
+    assert not (workspace / 'build' / 'changing').exists()
+    assert (workspace / 'build' / '.cargo' / 'download').read_text() == 'crate'
+
+
 @pytest.mark.parametrize('change', ['move', 'rename', 'remove', 'file', 'metadata', 'add'])
 def test_layout_changes_clean_generated_outputs(workspace: Path, change: str) -> None:
     # Given: 成功済み構成にパッケージ・ファイル構成の変更を加える。
@@ -198,7 +213,7 @@ def test_builder_entrypoint_does_not_source_old_workspace(tmp_path: Path) -> Non
     # Given: 古い overlay は source すると失敗する。
     install = tmp_path / 'install'
     install.mkdir()
-    _ = (install / 'setup.bash').write_text('exit 91\n')
+    _ = (install / 'local_setup.bash').write_text('exit 91\n')
     executable = tmp_path / 'build-workspace'
     _ = executable.write_text('#!/bin/sh\nexit 0\n')
     executable.chmod(0o755)
@@ -211,7 +226,10 @@ def test_builder_entrypoint_does_not_source_old_workspace(tmp_path: Path) -> Non
     assert result.returncode == 0
 
 
-def test_builder_orders_cmake_rust_and_launch_packages(tmp_path: Path) -> None:
+@pytest.mark.parametrize('linked_manifest', [False, True])
+def test_builder_orders_cmake_rust_and_launch_packages(
+    tmp_path: Path, linked_manifest: bool,
+) -> None:
     # Given: plain cargo のライブラリと CMake → ament_cargo → launch の依存。
     library = tmp_path / 'src' / 'vi_lib'
     (library / 'src').mkdir(parents=True)
@@ -219,6 +237,7 @@ def test_builder_orders_cmake_rust_and_launch_packages(tmp_path: Path) -> None:
         '[package]\nname = "vi_lib"\nversion = "0.0.0"\nedition = "2021"\n')
     _ = (library / 'src' / 'lib.rs').write_text('pub fn value() -> u8 { 1 }\n')
     for name, dependency in (
+            ('livox_ros_driver2', ''),
             ('daifuku_config', ''),
             ('vi_planner', 'daifuku_config'),
             ('daifuku_bringup', 'vi_planner')):
@@ -243,6 +262,12 @@ def test_builder_orders_cmake_rust_and_launch_packages(tmp_path: Path) -> None:
             _ = (source / 'CMakeLists.txt').write_text(
                 f'cmake_minimum_required(VERSION 3.16)\nproject({name})\n' +
                 'find_package(ament_cmake REQUIRED)\nament_package()\n')
+    livox = tmp_path / 'src' / 'livox_ros_driver2'
+    (livox / 'package.xml').rename(livox / 'package_ROS2.xml')
+    if linked_manifest:
+        (livox / 'package.xml').symlink_to('package_ROS2.xml')
+    (livox / 'launch_ROS2').mkdir()
+    _ = (livox / 'launch_ROS2' / 'sample.launch.py').write_text('# fixture\n')
     builder = SCRIPT.parents[1] / 'raspberrypi' / 'scripts' / 'build-workspace.sh'
     env = dict(os.environ, ROS_WS=str(tmp_path), BUILD_JOBS='2', CARGO_NET_OFFLINE='true')
     # When: 実際のビルド入口を通す。
@@ -250,6 +275,6 @@ def test_builder_orders_cmake_rust_and_launch_packages(tmp_path: Path) -> None:
         ['bash', str(builder)], env=env, capture_output=True, text=True, timeout=180)
     # Then: Rust を飛ばして依存パッケージの package.sh が欠落することがない。
     assert result.returncode == 0, result.stdout + result.stderr
-    for name in ('daifuku_config', 'vi_planner', 'daifuku_bringup'):
+    for name in ('livox_ros_driver2', 'daifuku_config', 'vi_planner', 'daifuku_bringup'):
         assert (tmp_path / 'install' / 'share' / name / 'package.sh').is_file()
     assert (tmp_path / 'build' / 'vi_lib' / 'release' / 'libvi_lib.rlib').is_file()

@@ -12,30 +12,50 @@
 # limitations under the License.
 
 
-"""起動時のパラメータ合成と、共有 API の公開口。"""
+"""起動時のパラメータ合成と、共有 API の公開口."""
 
 import os
 import tempfile
 
-import yaml
 from launch.actions import LogInfo, SetLaunchConfiguration
+import yaml
 
 from . import paths, value
 from .layers import (  # noqa: F401 - 公開 API
-    _resolve_layers, declare_args, site_meta, site_name,
+    _resolve_layers,
+    declare_args,
+    site_meta,
+    site_name,
 )
 from .monitoring import config_digest, precheck  # noqa: F401
 from .overlay import (  # noqa: F401
-    CONFIG_DIRS, KNOWN_PACKAGES, RESERVED_SECTIONS, load,
-    overlay as _overlay, reject_unknown_nodes as _reject_unknown_nodes,
+    CONFIG_DIRS,
+    KNOWN_PACKAGES,
+    load,
+    RESERVED_SECTIONS,
+)
+from .overlay import (
+    overlay as _overlay,
+)
+from .overlay import (
+    reject_unknown_nodes as _reject_unknown_nodes,
 )
 from .paths import (  # noqa: F401
-    DEFAULT_OVERRIDES, DEFAULT_OVERRIDES_ORIGIN, SENTINEL_RESTART_CODE,
-    available_overrides, is_site, overrides_dir, overrides_path,
-    read_site_file, site_file,
+    available_overrides,
+    DEFAULT_OVERRIDES,
+    DEFAULT_OVERRIDES_ORIGIN,
+    is_site,
+    overrides_dir,
+    overrides_path,
+    read_site_file,
+    SENTINEL_RESTART_CODE,
+    site_file,
 )
 from .watch_launch import (  # noqa: F401
-    _on_sentinel_exit, declare_watch_arg, follows_site, sentinel_actions,
+    _on_sentinel_exit,
+    declare_watch_arg,
+    follows_site,
+    sentinel_actions,
 )
 
 config_root = paths.config_root
@@ -43,7 +63,7 @@ config_root = paths.config_root
 
 def _dump_temp(prefix, body):
     out = tempfile.NamedTemporaryFile(
-        mode="w", prefix=prefix, suffix=".yaml", delete=False, encoding="utf-8",
+        mode='w', prefix=prefix, suffix='.yaml', delete=False, encoding='utf-8',
     )
     yaml.safe_dump(body, out, default_flow_style=False, allow_unicode=True)
     out.close()
@@ -51,7 +71,7 @@ def _dump_temp(prefix, body):
 
 
 def _base(context, name, base_resolvers):
-    """launch 引数 name が指す設定ファイルを読む。
+    """Launch 引数 name が指す設定ファイルを読む.
 
     base_resolvers に name があれば、そちらへ丸ごと委ねる。ファイル 1 つでは
     済まない土台 (navigation の params_file は navigation/nav2/*.yaml +
@@ -76,7 +96,7 @@ def _base(context, name, base_resolvers):
 
 
 def _compose_one(name, base, owned, origin, layers, always):
-    """1 つの設定ファイルに、そのファイルが受け持つノードの節だけを重ねる。
+    """1 つの設定ファイルに、そのファイルが受け持つノードの節だけを重ねる.
 
     Returns:
         (書き出したパス, ログ, 重ねたノード名の集合)。何も重ならず always でも
@@ -94,15 +114,15 @@ def _compose_one(name, base, owned, origin, layers, always):
     if not applied and not always:
         return None, None, hit
 
-    out = _dump_temp(f"{name}_", base)
-    log = LogInfo(msg=f"params: {name}: {origin} -> {out}"
-                      + (f" (+ {'; '.join(applied)})" if applied else ""))
+    out = _dump_temp(f'{name}_', base)
+    log = LogInfo(msg=f'params: {name}: {origin} -> {out}'
+                      + (f" (+ {'; '.join(applied)})" if applied else ''))
     return out, log, hit
 
 
 def compose(context, *args, package, config_root, targets,
             base_resolvers=None, **kwargs):
-    """targets の各 launch 引数が指す設定ファイルへ overrides を重ねる。
+    """Targets の各 launch 引数が指す設定ファイルへ overrides を重ねる.
 
     OpaqueFunction として呼ぶ。以降の参照 (RewrittenYaml / 各 include /
     各ノードの parameters=) は、ここで差し替えた合成結果を見ることになる。
@@ -134,7 +154,7 @@ def compose(context, *args, package, config_root, targets,
 
 
 def compose_path(context, path, *, name, package, config_root):
-    """解決済みのパスへ overrides を重ねて (新しいパス, action の並び) を返す。
+    """解決済みのパスへ overrides を重ねて (新しいパス, action の並び) を返す.
 
     launch 引数ではなく OpaqueFunction の中で決まるファイル (robot_bringup の
     driver:= で決まるパラメータファイル) 用。呼び元がそのパスをその場で使うので、

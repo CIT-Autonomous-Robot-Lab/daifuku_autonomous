@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""ウェイポイント巡回の進行状態。joy_teleop がアクション呼び出しの前後で使う。
+"""ウェイポイント巡回の進行状態。joy_teleop がアクション呼び出しの前後で使う.
 
 ROS のクライアントは持たない。二重押しと、取り消し中に次のゴールを出す穴を
 ここで塞ぐ。
@@ -20,7 +20,7 @@ ROS のクライアントは持たない。二重押しと、取り消し中に�
 
 
 class WaypointPatrol:
-    """投げたゴールが受理されるまでのあいだと、走っているあいだ。"""
+    """投げたゴールが受理されるまでのあいだと、走っているあいだ."""
 
     def __init__(self):
         self.handle = None

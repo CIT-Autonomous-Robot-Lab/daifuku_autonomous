@@ -1,8 +1,7 @@
 # 19f.yaml — 19F (915x577 @0.05m = 45.8x28.9m) 用の上書き。
 # 「断片」= 重ねる先の設定ファイルの値 (perception/, navigation/nav2/, localization/)。
 # 値の由来・実測・経緯は ../../README.md、仰角フィルタは docs/setup/lidar.md。
-# 自己位置推定は津田沼と同じ emcl2 (launch の既定)。VI は外部の推定姿勢を読む。
-#   ros2 launch daifuku_navigation navigation.launch.py localization:=emcl2
+# VI は外部の推定姿勢を読む。2D 地図を使う場合は localization:=emcl2 を明示する。
 # 未指定のパラメータは共通設定を使う。
 # 8 手の行動は津田沼の 2 地図だけ (屋内で 1 手 0.8m は曲がりきれない見込み。未検証)。
 
@@ -12,15 +11,8 @@ site:
   map:
     navigation:   19f/map_19f.yaml   # 経路計画 (/map)。vi_planner と global_costmap
     localization: 19f/map_19f.yaml   # 自己位置推定 (/map_loc)。emcl2
-    pointcloud:   19f/map_19f.pcd    # 任意: localization:=emcl3d の点群地図。2026-10-19 に map_19f の座標へ変換済み (元の GLIM 出力から yaw -23.80 度, t=(2.153, -2.231, -0.056)m。床の z は概算)
+    pointcloud:   19f/map_19f.pcd    # EMCL3D 用。map_19f へ変換済み (元の GLIM 出力から yaw -23.80 度, t=(2.153, -2.231, -0.056)m。床の z は概算)
 
-  # ── emcl2 ────────────────────────────────────────────────────────────────
-  # 有効ビームの 28% が地図の壁を貫通する。**地図を取り直したら 2 つとも消すこと**。
-daifuku_localization:
-  emcl2:
-    ros__parameters:
-      alpha_threshold: 0.2                # 断片 0.5: alpha が 0.0-0.4 に張り付くため
-      expansion_radius_orientation: 0.05  # 断片 0.2: リセット時の姿勢の飛びを抑える
 
   # ── cmd_vel の頭打ち ──────────────────────────────────────────────────────
 daifuku_navigation:
@@ -38,4 +30,3 @@ daifuku_navigation:
       action_rotation_deg: [0.0, 0.0, -45.0, -30.0, 45.0, 30.0]  # 断片 [0, 0, -30, -30, 30, 30]: 据え切りを45度に拡大
       cost_drawing_threshold: 100          # 断片 60: 表示専用。色スケール上限 [ステップ≒秒] ≒50m
       early_start: true                    # 断片 false: 方策が繋がった時点で solve を打ち切る。密なので効く。ログの cut short / truncated で見る (未検証)
-      waypoint_prefetch: true              # 断片 false: 点あたり 29 秒の停止が消える代わりに場が 2 本 (655MB x2 = 1.31GB) + 1 コア。**Pi 4 (4GB) では外すこと**

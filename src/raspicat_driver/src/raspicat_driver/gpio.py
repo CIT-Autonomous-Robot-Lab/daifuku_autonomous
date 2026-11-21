@@ -33,7 +33,7 @@ import fcntl
 import os
 import struct
 
-CONSUMER = "raspicat_driver"
+CONSUMER = 'raspicat_driver'
 
 
 # _IOC() from asm-generic/ioctl.h.  fcntl.ioctl() wants a value that fits in a
@@ -53,17 +53,17 @@ def _ioc(direction, type_, nr, size):
 _GPIO_MAGIC = 0xB4
 
 # struct gpiochip_info { char name[32]; char label[32]; __u32 lines; }
-_CHIPINFO_FMT = "=32s32sI"
+_CHIPINFO_FMT = '=32s32sI'
 _CHIPINFO_SIZE = struct.calcsize(_CHIPINFO_FMT)
 
 # struct gpiohandle_request { __u32 lineoffsets[64]; __u32 flags;
 #                             __u8 default_values[64]; char consumer_label[32];
 #                             __u32 lines; int fd; }
-_HANDLE_REQ_FMT = "=64I I 64B 32s I i"
+_HANDLE_REQ_FMT = '=64I I 64B 32s I i'
 _HANDLE_REQ_SIZE = struct.calcsize(_HANDLE_REQ_FMT)
 
 # struct gpiohandle_data { __u8 values[64]; }
-_HANDLE_DATA_FMT = "=64B"
+_HANDLE_DATA_FMT = '=64B'
 _HANDLE_DATA_SIZE = struct.calcsize(_HANDLE_DATA_FMT)
 
 _GPIO_GET_CHIPINFO = _ioc(_IOC_READ, _GPIO_MAGIC, 0x01, _CHIPINFO_SIZE)
@@ -82,9 +82,9 @@ _GPIOHANDLE_REQUEST_BIAS_PULL_UP = 1 << 5
 def chip_devices():
     """Return every /dev/gpiochip*, readable or not."""
     return [
-        os.path.join("/dev", name)
-        for name in sorted(os.listdir("/dev"))
-        if name.startswith("gpiochip")
+        os.path.join('/dev', name)
+        for name in sorted(os.listdir('/dev'))
+        if name.startswith('gpiochip')
     ]
 
 
@@ -105,7 +105,7 @@ def chip_labels():
             continue
         finally:
             os.close(fd)
-        found[path] = struct.unpack(_CHIPINFO_FMT, info)[1].split(b"\0")[0].decode()
+        found[path] = struct.unpack(_CHIPINFO_FMT, info)[1].split(b'\0')[0].decode()
     return found
 
 
@@ -131,7 +131,7 @@ class _GpioLines:
             fields = self._offsets + [0] * (64 - len(self._offsets))
             fields.append(flags)
             fields.extend([0] * 64)
-            fields.append(CONSUMER.encode("ascii")[:31])
+            fields.append(CONSUMER.encode('ascii')[:31])
             fields.append(len(self._offsets))
             fields.append(0)
             reply = fcntl.ioctl(
@@ -160,7 +160,7 @@ class GpioOutputs(_GpioLines):
         super().__init__(chip_path, offsets, _GPIOHANDLE_REQUEST_OUTPUT)
         self._values = [0] * len(self._offsets)
 
-    def set(self, index, value):
+    def set_value(self, index, value):
         """Drive one of the requested lines high or low."""
         self._values[index] = 1 if value else 0
         self.flush()

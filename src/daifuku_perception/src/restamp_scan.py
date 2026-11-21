@@ -34,16 +34,17 @@ from sensor_msgs.msg import LaserScan
 
 
 class RestampScan(Node):
+
     def __init__(self):
-        super().__init__("restamp_scan")
+        super().__init__('restamp_scan')
         # Publisher is reliable so both reliable and best-effort
         # subscribers (laser_filters, rviz) can match it.
         pub_qos = QoSProfile(depth=10)
         sub_qos = QoSProfile(depth=10)
         sub_qos.reliability = ReliabilityPolicy.BEST_EFFORT
-        self._publisher = self.create_publisher(LaserScan, "scan_out", pub_qos)
+        self._publisher = self.create_publisher(LaserScan, 'scan_out', pub_qos)
         self._subscription = self.create_subscription(
-            LaserScan, "scan_in", self._callback, sub_qos)
+            LaserScan, 'scan_in', self._callback, sub_qos)
 
     def _callback(self, message):
         message.header.stamp = self.get_clock().now().to_msg()
@@ -63,5 +64,5 @@ def main(args=None):
             rclpy.shutdown()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

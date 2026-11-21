@@ -35,6 +35,7 @@
 import os
 import sys
 
+from daifuku_config import params
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
@@ -50,22 +51,21 @@ _LAUNCH_DIR = os.path.dirname(os.path.realpath(__file__))
 if _LAUNCH_DIR not in sys.path:
     sys.path.insert(0, _LAUNCH_DIR)
 
-from daifuku_config import params  # noqa: E402
 from daifuku_robot_launch import lidar as lidar_common  # noqa: E402
 
 
 def generate_launch_description():
-    config_root = params.config_root("daifuku_robot")
+    config_root = params.config_root('daifuku_robot')
 
-    lidar = LaunchConfiguration("lidar")
-    lidar_driver = LaunchConfiguration("lidar_driver")
-    use_sim_time = LaunchConfiguration("use_sim_time")
-    scan_raw_topic = LaunchConfiguration("scan_raw_topic")
-    mid360_config = LaunchConfiguration("mid360_config")
-    publish_lidar_tf = LaunchConfiguration("publish_lidar_tf")
-    lidar_frame = LaunchConfiguration("lidar_frame")
-    base_frame = LaunchConfiguration("base_frame")
-    urg_params_file = LaunchConfiguration("urg_params_file")
+    lidar = LaunchConfiguration('lidar')
+    lidar_driver = LaunchConfiguration('lidar_driver')
+    use_sim_time = LaunchConfiguration('use_sim_time')
+    scan_raw_topic = LaunchConfiguration('scan_raw_topic')
+    mid360_config = LaunchConfiguration('mid360_config')
+    publish_lidar_tf = LaunchConfiguration('publish_lidar_tf')
+    lidar_frame = LaunchConfiguration('lidar_frame')
+    base_frame = LaunchConfiguration('base_frame')
+    urg_params_file = LaunchConfiguration('urg_params_file')
 
     # どのノードを立てるかの条件
     #
@@ -93,22 +93,22 @@ def generate_launch_description():
     # 持つ。ここで宣言するのは、親が素通ししない (このファイルの中だけで完結する) 分。
     declare_args = lidar_common.declare_shared_args() + [
         # 親 (robot_bringup) から素通しされる。単独起動でも同じ既定。
-        DeclareLaunchArgument("overrides", default_value="none"),
-        DeclareLaunchArgument("extra_params_file", default_value=""),
-        DeclareLaunchArgument("use_sim_time", default_value="false"),
+        DeclareLaunchArgument('overrides', default_value='none'),
+        DeclareLaunchArgument('extra_params_file', default_value=''),
+        DeclareLaunchArgument('use_sim_time', default_value='false'),
         DeclareLaunchArgument(
-            "scan_raw_topic",
-            default_value="/scan_raw",
-            description="lidar:=2d で urg_node が出すトピック。"
-                        "**daifuku_perception の scan_pipeline.launch.py の同名の "
-                        "引数と揃えること** (あちらの入口)。",
+            'scan_raw_topic',
+            default_value='/scan_raw',
+            description='lidar:=2d で urg_node が出すトピック。'
+                        '**daifuku_perception の scan_pipeline.launch.py の同名の '
+                        '引数と揃えること** (あちらの入口)。',
         ),
-        DeclareLaunchArgument("mid360_publish_freq", default_value="10.0"),
+        DeclareLaunchArgument('mid360_publish_freq', default_value='10.0'),
         # Mid-360 のフレーム。**robot_bringup.launch.py の urdf_lidar_frame
         # (既定 lidar_link) とは別物**で、あちらは URDF が持つ 2D LiDAR の
         # リンク名。同じ名前にすると include したときに親の値が漏れてくる。
-        DeclareLaunchArgument("lidar_frame", default_value="livox_frame"),
-        DeclareLaunchArgument("base_frame", default_value="base_footprint"),
+        DeclareLaunchArgument('lidar_frame', default_value='livox_frame'),
+        DeclareLaunchArgument('base_frame', default_value='base_footprint'),
     ]
 
     # LiDAR ドライバ
@@ -119,49 +119,49 @@ def generate_launch_description():
     # キー (urg_node) に合わせること。
     urg_driver = Node(
         condition=IfCondition(use_urg_driver),
-        package="urg_node",
-        executable="urg_node_driver",
-        name="urg_node",
-        output="screen",
-        parameters=[urg_params_file, {"use_sim_time": use_sim_time}],
-        remappings=[("scan", scan_raw_topic)],
+        package='urg_node',
+        executable='urg_node_driver',
+        name='urg_node',
+        output='screen',
+        parameters=[urg_params_file, {'use_sim_time': use_sim_time}],
+        remappings=[('scan', scan_raw_topic)],
     )
 
     livox_driver = Node(
         condition=IfCondition(use_livox_driver),
-        package="livox_ros_driver2",
-        executable="livox_ros_driver2_node",
-        name="livox_lidar_publisher",
-        output="screen",
+        package='livox_ros_driver2',
+        executable='livox_ros_driver2_node',
+        name='livox_lidar_publisher',
+        output='screen',
         parameters=[{
-            "xfer_format": 0,
-            "multi_topic": 0,
-            "data_src": 0,
-            "publish_freq": ParameterValue(
-                LaunchConfiguration("mid360_publish_freq"), value_type=float
+            'xfer_format': 0,
+            'multi_topic': 0,
+            'data_src': 0,
+            'publish_freq': ParameterValue(
+                LaunchConfiguration('mid360_publish_freq'), value_type=float
             ),
-            "output_data_type": 0,
-            "frame_id": lidar_frame,
-            "user_config_path": mid360_config,
-            "cmdline_input_bd_code": "livox0000000001",
+            'output_data_type': 0,
+            'frame_id': lidar_frame,
+            'user_config_path': mid360_config,
+            'cmdline_input_bd_code': 'livox0000000001',
         }],
     )
 
     mid360_static_tf = Node(
         condition=IfCondition(publish_mid360_tf),
-        package="tf2_ros",
-        executable="static_transform_publisher",
-        name="mid360_static_transform",
-        output="screen",
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='mid360_static_transform',
+        output='screen',
         arguments=[
-            "--x", LaunchConfiguration("lidar_x"),
-            "--y", LaunchConfiguration("lidar_y"),
-            "--z", LaunchConfiguration("lidar_z"),
-            "--roll", LaunchConfiguration("lidar_roll"),
-            "--pitch", LaunchConfiguration("lidar_pitch"),
-            "--yaw", LaunchConfiguration("lidar_yaw"),
-            "--frame-id", base_frame,
-            "--child-frame-id", lidar_frame,
+            '--x', LaunchConfiguration('lidar_x'),
+            '--y', LaunchConfiguration('lidar_y'),
+            '--z', LaunchConfiguration('lidar_z'),
+            '--roll', LaunchConfiguration('lidar_roll'),
+            '--pitch', LaunchConfiguration('lidar_pitch'),
+            '--yaw', LaunchConfiguration('lidar_yaw'),
+            '--frame-id', base_frame,
+            '--child-frame-id', lidar_frame,
         ],
     )
 
@@ -176,9 +176,9 @@ def generate_launch_description():
         OpaqueFunction(
             function=params.compose,
             kwargs={
-                "package": "daifuku_robot",
-                "config_root": config_root,
-                "targets": ["urg_params_file"],
+                'package': 'daifuku_robot',
+                'config_root': config_root,
+                'targets': ['urg_params_file'],
             },
         ),
 

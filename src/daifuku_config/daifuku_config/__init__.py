@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""機能別の launch が共有する設定 API。
+"""機能別の launch が共有する設定 API.
 
 機能パッケージは import せず、合成と監視だけを所有する。
 site_manager は任意の次回選択用ヘルパーで、実行中の固定構成を切り替えない。
@@ -21,12 +21,12 @@ import os
 
 # 環境変数を真偽値として読むときに受ける綴り。Compose の .env に人が書くので、
 # docker-compose 自身や systemd と同じくらいの幅を受けておく。
-_TRUE_WORDS = ("true", "1", "yes", "on")
-_FALSE_WORDS = ("false", "0", "no", "off")
+_TRUE_WORDS = ('true', '1', 'yes', 'on')
+_FALSE_WORDS = ('false', '0', 'no', 'off')
 
 
 def env_bool_default(name, fallback):
-    """環境変数を launch 引数の既定値 ("true" / "false") に変える。
+    """環境変数を launch 引数の既定値 ("true" / "false") に変える.
 
     Compose の .env から launch へ値を配るために使う。**知らない綴りは弾く**:
     既定へ落とすと、`USE_MID360_IMU=1` のつもりが false のまま走って、エラーも
@@ -44,17 +44,17 @@ def env_bool_default(name, fallback):
         return fallback
     text = raw.strip().lower()
     if text in _TRUE_WORDS:
-        return "true"
+        return 'true'
     if text in _FALSE_WORDS:
-        return "false"
+        return 'false'
     raise RuntimeError(
-        "%s=%r は真偽値として読めません。%s のいずれかを書いてください。"
-        % (name, raw, " / ".join(_TRUE_WORDS + _FALSE_WORDS))
+        '%s=%r は真偽値として読めません。%s のいずれかを書いてください。'
+        % (name, raw, ' / '.join(_TRUE_WORDS + _FALSE_WORDS))
     )
 
 
 def env_default(name, fallback):
-    """環境変数を launch 引数の既定値 (文字列) にする。
+    """環境変数を launch 引数の既定値 (文字列) にする.
 
     env_bool_default の文字列版。綴りの検査ができないので、**値そのものの妥当性は
     受け手が見る** (overrides なら名前が実在するかを params が見る)。
@@ -73,12 +73,12 @@ def env_default(name, fallback):
 
 
 def value(context, name):
-    """起動引数を文字列として取り出す (OpaqueFunction の中で使う)。"""
+    """起動引数を文字列として取り出す (OpaqueFunction の中で使う)."""
     from launch.substitutions import LaunchConfiguration
 
     return LaunchConfiguration(name).perform(context)
 
 
 def is_true(context, name):
-    """起動引数を真偽値として取り出す。"true"/"True" のどちらでも受ける。"""
-    return value(context, name).lower() == "true"
+    """起動引数を真偽値として取り出す。"true"/"True" のどちらでも受ける."""
+    return value(context, name).lower() == 'true'

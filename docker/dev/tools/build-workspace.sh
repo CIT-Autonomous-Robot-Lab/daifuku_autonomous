@@ -9,8 +9,6 @@ REPOS_FILE="${WS}/daifuku_autonomous.repos"
 
 cd "${WS}"
 source /opt/ros/humble/setup.bash
-source /opt/ros2_rust_ws/install/local_setup.bash
-source /opt/raspicat2/install/setup.bash
 
 mkdir -p src
 
@@ -36,14 +34,12 @@ repo_paths=("${repo_entries[@]%%$'\t'*}")
 probe_url="${repo_entries[0]#*$'\t'}"
 
 export GIT_TERMINAL_PROMPT=0
-online=false
 if timeout 15 git ls-remote -q --exit-code "${probe_url}" HEAD >/dev/null 2>&1; then
-  online=true
   echo "ネットワークに繋がっているので vcs import します"
   vcs import . < "${REPOS_FILE}" \
     || echo "警告: vcs import が失敗しました。手元のチェックアウトのまま建てます" >&2
 else
-  echo "ネットワークに繋がらないので vcs import と rosdep を省略します"
+  echo "ネットワークに繋がらないので vcs import を省略します"
 fi
 
 missing=()
@@ -56,7 +52,7 @@ if [[ ${#missing[@]} -ne 0 ]]; then
 fi
 
 # livox_ros_driver2 は ROS 2 用の manifest と launch を上流で別名に置いている。
-cp src/livox_ros_driver2/package_ROS2.xml src/livox_ros_driver2/package.xml
+cp --remove-destination src/livox_ros_driver2/package_ROS2.xml src/livox_ros_driver2/package.xml
 rm -rf src/livox_ros_driver2/launch
 # Windows/Podman のバインドマウントは一部の Unix タイムスタンプを設定できない。
 mkdir -p src/livox_ros_driver2/launch
@@ -65,16 +61,7 @@ while IFS= read -r -d '' launch_file; do
   dd if="${launch_file}" of="${target}" status=none
 done < <(find src/livox_ros_driver2/launch_ROS2 -maxdepth 1 -type f -print0)
 
-# イメージは apt の索引を消してある。rosdep がソース固有のパッケージ
-# (libaprutil1-dev など) を見つけることがあるので、入れる前に索引を取り直す。
-if [[ "${online}" == true ]]; then
-  apt-get update
-  rosdep install \
-    --from-paths src \
-    --ignore-src \
-    --rosdistro humble \
-    -r -y
-fi
+# ビルド依存はshell.nixで固定する。変更時はイメージを作り直す。
 
 # CMake/Python/Rust を同じビルドに載せ、colcon に依存順を任せる。
 pkg_list="$(colcon list --base-paths src)"
@@ -96,4 +83,4 @@ colcon build \
 
 bash /usr/local/lib/daifuku/workspace-layout.sh commit
 
-printf '\nBuild complete. Refresh this shell with:\n  source %s/install/setup.bash\n' "${WS}"
+printf '\nBuild complete. Refresh this shell with:\n  source %s/install/local_setup.bash\n' "${WS}"

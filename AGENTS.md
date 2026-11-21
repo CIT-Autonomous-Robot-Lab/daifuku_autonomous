@@ -39,7 +39,9 @@ Raspberry Pi Cat を ROS 2 Humble と standalone VI で自律移動させるワ�
   機能パッケージどうしを公開入口として使わず、合成は `daifuku_bringup` に寄せます。
   設定の実体と合成規則（Python は `src/daifuku_config/daifuku_config/`）は
   `daifuku_config` に置き、そこから機能パッケージの実装を import しません。
-- Windows は編集ホストです。ビルド・ROS の確認は Docker または Ubuntu 22.04 で行います。
+- Windows は編集ホストです。ビルド・ROS の確認は Docker、Ubuntu 22.04、
+  または `shell.nix` を使う NixOS で行います。Dockerの依存をaptやrosdepへ分散させず、
+  ホストと同じ `shell.nix` にそろえます。
   再ビルドと再起動の判断表は[日常操作](docs/usage/operations.md#設定変更を反映する)に
   一本化します。Pi の再起動では `workspace-build` が走らず、コンパイル済みコードは更新されません。
 - 新規・移動したファイルは symlink の作成にビルドが必要です。移動・改名後は古い
@@ -50,7 +52,7 @@ Raspberry Pi Cat を ROS 2 Humble と standalone VI で自律移動させるワ�
   ソース実行ビットに依存させません。ラッパーは share の実装を実行するので、
   `--symlink-install` では Python の編集も再ビルドなしで反映されます。
   起動名を追加したら CMake の生成対象と CI のインストール確認を揃えます。
-- Pi の ROS base イメージでは `daifuku_rqt` と `daifuku_waypoint_manager` を
+- Pi のヘッドレスプロファイルでは `daifuku_rqt` と `daifuku_waypoint_manager` を
   `SKIP_PACKAGES` から外しません。rqt/RViz が無くビルドできないためです。
   `daifuku_bringup`、`daifuku_robot`、`daifuku_config` は実機でも必須です。
 
@@ -100,11 +102,11 @@ Raspberry Pi Cat を ROS 2 Humble と standalone VI で自律移動させるワ�
 ## 実機で守ること
 
 - `twist_mux:=true` ではドライバ入力は `/cmd_vel_mux`、自律入力は `/cmd_vel`
-  （優先度 100）、手動入力は `/cmd_vel_teleop`（10）です。手動側のゼロ指令や
-  `control.sh stop` は自律側が 0.5 秒黙るまで通りません。確実な停止はモータ電源で行います。
+  （優先度 10）、手動入力は `/cmd_vel_teleop`（100）です。手動側が優先され、
+  最後の手動指令から 0.5 秒で自律側へ譲ります。確実な停止はモータ電源で行います。
 - ゲームパッドの teleop は START 長押しで入るモードで、ボタンを離しても続きます。
   入るときに `/follow_waypoints` と `/navigate_to_pose` を取り消しますが、
-  自律側の有効期限までは手動が通りません。`twist_mux:=false` では
+  手動指令は自律側より優先されます。`twist_mux:=false` では
   `/cmd_vel_teleop` はドライバへ届きません。
 - teleop の発行側は終了時にゼロを送ります。自前ドライバは指令断でも
   `cmd_vel_timeout`（60 秒）まで最後の指令を保持します。公式ドライバの指令断時の停止は未確認です。
@@ -144,8 +146,8 @@ Raspberry Pi Cat を ROS 2 Humble と standalone VI で自律移動させるワ�
 - 行動配列の長さを揃え、前進量・旋回量・smoother 上限を一緒に確認します。
   同じ前進速度の旋回行動は直進と同じ手数単価を保ち、据え切りの角度を対応する
   旋回前進より大きくしません。着地セルだけの判定では、1 手より薄い壁を跳び越え得ます。
-- 4 GB 機では `waypoint_prefetch` を無効にします。既定の場所 `19f` も先読みを
-  有効にしており、場が 2 本になります。メモリ判定は 1 本単位なので合計 OOM を防げません。
+- 4 GB 機では `waypoint_prefetch` を無効にします。先読みを有効にすると場が 2 本になります。
+  メモリ判定は 1 本単位なので合計 OOM を防げません。
   compact の RAM 閾値はプロセス全体の上限ではありません。詳細は[設定の説明](src/daifuku_config/README.md)。
 - `local_cpu_share`・`global_cpu_share` は1コア基準の独立したCPU配分です。
   局所は有限の正値で 1 を超えると補助スレッドを使えます。広域は `0 < share <= 1` です。
@@ -183,8 +185,8 @@ Raspberry Pi Cat を ROS 2 Humble と standalone VI で自律移動させるワ�
 - `site_manager` / `config_sentinel` の launch テストは実機ノードと隔離します。
   `ROS_DOMAIN_ID=77` と `ROS_LOCALHOST_ONLY=1` を外しません。
   テストは `daifuku_config` パッケージ内に置きます。
-- lint は個別指定を保ち、`ament_lint_common` や pep257 を戻しません。
-  移植 C++ の書式と日本語 docstring に合わないためです。`ament_python` では
+- lint は個別指定を保ち、`ament_lint_common` や独立した pep257 テストを戻しません。
+  Python は各 ROS 版の `ament_flake8` 規約を満たし、警告を除外して差分を隠しません。`ament_python` では
   `test_depend` だけでなく実行する `test/test_*.py` が必要です。
   CMake パッケージの Python には `ament_cmake_flake8` を使います。
 - 新規 `.py` / `.cpp` / `.hpp` の Apache-2.0 ヘッダはファイル先頭のコメント塊に置きます。
