@@ -12,6 +12,7 @@ vi_planner:
     map_penalty: 10000          # 既定 10000: 地図障害物近傍のペナルティ
     scan_penalty_radius: 0.4    # 既定 0.1 [m]: スキャン障害物のペナルティ帯半幅
     scan_penalty: 10000         # 既定 10000: スキャンのペナルティ。0で無効
+    # scan_collision_radius: 0.2  # 既定 0.2 [m]: greedy追従で行動を棄却する円形の機体半径。0で無効
     goal_margin_radius: 0.75     # 既定 0.3 [m]: 実機調整の到達許容距離0.75 m
     goal_margin_theta: 45.0      # 既定 15.0 [deg]: 実機調整の到達許容角度45度
     map_wait_sec: 60             # 既定 30 [s]: 地図の到着待ち
@@ -54,6 +55,7 @@ vi_planner:
     action_names: ["forward", "back", "right", "rightfw", "left", "leftfw"]  # 既定 同左
     action_forward_m: [0.5, -0.2, 0.0, 0.5, 0.0, 0.5]  # 既定 [0.3, -0.2, 0, 0.2, 0, 0.2] [m]: 前進量
     action_rotation_deg: [0.0, 0.0, -30.0, -30.0, 30.0, 30.0]  # 既定 [0, 0, -20, -20, 20, 20] [deg]: 回転量
+    # action_costs_s: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]  # 既定 各1.0 [s]: 1手のコスト。指定時はaction_namesと同じ長さ
     localizer: "external"        # 既定 external: 外部の自己位置推定を使用
 
     # 内蔵推定器用。externalでは不要。
@@ -75,6 +77,7 @@ vi_planner:
     # standalone: false          # 既定 false: 単発移動・巡回サーバを提供
     # publish_tf: false          # 既定 false: map→odomを配信
     # pose_topic: "mcl_pose"      # 既定 mcl_pose: 外部姿勢。内蔵推定では手動シード
+    # external_pose_max_age_sec: 0.0  # 既定 0.0 [s]: 外部姿勢の鮮度上限。0で無期限
     # scan_topic: "scan"          # 既定 scan: 入力スキャン
     # global_frame: "map"         # 既定 map: 経路の座標系
     # odom_topic: "odom"          # 既定 odom: map→odom算出用のオドメトリ
