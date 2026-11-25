@@ -28,11 +28,11 @@ MAPS = ROOT / "src/daifuku_maps/maps/tsukuba2026"
 
 
 @pytest.mark.parametrize("name,digest", [
-    ("tsukuba2026.pgm", "810275ff4bb06a225df93e52037f33c9a3d1e1bfd8a025e108e5adb5d4645809"),
-    ("tsukuba2026_modified.pgm", "d2b7ef7e2bfb2f49ab7cddefb044c3cc62bae5e1c14f3a80a66f2d080cb81e9d"),
+    ("tsukuba2026.pgm", "ec4b21ec16ccf6cd7474f73f77ef7962b6e7a2b36183b06b8b2f69dd359b01d6"),
+    ("tsukuba2026_modified.pgm", "5ec373a9fd52375f82fa503950546b4f2a1b7c2590a48bb5c7c71cbe6dc62e8f"),
 ])
 def test_provided_map_pixels_are_preserved(name: str, digest: str) -> None:
-    # Given: fingerprints of the original and edited maps reduced to 0.1m cells.
+    # Given: fingerprints of the original and edited maps reduced to 0.2m cells.
     # When: the shipped asset is read.
     actual = hashlib.sha256((MAPS / name).read_bytes()).hexdigest()
     # Then: importing or renaming assets cannot silently change their pixels.
@@ -55,7 +55,7 @@ def test_navigation_and_localization_keep_the_provided_world_frame() -> None:
     assert navigation["image"] == "tsukuba2026_modified.pgm"
     assert localization["image"] == "tsukuba2026.pgm"
     assert navigation | {"image": localization["image"]} == localization
-    assert localization["resolution"] == 0.1
+    assert localization["resolution"] == 0.2
     assert localization["origin"] == [-239.888, -81.802, 0.0]
     assert localization["negate"] == 0
     assert localization["occupied_thresh"] == 0.65

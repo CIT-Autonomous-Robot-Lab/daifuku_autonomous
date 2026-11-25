@@ -25,7 +25,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
 MAPS = ROOT / "src/daifuku_maps/maps/tsukuba2026"
-WAYPOINTS = ROOT / "src/daifuku_maps/waypoints/waypoints_tsukuba2026.yaml"
+WAYPOINTS = ROOT / "src/daifuku_maps/waypoints/waypoints_tsukuba2026_v1.1.yaml"
 
 
 def test_supplied_waypoints_are_preserved() -> None:
@@ -33,7 +33,7 @@ def test_supplied_waypoints_are_preserved() -> None:
     # When: the installed route source is read.
     actual = hashlib.sha256(WAYPOINTS.read_bytes()).hexdigest()
     # Then: positions, stop flags, and orientations remain the supplied values.
-    assert actual == "53e671c91bba362d2796fa1fe4fe8c4754e672dd539a9ab1709516b536903187"
+    assert actual == "fe81d92ba3d89804e6f666c08a0ed7c362a7e9bf8218306632b3250ec4aa052e"
 
 
 def test_waypoint_poses_are_in_free_cells_of_the_selected_map(monkeypatch) -> None:

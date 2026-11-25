@@ -1,7 +1,8 @@
 # tsukuba2026
 
-`C:\Users\nop\Downloads\ナビゲーション用ファイル`で提供された地図を使う。
-元画像・編集画像を2×2セルの最小画素値で縮小し、障害物を残す。実寸と原点は保つ。
+2026-11-22に提供された0.05 mの地図（`20261122.zip`）を使う。
+元画像・編集画像を4×4セルの最小画素値で0.2 mへ縮小し、障害物を残す。実寸と原点は保つ。
+幅14466画素は4で割り切れないため、右端は白（255）で補ってから縮小した。
 XCFは編集用なので配置しない。
 PGMの2枚はGit LFSで管理する。取得時はGit LFSを導入して`git lfs pull`を実行する。
 
@@ -10,11 +11,12 @@ PGMの2枚はGit LFSで管理する。取得時はGit LFSを導入して`git lfs
 | 計画用 `/map` | `tsukuba2026_modified.yaml` / `tsukuba2026_modified.pgm` |
 | 2D自己位置推定用 `/map_loc` | `tsukuba2026.yaml` / `tsukuba2026.pgm` |
 | EMCL3D自己位置推定用 | `tsukuba2026.pcd` |
-| 順路 | `../../waypoints/waypoints_tsukuba2026.yaml` |
+| 順路 | `../../waypoints/waypoints_tsukuba2026_v1.1.yaml`（旧版は`_v1.0`） |
 
-PGMは7233 × 4302セル、解像度0.1 m、原点は`[-239.888, -81.802, 0.0]`。
-VIでは`map_scale: 2`でtsudanumaと同じ内部解像度0.20 mを使う。
-順路は提供された`waypoints.yaml`の24点をそのまま配置する。
+PGMは3617 × 2151セル、解像度0.2 m、原点は`[-239.888, -81.802, 0.0]`。
+VIは`map_scale: 1`で0.2 mをそのまま使う（tsudanumaの内部解像度と同じ）。
+順路は2版ある。v1.0は以前に提供された24点、v1.1は`20261122.zip`の`waypoints.yaml`の
+15点（うち停止点12点）で、どちらも提供されたまま配置する。
 以前のGLIM地図・市役所参照経路とは座標が異なるため共用しない。
 
 PCDは`C:\Users\nop\Downloads\tsukuba2026.pcd`から取得し、このディレクトリへ
@@ -30,4 +32,4 @@ ros2 launch daifuku_bringup navigation.tsukuba2026.launch.py
 
 自己位置推定の既定はEMCL3D。元の2D地図でEMCL2を使う場合は
 `localization:=emcl2`を指定する。
-順路ファイルは`daifuku_maps`の`waypoints/waypoints_tsukuba2026.yaml`を明示して読み込む。
+順路ファイルは`daifuku_maps`の`waypoints/waypoints_tsukuba2026_v1.1.yaml`を明示して読み込む。
