@@ -21,14 +21,14 @@ robot_bringup.launch.py が joy:=true (既定) のとき joy_node と一緒に�
 必要があるためで、あちらは押している間だけ速度を出す (デッドマン) しかできない。
 
   * STARTを長押し          … teleop の入/切をトグルする (ピロリ↑ / ピロリ↓)
-  * BACKを長押しして離す    … モータ電源の入/切をトグルする (ピロリピロリ↑ / ↓)
+  * BACKを長押し           … モータ電源の入/切をトグルする (ピロリピロリ↑ / ↓)
   * RB を押している間      … ブースト (上限が linear_max_speed から boost へ上がる)
 
 左スティックで前後・旋回を操作し、右スティックの左右が不感帯を超えたときは
 旋回だけ右を優先する。後退入力中は旋回の向きを反転する。
 
-長押しの時間はどれも hold_seconds (既定 2 秒)。BACK 単独だけ**離した時点**で決まる
-のは joy_buttons.HoldLatch の docstring のとおり。START と BACK を同時に押したときは
+長押しの時間はどれも hold_seconds (既定 2 秒) で、押し続けてその時間が経った時点で
+決まる (joy_buttons.HoldLatch)。START と BACK を同時に押したときは
 どちらも起きない。ウェイポイント巡回はこのノードでは始めず、RViz の
 daifuku_waypoint_manager パネルから始める。
 
@@ -284,7 +284,7 @@ class JoyTeleop(Node):
         self.create_timer(period, self._tick)
         self._publish_state()
         self.get_logger().info(
-            'joy teleop %s; hold %.1fs: START toggles teleop, BACK (on release) toggles '
+            'joy teleop %s; hold %.1fs: START toggles teleop, BACK toggles '
             'motor power'
             % ('on' if self._enabled else 'off', self._latch.hold_seconds)
         )

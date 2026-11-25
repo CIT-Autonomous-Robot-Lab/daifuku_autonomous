@@ -37,9 +37,9 @@ joy_teleop:
     angular_decel: 12.0     # 既定 同左 [rad/s^2]: 1.0 -> 0 に 0.083 秒。publish_rate 20 Hz では 2 刻みで降りるので、**これ以上上げても刻みが粗くなるだけ** (段差に近づく)
 
     button_toggle: 7        # 既定 7: START。hold_seconds 長押しで teleop の入/切
-    button_motor: 6         # 既定 6: BACK。単体で長押しして離すとモータ電源の入/切 (START と同時なら何もしない)
+    button_motor: 6         # 既定 6: BACK。単体で長押しするとモータ電源の入/切 (START と同時なら何もしない)
     button_boost: 5         # 既定 5: RB。押しているあいだだけ上限が boost 側になる
-    hold_seconds: 2.0       # 既定 同左 [s]: 長押しと判定するまでの時間。BACK 単体だけはこれを超えて「離した」時点で成立する
+    hold_seconds: 2.0       # 既定 同左 [s]: 長押しと判定するまでの時間。START も BACK も押し続けてこの時間が経った時点で成立する
 
     publish_rate: 20.0      # 既定 同左 [Hz]: /cmd_vel_teleop を出す周期。twist_mux の timeout 0.5 s より十分速く
     joy_timeout: 0.5        # 既定 同左 [s]: /joy がこれだけ途切れたら受信断とみなしてゼロを出す

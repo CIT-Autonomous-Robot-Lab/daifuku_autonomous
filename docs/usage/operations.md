@@ -116,7 +116,7 @@ TELEOP_LINEAR_SPEED=0.1 bash tools/control.sh teleop keyboard
 `motor off`は停止指令を送ってから電源を切ります。停止指令の送信に失敗した場合も、
 警告を出したうえで電源を切ります。作業を終えるときは`motor off`を実行してください。
 
-同じことは**ゲームパッドのBACKを2秒長押しして離す**操作でもできます
+同じことは**ゲームパッドのBACKを2秒長押しする**操作でもできます
 （[ゲームパッドで操作する](joystick.md#backでモータ電源を切る)）。端末に戻れない場所で
 止めたいときはそちら。標準の自前実装（`driver:=original`）は電源の実状態を
 `/motor_power_state`へ出すので、`control.sh`と混ぜても`joy_teleop`が追随します。
