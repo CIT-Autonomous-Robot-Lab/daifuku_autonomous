@@ -46,8 +46,8 @@ Raspberry Pi Cat を ROS 2 Humble と standalone VI で自律移動させるワ�
   一本化します。Pi の再起動では `workspace-build` が走らず、コンパイル済みコードは更新されません。
 - 新規・移動したファイルは symlink の作成にビルドが必要です。移動・改名後は古い
   `install/` の symlink が残り、パッケージ移動では `build/<pkg>/CMakeCache.txt` にも
-  旧パスが残ります。Docker のビルド入口は共通の `workspace-layout.sh` で
-  構成変更時だけ生成物を自動整理します。手動 colcon ビルドでは自分で整理してください。
+  旧パスが残ります。ビルド入口は生成物を自動では整理しません。構成を変えたときは
+  `build/` と `install/` を手で消してから建て直します（[日常操作](docs/usage/operations.md#設定変更を反映する)）。
 - 自前 Python ノードは CMake が実行可能なラッパーを生成します。Windows の
   ソース実行ビットに依存させません。ラッパーは share の実装を実行するので、
   `--symlink-install` では Python の編集も再ビルドなしで反映されます。

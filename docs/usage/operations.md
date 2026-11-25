@@ -176,16 +176,22 @@ Livox はタグ、その他はコミットハッシュで固定しています�
 新しく足したときは`docker compose up`が要ります。`install/`のsymlinkはビルド時に
 張られるためです。
 
-`workspace-build` と開発用の `build-autonomous` は、パッケージの追加・削除・移動、
-ファイルの追加・削除・改名、`CMakeLists.txt` などのビルド定義の変更を検出します。
-変更時だけ `build/` と `install/` の生成物を自動整理して建て直します。
-既存ファイルの値やコードだけの編集は差分ビルドのままです。
-Cargo の取得キャッシュ（`build/.cargo`）とログは残します。ビルドが失敗した場合は、
-次の実行でも未完了の構成変更として扱います。
+`workspace-build` と開発用の `build-autonomous` は差分ビルドだけをします。
+古い生成物は自動では消しません。次の変更をしたときは、`build/` と `install/` を
+手で消してから建て直します。
 
-この仕組みを初めて入れるときは、スクリプトがイメージ内にあるため
-`docker compose down` → `docker compose build` → `docker compose up -d` が必要です。
-構成の記録が無い既存の `build/` と `install/` は初回だけ成果物を整理します。
+- パッケージの追加・削除・移動・改名
+- ファイルの削除・移動・改名（古い `install/` の symlink が残るため）
+- `CMakeLists.txt` などのビルド定義、ROS 環境（`shell.nix` やイメージ）の変更
+
+```bash
+docker compose down
+rm -rf build install
+docker compose up -d
+```
+
+`build/.cargo` は Rust の取得キャッシュです。上のように丸ごと消すと、次のビルドで
+クレートを取り直します。既存ファイルの値やコードだけの編集なら、消す必要はありません。
 
 名前付きボリュームは使用しません。生成物はホストのリポジトリ直下の
 `build/`・`install/`・`log/` に保存されます。旧ボリュームは参照しなくなりますが、

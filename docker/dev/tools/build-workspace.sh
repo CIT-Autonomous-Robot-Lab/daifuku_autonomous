@@ -64,13 +64,10 @@ done < <(find src/livox_ros_driver2/launch_ROS2 -maxdepth 1 -type f -print0)
 # ビルド依存はshell.nixで固定する。変更時はイメージを作り直す。
 
 # CMake/Python/Rust を同じビルドに載せ、colcon に依存順を任せる。
-pkg_list="$(colcon list --base-paths src)"
-awk '$1 == "vi_planner" && $3 ~ /cargo/ {found=1} END {exit !found}' <<<"${pkg_list}" || {
+colcon list --base-paths src | awk '$1 == "vi_planner" && $3 ~ /cargo/ {found=1} END {exit !found}' || {
   printf 'vi_planner is missing from colcon list\n' >&2
   exit 1
 }
-bash /usr/local/lib/daifuku/workspace-layout.sh prepare <<<"${pkg_list}"
-
 colcon build \
   --base-paths src \
   --symlink-install \
@@ -80,7 +77,5 @@ colcon build \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DROS_EDITION=ROS2 \
     -DDISTRO_ROS=humble
-
-bash /usr/local/lib/daifuku/workspace-layout.sh commit
 
 printf '\nBuild complete. Refresh this shell with:\n  source %s/install/local_setup.bash\n' "${WS}"
