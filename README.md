@@ -81,8 +81,10 @@ TF を使います。TF の最新共通時刻と地図補正の更新を確認�
 ### ゴールから駆動まで
 
 ```text
-[RViz / Waypoint Manager]
-    -- action: /navigate_to_pose or /follow_waypoints --> [vi_planner]
+[RViz / Waypoint Manager] -- /waypoint/{route,stops,start,resume} --> [waypoint_runner]
+[joy_teleop] -- /waypoint/resume (B) -----------------------------------^
+[RViz / Nav2 Goal]  -- action: /navigate_to_pose --+
+[waypoint_runner]   -- action: /follow_waypoints --+--> [vi_planner]
          -- /cmd_vel_nav --> [velocity_smoother] -- /cmd_vel ----------+
                                                                        v
 [joy_node] -- /joy --> [joy_teleop] -- /cmd_vel_teleop ------------> [twist_mux]
@@ -96,6 +98,8 @@ TF を使います。TF の最新共通時刻と地図補正の更新を確認�
                                                                     Motors
 ```
 
+巡回は機体側の `waypoint_runner` が停止点で区切って `/follow_waypoints` へ送ります。
+RViz の PC を外していても、停止点からの再開は B ボタンで届きます。
 `twist_mux` は自律走行と手動操作の速度指令をまとめます。手動側が指令を出している間は
 そちらが優先です。公式ドライバを選んだ場合、図の `raspicat_driver` は `raspimouse` に置き換わります。
 
