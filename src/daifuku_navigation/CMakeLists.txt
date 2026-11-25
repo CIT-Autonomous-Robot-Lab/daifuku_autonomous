@@ -22,6 +22,8 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
   find_package(ament_cmake_pytest REQUIRED)
   ament_add_pytest_test(navigation_launch test/test_navigation_launch.py)
+  ament_add_pytest_test(tf_pose test/test_tf_pose.py
+    ENV ROS_DOMAIN_ID=77 ROS_LOCALHOST_ONLY=1)
   ament_add_pytest_test(waypoint_runner test/test_waypoint_runner.py
     ENV ROS_DOMAIN_ID=77 ROS_LOCALHOST_ONLY=1)
 endif()

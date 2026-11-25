@@ -10,7 +10,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Adapt the latest common map-to-base TF to the Rust planner's pose input."""
+"""Compose the latest map correction with the latest odometry for the Rust planner."""
 
 from geometry_msgs.msg import PoseWithCovarianceStamped
 import rclpy
@@ -34,6 +34,10 @@ class TfPose(Node):
     def _publish_pose(self) -> None:
         try:
             map_to_odom = self._buffer.lookup_transform('map', 'odom', Time())
+            # Each half at its own latest time. emcl3d stamps map→odom with the cloud
+            # time (~0.2 s ago); the latest common time would drop the odometry since.
+            transform = self._buffer.lookup_transform_full(
+                'map', Time(), 'base_footprint', Time(), 'odom')
         except TransformException:
             return
 
@@ -41,17 +45,12 @@ class TfPose(Node):
         if self._map_update is None or map_stamp != self._map_update[0]:
             self._map_update = (map_stamp, self.get_clock().now())
         _, map_seen = self._map_update
-        try:
-            transform = self._buffer.lookup_transform('map', 'base_footprint', Time())
-        except TransformException:
-            return
 
         msg = PoseWithCovarianceStamped()
-        # AMCL can postdate map→odom. Advancing odom must not renew an old map correction.
         msg.header = transform.header
-        common_stamp = Time.from_msg(transform.header.stamp)
-        if map_seen.nanoseconds < common_stamp.nanoseconds:
-            msg.header.stamp = map_seen.to_msg()
+        # Freshness is the map correction's, never the odometry's. AMCL postdates
+        # map→odom, so cap it at when the correction arrived.
+        msg.header.stamp = min(map_stamp, map_seen, key=lambda t: t.nanoseconds).to_msg()
         translation = transform.transform.translation
         msg.pose.pose.position.x = translation.x
         msg.pose.pose.position.y = translation.y
