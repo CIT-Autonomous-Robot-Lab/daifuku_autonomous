@@ -129,8 +129,8 @@ private:
   rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr clicked_point_subscription_;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr clicked_pose_subscription_;
   rclcpp_action::Client<FollowWaypoints>::SharedPtr action_client_;
-  // 取り消しは action クライアントではなくキャンセルサービスへ直接出す
-  // (joy_teleop._cancel_goals と同じ)。理由は 2 つ: 空の goal_info が
+  // 取り消しは action クライアントではなくキャンセルサービスへ直接出す。
+  // 理由は 2 つ: 空の goal_info が
   // 「そのサーバの全ゴール」を意味するのでパネルが送っていないゴールも止められる
   // ことと、FollowWaypoints 以外のサーバへも投げられること。
   std::vector<rclcpp::Client<CancelGoalSrv>::SharedPtr> cancel_clients_;

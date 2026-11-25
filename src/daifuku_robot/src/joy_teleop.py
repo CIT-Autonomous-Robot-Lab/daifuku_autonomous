@@ -32,8 +32,8 @@ robot_bringup.launch.py が joy:=true (既定) のとき joy_node と一緒に�
 のは joy_buttons.HoldLatch の docstring のとおり。
 
 出す先は **/cmd_vel_teleop** (twist_mux の優先度 100 側)。自律側の /cmd_vel は
-優先度 10 なので、手動指令が優先される。開始時のゴール取り消しは、
-手動終了後に自律走行が再開するのを防ぐために行う
+優先度 10 なので、手動指令が優先される。走行中のゴールは取り消さないので、
+teleop を切ると自律走行がそのまま再開する
 (下の「teleop 中は『出しっぱなし』にしてある」)。
 
 ## 指令は刻んで出す (加減速)
@@ -47,8 +47,8 @@ robot_bringup.launch.py が joy:=true (既定) のとき joy_node と一緒に�
 脱調」だったが、モータはギアエンコーダ付き DC だった。値も症状も未実測。**
 
 刻むのは**このノードが出す区間だけ**である。teleop に入った時点で自律側が
-走らせていても相手の速度は分からないので、そこは段差のまま (ゴールを取り消して
-自律側を黙らせ、ゼロから出し直す)。自律側の加減速は velocity_smoother の担当。
+走らせていても相手の速度は分からないので、そこは段差のまま (優先度で自律側を
+上書きし、ゼロから出し直す)。自律側の加減速は velocity_smoother の担当。
 
 ## モータ電源は「切る」ほうが本命
 
@@ -101,14 +101,13 @@ activate で戻さないので、lifecycle を回すと次にボタンを押す�
 
 ## teleop 中は「出しっぱなし」にしてある
 
-**自律側を黙らせているのはゴールの取り消しであって、優先度ではない** (/cmd_vel の
-ほうが上)。だから teleop に入るときに /follow_waypoints と /navigate_to_pose を
-取り消す。取り消しても自律側は最後の指令から timeout (0.5 s) のあいだ勝ち続けるので、
-入った直後は**パッドが効かない間がある**。そのあいだ機体は止まっている —
-vi_planner は取り消しで 0 速度を 1 通出し (main.rs の stop_cmd)、それは優先度の
-高い側の指令としてそのままドライバへ届く。
+**自律側を黙らせているのは twist_mux の優先度である** (/cmd_vel_teleop の 100 が
+/cmd_vel の 10 より上)。teleop に入っても /follow_waypoints と /navigate_to_pose の
+ゴールは**取り消さない**。取り消すと、teleop を切ったあとに自律走行が再開せず、
+入れ直すしかなくなるため。走行を止めたいときは操作パネルの「中断」か
+ウェイポイントパネルの Cancel を使い、確実に止めるならモータ電源を切る。
 
-そのうえで teleop 入のあいだはスティックが中立でもゼロ速度を publish し続ける。
+teleop 入のあいだはスティックが中立でもゼロ速度を publish し続ける。
 twist_mux は勝っているトピックがメッセージを受けたときしか中継しないので、黙ると
 本体ドライバに何も届かず、ドライバは最後の指令を cmd_vel_timeout (既定 60 s) まで
 保持するからである。
@@ -139,7 +138,6 @@ import sys
 import time
 
 from action_msgs.msg import GoalStatus
-from action_msgs.srv import CancelGoal
 from geometry_msgs.msg import PoseStamped, Twist
 from nav2_msgs.action import FollowWaypoints
 from nav_msgs.msg import Path
@@ -235,7 +233,6 @@ class JoyTeleop(Node):
         self.declare_parameter('publish_rate', 20.0)
         self.declare_parameter('joy_timeout', 0.5)
         self.declare_parameter('stop_tail', 1.0)
-        self.declare_parameter('cancel_window', 2.0)
         self.declare_parameter('start_enabled', False)
         self.declare_parameter('buzzer', True)
         self.declare_parameter('leds', True)
@@ -243,7 +240,6 @@ class JoyTeleop(Node):
         self.declare_parameter('motor_power_start_state', False)
         self.declare_parameter('waypoints_file', '')
         self.declare_parameter('follow_waypoints_action', 'follow_waypoints')
-        self.declare_parameter('navigate_to_pose_action', 'navigate_to_pose')
 
         def value(name):
             return self.get_parameter(name).value
@@ -267,7 +263,6 @@ class JoyTeleop(Node):
         self._button_boost = int(value('button_boost'))
         self._joy_timeout = float(value('joy_timeout'))
         self._stop_tail = float(value('stop_tail'))
-        self._cancel_window = float(value('cancel_window'))
 
         # 既定値は持たせない。順路は地図と対でしか意味を持たないので、既定の 1 つを
         # 忍ばせると別の地図で立てたときに黙って噛み合わないものを走らせてしまう
@@ -282,8 +277,6 @@ class JoyTeleop(Node):
         self._joy_at = None
         self._tick_at = None
         self._stop_until = 0.0
-        self._cancel_until = 0.0
-        self._cancel_at = 0.0
         self._state_at = 0.0
         self._leds = None
         self._leds_at = 0.0
@@ -337,13 +330,6 @@ class JoyTeleop(Node):
         self._follow_action = value('follow_waypoints_action')
         follow_action = self._follow_action
         self._follow_client = ActionClient(self, FollowWaypoints, follow_action)
-        # 取り消しはアクションクライアント経由ではなくキャンセルサービスへ直接出す。
-        # 空の goal_info は「そのサーバの全ゴール」を意味するので、自分が投げた
-        # ゴールだけでなく RViz のパネルや Nav2 Goal から走り出したものも止まる。
-        self._cancel_clients = [
-            self.create_client(CancelGoal, '%s/_action/cancel_goal' % name)
-            for name in (follow_action, value('navigate_to_pose_action'))
-        ]
 
         # 起動時に一度読んでおく。走らせようとした瞬間に「書式が違う」と分かるより、
         # 立ち上げのログで分かるほうがよい (読むのは押されたときに読み直す)。
@@ -418,14 +404,6 @@ class JoyTeleop(Node):
                 self._warned_stale = True
                 self.get_logger().warning('no joy for %.1f s; slowing to a stop'
                                           % self._joy_timeout)
-
-        # 取り消しは 1 回では足りない。waypoint_follower は stop_on_failure: false
-        # なので、navigate_to_pose 側が先に取り消されると「1 点失敗した」と見なして
-        # **次の点へ新しいゴールを出す**。こちらの取り消しはもう飛んだあとなので、
-        # それは残る。そこでしばらく出し続ける (取り消しは何度出しても副作用が無い)。
-        if now < self._cancel_until and now >= self._cancel_at:
-            self._cancel_at = now + 0.25
-            self._cancel_goals()
 
         # 状態は変化時だけでなく定期的にも出す。TRANSIENT_LOCAL は購読側も
         # transient_local で繋がないと過去の 1 件が届かず、素の
@@ -512,11 +490,8 @@ class JoyTeleop(Node):
         self._enabled = enabled
         now = time.monotonic()
         if enabled:
-            # 手動側が優先されるが、ゴールが残ると手動終了後に自律走行が再開する。
-            # 再開を防ぐため、走行中のゴールを取り消す。
-            # 実際に取り消すのは _tick で、cancel_window のあいだ繰り返す。
-            self._cancel_until = now + self._cancel_window
-            self._cancel_at = 0.0
+            # 走行中のゴールは取り消さない。手動指令が優先度で勝ち、teleop を
+            # 切れば自律走行がそのまま再開する。
             # 刻みの起点をゼロへ戻す。ここで出すゼロと揃えておかないと、次の
             # _tick が「前は出ていた」ことにして減速で降りてくる。
             # **自律側が走らせている最中に入ってもここは段差になる** (こちらは
@@ -525,7 +500,6 @@ class JoyTeleop(Node):
             self._angular_ramp.reset()
             self._cmd_pub.publish(Twist())
         else:
-            self._cancel_until = 0.0
             self._stop_until = now + self._stop_tail
         self._publish_state()
         self.get_logger().info('teleop %s' % ('on' if enabled else 'off'))
@@ -652,14 +626,6 @@ class JoyTeleop(Node):
             message.data = frequency
             self._buzzer_pub.publish(message)
 
-    def _cancel_goals(self):
-        for client in self._cancel_clients:
-            if not client.service_is_ready():
-                continue
-            # 空の goal_info = そのサーバの全ゴール。
-            client.call_async(CancelGoal.Request())
-        self._patrol.finished()
-
     # ── ウェイポイント巡回 ──────────────────────────────────────────────
 
     def _start_waypoints(self):
@@ -673,16 +639,8 @@ class JoyTeleop(Node):
 
         if self._patrol.running():
             self._refuse(
-                'waypoints already running; hold START to take over first',
+                'waypoints already running; cancel it from the panel first',
                 warning=True,
-            )
-            return
-
-        # 取り消しを出しているあいだに投げると、あとから届いた取り消しが今から
-        # 出すゴールを巻き込む。hold_seconds > cancel_window なら普通は来ない。
-        if time.monotonic() < self._cancel_until:
-            self._refuse(
-                'still cancelling the previous goal; try again', warning=True
             )
             return
 
@@ -754,9 +712,7 @@ class JoyTeleop(Node):
         # 走り切った音は 1 点も外さなかったときだけ。waypoint_follower は
         # stop_on_failure: false なので、**全点が地図の外でも SUCCEEDED で返る**
         # (地図と経路を取り違えたときがこれ)。取り消しのときは鳴らさない。取り消す
-        # のは teleop へ移ったときで、その音を出した直後にここへ来るため、鳴らすと
-        # 切り替えの音を潰してしまう (nav2_util の SimpleActionServer は
-        # is_canceling() を見て canceled() を返すので、ここは必ず CANCELED になる)。
+        # のはパネルの中断・Cancel で、人が自分で止めたと分かっているため。
         if result.status == GoalStatus.STATUS_SUCCEEDED and not missed:
             self._play(TUNE_FINISHED)
         elif result.status != GoalStatus.STATUS_CANCELED:

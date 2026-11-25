@@ -62,8 +62,7 @@ constexpr int kLeadIntervalMs = 500;
 // これ未満しか機体が動いていなければマーカを出し直さない。
 constexpr double kLeadMoveThreshold = 0.05;
 // 取り消しを投げ直す間隔と回数 (250ms × 8 = 2 秒)。1 発で済ませると、無線で
-// その 1 発が落ちたときに**エラーも出ないまま何も止まらない**。joy_teleop の
-// cancel_window と同じ考え方で、届くまで繰り返す。
+// その 1 発が落ちたときに**エラーも出ないまま何も止まらない**。届くまで繰り返す。
 constexpr int kCancelBurstIntervalMs = 250;
 constexpr int kCancelBursts = 8;
 using Marker = visualization_msgs::msg::Marker;
@@ -812,7 +811,7 @@ void WaypointManagerPanel::sendSegment()
     return;
   }
   // 取り消しを投げているあいだは受け付けない。いま出しているゴールを、まだ
-  // 飛んでいる取り消しが巻き込む (joy_teleop._start_waypoints と同じ理由)。
+  // 飛んでいる取り消しが巻き込む。
   if (cancel_bursts_ > 0) {
     setStatus("Error: still cancelling - try again in a moment");
     return;
