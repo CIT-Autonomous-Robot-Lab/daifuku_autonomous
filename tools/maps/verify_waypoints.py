@@ -21,7 +21,7 @@
 # 2. Run: uv run tools/maps/verify_waypoints.py
 # 3. Or: chmod +x tools/maps/verify_waypoints.py && ./tools/maps/verify_waypoints.py
 # ------------------
-"""ウェイポイント YAML の書式を、実機 (joy_teleop) と同じパーサで検算する。
+"""ウェイポイント YAML の書式を、パネルと同じ規則のパーサ (waypoint_yaml.py) で検算する。
 
 パネル (waypoint_manager_panel.cpp の readYamlFile) と同じ契約:
 
@@ -29,8 +29,7 @@
   * position.z は省略可 (0.0)
   * 有限でない値と長さ 0 のクォータニオンは弾く
 
-片方だけが通す形にすると、手で書いた順路が「実機では走るのにパネルでは開けない」
-(あるいはその逆) になる。同梱の順路は全部通ること、壊した入力は落ちることが要点。
+同梱の順路は全部通ること、壊した入力は落ちることが要点。
 
     uv run tools/maps/verify_waypoints.py
 
@@ -45,9 +44,9 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from src.daifuku_robot.src.joy_waypoints import load_waypoint_document  # noqa: E402
+from waypoint_yaml import load_waypoint_document  # noqa: E402
 
 WAYPOINTS_DIR = ROOT / "src" / "daifuku_maps" / "waypoints"
 

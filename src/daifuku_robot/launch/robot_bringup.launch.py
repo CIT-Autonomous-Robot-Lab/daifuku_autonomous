@@ -144,7 +144,7 @@ def _joy_teleop(context):
     """ゲームパッドのドライバと、その入力をモードに変えるノードを組み立てる.
 
     joy_node は /joy を出すだけ。速度の写像と、START 長押しでの teleop 切り替え・
-    START+BACK でのウェイポイント巡回開始は src/joy_teleop.py が持つ。上流の
+    BACK 長押しでのモータ電源の入/切は src/joy_teleop.py が持つ。上流の
     teleop_twist_joy を使っていないのはそのため (あちらは押している間だけ速度を
     出すデッドマンしかできない)。
 
@@ -361,8 +361,7 @@ def generate_launch_description():
             description='ゲームパッド (XInput 互換) での手動走行を立てるか。true なら '
                         'joy_node と joy_teleop が上がり、START 2 秒長押しで '
                         '/cmd_vel_teleop への出力を入/切、BACK 単体の 2 秒長押しで '
-                        'モータ電源の入/切、START+BACK 同時 2 秒で '
-                        '保存したウェイポイントの巡回を始める。挿していなくても '
+                        'モータ電源の入/切。挿していなくても '
                         '他のノードは動く (joy_teleop は /joy が来なければ何も '
                         'publish しない。joy_node は respawn 付き)。',
         ),

@@ -20,21 +20,20 @@ joy_teleop.py で唯一「実機に載せる前に確かめられる」部分だ
 ジョイスティックもブザーも要らないので、開発ホスト (Windows) で素の python から
 呼んで検算できる。
 
-長押しの判定を分けてあるのは、START 単独 (teleop 切り替え)・BACK 単独 (モータ電源)・
-START+BACK 同時 (ウェイポイント走行開始) の 3 つが**必ず重なる**ため。素直に
-ボタンごとのタイマーを置くと、同時押しの途中で単独側が先に発火してモードが裏返る。
+長押しの判定を分けてあるのは、START 単独 (teleop 切り替え) と BACK 単独 (モータ電源) が
+同時に押されうるため。素直にボタンごとのタイマーを置くと、両方を握ったときに
+どちらかが先に発火してモードが裏返る。同時押しは何も起こさない。
 """
 
 # HoldLatch.update() の戻り値。
 TOGGLE = 'toggle'
-COMBO = 'combo'
 MOTOR = 'motor'
 
 # モードを伝える旋律。(周波数 [Hz], 長さ [s]) の並びで、0 は無音。
 #
 # 何をどう区別しているか (下の数字の読み方):
-#   向き   … 上がりが「入った・走り切った」、下がりが「切れた」
-#   リズム … 短く 3 回が「始まった」、低く長く 2 回が「効かなかった」
+#   向き   … 上がりが「入った」、下がりが「切れた」
+#   リズム … 低く長く 2 回が「効かなかった」
 #   長さ   … モータ電源だけ同じ向きを 2 回繰り返す。teleop の入/切と向きが同じなのに
 #            意味の重さが違う (切るほうは非常停止として使う) ため
 #   無音   … 同じ周波数を続けて出しても切れ目が聞こえないので挟む
@@ -44,10 +43,6 @@ MOTOR = 'motor'
 # やすい帯がそこだけだったため (掃引の結果は ../../../docs/usage/joystick.md)。
 TUNE_TELEOP_ON = ((1397, 0.08), (1976, 0.14))            # ピロリ↑
 TUNE_TELEOP_OFF = ((1976, 0.08), (1397, 0.14))           # ピロリ↓
-TUNE_WAYPOINTS = (                                       # ピピピ (短く 3 回)
-    (2093, 0.07), (0, 0.06), (2093, 0.07), (0, 0.06), (2093, 0.16),
-)
-TUNE_FINISHED = ((1397, 0.10), (1760, 0.10), (2093, 0.22))   # ピロリロ↑
 TUNE_REFUSED = ((1175, 0.14), (0, 0.07), (1175, 0.26))       # ブッブー (低く長く 2 回)
 TUNE_MOTOR_ON = (                                        # ピロリピロリ↑
     (1397, 0.07), (1976, 0.09), (0, 0.05), (1397, 0.07), (1976, 0.13),
@@ -125,28 +120,21 @@ class TunePlayer:
 
 
 class HoldLatch:
-    """2 つのボタンの「単独長押し」と「同時長押し」を取り違えずに拾う.
+    """2 つのボタンの単独長押しを、同時押しと取り違えずに拾う.
 
-    毎周期 update() を呼ぶ。3 つの長押しを見分ける — 主単独 (TOGGLE)、副単独
-    (MOTOR)、同時 (COMBO)。
-
-    **主と同時は「hold_seconds 経った時点で押されている組」で決める。** 主単独の
-    つもりでも、そのとき副が入っていれば同時のほうが返る。
-
-    **副単独だけは「離した時点」で決める。** 経過した時点にすると、同時押しを
-    やりかけて主だけ先に離したとき、副を握ったままでは何も返せなくなる (同時の
-    やりかけとして毒が回っているため)。押しているのに永久に反応しない状態になる
-    ので、離す動作で必ず決着させる。副単独がモータ電源の入/切なのでなおさら。
+    毎周期 update() を呼ぶ。2 つの長押しを見分ける — 主単独 (TOGGLE) と副単独
+    (MOTOR)。どちらも「押し始めから hold_seconds 経った時点」で決まり、離すのを
+    待たない。両方を同時に押したときはどちらも返さない。
 
     3 つの規則で誤発火を防いでいる:
 
       * 一度返したら**両方を離すまで**二度と返さない。押しっぱなしにしても
-        hold_seconds ごとに再発火しない (副単独は離してから返すので関係ない)。
-      * 主を押しているあいだに副が一度でも入ったら、その主を離すまで主単独は
-        返さない。同時押しをやりかけて途中でやめたとき (副だけ先に離したとき) に
-        モードが裏返らないようにするため。
-      * 副を押しているあいだに主が一度でも入ったら、その副を離しても副単独は
-        返さない。同時押しは常にこちらより優先される。
+        hold_seconds ごとに再発火しない。
+      * 両方が一度でも同時に入ったら、それぞれのボタンは自分が離されるまで
+        単独長押しを返さない。片方だけ先に離したとき、握ったままのほうが
+        遅れて発火してモードが裏返らないようにするため。もう一度効かせるには
+        そのボタンを離して押し直す。
+      * 経過は各ボタンが自分で押され始めた時刻から数える。
     """
 
     def __init__(self, hold_seconds):
@@ -162,8 +150,7 @@ class HoldLatch:
 
         ジョイスティックの受信が途切れたら呼ぶ。最後に見えたボタンの状態を
         押しっぱなしとして数え続けると、電池切れや受信機の抜けが hold_seconds 後の
-        モード切り替えになって現れる。副単独も返さない (押下そのものを無かった
-        ことにするので、次に見えた「離す」は離す動作として数えない)。
+        モード切り替えになって現れる。
         """
         self._main_since = None
         self._sub_since = None
@@ -180,10 +167,8 @@ class HoldLatch:
             sub: 副ボタン (BACK) が押されているか。
 
         Returns:
-            TOGGLE / COMBO / MOTOR / None。
+            TOGGLE / MOTOR / None。
         """
-        released = None
-
         if main:
             if self._main_since is None:
                 self._main_since = now
@@ -194,47 +179,27 @@ class HoldLatch:
         if sub:
             if self._sub_since is None:
                 self._sub_since = now
-                self._sub_poisoned = False
-            if main:
-                self._main_poisoned = True
-                self._sub_poisoned = True
         else:
-            # 副を離した瞬間。長押しが成立していて同時押しの毒が回っていなければ、
-            # ここで副単独として決着させる。
-            if (
-                self._sub_since is not None
-                and not self._sub_poisoned
-                and now - self._sub_since >= self.hold_seconds
-            ):
-                released = MOTOR
             self._sub_since = None
             self._sub_poisoned = False
+
+        if main and sub:
+            self._main_poisoned = True
+            self._sub_poisoned = True
 
         if not main and not sub:
             self._latched = False
 
-        if released is not None:
-            # 主も同時に成立することはない。副を押していたあいだに主が入って
-            # いれば主のほうにも毒が回っている。
-            return released
-
-        if self._latched or not main:
+        if self._latched:
             return None
 
-        if sub:
-            # 同時押しの経過は「あとから押されたほう」から数える。
-            since = max(self._main_since, self._sub_since)
-            if now - since >= self.hold_seconds:
-                self._latched = True
-                return COMBO
-            return None
-
-        if self._main_poisoned:
-            return None
-
-        if now - self._main_since >= self.hold_seconds:
+        # 同時押しでは両方に毒が回っているので、ここで両方が成立することはない。
+        if main and not self._main_poisoned and now - self._main_since >= self.hold_seconds:
             self._latched = True
             return TOGGLE
+        if sub and not self._sub_poisoned and now - self._sub_since >= self.hold_seconds:
+            self._latched = True
+            return MOTOR
         return None
 
 

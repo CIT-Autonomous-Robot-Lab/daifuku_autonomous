@@ -344,8 +344,8 @@ RVizで次の順に操作します。
 3. 「Start」で巡回開始、「Cancel」で停止
 
 **「Cancel」はいつでも押せて、`/follow_waypoints`と`/navigate_to_pose`の
-ゴールを全部止めます。** パネルから始めていない巡回——ゲームパッドのSTART+BACK、
-RVizを立て直したあと、「Nav2 Goal」の単発ゴール——もこれで止まります。詳細は
+ゴールを全部止めます。** パネルが持っていないゴール——RVizを立て直したあと、
+「Nav2 Goal」の単発ゴール——もこれで止まります。詳細は
 [`src/daifuku_waypoint_manager/README.md`](../../src/daifuku_waypoint_manager/README.md)。
 
 `daifuku_maps/waypoints/`に津田沼の順路を版ごとに置いてあります

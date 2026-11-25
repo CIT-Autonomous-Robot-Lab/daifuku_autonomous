@@ -37,19 +37,16 @@ joy_teleop:
     angular_decel: 12.0     # 既定 同左 [rad/s^2]: 1.0 -> 0 に 0.083 秒。publish_rate 20 Hz では 2 刻みで降りるので、**これ以上上げても刻みが粗くなるだけ** (段差に近づく)
 
     button_toggle: 7        # 既定 7: START。hold_seconds 長押しで teleop の入/切
-    button_waypoints: 6     # 既定 6: BACK。単体で長押しして離すとモータ電源の入/切、START と同時ならウェイポイント巡回を開始
+    button_motor: 6         # 既定 6: BACK。単体で長押しするとモータ電源の入/切 (START と同時なら何もしない)
     button_boost: 5         # 既定 5: RB。押しているあいだだけ上限が boost 側になる
-    hold_seconds: 2.0       # 既定 同左 [s]: 長押しと判定するまでの時間。BACK 単体だけはこれを超えて「離した」時点で成立する
+    hold_seconds: 2.0       # 既定 同左 [s]: 長押しと判定するまでの時間。START も BACK も押し続けてこの時間が経った時点で成立する
 
     publish_rate: 20.0      # 既定 同左 [Hz]: /cmd_vel_teleop を出す周期。twist_mux の timeout 0.5 s より十分速く
     joy_timeout: 0.5        # 既定 同左 [s]: /joy がこれだけ途切れたら受信断とみなしてゼロを出す
     stop_tail: 1.0          # 既定 同左 [s]: teleop を切ったあとゼロを出し続ける時間。黙るだけだとドライバが最後の速度を保持する。linear_decel で降りきるまでは別途待つので、ここを縮めても途中で黙りはしない
     start_enabled: false    # 既定 false: 起動直後から teleop 入にするか。true にすると挿しただけで自律側を塞ぐ
     buzzer: true            # 既定 同左: モードが切り替わったとき /buzzer へ短い旋律を出すか。旋律は src/joy_buttons.py の TUNE_*
-    leds: true              # 既定 同左: いまのモードを /leds へ映すか。led0=teleop 入 / led1=モータ電源 (ドライバの /motor_power_state。出さない driver:=raspimouse でだけ要求の写し) / led2=巡回中 / led3=/joy 受信中
+    leds: true              # 既定 同左: いまのモードを /leds へ映すか。led0=teleop 入 / led1=モータ電源 (ドライバの /motor_power_state。出さない driver:=raspimouse でだけ要求の写し) / led3=/joy 受信中 (led2 は使わない)
 
-    waypoints_file: ""      # 既定 同左: 巡回する経路。**空なら START+BACK は断る** (既定の順路は無い)。**地図と対で選ぶこと** — 噛み合わないと全点が地図の外に出て、1 点ずつ失敗しながら最後まで進む
-
-    follow_waypoints_action: "follow_waypoints"  # 既定 同左: vi_planner が受ける巡回アクション名
     motor_power_service: "motor_power"           # 既定 同左: BACK 単体長押しで叩く本体ドライバのサービス (std_srvs/SetBool)
     motor_power_start_state: false               # 既定 同左: 起動時に電源が入っているとみなすか。**効くのは /motor_power_state が来ないあいだだけ** (自前実装は出すので 1 通目で上書きされる)。公式実装 (driver:=raspimouse) では最後までこちらで、initial_motor_power と合わせる

@@ -140,7 +140,7 @@ Raspberry Pi Cat を ROS 2 Humble と standalone VI で自律移動させるワ�
 ## VI・地図・表示
 
 - 複数点巡回は `/follow_waypoints` を使います。`navigate_through_poses` はありません。
-  ゲームパッド巡回には場所に合う `waypoints_file` が必須です。
+  巡回はウェイポイントパネルから始めます。ゲームパッドからは始めません。
 - `follow_controller` は `greedy` を使います。DWA/MPPI は行動の速度・角速度の組を
   外接矩形へ崩すため、意図した旋回半径を守れません。
 - 行動配列の長さを揃え、前進量・旋回量・smoother 上限を一緒に確認します。

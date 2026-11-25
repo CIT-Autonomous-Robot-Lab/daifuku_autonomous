@@ -116,7 +116,7 @@ TELEOP_LINEAR_SPEED=0.1 bash tools/control.sh teleop keyboard
 `motor off`は停止指令を送ってから電源を切ります。停止指令の送信に失敗した場合も、
 警告を出したうえで電源を切ります。作業を終えるときは`motor off`を実行してください。
 
-同じことは**ゲームパッドのBACKを2秒長押しして離す**操作でもできます
+同じことは**ゲームパッドのBACKを2秒長押しする**操作でもできます
 （[ゲームパッドで操作する](joystick.md#backでモータ電源を切る)）。端末に戻れない場所で
 止めたいときはそちら。標準の自前実装（`driver:=original`）は電源の実状態を
 `/motor_power_state`へ出すので、`control.sh`と混ぜても`joy_teleop`が追随します。
@@ -263,11 +263,6 @@ tools/site.sh tsudanuma          # 次の場所を選び、起動コマンドを
 `map:=` / `map_loc:=`を明示することもできますが、`overrides`の`site: map:`と別のファイルを
 指していると**起動時にエラーで止まります**（役ごとに見ます）。地図だけ差し替えて調整を置き忘れると、
 別の場所の帯と`emcl2`のリセット閾値を載せたまま走ることになるためです。
-
-**場所のlaunchに入っていない場所依存が1つあります。** `joy_teleop`の`waypoints_file`
-（パッド巡回の順路）です。既定は空で、空のあいだはSTART+BACKが巡回を断ります。絶対パスな
-ので場所ごとの`overrides`には書きにくく、いまは手で渡す扱いのままです
-（`src/daifuku_config/robot/robot/joy_teleop.yaml`）。
 
 ## ログを見る
 

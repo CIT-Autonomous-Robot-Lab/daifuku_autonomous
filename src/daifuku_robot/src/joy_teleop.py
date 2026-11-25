@@ -21,15 +21,16 @@ robot_bringup.launch.py が joy:=true (既定) のとき joy_node と一緒に�
 必要があるためで、あちらは押している間だけ速度を出す (デッドマン) しかできない。
 
   * STARTを長押し          … teleop の入/切をトグルする (ピロリ↑ / ピロリ↓)
-  * BACKを長押しして離す    … モータ電源の入/切をトグルする (ピロリピロリ↑ / ↓)
-  * START+BACKを同時に長押し … teleop を切り、保存したウェイポイントの巡回を始める (ピピピ)
+  * BACKを長押し           … モータ電源の入/切をトグルする (ピロリピロリ↑ / ↓)
   * RB を押している間      … ブースト (上限が linear_max_speed から boost へ上がる)
 
 左スティックで前後・旋回を操作し、右スティックの左右が不感帯を超えたときは
 旋回だけ右を優先する。後退入力中は旋回の向きを反転する。
 
-長押しの時間はどれも hold_seconds (既定 2 秒)。BACK 単独だけ**離した時点**で決まる
-のは joy_buttons.HoldLatch の docstring のとおり。
+長押しの時間はどれも hold_seconds (既定 2 秒) で、押し続けてその時間が経った時点で
+決まる (joy_buttons.HoldLatch)。START と BACK を同時に押したときは
+どちらも起きない。ウェイポイント巡回はこのノードでは始めず、RViz の
+daifuku_waypoint_manager パネルから始める。
 
 出す先は **/cmd_vel_teleop** (twist_mux の優先度 100 側)。自律側の /cmd_vel は
 優先度 10 なので、手動指令が優先される。走行中のゴールは取り消さないので、
@@ -69,8 +70,8 @@ initial_motor_power と合わせておくこと。`control.sh motor` や RViz �
 長押しは hold_seconds (既定 2 秒) 経つまで何も起きず、切り替わった先はスティックを倒すまで見分けが
 付かない。手元にノート PC が無ければログも見えないので、切り替わった時点で
 **/buzzer** (`std_msgs/Int16`、値は Hz・0 で停止) へ短い旋律を出す。旋律そのものは
-joy_buttons.py の TUNE_* にある。押しても効かなかったとき (巡回中にもう一度
-押した、navigation.launch.py が立っていない、YAML が読めない) にも鳴らすのは、
+joy_buttons.py の TUNE_* にある。押しても効かなかったとき (モータ電源の要求が
+返っていない、ドライバが立っていない) にも鳴らすのは、
 そこが**今まで完全に無音だった**ためで、「長押ししたのに何も起きない」が一番
 分かりにくい。
 
@@ -88,7 +89,7 @@ stop() で 0 を出しておく。
 音は**切り替わった瞬間しか**伝えない。2 秒前に鳴ったのを聞き逃せば、いま teleop が
 入っているのかは結局スティックを倒すまで分からない。そこで **/leds**
 (`raspimouse_msgs/Leds`、ドライバが購読する 4 灯) へ現在の状態を出す
-(led0=teleop 入、led1=モータ電源、led2=巡回中、led3=/joy 受信中)。音を消していない
+(led0=teleop 入、led1=モータ電源、led3=/joy 受信中。led2 は使わず消したまま)。音を消していない
 のは、機体を見ていない・見えない位置にいるときは音のほうが届くため。
 
 **変化時だけでなく 1 秒ごとにも出す。** ドライバは deactivate で LED を消すが
@@ -112,7 +113,7 @@ twist_mux は勝っているトピックがメッセージを受けたときし�
 本体ドライバに何も届かず、ドライバは最後の指令を cmd_vel_timeout (既定 60 s) まで
 保持するからである。
 
-teleop を切るとき (と巡回を始めるとき) は、減速で降りきってから、さらに
+teleop を切るときは、減速で降りきってから、さらに
 stop_tail 秒ゼロを出してから黙る。黙るだけだと本体ドライバは最後に受けた速度を
 保持し続けるためで、最後に届いた指令をゼロにしておく。自前実装
 (driver:=original) は cmd_vel_timeout の 60 秒で止まるが、公式実装 (既定の
@@ -137,19 +138,14 @@ import os
 import sys
 import time
 
-from action_msgs.msg import GoalStatus
-from geometry_msgs.msg import PoseStamped, Twist
-from nav2_msgs.action import FollowWaypoints
-from nav_msgs.msg import Path
+from geometry_msgs.msg import Twist
 from raspimouse_msgs.msg import Leds
 import rclpy
-from rclpy.action import ActionClient
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
 from sensor_msgs.msg import Joy
 from std_msgs.msg import Bool, Int16
 from std_srvs.srv import SetBool
-import yaml
 
 # joy_buttons.py は同じ lib/daifuku_robot に入る (CMakeLists.txt の install(PROGRAMS))。
 # share/ 側の src/ から直接叩かれることもあるので、両方で通るように自分の隣を見る。
@@ -160,51 +156,24 @@ if _HERE not in sys.path:
 from joy_buttons import (  # noqa: E402
     axis,
     axis_to_speed,
-    COMBO,
     HoldLatch,
     MOTOR,
     pressed,
     RateLimiter,
     TOGGLE,
-    TUNE_FINISHED,
     TUNE_MOTOR_OFF,
     TUNE_MOTOR_ON,
     TUNE_REFUSED,
     TUNE_TELEOP_OFF,
     TUNE_TELEOP_ON,
-    TUNE_WAYPOINTS,
     TunePlayer,
 )
 from joy_motor import MotorPower  # noqa: E402
-from joy_patrol import WaypointPatrol  # noqa: E402
-from joy_waypoints import load_waypoint_document  # noqa: E402
 
 # 旋律の音の変わり目を拾う周期 [s]。一番短い音 (60 ms) の 1/6 で、publish するのは
 # 変わり目だけなのでトピックには乗らない。_tick と分けてあるのは、あちらが
 # publish_rate (パラメータ) 次第で 50 ms 粒度になり、音長がそれに引きずられるため。
 TUNE_PERIOD = 0.01
-
-
-def load_waypoints(path):
-    """ウェイポイントの YAML を PoseStamped の並びに読む.
-
-    書式の決まりは joy_waypoints.load_waypoint_document (パネルの
-    readYamlFile と同じ契約)。ここは ROS の型へ載せ替えるだけ。
-    """
-    frame_id, entries = load_waypoint_document(path)
-    poses = []
-    for xyz, quat in entries:
-        pose = PoseStamped()
-        pose.header.frame_id = frame_id
-        pose.pose.position.x, pose.pose.position.y, pose.pose.position.z = xyz
-        (
-            pose.pose.orientation.x,
-            pose.pose.orientation.y,
-            pose.pose.orientation.z,
-            pose.pose.orientation.w,
-        ) = quat
-        poses.append(pose)
-    return frame_id, poses
 
 
 class JoyTeleop(Node):
@@ -227,7 +196,7 @@ class JoyTeleop(Node):
         self.declare_parameter('angular_accel', 6.0)
         self.declare_parameter('angular_decel', 12.0)
         self.declare_parameter('button_toggle', 7)
-        self.declare_parameter('button_waypoints', 6)
+        self.declare_parameter('button_motor', 6)
         self.declare_parameter('button_boost', 5)
         self.declare_parameter('hold_seconds', 2.0)
         self.declare_parameter('publish_rate', 20.0)
@@ -238,8 +207,6 @@ class JoyTeleop(Node):
         self.declare_parameter('leds', True)
         self.declare_parameter('motor_power_service', 'motor_power')
         self.declare_parameter('motor_power_start_state', False)
-        self.declare_parameter('waypoints_file', '')
-        self.declare_parameter('follow_waypoints_action', 'follow_waypoints')
 
         def value(name):
             return self.get_parameter(name).value
@@ -259,16 +226,10 @@ class JoyTeleop(Node):
         self._linear_ramp = RateLimiter(value('linear_accel'), value('linear_decel'))
         self._angular_ramp = RateLimiter(value('angular_accel'), value('angular_decel'))
         self._button_toggle = int(value('button_toggle'))
-        self._button_waypoints = int(value('button_waypoints'))
+        self._button_motor = int(value('button_motor'))
         self._button_boost = int(value('button_boost'))
         self._joy_timeout = float(value('joy_timeout'))
         self._stop_tail = float(value('stop_tail'))
-
-        # 既定値は持たせない。順路は地図と対でしか意味を持たないので、既定の 1 つを
-        # 忍ばせると別の地図で立てたときに黙って噛み合わないものを走らせてしまう
-        # (全点が地図の外に出ても plan が失敗するだけで、外からは recovery の
-        # spin が延々回っているようにしか見えない)。空なら START+BACK は断る。
-        self._waypoints_file = value('waypoints_file')
 
         self._latch = HoldLatch(float(value('hold_seconds')))
         self._enabled = bool(value('start_enabled'))
@@ -281,7 +242,6 @@ class JoyTeleop(Node):
         self._leds = None
         self._leds_at = 0.0
         self._warned_stale = False
-        self._patrol = WaypointPatrol()
         self._tune = TunePlayer()
         # ドライバが状態を出さない構成 (driver:=raspimouse) 用の写しは MotorPower
         # が持つ。自分が投げた要求だけを数えるので、外から変えられるとずれる。
@@ -291,16 +251,6 @@ class JoyTeleop(Node):
         # 状態は遅れて繋いだ購読者にも見せたい (「なぜ動かない」を追うため)。
         self._state_pub = self.create_publisher(
             Bool, '~/enabled',
-            QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL),
-        )
-        # 順路そのもの。vi_planner の先読み (waypoint_prefetch) が「いま向かって
-        # いる点の次はどこか」をこれで知る。RViz のパネル
-        # (daifuku_waypoint_manager) も同じトピックへ同じものを出すが、**実機の
-        # イメージにパネルは入っていない** ので、ここから始めた巡回では
-        # こちらが唯一の出どころになる。latch するのは vi_planner が後から
-        # 上がることがあるため。
-        self._path_pub = self.create_publisher(
-            Path, 'waypoints',
             QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL),
         )
         self.create_subscription(Joy, 'joy', self._on_joy, 10)
@@ -327,28 +277,6 @@ class JoyTeleop(Node):
             QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL),
         )
 
-        self._follow_action = value('follow_waypoints_action')
-        follow_action = self._follow_action
-        self._follow_client = ActionClient(self, FollowWaypoints, follow_action)
-
-        # 起動時に一度読んでおく。走らせようとした瞬間に「書式が違う」と分かるより、
-        # 立ち上げのログで分かるほうがよい (読むのは押されたときに読み直す)。
-        if not self._waypoints_file:
-            self.get_logger().warning(
-                'waypoints_file is not set; START+BACK will refuse to start a patrol'
-            )
-        else:
-            try:
-                frame_id, poses = load_waypoints(self._waypoints_file)
-                self.get_logger().info(
-                    'waypoints: %d points from %s' % (len(poses), self._waypoints_file)
-                )
-                self._publish_waypoints(frame_id, poses)
-            except (OSError, ValueError, yaml.YAMLError) as exc:
-                self.get_logger().warning(
-                    'waypoints file unusable (%s): %s' % (self._waypoints_file, exc)
-                )
-
         period = 1.0 / max(float(value('publish_rate')), 1.0)
         # 加減速に使う経過時間の上限。タイマが詰まって数秒飛んだとき、その分を
         # まるごと積むと 1 回で最高速まで飛ぶ (刻んだ意味が無くなる)。
@@ -356,14 +284,9 @@ class JoyTeleop(Node):
         self.create_timer(period, self._tick)
         self._publish_state()
         self.get_logger().info(
-            'joy teleop %s; hold %.1fs: START toggles teleop, BACK (on release) toggles '
-            'motor power, START+BACK %s'
-            % (
-                'on' if self._enabled else 'off',
-                self._latch.hold_seconds,
-                'follows waypoints' if self._waypoints_file
-                else 'is disabled (no waypoints_file)',
-            )
+            'joy teleop %s; hold %.1fs: START toggles teleop, BACK toggles '
+            'motor power'
+            % ('on' if self._enabled else 'off', self._latch.hold_seconds)
         )
 
     # ── 入力 ────────────────────────────────────────────────────────────
@@ -388,12 +311,9 @@ class JoyTeleop(Node):
             action = self._latch.update(
                 now,
                 pressed(self._buttons, self._button_toggle),
-                pressed(self._buttons, self._button_waypoints),
+                pressed(self._buttons, self._button_motor),
             )
-            if action == COMBO:
-                # 音は _start_waypoints が選ぶ (始まったか、断ったか)。
-                self._start_waypoints()
-            elif action == MOTOR:
+            if action == MOTOR:
                 self._toggle_motor_power()
             elif action == TOGGLE:
                 self._set_enabled(not self._enabled)
@@ -480,13 +400,7 @@ class JoyTeleop(Node):
     # ── モード ──────────────────────────────────────────────────────────
 
     def _set_enabled(self, enabled):
-        """Teleop の入/切を切り替える。**音は鳴らさない。**.
-
-        _start_waypoints が「巡回を始める前に teleop を切っておく」ためにも呼ぶ
-        ので、ここで鳴らすと START+BACK が「ピロリ↓ + ピピピ」になり、そもそも
-        teleop が入っていなかったときは切ってもいないのに切った音が出る。呼び手が
-        鳴らすこと。
-        """
+        """Teleop の入/切を切り替える。音は呼び手が鳴らす."""
         self._enabled = enabled
         now = time.monotonic()
         if enabled:
@@ -525,7 +439,7 @@ class JoyTeleop(Node):
         state = (
             self._enabled,                                          # teleop 入
             self._motor.is_on(),                                    # モータ電源
-            self._patrol.running(),                                 # 巡回中
+            False,                                                  # 未使用
             fresh,                                                  # /joy が来ている
         )
         now = time.monotonic()
@@ -625,98 +539,6 @@ class JoyTeleop(Node):
             message = Int16()
             message.data = frequency
             self._buzzer_pub.publish(message)
-
-    # ── ウェイポイント巡回 ──────────────────────────────────────────────
-
-    def _start_waypoints(self):
-        if not self._waypoints_file:
-            # 既定の順路を持たないので、設定していなければここで終わり。黙って
-            # 何かを走らせるより、押しても始まらないほうが安全側。
-            self._refuse(
-                'waypoints_file is not set; pick a route that matches map:= first'
-            )
-            return
-
-        if self._patrol.running():
-            self._refuse(
-                'waypoints already running; cancel it from the panel first',
-                warning=True,
-            )
-            return
-
-        try:
-            frame_id, poses = load_waypoints(self._waypoints_file)
-        except (OSError, ValueError, yaml.YAMLError) as exc:
-            self._refuse('cannot read %s: %s' % (self._waypoints_file, exc))
-            return
-
-        if not self._follow_client.server_is_ready():
-            # navigation.launch.py が立っていないか、lifecycle がまだ activate
-            # されていない。ここで黙ると「押したのに何も起きない」になる。
-            self._refuse(
-                '%s action server is not available; is navigation.launch.py up?'
-                % self._follow_action
-            )
-            return
-
-        self._set_enabled(False)
-
-        stamp = self.get_clock().now().to_msg()
-        for pose in poses:
-            pose.header.stamp = stamp
-
-        # ゴールを投げる前に順路を出す。先読み (waypoint_prefetch) は 1 点目の
-        # 計画が来た時点で並びを引くので、後出しにすると 1 点目ぶんだけ間に合わない。
-        self._publish_waypoints(frame_id, poses)
-
-        goal = FollowWaypoints.Goal()
-        goal.poses = poses
-        self._patrol.mark_sent()
-        future = self._follow_client.send_goal_async(goal)
-        future.add_done_callback(self._on_goal_response)
-        self._play(TUNE_WAYPOINTS)
-        self.get_logger().info(
-            'following %d waypoints in %s' % (len(poses), frame_id)
-        )
-
-    def _publish_waypoints(self, frame_id, poses):
-        """順路を latch して出す (vi_planner の先読み用。見せるためのものではない)."""
-        path = Path()
-        path.header.frame_id = frame_id
-        path.header.stamp = self.get_clock().now().to_msg()
-        path.poses = poses
-        for pose in path.poses:
-            # header ごと差し替えない。poses は呼び出し元がそのまま
-            # FollowWaypoints のゴールに使う同じ配列なので、1 つの header を
-            # 共有させると片方を触ったつもりが全点に効く。
-            pose.header.frame_id = frame_id
-            pose.header.stamp = path.header.stamp
-        self._path_pub.publish(path)
-
-    def _on_goal_response(self, future):
-        handle = future.result()
-        if not handle.accepted:
-            self._patrol.rejected()
-            self._refuse('waypoint goal rejected')
-            return
-        self._patrol.accepted(handle)
-        handle.get_result_async().add_done_callback(self._on_goal_result)
-
-    def _on_goal_result(self, future):
-        self._patrol.finished()
-        result = future.result()
-        missed = list(getattr(result.result, 'missed_waypoints', []))
-        self.get_logger().info(
-            'waypoints finished (status %d, missed %d)' % (result.status, len(missed))
-        )
-        # 走り切った音は 1 点も外さなかったときだけ。waypoint_follower は
-        # stop_on_failure: false なので、**全点が地図の外でも SUCCEEDED で返る**
-        # (地図と経路を取り違えたときがこれ)。取り消しのときは鳴らさない。取り消す
-        # のはパネルの中断・Cancel で、人が自分で止めたと分かっているため。
-        if result.status == GoalStatus.STATUS_SUCCEEDED and not missed:
-            self._play(TUNE_FINISHED)
-        elif result.status != GoalStatus.STATUS_CANCELED:
-            self._play(TUNE_REFUSED)
 
     def stop(self):
         """終了時に最後の指令と最後の音をゼロにしておく.

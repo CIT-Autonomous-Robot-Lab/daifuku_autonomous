@@ -701,9 +701,8 @@ bool WaypointManagerPanel::readYamlFile(
       pose.pose.position.x = position["x"].as<double>();
       pose.pose.position.y = position["y"].as<double>();
       // z だけは省略可。接地して走る機体なので無くても意味が決まる
-      // (joy_waypoints.load_waypoint_document と同じ扱い。片方だけが通す形にすると、
-      // 手で書いた順路が「実機では走るのにパネルでは開けない」になる)。
-      // 書式の検算は tools/maps/verify_waypoints.py。
+      // (tools/maps/waypoint_yaml.py と同じ扱い。書式の検算は
+      // tools/maps/verify_waypoints.py)。
       pose.pose.position.z = position["z"] ? position["z"].as<double>() : 0.0;
       pose.pose.orientation.x = orientation["x"].as<double>();
       pose.pose.orientation.y = orientation["y"].as<double>();
@@ -877,7 +876,7 @@ void WaypointManagerPanel::sendSegment()
 void WaypointManagerPanel::cancelFollowing()
 {
   // **ゴールを名指しでは止めない。** パネルがゴールを持っていない場面 —
-  // joy_teleop の START+BACK で始まった巡回、RViz を立て直した後、サーバが
+  // RViz を立て直した後、サーバが
   // 見えなくなって諦めた後 — でも同じ 1 つの経路で止めたいため。名指しでしか
   // 止められない作りだと、そのどれもが「Cancel が効かない」になる。
   if (cancel_clients_.empty()) {
@@ -1025,7 +1024,7 @@ void WaypointManagerPanel::updateButtons()
   resume_button_->setEnabled(
     !busy && action_client_ && next_index_ > 0 && next_index_ < waypoints_.size());
   // **Cancel は常に押せる。** パネルが巡回を持っているかどうかと、機体が走って
-  // いるかどうかは別のこと — joy_teleop が始めた巡回、RViz を立て直した後、
+  // いるかどうかは別のこと — RViz を立て直した後、
   // サーバが見えなくなって諦めた後は、どれもパネルがゴールを持っていないまま
   // 機体だけが走っている。押せなくすると、その全部が「Cancel が効かない」になる。
   cancel_button_->setEnabled(!cancel_clients_.empty());
