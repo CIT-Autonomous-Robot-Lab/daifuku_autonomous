@@ -329,14 +329,14 @@ RVizで次の順に操作します。
 
 自律移動中は緊急停止をすぐ操作できる状態を保ってください。
 
-**「2D Goal Pose」ではゴールを出せません。** waypoint を足すための`/waypoint_pose`へ
+**「2D Goal Pose」ではゴールを出せません。** waypoint を足すための`/waypoint/pose`へ
 付け替えてあります（次節）。押しても機体は動かず、エラーも出ません。単発のゴールは
 上の「Nav2 Goal」を使ってください。
 
 ## Waypointを並べて巡回する
 
-`WaypointManagerPanel`（`daifuku_waypoint_manager`）で、複数の通過点を並べて
-`/follow_waypoints`へ投げられます。RVizの左に出ていない場合は
+`WaypointManagerPanel`（`daifuku_waypoint_manager`）で、複数の通過点を並べて巡回できます。
+パネルは順路を機体側の`waypoint_runner`へ渡し、`waypoint_runner`が`/follow_waypoints`へ送ります。RVizの左に出ていない場合は
 **Panels → Add New Panel**から追加します。
 
 1. 「2D Goal Pose」で地図上をクリック＋ドラッグ。クリック位置が座標、ドラッグ方向が

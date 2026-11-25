@@ -147,9 +147,11 @@ id -u
 ls -l /dev/shm | head
 ```
 
-## Waypointパネルが`/follow_waypoints action server is unavailable`と出す
+## Waypointパネルが`Robot: Error: follow_waypoints action server is unavailable`と出す
 
-ゴールが送られる前に止まっているので、サーバ側が居ません。
+機体側の`waypoint_runner`がゴールを送る前に止まっているので、サーバ側が居ません。
+ステータス行が`Start requested`のまま変わらないときは、`waypoint_runner`自体が居ません
+（navigationが立っていないか、古いビルドです）。
 `/follow_waypoints`を出すのは**`vi_planner`だけ**で、navigationの公開launchが立てます。
 `robot.launch.py`だけでは出ません。
 
@@ -184,7 +186,7 @@ docker compose up -d               # 差分ビルド。リポジトリルート�
 
 ## 古いWaypointパネルから巡回できない
 
-現在のパネルは`/follow_waypoints`へ送ります。古いプラグインが
+現在は機体側の`waypoint_runner`が`/follow_waypoints`へ送ります。古いプラグインが
 `/navigate_through_poses`へ送っている場合、そのサーバは存在しません。
 RVizを起動している開発コンテナで`daifuku_waypoint_manager`を建て直してください。
 

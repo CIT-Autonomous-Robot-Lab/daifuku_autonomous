@@ -158,10 +158,12 @@ Raspberry Pi Cat を ROS 2 Humble と standalone VI で自律移動させるワ�
   自由セル・連結性・画像の上下方向を検算します。PGM の行 0 は地図の y 最大側です。
   `tools/maps/verify_{map_thresholds,corridor_orientation,waypoints}.py` を使い、
   地図固有の既知事項は[地図の説明](src/daifuku_maps/maps/tsudanuma/README.md)に従います。
-- RViz に `Navigation 2` パネルを足しません。同じ `/waypoints` へ MarkerArray を出し、
-  自前パネルの Path と型が衝突して設定読み込みが途中で止まります。
-  `/waypoints` の表示は Path、点の表示は `/waypoint_markers` です。
-  `2D Goal Pose` は `/waypoint_pose` への点追加、単発移動は `Nav2 Goal` を使います。
+- 停止点の区切りと再開は機体側の `waypoint_runner`（`daifuku_navigation`）が持ちます。
+  走行中に RViz の PC を外す運用があるため、パネルへ巡回の状態を戻しません。
+  パネルとは `/waypoint/{route,stops,start,resume,status,next}` でつなぎます。
+- RViz に `Navigation 2` パネルを足しません。順路の表示は `/waypoint/route` の Path、
+  点の表示は `/waypoint/markers` です。
+  `2D Goal Pose` は `/waypoint/pose` への点追加、単発移動は `Nav2 Goal` を使います。
 
 ## Docker と通信
 
