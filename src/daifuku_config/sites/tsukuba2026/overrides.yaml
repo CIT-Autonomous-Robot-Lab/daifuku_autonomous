@@ -1,5 +1,5 @@
 # 提供された2026地図を使う。2025や旧GLIM地図の順路は共用しない。
-# 地図とmap_scale以外はtsudanumaとそろえる。
+# 地図以外はtsudanumaとそろえる。
 site:
   map:
     navigation: tsukuba2026/tsukuba2026_modified.yaml  # /map: 提供された編集済み地図
@@ -13,7 +13,7 @@ daifuku_perception:
 daifuku_navigation:
   vi_planner:
     ros__parameters:
-      map_scale: 2  # 既定 1: 0.1mの地図をtsudanumaと同じ内部0.20mで使う
+      map_scale: 1  # 既定 1: 0.2mの地図をそのまま使う (tsudanumaの内部解像度と同じ)
       action_names: ["forward", "back", "right", "rightfwsl", "rightfw", "left", "leftfwsl", "leftfw"]  # 既定 6手: mugimaruと同じ8手
       action_forward_m: [0.8, -0.4, 0.0, 0.4, 0.8, 0.0, 0.4, 0.8]  # 既定 6手: mugimaruの並進量
       action_rotation_deg: [0.0, 0.0, -45.0, -45.0, -20.0, 45.0, 45.0, 20.0]  # 既定 6手: mugimaruの旋回量

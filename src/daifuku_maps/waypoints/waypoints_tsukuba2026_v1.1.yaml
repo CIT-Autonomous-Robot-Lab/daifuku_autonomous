@@ -1,0 +1,164 @@
+frame_id: map
+waypoints:
+- name: waypoint_0
+  stop: true
+  position:
+    x: -60.324
+    y: 81.9345
+    z: 0.0
+  orientation:
+    x: 0.0
+    y: 0.0
+    z: 0.2712
+    w: 0.9625
+- name: waypoint_1
+  stop: true
+  position:
+    x: -28.4827
+    y: 90.6836
+    z: 0.0
+  orientation:
+    x: 0.0
+    y: 0.0
+    z: -0.1854
+    w: 0.9827
+- name: waypoint_2
+  stop: true
+  position:
+    x: 60.1787
+    y: 86.3576
+    z: 0.0
+  orientation:
+    x: 0.0
+    y: 0.0
+    z: 0.0198
+    w: 0.9998
+- name: waypoint_3
+  stop: true
+  position:
+    x: 84.0966
+    y: 87.0572
+    z: 0.0
+  orientation:
+    x: 0.0
+    y: 0.0
+    z: 0.0104
+    w: 0.9999
+- name: waypoint_4
+  stop: true
+  position:
+    x: 170.486
+    y: 235.7789
+    z: 0.0
+  orientation:
+    x: 0.0
+    y: 0.0
+    z: 0.0125
+    w: 0.9999
+- name: waypoint_5
+  stop: true
+  position:
+    x: 376.3736
+    y: 199.7531
+    z: 0.0
+  orientation:
+    x: 0.0
+    y: 0.0
+    z: -0.7
+    w: 0.7141
+- name: waypoint_6
+  position:
+    x: 378.8001
+    y: -3.4284
+    z: 0.0
+  orientation:
+    x: 0.0
+    y: 0.0
+    z: -0.9994
+    w: 0.0356
+- name: waypoint_7
+  position:
+    x: 343.3799
+    y: 41.2722
+    z: 0.0
+  orientation:
+    x: 0.0
+    y: 0.0
+    z: 0.7198
+    w: 0.6942
+- name: waypoint_8
+  stop: true
+  position:
+    x: 376.7364
+    y: 186.637
+    z: 0.0
+  orientation:
+    x: 0.0
+    y: 0.0
+    z: 0.7071
+    w: 0.7071
+- name: waypoint_9
+  stop: true
+  position:
+    x: 202.7283
+    y: 243.8247
+    z: 0.0
+  orientation:
+    x: 0.0
+    y: 0.0
+    z: -0.9998
+    w: 0.02
+- name: waypoint_10
+  stop: true
+  position:
+    x: 91.781
+    y: 83.6029
+    z: 0.0
+  orientation:
+    x: 0.0
+    y: 0.0
+    z: -0.9999
+    w: 0.0161
+- name: waypoint_11
+  stop: true
+  position:
+    x: 67.9576
+    y: 83.1111
+    z: 0.0
+  orientation:
+    x: 0.0
+    y: 0.0
+    z: -1
+    w: 0.0045
+- name: waypoint_12
+  stop: true
+  position:
+    x: -10.6924
+    y: 83.2891
+    z: 0.0
+  orientation:
+    x: 0.0
+    y: 0.0
+    z: 0.9949
+    w: 0.101
+- name: waypoint_13
+  stop: true
+  position:
+    x: -45.5919
+    y: 90.0243
+    z: 0.0
+  orientation:
+    x: 0.0
+    y: 0.0
+    z: -0.9848
+    w: 0.1735
+- name: waypoint_14
+  position:
+    x: -38.1222
+    y: 17.5293
+    z: 0.0
+  orientation:
+    x: 0.0
+    y: 0.0
+    z: 0.0111
+    w: 0.9999
