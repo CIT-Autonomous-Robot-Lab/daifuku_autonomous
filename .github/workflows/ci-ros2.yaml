@@ -61,7 +61,7 @@ jobs:
             "ros-${ROS_DISTRO}-ament-lint-auto" "ros-${ROS_DISTRO}-ament-cmake-copyright" \
             "ros-${ROS_DISTRO}-ament-cmake-flake8" "ros-${ROS_DISTRO}-ament-cmake-lint-cmake" \
             "ros-${ROS_DISTRO}-ament-cmake-xmllint" "ros-${ROS_DISTRO}-launch-testing" \
-            "ros-${ROS_DISTRO}-launch-testing-ament-cmake" "ros-${ROS_DISTRO}-nav2-common" \
+            "ros-${ROS_DISTRO}-launch-testing-ament-cmake" "ros-${ROS_DISTRO}-nav2-common" "ros-${ROS_DISTRO}-nav2-msgs" \
             "ros-${ROS_DISTRO}-diagnostic-updater" "ros-${ROS_DISTRO}-tf2-ros"
           pip3 install colcon-cargo colcon-ros-cargo
       - name: Git LFS の地図を取得する
