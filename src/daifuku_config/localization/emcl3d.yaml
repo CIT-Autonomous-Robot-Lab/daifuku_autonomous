@@ -45,7 +45,7 @@ emcl3d:
     reset_confirmation_updates: 3       # 既定 同左
     translation_noise: [0.1, 0.1, 0.1]  # 既定 同左 [m] (標準偏差)
     rotation_noise: [0.01, 0.01, 0.1]  # 既定 [0.1,0.1,0.1] [rad]: roll/pitch の拡散を yaw の 1/10 に抑える
-    min_noise_scale: 0.05               # 既定 0.0: 静止中もノイズ倍率をこれ以上に保ち、粒子を散らして補正を続ける (並進 5mm・yaw 0.3度)。**未検証**
+    min_noise_scale: 0.10               # 既定 0.0: 静止中もノイズ倍率をこれ以上に保ち、粒子を散らして補正を続ける (並進 10mm・yaw 0.6度)。**未検証**
     expansion_translation: [0.2, 0.2, 0.2]  # 既定 同左 [m]
     expansion_rotation: [0.03490659, 0.03490659, 0.17453293]  # 既定 [0.1,0.1,0.1] [rad]: roll/pitch ±2度、yaw ±10度
 
