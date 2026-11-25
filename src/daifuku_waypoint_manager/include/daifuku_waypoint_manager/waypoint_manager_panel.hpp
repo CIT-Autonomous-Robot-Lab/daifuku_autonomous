@@ -30,6 +30,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_action/rclcpp_action.hpp>
 #include <rviz_common/panel.hpp>
+#include <std_msgs/msg/empty.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 
 class QLabel;
@@ -128,6 +129,7 @@ private:
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_publisher_;
   rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr clicked_point_subscription_;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr clicked_pose_subscription_;
+  rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr resume_subscription_;
   rclcpp_action::Client<FollowWaypoints>::SharedPtr action_client_;
   // 取り消しは action クライアントではなくキャンセルサービスへ直接出す。
   // 理由は 2 つ: 空の goal_info が

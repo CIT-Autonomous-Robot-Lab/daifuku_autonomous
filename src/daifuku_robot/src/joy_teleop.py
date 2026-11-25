@@ -23,6 +23,7 @@ robot_bringup.launch.py が joy:=true (既定) のとき joy_node と一緒に�
   * STARTを長押し          … teleop の入/切をトグルする (ピロリ↑ / ピロリ↓)
   * BACKを長押し           … モータ電源の入/切をトグルする (ピロリピロリ↑ / ↓)
   * RB を押している間      … ブースト (上限が linear_max_speed から boost へ上がる)
+  * B (丸) を押す          … 停止点で止まっている巡回を再開する (/waypoint_resume)
 
 左スティックで前後・旋回を操作し、右スティックの左右が不感帯を超えたときは
 旋回だけ右を優先する。後退入力中は旋回の向きを反転する。
@@ -30,7 +31,8 @@ robot_bringup.launch.py が joy:=true (既定) のとき joy_node と一緒に�
 長押しの時間はどれも hold_seconds (既定 2 秒) で、押し続けてその時間が経った時点で
 決まる (joy_buttons.HoldLatch)。START と BACK を同時に押したときは
 どちらも起きない。ウェイポイント巡回はこのノードでは始めず、RViz の
-daifuku_waypoint_manager パネルから始める。
+daifuku_waypoint_manager パネルから始める。B は長押しを待たず、押し始めで 1 回だけ
+/waypoint_resume を出す。止まっているかどうかは知らないので、判断はパネルに任せる。
 
 出す先は **/cmd_vel_teleop** (twist_mux の優先度 100 側)。自律側の /cmd_vel は
 優先度 10 なので、手動指令が優先される。走行中のゴールは取り消さないので、
@@ -144,7 +146,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
 from sensor_msgs.msg import Joy
-from std_msgs.msg import Bool, Int16
+from std_msgs.msg import Bool, Empty, Int16
 from std_srvs.srv import SetBool
 
 # joy_buttons.py は同じ lib/daifuku_robot に入る (CMakeLists.txt の install(PROGRAMS))。
@@ -198,6 +200,7 @@ class JoyTeleop(Node):
         self.declare_parameter('button_toggle', 7)
         self.declare_parameter('button_motor', 6)
         self.declare_parameter('button_boost', 5)
+        self.declare_parameter('button_resume', 1)
         self.declare_parameter('hold_seconds', 2.0)
         self.declare_parameter('publish_rate', 20.0)
         self.declare_parameter('joy_timeout', 0.5)
@@ -228,6 +231,7 @@ class JoyTeleop(Node):
         self._button_toggle = int(value('button_toggle'))
         self._button_motor = int(value('button_motor'))
         self._button_boost = int(value('button_boost'))
+        self._button_resume = int(value('button_resume'))
         self._joy_timeout = float(value('joy_timeout'))
         self._stop_tail = float(value('stop_tail'))
 
@@ -242,6 +246,8 @@ class JoyTeleop(Node):
         self._leds = None
         self._leds_at = 0.0
         self._warned_stale = False
+        # 前の周期に再開ボタンが押されていたか。押し始めの 1 回だけ出すために持つ。
+        self._resume_held = False
         self._tune = TunePlayer()
         # ドライバが状態を出さない構成 (driver:=raspimouse) 用の写しは MotorPower
         # が持つ。自分が投げた要求だけを数えるので、外から変えられるとずれる。
@@ -254,6 +260,9 @@ class JoyTeleop(Node):
             QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL),
         )
         self.create_subscription(Joy, 'joy', self._on_joy, 10)
+        # 停止点で止まった巡回の再開。受けるのは RViz のウェイポイントパネルで、
+        # 止まっていなければパネルが聞き流す。
+        self._resume_pub = self.create_publisher(Empty, 'waypoint_resume', 10)
 
         # ブザーは本体ドライバが購読する。買い手が居なくても publish は通るので、
         # 立っていない・ピンを掴めていないときは黙るだけになる。
@@ -285,8 +294,8 @@ class JoyTeleop(Node):
         self._publish_state()
         self.get_logger().info(
             'joy teleop %s; hold %.1fs: START toggles teleop, BACK toggles '
-            'motor power'
-            % ('on' if self._enabled else 'off', self._latch.hold_seconds)
+            'motor power; button %d resumes waypoints'
+            % ('on' if self._enabled else 'off', self._latch.hold_seconds, self._button_resume)
         )
 
     # ── 入力 ────────────────────────────────────────────────────────────
@@ -318,8 +327,16 @@ class JoyTeleop(Node):
             elif action == TOGGLE:
                 self._set_enabled(not self._enabled)
                 self._play(TUNE_TELEOP_ON if self._enabled else TUNE_TELEOP_OFF)
+            # 長押しを待たず、押し始めで 1 回だけ出す。押しっぱなしでも繰り返さない。
+            resume = pressed(self._buttons, self._button_resume)
+            if resume and not self._resume_held:
+                self._resume_pub.publish(Empty())
+                self.get_logger().info('resume requested for waypoint following')
+            self._resume_held = resume
         else:
             self._latch.reset()
+            # 受信が戻ったときに握ったままだったら、それは押し始めとして数えない。
+            self._resume_held = True
             if self._enabled and not self._warned_stale:
                 self._warned_stale = True
                 self.get_logger().warning('no joy for %.1f s; slowing to a stop'
