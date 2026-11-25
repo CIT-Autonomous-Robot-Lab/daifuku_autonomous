@@ -54,6 +54,8 @@ constexpr char kNavigateActionName[] = "/navigate_to_pose";
 constexpr char kCancelServiceSuffix[] = "/_action/cancel_goal";
 constexpr char kClickedPointTopic[] = "/clicked_point";
 constexpr char kWaypointPoseTopic[] = "/waypoint_pose";
+// 停止点からの再開要求。joy_teleop がゲームパッドの B で出す。Resume ボタンと同じ扱い。
+constexpr char kResumeTopic[] = "/waypoint_resume";
 // 機体の位置を取る TF フレーム。本リポジトリの約束は base_footprint だが、それを出さない
 // 構成でも線が消えないよう base_link まで見る。
 constexpr char kRobotFrame[] = "base_footprint";
@@ -144,6 +146,11 @@ void WaypointManagerPanel::onInitialize()
     kWaypointPoseTopic, rclcpp::QoS(10),
     [this](geometry_msgs::msg::PoseStamped::SharedPtr pose) {
       QMetaObject::invokeMethod(this, [this, pose]() {addClickedPose(*pose);}, Qt::QueuedConnection);
+    });
+  resume_subscription_ = node_->create_subscription<std_msgs::msg::Empty>(
+    kResumeTopic, rclcpp::QoS(10),
+    [this](std_msgs::msg::Empty::SharedPtr) {
+      QMetaObject::invokeMethod(this, [this]() {resumeFollowing();}, Qt::QueuedConnection);
     });
   action_client_ = rclcpp_action::create_client<FollowWaypoints>(node_, kActionName);
   // Cancel が名指しではなくこちらを使う。action クライアントを 2 つ持たずに済む
@@ -796,6 +803,12 @@ void WaypointManagerPanel::startFollowing()
 
 void WaypointManagerPanel::resumeFollowing()
 {
+  // Resume ボタンは走っているあいだ押せないが、/waypoint_resume はいつでも届く。
+  // 走行中に受けて区間を送り直さないよう、ここでも弾く。
+  if (active_goal_ || goal_pending_) {
+    setStatus("Error: already following - resume ignored");
+    return;
+  }
   if (next_index_ == 0 || next_index_ >= waypoints_.size()) {
     setStatus("Error: not paused at a stop waypoint");
     return;
