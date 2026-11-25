@@ -140,7 +140,8 @@ site:
 
 **`localization:=vi`（VIOLA）では`map_server_loc`を立てません。**
 同じVIノードが`/map`を使って推定し、`map→odom`を所有します。
-既定のEMCL3Dでは`map_server_loc`を立てず、PCDで推定します。
+既定のEMCL3DはPCDで推定し、`/map_loc`を読みません。それでも自己位置推定用の地図が
+決まっていれば`map_server_loc`を立てて`/map_loc`を出します。RVizで実環境と見比べるためです。
 
 RVizには`Map (navigation)`と`Map (localization)`の2つの表示があります。**既定でオンなのは
 後者（`/map_loc`）です**——経路計画用の地図は手で壁を描き足したり回廊の外を塗り潰したり
@@ -150,7 +151,7 @@ RVizには`Map (navigation)`と`Map (localization)`の2つの表示がありま�
 経路計画が「なぜそこを通らないか」を見たいときだけ`Map (navigation)`をオンにしてください。
 
 **`localization:=amcl`も`/map_loc`を使います。** `daifuku_localization`が
-自己位置推定用のmap serverとAMCLを起動します。EMCL3DとVIでは`/map_loc`を出さないので、
+自己位置推定用のmap serverとAMCLを起動します。VIでは`/map_loc`を出さないので、
 RVizの表示は`Map (navigation)`へ切り替えます。
 
 `map:=`を明示することもできますが、`site: map:`と別のファイルを指していると**起動時に

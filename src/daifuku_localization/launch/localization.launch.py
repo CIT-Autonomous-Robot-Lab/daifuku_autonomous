@@ -37,7 +37,8 @@ def localization_nodes(context: LaunchContext):
               'arguments': ['--ros-args', '--log-level', LC('log_level')]}
     actions = []
     managed = []
-    if selected != 'emcl3d':
+    # emcl3d は /map_loc を読まないが、RViz で実環境と見比べられるよう地図があれば出す。
+    if selected != 'emcl3d' or context.launch_configurations.get('map_loc'):
         actions.append(Node(
             package='nav2_map_server', executable='map_server', name='map_server_loc',
             parameters=[sim, {'yaml_filename': LC('map_loc')}],

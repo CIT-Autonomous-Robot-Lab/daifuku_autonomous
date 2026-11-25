@@ -78,6 +78,27 @@ def test_selected_estimator_reads_localization_scan(component, backend, estimato
         assert ('map', 'map_loc') in selected.expanded_remapping_rules
 
 
+@pytest.mark.parametrize('map_loc,served', [('/localization.yaml', True), ('', False)])
+def test_emcl3d_serves_localization_map_only_when_given(component, map_loc, served):
+    # Given: emcl3d, which localizes against the PCD and never reads /map_loc.
+    context = LaunchContext()
+    context.launch_configurations.update({
+        'localization': 'emcl3d', 'use_sim_time': 'false', 'use_respawn': 'false',
+        'log_level': 'info', 'autostart': 'true', 'map_loc': map_loc,
+        'map_pcd': '/localization.pcd', 'emcl3d_params_file': '/emcl3d.yaml',
+        'emcl3d_compute_backend': '',
+    })
+    # When: the localization component selects its nodes.
+    packages = [
+        perform_substitutions(context, normalize_to_list_of_substitutions(node.node_package))
+        for node in component.localization_nodes(context)
+    ]
+    # Then: the 2D map is still published for RViz whenever one was resolved.
+    assert ('nav2_map_server' in packages) == served
+    assert ('nav2_lifecycle_manager' in packages) == served
+    assert 'emcl3d' in packages
+
+
 @pytest.mark.parametrize('backend', ['', 'cpu', 'vulkan'])
 def test_emcl3d_compute_selection_overrides_yaml_only_when_explicit(component, backend, tmp_path):
     # Given: a YAML selection distinct from an explicit CPU override.
