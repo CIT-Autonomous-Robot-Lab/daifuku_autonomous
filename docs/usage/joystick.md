@@ -138,7 +138,7 @@ rclpyを持ち込んでいないので開発ホストからそのまま呼んで
 | --- | --- |
 | LED0 | teleopが入っている（自律側は塞がれています） |
 | LED1 | モータ電源が入っている（ドライバの`/motor_power_state`。下記） |
-| LED2 | 使いません（常に消灯） |
+| LED2 | ナビゲーションが動いている（`/follow_waypoints`か`/navigate_to_pose`のゴールが実行中。停止点で止まっているあいだは消灯） |
 | LED3 | `/joy`が届いている（消えていたらパッドの電池・受信機） |
 
 **LED1の出どころは自前実装（`driver:=original`）が出す`/motor_power_state`です。** ドライバが
@@ -225,7 +225,7 @@ STARTと一緒に握ってからSTARTだけ先に離したときも、BACKを握
 ros2 topic echo /joy                       # ボタンと軸の番号
 ros2 topic echo /joy_teleop/enabled        # teleopが入っているか（1秒ごとに出ています）
 ros2 topic echo /buzzer                    # モードの音（Hz、0で停止。音の変わり目だけ出ます）
-ros2 topic echo /leds                      # いまのモード（led0=teleop / led1=モータ / led3=/joy）
+ros2 topic echo /leds                      # いまのモード（led0=teleop / led1=モータ / led2=ナビ / led3=/joy）
 ros2 topic echo /motor_power_state --qos-durability transient_local  # モータ電源の実状態（自前実装だけが出します）
 ros2 topic hz /cmd_vel_teleop              # 出ているか
 ros2 topic echo /cmd_vel_mux               # 仲裁を抜けてドライバへ届いているか

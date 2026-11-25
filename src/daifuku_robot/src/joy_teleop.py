@@ -91,7 +91,7 @@ stop() で 0 を出しておく。
 音は**切り替わった瞬間しか**伝えない。2 秒前に鳴ったのを聞き逃せば、いま teleop が
 入っているのかは結局スティックを倒すまで分からない。そこで **/leds**
 (`raspimouse_msgs/Leds`、ドライバが購読する 4 灯) へ現在の状態を出す
-(led0=teleop 入、led1=モータ電源、led3=/joy 受信中。led2 は使わず消したまま)。音を消していない
+(led0=teleop 入、led1=モータ電源、led2=ナビゲーション実行中、led3=/joy 受信中)。音を消していない
 のは、機体を見ていない・見えない位置にいるときは音のほうが届くため。
 
 **変化時だけでなく 1 秒ごとにも出す。** ドライバは deactivate で LED を消すが
@@ -140,14 +140,18 @@ import os
 import sys
 import time
 
+from action_msgs.msg import GoalStatus, GoalStatusArray
 from geometry_msgs.msg import Twist
 from raspimouse_msgs.msg import Leds
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import DurabilityPolicy, QoSProfile
+from rclpy.qos import DurabilityPolicy, qos_profile_action_status_default, QoSProfile
 from sensor_msgs.msg import Joy
 from std_msgs.msg import Bool, Empty, Int16
 from std_srvs.srv import SetBool
+
+# led2 で見るナビゲーションの action。操作パネルが送る巡回と単発ゴールの両方。
+NAVIGATION_ACTIONS = ('/follow_waypoints', '/navigate_to_pose')
 
 # joy_buttons.py は同じ lib/daifuku_robot に入る (CMakeLists.txt の install(PROGRAMS))。
 # share/ 側の src/ から直接叩かれることもあるので、両方で通るように自分の隣を見る。
@@ -285,6 +289,16 @@ class JoyTeleop(Node):
             Bool, 'motor_power_state', self._on_motor_state,
             QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL),
         )
+        # led2 用。どちらかの action サーバでゴールが実行中ならナビゲーション中とみなす。
+        # 停止点で止まっているあいだはゴールが無いので消える。状態トピックは latch なので
+        # サーバが落ちると最後の状態が残り、実行中のまま落ちると点いたままになる。
+        self._navigating = {}
+        for action in NAVIGATION_ACTIONS:
+            self.create_subscription(
+                GoalStatusArray, action + '/_action/status',
+                lambda msg, action=action: self._on_navigation_status(action, msg),
+                qos_profile_action_status_default,
+            )
 
         period = 1.0 / max(float(value('publish_rate')), 1.0)
         # 加減速に使う経過時間の上限。タイマが詰まって数秒飛んだとき、その分を
@@ -456,7 +470,7 @@ class JoyTeleop(Node):
         state = (
             self._enabled,                                          # teleop 入
             self._motor.is_on(),                                    # モータ電源
-            False,                                                  # 未使用
+            any(self._navigating.values()),                         # ナビゲーション中
             fresh,                                                  # /joy が来ている
         )
         now = time.monotonic()
@@ -469,6 +483,12 @@ class JoyTeleop(Node):
         )
 
     # ── モータ電源 ──────────────────────────────────────────────────────
+
+    def _on_navigation_status(self, action, msg):
+        """実行中のゴールがあるかを、action サーバの状態一覧から覚える."""
+        self._navigating[action] = any(
+            status.status == GoalStatus.STATUS_EXECUTING for status in msg.status_list
+        )
 
     def _on_motor_state(self, msg):
         """ドライバが出す実際のモータ電源の状態 (自前実装だけが出す).
