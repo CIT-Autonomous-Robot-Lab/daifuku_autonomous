@@ -7,7 +7,7 @@
   <class name="daifuku_waypoint_manager/WaypointManagerPanel"
          type="daifuku_waypoint_manager::WaypointManagerPanel"
          base_class_type="rviz_common::Panel">
-    <description>Creates, saves, and sends ordered waypoints to Nav2 FollowWaypoints.</description>
+    <description>Creates and saves ordered waypoints and starts the robot-side waypoint_runner.</description>
   </class>
   <class name="initial_pose_preset_panel/InitialPosePresetPanel"
          type="initial_pose_preset_panel::InitialPosePresetPanel"

@@ -12,7 +12,6 @@
   <depend>action_msgs</depend>
   <depend>emcl3d</depend>
   <depend>geometry_msgs</depend>
-  <depend>nav2_msgs</depend>
   <depend>nav_msgs</depend>
   <depend>pluginlib</depend>
   <depend>qtbase5-dev</depend>

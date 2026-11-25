@@ -94,6 +94,9 @@ def generate_launch_description():
                      "'cmd_vel_nav' if '", smooth,
                      "'.lower() in ('true', '1') else 'cmd_vel'",
                  ]))], **common),
+            # 停止点の区切りと再開は機体側で持つ。RViz の PC を外しても B で再開できるように。
+            Node(package='daifuku_navigation', executable='waypoint_runner.py',
+                 parameters=[{'use_sim_time': sim}], **common),
             Node(package='nav2_velocity_smoother', executable='velocity_smoother',
                  name='velocity_smoother', condition=IfCondition(smooth),
                  parameters=[configured], remappings=tf + [

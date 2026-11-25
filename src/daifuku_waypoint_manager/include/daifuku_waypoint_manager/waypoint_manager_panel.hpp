@@ -25,12 +25,13 @@
 #include <action_msgs/srv/cancel_goal.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/point_stamped.hpp>
-#include <nav2_msgs/action/follow_waypoints.hpp>
 #include <nav_msgs/msg/path.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include <rclcpp_action/rclcpp_action.hpp>
 #include <rviz_common/panel.hpp>
 #include <std_msgs/msg/empty.hpp>
+#include <std_msgs/msg/int32.hpp>
+#include <std_msgs/msg/int32_multi_array.hpp>
+#include <std_msgs/msg/string.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 
 class QLabel;
@@ -47,7 +48,6 @@ class WaypointManagerPanel : public rviz_common::Panel
 
 public:
   explicit WaypointManagerPanel(QWidget * parent = nullptr);
-  ~WaypointManagerPanel() override;
 
   void onInitialize() override;
 
@@ -66,21 +66,11 @@ private Q_SLOTS:
   void sendCancelBurst();
   void selectionChanged();
   void setStatus(const QString & status);
-  void handleResult(int result_code, int missed_count);
 
 private:
-  // NavigateThroughPoses ではなく FollowWaypoints を使う。前者の BT は
-  // ComputePathThroughPoses を要求するが、standalone VI (daifuku_navigation) では
-  // その action が存在せず、木がスタブ (常に失敗) に差し替えられているため。
-  using FollowWaypoints = nav2_msgs::action::FollowWaypoints;
-  using GoalHandleFollowWaypoints = rclcpp_action::ClientGoalHandle<FollowWaypoints>;
   using CancelGoalSrv = action_msgs::srv::CancelGoal;
 
   void buildUi();
-  // 「巡回中」の表示をやめて Start を押せる状態へ戻す。ゴールも手放すので、
-  // そのゴールのコールバックは以後届かない。
-  void resetGoalState();
-  QString resultText(int result_code, int missed_count) const;
   void refreshList();
   // reset=false のときは DELETEALL を付けない。同じ ns/id は ADD で上書きされるので、
   // タイマからの出し直し (updateLead) で全マーカが作り直されて瞬くのを避ける。
@@ -99,18 +89,17 @@ private:
     visualization_msgs::msg::MarkerArray * markers, const rclcpp::Time & stamp,
     int selected) const;
   // 巡回の順路そのものを nav_msgs/Path で latch する。マーカ (見せるため) と違い、
-  // これは他ノードが読むためのもの — vi_planner の先読み (waypoint_prefetch) が
-  // 「いま向かっている点の次はどこか」をこれで知る。
+  // これは他ノードが読むためのもの — 機体側の waypoint_runner が区間を切り、
+  // vi_planner の先読み (waypoint_prefetch) が「いま向かっている点の次」を知る。
   void publishWaypointPath();
+  // 停止点の番号を latch する。順路と別に出すのは、停止点の切り替えでは順路が
+  // 変わらず、waypoint_runner が停止中の位置を捨てずに済むようにするため。
+  void publishStops();
   bool leadPoint(geometry_msgs::msg::Point * point, QString * reason) const;
   void updateLead();
   void updateButtons();
   void addClickedPoint(const geometry_msgs::msg::PointStamped & point);
   void addClickedPose(const geometry_msgs::msg::PoseStamped & pose);
-  // next_index_ から次の停止点 (無ければ最後の点) までを 1 つのゴールとして送る。
-  void sendSegment();
-  // 停止点で止まっている状態を捨てる。並びが変わると next_index_ が別の点を指すため。
-  void clearPause();
   bool readYamlFile(const QString & filename, std::vector<geometry_msgs::msg::PoseStamped> * poses,
                     std::vector<bool> * stops, std::string * frame_id, QString * error) const;
   bool writeYamlFile(const QString & filename, QString * error) const;
@@ -120,31 +109,25 @@ private:
   std::vector<geometry_msgs::msg::PoseStamped> waypoints_;
   // waypoints_ と同じ並び。true の点に着いたら巡回を止め、Resume を待つ。
   std::vector<bool> stop_flags_;
-  // 次に送る区間の先頭。0 より大きいあいだは停止点で止まっている (Resume が押せる)。
-  size_t next_index_{0};
-  // いま送っている区間の末尾 (含む)。
-  size_t segment_end_{0};
+  // waypoint_runner の /waypoint/next。次に送る区間の先頭で、0 より大きいあいだは
+  // 停止点で止まっている (Resume が押せる)。-1 は走行中。
+  int robot_next_{0};
   rclcpp::Node::SharedPtr node_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_publisher_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_publisher_;
   rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr clicked_point_subscription_;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr clicked_pose_subscription_;
-  rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr resume_subscription_;
-  rclcpp_action::Client<FollowWaypoints>::SharedPtr action_client_;
+  rclcpp::Publisher<std_msgs::msg::Int32MultiArray>::SharedPtr stops_publisher_;
+  rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr start_publisher_;
+  rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr resume_publisher_;
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr status_subscription_;
+  rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr next_subscription_;
   // 取り消しは action クライアントではなくキャンセルサービスへ直接出す。
   // 理由は 2 つ: 空の goal_info が
   // 「そのサーバの全ゴール」を意味するのでパネルが送っていないゴールも止められる
   // ことと、FollowWaypoints 以外のサーバへも投げられること。
   std::vector<rclcpp::Client<CancelGoalSrv>::SharedPtr> cancel_clients_;
   std::vector<QString> cancel_client_names_;
-  // **ここが最後の shared_ptr。** rclcpp_action のクライアントは goal handle を
-  // weak_ptr で持つので、これを落とすとそのゴールの feedback も結果も来なくなる
-  // (= resetGoalState はコールバックを止める操作でもある)。
-  GoalHandleFollowWaypoints::SharedPtr active_goal_;
-  // ゴールを送ってから goal_response_callback が返るまでの窓。この間 active_goal_ は
-  // まだ空なので、waypoint の編集 (refreshList 経由の updateButtons) が Start を
-  // 押せる状態に戻してしまい、二重にゴールを送れる。
-  bool goal_pending_{false};
   // 残りの取り消し回数。1 発では無線で落ちたときに何も起きないので、繰り返す。
   int cancel_bursts_{0};
   // その取り消しで 1 度でもサービスへ出せたか。全部 not ready のまま終わったら、

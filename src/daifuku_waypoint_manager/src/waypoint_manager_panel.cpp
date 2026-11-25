@@ -32,7 +32,6 @@
 #include <QVBoxLayout>
 
 #include <pluginlib/class_list_macros.hpp>
-#include <rclcpp_action/exceptions.hpp>
 #include <rviz_common/display_context.hpp>
 #include <rviz_common/frame_manager_iface.hpp>
 #include <rviz_common/ros_integration/ros_node_abstraction.hpp>
@@ -43,19 +42,28 @@ namespace daifuku_waypoint_manager
 
 namespace
 {
-constexpr char kMarkerTopic[] = "/waypoint_markers";
-// 巡回の順路。vi_planner の先読み (waypoint_prefetch) が購読する既定のトピック名と
-// そろえてある。片方だけ変えると先読みが黙って効かなくなる。
-constexpr char kWaypointPathTopic[] = "/waypoints";
+constexpr char kMarkerTopic[] = "/waypoint/markers";
+// 巡回の順路。機体側の waypoint_runner と vi_planner の先読み (waypoint_topic) が購読する。
+// 片方だけ変えると巡回も先読みも黙って動かなくなる。
+constexpr char kWaypointPathTopic[] = "/waypoint/route";
+// 停止点の番号。順路と同じく latch する。
+constexpr char kStopsTopic[] = "/waypoint/stops";
+// 開始と再開の要求。区間を切って /follow_waypoints へ送るのは waypoint_runner。
+// 再開は joy_teleop もゲームパッドの B で出す。
+constexpr char kStartTopic[] = "/waypoint/start";
+constexpr char kResumeTopic[] = "/waypoint/resume";
+// waypoint_runner の状態。どちらも latch なので、つなぎ直したときにも届く。
+constexpr char kStatusTopic[] = "/waypoint/status";
+constexpr char kNextTopic[] = "/waypoint/next";
+// /waypoint/next の値。走行中は次に送る点が決まっていない。
+constexpr int kFollowing = -1;
 constexpr char kActionName[] = "/follow_waypoints";
 // 単発ゴールも巡回と一緒に取り消す。
 constexpr char kNavigateActionName[] = "/navigate_to_pose";
 // action の裏にあるキャンセルサービス。空の goal_info = そのサーバの全ゴール。
 constexpr char kCancelServiceSuffix[] = "/_action/cancel_goal";
 constexpr char kClickedPointTopic[] = "/clicked_point";
-constexpr char kWaypointPoseTopic[] = "/waypoint_pose";
-// 停止点からの再開要求。joy_teleop がゲームパッドの B で出す。Resume ボタンと同じ扱い。
-constexpr char kResumeTopic[] = "/waypoint_resume";
+constexpr char kWaypointPoseTopic[] = "/waypoint/pose";
 // 機体の位置を取る TF フレーム。本リポジトリの約束は base_footprint だが、それを出さない
 // 構成でも線が消えないよう base_link まで見る。
 constexpr char kRobotFrame[] = "base_footprint";
@@ -110,18 +118,6 @@ WaypointManagerPanel::WaypointManagerPanel(QWidget * parent)
   buildUi();
 }
 
-WaypointManagerPanel::~WaypointManagerPanel()
-{
-  if (active_goal_ && action_client_) {
-    // 結果が届いた直後 (クライアントが goal handle を捨てた後) にパネルを閉じると
-    // 投げる。デストラクタから外へ出すと std::terminate = RViz ごと落ちる。
-    try {
-      action_client_->async_cancel_goal(active_goal_);
-    } catch (const rclcpp_action::exceptions::UnknownGoalHandleError &) {
-    }
-  }
-}
-
 void WaypointManagerPanel::onInitialize()
 {
   auto ros_node_abstraction = getDisplayContext()->getRosNodeAbstraction().lock();
@@ -137,6 +133,10 @@ void WaypointManagerPanel::onInitialize()
   // 直すこともあるので、そのたびに編集し直させない。
   path_publisher_ = node_->create_publisher<nav_msgs::msg::Path>(
     kWaypointPathTopic, rclcpp::QoS(1).transient_local());
+  stops_publisher_ = node_->create_publisher<std_msgs::msg::Int32MultiArray>(
+    kStopsTopic, rclcpp::QoS(1).transient_local());
+  start_publisher_ = node_->create_publisher<std_msgs::msg::Empty>(kStartTopic, rclcpp::QoS(10));
+  resume_publisher_ = node_->create_publisher<std_msgs::msg::Empty>(kResumeTopic, rclcpp::QoS(10));
   clicked_point_subscription_ = node_->create_subscription<geometry_msgs::msg::PointStamped>(
     kClickedPointTopic, rclcpp::QoS(10),
     [this](geometry_msgs::msg::PointStamped::SharedPtr point) {
@@ -147,12 +147,23 @@ void WaypointManagerPanel::onInitialize()
     [this](geometry_msgs::msg::PoseStamped::SharedPtr pose) {
       QMetaObject::invokeMethod(this, [this, pose]() {addClickedPose(*pose);}, Qt::QueuedConnection);
     });
-  resume_subscription_ = node_->create_subscription<std_msgs::msg::Empty>(
-    kResumeTopic, rclcpp::QoS(10),
-    [this](std_msgs::msg::Empty::SharedPtr) {
-      QMetaObject::invokeMethod(this, [this]() {resumeFollowing();}, Qt::QueuedConnection);
+  status_subscription_ = node_->create_subscription<std_msgs::msg::String>(
+    kStatusTopic, rclcpp::QoS(1).transient_local(),
+    [this](std_msgs::msg::String::SharedPtr status) {
+      const QString text = QString::fromStdString(status->data);
+      QMetaObject::invokeMethod(this, [this, text]() {setStatus("Robot: " + text);},
+        Qt::QueuedConnection);
     });
-  action_client_ = rclcpp_action::create_client<FollowWaypoints>(node_, kActionName);
+  next_subscription_ = node_->create_subscription<std_msgs::msg::Int32>(
+    kNextTopic, rclcpp::QoS(1).transient_local(),
+    [this](std_msgs::msg::Int32::SharedPtr next) {
+      const int index = next->data;
+      QMetaObject::invokeMethod(this, [this, index]() {
+        robot_next_ = index;
+        updateButtons();
+        publishMarkers(false);
+      }, Qt::QueuedConnection);
+    });
   // Cancel が名指しではなくこちらを使う。action クライアントを 2 つ持たずに済む
   // (NavigateToPose 側は送る用が無いのに購読とクライアントが一式生える)。
   for (const char * action : {kActionName, kNavigateActionName}) {
@@ -290,7 +301,6 @@ void WaypointManagerPanel::deleteSelected()
   }
   waypoints_.erase(waypoints_.begin() + index);
   stop_flags_.erase(stop_flags_.begin() + index);
-  clearPause();
   refreshList();
   publishMarkers();
 }
@@ -303,7 +313,6 @@ void WaypointManagerPanel::deleteLast()
   }
   waypoints_.pop_back();
   stop_flags_.pop_back();
-  clearPause();
   refreshList();
   publishMarkers();
 }
@@ -312,7 +321,6 @@ void WaypointManagerPanel::clearWaypoints()
 {
   waypoints_.clear();
   stop_flags_.clear();
-  clearPause();
   refreshList();
   publishMarkers();
 }
@@ -325,7 +333,6 @@ void WaypointManagerPanel::moveUp()
   }
   std::swap(waypoints_[index], waypoints_[index - 1]);
   std::vector<bool>::swap(stop_flags_[index], stop_flags_[index - 1]);
-  clearPause();
   refreshList();
   waypoint_list_->setCurrentRow(index - 1);
   publishMarkers();
@@ -339,7 +346,6 @@ void WaypointManagerPanel::moveDown()
   }
   std::swap(waypoints_[index], waypoints_[index + 1]);
   std::vector<bool>::swap(stop_flags_[index], stop_flags_[index + 1]);
-  clearPause();
   refreshList();
   waypoint_list_->setCurrentRow(index + 1);
   publishMarkers();
@@ -352,15 +358,12 @@ void WaypointManagerPanel::toggleStop()
     setStatus("Error: select a waypoint to toggle stop");
     return;
   }
-  // 止まっている最中に切り替えても next_index_ は動かさない。効くのは次に送る区間から。
+  // 止まっている最中に切り替えても再開位置は動かない。効くのは次に送る区間から。
+  // 順路は変わらないので停止点だけ出し直す。
   stop_flags_[index] = !stop_flags_[index];
+  publishStops();
   refreshList();
   publishMarkers(false);
-}
-
-void WaypointManagerPanel::clearPause()
-{
-  next_index_ = 0;
 }
 
 QString WaypointManagerPanel::formatWaypoint(
@@ -411,6 +414,21 @@ void WaypointManagerPanel::publishWaypointPath()
     pose.header = path.header;
   }
   path_publisher_->publish(path);
+  publishStops();
+}
+
+void WaypointManagerPanel::publishStops()
+{
+  if (!stops_publisher_) {
+    return;
+  }
+  std_msgs::msg::Int32MultiArray stops;
+  for (size_t i = 0; i < stop_flags_.size(); ++i) {
+    if (stop_flags_[i]) {
+      stops.data.push_back(static_cast<int32_t>(i));
+    }
+  }
+  stops_publisher_->publish(stops);
 }
 
 void WaypointManagerPanel::publishMarkers(bool reset)
@@ -450,17 +468,17 @@ void WaypointManagerPanel::appendLeadMarker(
 {
   // 機体から 1 点目 (停止点で止まっているあいだは再開後の 1 点目) までの区間。
   // 巡回中は引かない (1 点目はもう後ろにあるため。いまどこへ向かっているかは
-  // Nav2 の Path 表示に出る)。
+  // Nav2 の Path 表示に出る)。どちらも waypoint_runner の /waypoint/next で決める。
   geometry_msgs::msg::Point lead;
   QString lead_reason;
-  const bool draw_lead = !active_goal_ && !goal_pending_ && leadPoint(&lead, &lead_reason);
+  const bool draw_lead = robot_next_ != kFollowing && leadPoint(&lead, &lead_reason);
   if (draw_lead) {
     Marker marker = makeMarker("waypoint_lead", 0, Marker::LINE_STRIP, frame_id_, stamp);
     marker.scale.x = 0.06;
     setColor(&marker, 1.0F, 0.7F, 0.0F, 0.5F);
     marker.points.push_back(lead);
-    marker.points.push_back(
-      waypoints_[next_index_ < waypoints_.size() ? next_index_ : 0].pose.position);
+    const size_t next = static_cast<size_t>(robot_next_);
+    marker.points.push_back(waypoints_[next < waypoints_.size() ? next : 0].pose.position);
     markers->markers.push_back(marker);
     lead_origin_ = lead;
   } else if (lead_drawn_ && !reset) {
@@ -589,7 +607,7 @@ void WaypointManagerPanel::updateLead()
   }
   geometry_msgs::msg::Point lead;
   QString reason;
-  const bool draw_lead = !active_goal_ && !goal_pending_ && leadPoint(&lead, &reason);
+  const bool draw_lead = robot_next_ != kFollowing && leadPoint(&lead, &reason);
   if (reason != lead_reason_) {
     lead_reason_ = reason;
     // 線が出ない理由は 1 度だけ出す。毎回書くとステータス行が編集の結果を上書きし続ける。
@@ -780,7 +798,6 @@ void WaypointManagerPanel::loadYaml()
     stop_flags_ = std::move(loaded_stops);
     frame_id_ = loaded_frame_id;
   }
-  clearPause();
   refreshList();
   publishMarkers();
   setStatus("Loaded " + filename);
@@ -796,94 +813,17 @@ void WaypointManagerPanel::startFollowing()
     setStatus("Error: frame_id is not set");
     return;
   }
-  // 止まっていても最初から。
-  clearPause();
-  sendSegment();
+  // 区間を切って送るのは機体側の waypoint_runner。パネルは順路を latch で渡して
+  // あるので、ここでは「最初から」を頼むだけにする。結果は /waypoint/status で返る。
+  start_publisher_->publish(std_msgs::msg::Empty());
+  setStatus("Start requested");
 }
 
 void WaypointManagerPanel::resumeFollowing()
 {
-  // Resume ボタンは走っているあいだ押せないが、/waypoint_resume はいつでも届く。
-  // 走行中に受けて区間を送り直さないよう、ここでも弾く。
-  if (active_goal_ || goal_pending_) {
-    setStatus("Error: already following - resume ignored");
-    return;
-  }
-  if (next_index_ == 0 || next_index_ >= waypoints_.size()) {
-    setStatus("Error: not paused at a stop waypoint");
-    return;
-  }
-  sendSegment();
-}
-
-void WaypointManagerPanel::sendSegment()
-{
-  if (!action_client_ || !action_client_->action_server_is_ready()) {
-    setStatus("Error: /follow_waypoints action server is unavailable");
-    return;
-  }
-  // 取り消しを投げているあいだは受け付けない。いま出しているゴールを、まだ
-  // 飛んでいる取り消しが巻き込む。
-  if (cancel_bursts_ > 0) {
-    setStatus("Error: still cancelling - try again in a moment");
-    return;
-  }
-  // 停止点で区切って送る。止まるのは区間の終わりにゴールが SUCCEEDED で返るからで、
-  // vi_planner 側には停止の概念を持たせていない。
-  segment_end_ = next_index_;
-  while (segment_end_ + 1 < waypoints_.size() && !stop_flags_[segment_end_]) {
-    ++segment_end_;
-  }
-  const int base = static_cast<int>(next_index_);
-  FollowWaypoints::Goal goal;
-  goal.poses.assign(waypoints_.begin() + next_index_, waypoints_.begin() + segment_end_ + 1);
-  for (auto & pose : goal.poses) {
-    pose.header.frame_id = frame_id_;
-    pose.header.stamp = node_->now();
-  }
-  QPointer<WaypointManagerPanel> panel(this);
-  rclcpp_action::Client<FollowWaypoints>::SendGoalOptions options;
-  options.goal_response_callback =
-    [panel](GoalHandleFollowWaypoints::SharedPtr goal_handle) {
-      if (!panel) {return;}
-      QMetaObject::invokeMethod(panel, [panel, goal_handle]() {
-        if (!panel) {return;}
-        panel->goal_pending_ = false;
-        if (!goal_handle) {
-          panel->setStatus("Error: FollowWaypoints goal was rejected");
-        } else {
-          panel->active_goal_ = goal_handle;
-          panel->setStatus("Following waypoints");
-        }
-        panel->updateButtons();
-      }, Qt::QueuedConnection);
-    };
-  options.feedback_callback = [panel, base](GoalHandleFollowWaypoints::SharedPtr,
-      const std::shared_ptr<const FollowWaypoints::Feedback> feedback) {
-      if (!panel) {return;}
-      // current_waypoint は区間の中での番号。
-      const int current = base + static_cast<int>(feedback->current_waypoint);
-      QMetaObject::invokeMethod(panel, [panel, current]() {
-        if (!panel) {return;}
-        panel->setStatus(
-          QString("Following waypoint %1 / %2").arg(current + 1).arg(
-            static_cast<int>(panel->waypoints_.size())));
-      }, Qt::QueuedConnection);
-    };
-  options.result_callback =
-    [panel](const GoalHandleFollowWaypoints::WrappedResult & result) {
-      if (!panel) {return;}
-      const int code = static_cast<int>(result.code);
-      const int missed = result.result ? static_cast<int>(result.result->missed_waypoints.size()) : 0;
-      QMetaObject::invokeMethod(panel, [panel, code, missed]() {
-        if (!panel) {return;}
-        panel->handleResult(code, missed);
-      }, Qt::QueuedConnection);
-    };
-  goal_pending_ = true;
-  action_client_->async_send_goal(goal, options);
-  setStatus("Sending FollowWaypoints goal...");
-  updateButtons();
+  // 止まっているかどうかは waypoint_runner が判断する (B ボタンと同じ経路)。
+  resume_publisher_->publish(std_msgs::msg::Empty());
+  setStatus("Resume requested");
 }
 
 void WaypointManagerPanel::cancelFollowing()
@@ -898,7 +838,6 @@ void WaypointManagerPanel::cancelFollowing()
   }
   cancel_bursts_ = kCancelBursts;
   cancel_sent_any_ = false;
-  clearPause();
   setStatus("Cancelling every goal on /follow_waypoints and /navigate_to_pose...");
   // 1 発目はその場で。残りをタイマで投げ直す。
   sendCancelBurst();
@@ -943,86 +882,19 @@ void WaypointManagerPanel::sendCancelBurst()
 
   // ── 投げ切った ──
   //
-  // **ここで表示を戻さない。** 2 秒は「1 発落ちたから投げ直す」の尺であって、
-  // サーバが取り消して結果を返すまでの尺ではない (VI の solve 境界で数十秒、
-  // 無線が詰まっていればさらに乗る)。戻すと、効いた取り消しに対して
-  // 「結果が来ないので諦めた」と出したあとで結果が届く形になる。
+  // 取り消した結果 (Canceled) は waypoint_runner が /waypoint/status で返す。
   if (cancel_timer_) {
     cancel_timer_->stop();
   }
   if (!cancel_sent_any_) {
     // どちらのサービスも見えなかった = サーバが落ちている。取り消しは届いて
     // いないので、機体が走っていれば走ったままになる。
-    // **表示はここで戻す。** サーバが居ない以上そのゴールの結果は二度と来ず、
-    // 待ち続けると Start が押せないまま固まる。**時間で勝手に戻さないのは
-    // 意図的**で、戻す合図は人が Cancel を押したことのほうにしてある (無線の
-    // ディスカバリが一瞬途切れただけで戻すと、走っている巡回を「終わった」ように
-    // 見せてしまう)。
-    resetGoalState();
     setStatus(
       "Neither cancel service is reachable - the servers are gone, so nothing was "
       "cancelled. If the robot is still moving, stop it with the joystick or the "
       "motor power.");
-  } else if (active_goal_ || goal_pending_) {
-    setStatus(
-      "Cancel requests were sent - waiting for the result. "
-      "Press Cancel again if the robot is still moving.");
   }
   updateButtons();
-}
-
-void WaypointManagerPanel::resetGoalState()
-{
-  // **ゴールを手放す。** rclcpp_action のクライアントは goal handle を weak_ptr で
-  // 持つので、最後の shared_ptr を落とせばこのゴールのコールバックはもう来ない。
-  // 巡回そのものが続いていてもパネルは知らないままになるが、Cancel はゴールを
-  // 名指しせずサービスで全ゴールを止めるので、それでも機体は止められる。
-  active_goal_.reset();
-  goal_pending_ = false;
-  // **投げている途中の取り消しは止めない。** ここへは結果が届いたときにも来るが、
-  // そこで打ち切ると、別に走っている navigate_to_pose のゴールへ投げ直す残りが
-  // 消える (1 発しか届かなかったのと同じになる)。止めるのは sendCancelBurst。
-  updateButtons();
-}
-
-QString WaypointManagerPanel::resultText(int result_code, int missed_count) const
-{
-  QString status;
-  if (result_code == static_cast<int>(rclcpp_action::ResultCode::SUCCEEDED)) {
-    status = "Succeeded";
-  } else if (result_code == static_cast<int>(rclcpp_action::ResultCode::CANCELED)) {
-    status = "Canceled";
-  } else if (result_code == static_cast<int>(rclcpp_action::ResultCode::ABORTED)) {
-    status = "Failed (aborted)";
-  } else {
-    status = "Failed (unknown result)";
-  }
-  // 取りこぼしは結果コードによらず出す。stop_on_failure:=false
-  // (config/nav2/behaviors.yaml) なら SUCCEEDED で返るが、true にすると同じ
-  // missed_waypoints を積んだまま ABORTED で返るため、そこで数を落とさない。
-  if (missed_count > 0) {
-    status += QString(" - %1 waypoint(s) missed").arg(missed_count);
-  }
-  return status;
-}
-
-void WaypointManagerPanel::handleResult(int result_code, int missed_count)
-{
-  resetGoalState();
-  if (result_code == static_cast<int>(rclcpp_action::ResultCode::SUCCEEDED) &&
-    segment_end_ + 1 < waypoints_.size())
-  {
-    next_index_ = segment_end_ + 1;
-    setStatus(
-      QString("Stopped at waypoint %1 - press Resume to continue").arg(segment_end_) +
-      (missed_count > 0 ? QString(" (%1 waypoint(s) missed)").arg(missed_count) : QString()));
-  } else {
-    clearPause();
-    setStatus(resultText(result_code, missed_count));
-  }
-  updateButtons();
-  // 機体からの線を再開後の 1 点目へ引き直す。
-  publishMarkers(false);
 }
 
 void WaypointManagerPanel::setStatus(const QString & status)
@@ -1032,10 +904,10 @@ void WaypointManagerPanel::setStatus(const QString & status)
 
 void WaypointManagerPanel::updateButtons()
 {
-  const bool busy = active_goal_ || goal_pending_ || cancel_bursts_ > 0;
-  start_button_->setEnabled(!waypoints_.empty() && !busy && action_client_);
-  resume_button_->setEnabled(
-    !busy && action_client_ && next_index_ > 0 && next_index_ < waypoints_.size());
+  // 走っているか・止まっているかは waypoint_runner の /waypoint/next で知る。
+  const bool cancelling = cancel_bursts_ > 0;
+  start_button_->setEnabled(!waypoints_.empty() && !cancelling && robot_next_ != kFollowing);
+  resume_button_->setEnabled(!cancelling && robot_next_ > 0);
   // **Cancel は常に押せる。** パネルが巡回を持っているかどうかと、機体が走って
   // いるかどうかは別のこと — RViz を立て直した後、
   // サーバが見えなくなって諦めた後は、どれもパネルがゴールを持っていないまま
