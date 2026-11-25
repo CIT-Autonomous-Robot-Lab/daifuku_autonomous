@@ -223,7 +223,7 @@ class OverlayTest(unittest.TestCase):
                 self.assertFalse(removed.intersection(params))
                 self.assertEqual(params['scan_penalty_radius'], 0.4)
                 self.assertEqual(params['scan_penalty'], 10000)
-                self.assertEqual(params['map_penalty_radius'], 0.45)
+                self.assertEqual(params['map_penalty_radius'], 0.4)
                 self.assertEqual(params['map_penalty'], 10000)
                 if path.parent.name == 'tsukuba2026':
                     reference = load(root / 'navigation' / 'vi_planner.yaml')

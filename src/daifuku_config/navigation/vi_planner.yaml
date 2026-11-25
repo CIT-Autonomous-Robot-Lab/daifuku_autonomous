@@ -8,13 +8,13 @@ vi_planner:
     solver: "frontier2d_sparse_compact"  # 既定 frontier2d_sparse: 省メモリ版
     compact_ram_limit_mb: 4096    # 既定 0 [MB]: RAM上限。compact_sink_dir指定時は無効
     theta_cell_num: 60           # 既定 60: 姿勢分割数。360の約数にする
-    map_penalty_radius: 0.45     # 既定 0.2 [m]: 地図障害物のペナルティ帯半径
+    map_penalty_radius: 0.4     # 既定 0.2 [m]: 地図障害物のペナルティ帯半径
     map_penalty: 10000          # 既定 10000: 地図障害物近傍のペナルティ
     scan_penalty_radius: 0.4    # 既定 0.1 [m]: スキャン障害物のペナルティ帯半幅
     scan_penalty: 10000         # 既定 10000: スキャンのペナルティ。0で無効
     # scan_collision_radius: 0.2  # 既定 0.2 [m]: greedy追従で行動を棄却する円形の機体半径。0で無効
-    goal_margin_radius: 0.75     # 既定 0.3 [m]: 実機調整の到達許容距離0.75 m
-    goal_margin_theta: 45.0      # 既定 15.0 [deg]: 実機調整の到達許容角度45度
+    goal_margin_radius: 0.25     # 既定 0.3 [m]: 実機調整の到達許容距離0.25 m
+    goal_margin_theta: 20.0      # 既定 15.0 [deg]: 実機調整の到達許容角度20度
     map_wait_sec: 60             # 既定 30 [s]: 地図の到着待ち
     vi_threads: 0               # 既定 0: 論理コア数を使用
     unknown_as_obstacle: true    # 既定 true: 未観測を障害物とする
@@ -38,7 +38,7 @@ vi_planner:
     # mppi_samples: 256          # 既定 256: MPPIのサンプル数
 
     # 巡回と背景計算
-    goal_retry_limit: 3          # 既定 3: 失敗時の再試行上限
+    goal_retry_limit: 100          # 既定 3: 失敗時の再試行上限
     stop_on_failure: false       # 既定 false: 失敗した点を飛ばして続行
     global_sweep: true           # 既定 true: 局所の変更を全域へ伝播
     global_cpu_share: 0.2        # 既定 0.2: 単一CPUスレッドに対する全域伝播の配分
