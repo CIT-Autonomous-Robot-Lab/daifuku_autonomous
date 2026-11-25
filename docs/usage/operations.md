@@ -264,11 +264,6 @@ tools/site.sh tsudanuma          # 次の場所を選び、起動コマンドを
 指していると**起動時にエラーで止まります**（役ごとに見ます）。地図だけ差し替えて調整を置き忘れると、
 別の場所の帯と`emcl2`のリセット閾値を載せたまま走ることになるためです。
 
-**場所のlaunchに入っていない場所依存が1つあります。** `joy_teleop`の`waypoints_file`
-（パッド巡回の順路）です。既定は空で、空のあいだはSTART+BACKが巡回を断ります。絶対パスな
-ので場所ごとの`overrides`には書きにくく、いまは手で渡す扱いのままです
-（`src/daifuku_config/robot/robot/joy_teleop.yaml`）。
-
 ## ログを見る
 
 ```bash

@@ -124,7 +124,7 @@ navigationとmappingの公開launchは`/scan`を作る段の引数を持ちま�
 | `params_file` | 空（`driver:=`に応じて`src/daifuku_config/robot/robot/`から選ぶ） | ドライバのパラメータファイル |
 | `twist_mux` | `true` | 速度指令の仲裁を挟むか。`true`だと**ドライバが購読するのは`/cmd_vel`ではなく`/cmd_vel_mux`**になり、人が出す指令は`/cmd_vel_teleop`（優先度100）へ。自律側の`/cmd_vel`は優先度10で、手動が優先される。最後の手動指令から0.5秒で自律側へ譲る。`false`で全員が`/cmd_vel`へ書く従来の配線に戻る |
 | `twist_mux_params_file` | 空（`src/daifuku_config/robot/robot/twist_mux.yaml`） | `twist_mux`のパラメータファイル |
-| `joy` | `true` | ゲームパッドでの手動走行を立てるか。`joy_node`と`joy_teleop`が上がり、STARTの2秒長押しでteleopの入/切、BACK単体の2秒長押しでモータ電源の入/切、START+BACK同時2秒でウェイポイント巡回を始める（[ゲームパッドで操作する](joystick.md)）。挿していなくても他のノードは動く |
+| `joy` | `true` | ゲームパッドでの手動走行を立てるか。`joy_node`と`joy_teleop`が上がり、STARTの2秒長押しでteleopの入/切、BACK単体の2秒長押しでモータ電源の入/切（[ゲームパッドで操作する](joystick.md)）。挿していなくても他のノードは動く |
 | `joy_teleop_params_file` | 空（`src/daifuku_config/robot/robot/joy_teleop.yaml`） | ゲームパッドのパラメータファイル。`joy_node`と`joy_teleop`の両方に渡る |
 | `urdf_lidar_frame` | `lidar_link` | URDFへ渡す2D LiDARのリンク名。**`lidar_bringup`の`lidar_frame`（Mid-360の`livox_frame`）とは別物** |
 | `use_joint_state_publisher` | `True` | `joint_state_publisher`を起動するか |

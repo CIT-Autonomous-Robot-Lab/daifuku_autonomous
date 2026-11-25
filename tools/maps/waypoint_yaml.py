@@ -15,12 +15,11 @@
 """ウェイポイント YAML の読み込み (ROS に依存しない).
 
 書式は daifuku_waypoint_manager パネルが保存するものと同じ
-(frame_id + waypoints[].position/orientation)。パネルは RViz プラグインで
-実機には載らないので、joy_teleop は同じ書式を読むだけの実装を持つ。
+(frame_id + waypoints[].position/orientation)。verify_waypoints.py が同梱の
+順路を検算するために使う。
 
 **受け入れる書式はパネルの readYamlFile (waypoint_manager_panel.cpp) と
-そろえてある。** 片方だけが通す形にすると、手で書いた順路が「実機では走るのに
-パネルでは開けない」(あるいはその逆) になる。決まりは 3 つ:
+そろえてある。** ずれると、検算は通るのにパネルでは開けない順路ができる。決まりは 3 つ:
 
   * frame_id は必須。既定を持たせると、書き忘れた順路が黙って map 上の
     座標として走る (座標系を取り違えると全点が地図の外に出る)

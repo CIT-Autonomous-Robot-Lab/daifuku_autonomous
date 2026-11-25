@@ -28,9 +28,7 @@ foreach(NODE_SCRIPT prepare_mid360_imu.py joy_teleop.py)
 endforeach()
 install(FILES
   src/joy_buttons.py
-  src/joy_waypoints.py
   src/joy_motor.py
-  src/joy_patrol.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

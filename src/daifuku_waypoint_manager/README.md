@@ -68,7 +68,6 @@ RViz プラグインなので、実機イメージ (`ros:humble-ros-base`) で�
 - **区間をまたいだ先読みはたぶん効かない。** ゴールに入るのは区間の点だけで、
   `/waypoints` には順路全体が流れる。`vi_planner` がどちらを見て「次」を決めるかは
   **未検証**
-- **`joy_teleop` の START+BACK は停止点で止まらない。** YAML の `stop` は読み飛ばす
 - **止まっているあいだに点を消す・並べ替える・読み込み直すと、再開できなくなる**
   （再開先の番号が別の点を指してしまうため）。停止点を付け外しするだけなら再開できる
 
@@ -85,7 +84,6 @@ YAML では停止点の点にだけ `stop: true` を書く（省略は `false`�
 別のことだから**。次はどれも「パネルは何も持っていないのに機体は走っている」場面で、
 名指しでしか止められない作りだと全部が「Cancel が効かない」になる。
 
-- `joy_teleop` の START+BACK で始まった巡回（パネルは一度もゴールを持たない）
 - RViz を立て直した・パネルを閉じて開いた後
 - サーバが落ちていて、パネルが「巡回中」の表示から抜けた後（下記）
 - `Nav2 Goal` から出した単発ゴール（`navigate_to_pose` 側）
@@ -176,14 +174,11 @@ solve 中は機体が止まる（過去の実測で 19F が 29 秒、津田沼�
 足さずに立てれば先読みは入っています。先読みは価値関数を2本保持するため、
 メモリ使用量が増えます。
 
-同じものを `daifuku_robot/src/joy_teleop.py`（START+BACK での巡回開始）も出す。
-**実機のイメージにこのパネルは入らない**ので、機体だけで走らせるときはあちらが
-出どころになる。トピック名はパネルの `kWaypointPathTopic`・`joy_teleop` の
-publisher・`vi_planner` の `waypoint_topic` の 3 か所にあり、1 つだけ変えると
-**エラーは出ず、ただ先読みが効かない**。
+トピック名はパネルの `kWaypointPathTopic` と `vi_planner` の `waypoint_topic` の
+2 か所にあり、片方だけ変えると**エラーは出ず、ただ先読みが効かない**。
 
-**パネルだけが絶対名 `"/waypoints"`** で、残る 2 つは相対名 `"waypoints"` である。
-名前空間なし（既定）では 3 つとも `/waypoints` に解決されるので噛み合うが、
+**パネルは絶対名 `"/waypoints"`**、`vi_planner` は相対名 `"waypoints"` である。
+名前空間なし（既定）ではどちらも `/waypoints` に解決されるので噛み合うが、
 `namespace:=` を付けた構成ではパネルの出す `/waypoints` と `vi_planner` の見る
 `/<名前空間>/waypoints` が別になる。**このときも先読みが黙って効かなくなるだけ**で、
 警告は出ない。
@@ -197,10 +192,9 @@ RViz の Fixed Frame と waypoint の `frame_id` が一致している必要が�
 
 ## YAML の受け入れ規則
 
-読み手が 2 つある。このパネルの `readYamlFile` と、実機で巡回を始める
-`daifuku_robot/src/joy_teleop.py` の `load_waypoints` である。**両方が同じ規則で
-受けること。** 片方だけが通す形にすると、手で書いた順路が「実機では走るのに
-パネルでは開けない」（あるいはその逆）になり、しかもどちらの側にも異常が出ない。
+読み手はこのパネルの `readYamlFile` である。同梱の順路を検算する
+`tools/maps/waypoint_yaml.py`（`verify_waypoints.py` が使う）も**同じ規則で受けること。**
+ずれると、検算は通るのにパネルでは開けない順路ができる。
 
 - `frame_id` は必須。既定を持たせない — 書き忘れた順路が黙って `map` 上の座標として
   走ると、座標系を取り違えたときに全点が地図の外に出る（`plan` が失敗するだけなので、
@@ -209,7 +203,7 @@ RViz の Fixed Frame と waypoint の `frame_id` が一致している必要が�
 - 有限でない値と、長さが 0 のクォータニオンは弾く。`NaN` のまま `FollowWaypoints` へ
   投げると Nav2 の側で黙って落ちる
 
-`load_waypoints` は UTF-8 を明示して開く。同梱の `waypoints_tsudanuma_v1.0.yaml` は冒頭に
+`waypoint_yaml.py` は UTF-8 を明示して開く。同梱の `waypoints_tsudanuma_v1.0.yaml` は冒頭に
 日本語の注記を持っていて、ロケールが C の環境（実機のコンテナは `LANG` を持たない）では
 既定の encoding が ASCII になり、**読み込みごと失敗する**。
 
