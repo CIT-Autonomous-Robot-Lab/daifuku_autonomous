@@ -94,14 +94,10 @@ fi
 
 # Rust を別段へ飛ばすと、それに依存する launch の package.sh が揃わない。
 # CMake/Python/Rust を同じビルドに載せ、colcon に依存順を任せる。
-pkg_list="$(colcon list --base-paths src)"
-awk '$1 == "vi_planner" && $3 ~ /cargo/ {found=1} END {exit !found}' <<<"${pkg_list}" || {
+colcon list --base-paths src | awk '$1 == "vi_planner" && $3 ~ /cargo/ {found=1} END {exit !found}' || {
   echo "vi_planner が colcon から見えません (Cargo.toml の additional-packages を確認)" >&2
   exit 1
 }
-
-# 旧 install を読み込む前に、パッケージ移動や削除・改名の残骸を整理する。
-bash /usr/local/lib/daifuku/workspace-layout.sh prepare <<<"${pkg_list}"
 
 # --symlink-install なので launch や yaml は install/ から src/ への symlink になり、
 # 直しただけならビルドは要らない。
@@ -113,7 +109,5 @@ colcon build --base-paths src --merge-install --symlink-install \
                  -DEMCL3D_ENABLE_VULKAN="${EMCL3D_ENABLE_VULKAN:-OFF}" \
                  -DDISTRO_ROS="${ROS_DISTRO}" \
                  -DCMAKE_BUILD_TYPE=Release
-
-bash /usr/local/lib/daifuku/workspace-layout.sh commit
 
 printf '\nワークスペースのビルドが完了しました: %s/install\n' "${WS}"

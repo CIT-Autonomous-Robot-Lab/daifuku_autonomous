@@ -19,7 +19,7 @@ RUN --mount=type=cache,from=nix-bootstrap,source=/nix,target=/nix,id=daifuku-nix
     bash /tmp/build-nix-environment.sh false true
 
 FROM scratch AS runtime-base
-COPY --chmod=755 docker/common/entrypoint.sh docker/common/workspace-layout.sh docker/raspberrypi/scripts/build-workspace.sh /usr/local/lib/daifuku/
+COPY --chmod=755 docker/common/entrypoint.sh docker/raspberrypi/scripts/build-workspace.sh /usr/local/lib/daifuku/
 ENV ROS_DISTRO=humble ROS_WS=/opt/ros_ws
 ENV PATH=/bin:/usr/bin:/usr/local/bin
 ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt

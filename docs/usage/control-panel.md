@@ -33,8 +33,9 @@ Pi 側は `system_monitor` が新しいファイルなので、一度だけワ�
 docker compose up -d
 ```
 
-旧名 `autonomous_nav` などの生成物は、構成変更時のビルドで自動整理されます。
-手動で旧パッケージの成果物を削除する必要はありません。
+旧名 `autonomous_nav` などの生成物は自動では消えません。
+残っているときは `build/` と `install/` を消してから建て直します
+（[日常操作](operations.md#設定変更を反映する)）。
 
 ## 起動
 

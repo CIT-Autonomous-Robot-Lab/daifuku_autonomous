@@ -14,7 +14,7 @@ RUN --mount=type=cache,from=nix-bootstrap,source=/nix,target=/nix,id=daifuku-nix
 
 FROM scratch
 COPY --from=nix-environment /export/ /
-COPY --chmod=755 docker/common/entrypoint.sh docker/common/workspace-layout.sh docker/dev/tools/build-workspace.sh /usr/local/lib/daifuku/
+COPY --chmod=755 docker/common/entrypoint.sh docker/dev/tools/build-workspace.sh /usr/local/lib/daifuku/
 ENV ROS_DISTRO=humble AUTONOMOUS_WS=/workspaces/daifuku_autonomous
 ENV PATH=/bin:/usr/bin:/usr/local/bin
 ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt

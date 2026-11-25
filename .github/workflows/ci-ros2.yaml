@@ -71,12 +71,6 @@ jobs:
           . "/opt/ros/${{ matrix.ros_distro }}/setup.sh"
           read -r -a packages <<< "$PACKAGES"
           colcon build --packages-select "${packages[@]}"
-      - name: Docker の永続ビルドキャッシュと構成変更を検査する
-        if: matrix.ros_distro == 'humble'
-        run: |
-          . "/opt/ros/${{ matrix.ros_distro }}/setup.sh"
-          install -D docker/common/workspace-layout.sh /usr/local/lib/daifuku/workspace-layout.sh
-          python3 -m pytest -q docker/raspberrypi/tests
       - name: ROS ノード・設定監視・起動構成を検査する
         run: |
           . "/opt/ros/${{ matrix.ros_distro }}/setup.sh"
