@@ -25,7 +25,7 @@ Piの空き（1.5GB程度）を数分で埋めます。SDへの書き込みは�
 | `/mcl_pose` `/particle_cloud` | `emcl2`の推定姿勢とパーティクル。膨張リセットの様子 |
 | `/cmd_vel` `/cmd_vel_nav` `/cmd_vel_teleop` `/cmd_vel_mux` | **4本とも**。仲裁の取り合いは既知の破綻要因なので、どれが勝っていたかは並べないと分からない。`/cmd_vel_nav`は`velocity_smoother`を挟んだときだけ居る（`velocity_smoother:=false`では`vi_planner`が`/cmd_vel`へ直接出す） |
 | `/plan` `/value_function` `/local_window_value` | 価値反復が引いた経路と価値関数 |
-| `/waypoints` `/waypoint_pose` | 順路（latch）と単発ゴール |
+| `/waypoint/route` `/waypoint/status` `/waypoint/pose` | 順路（latch）、巡回の状態（latch）、waypointの追加 |
 | `*/_action/status` | ゴールがABORTEDになった経緯。**ここにしか出ない** |
 | `/diagnostics` | ノードの自己申告 |
 
@@ -55,7 +55,7 @@ ros2 bag record -o /tmp/bags/run1 --include-hidden-topics \
   /mcl_pose /particle_cloud \
   /cmd_vel /cmd_vel_nav /cmd_vel_teleop /cmd_vel_mux \
   /plan /value_function /local_window_value \
-  /waypoints /waypoint_pose \
+  /waypoint/route /waypoint/status /waypoint/pose \
   /compute_path_to_pose/_action/status \
   /follow_waypoints/_action/status
 ```
@@ -138,7 +138,7 @@ Piで再生するなら先に`docker compose stop raspicat`するか、`ROS_DOMA
   depth: 100
 ```
 
-`/waypoints`や`/value_function`もlatchなので、それらを見たいときは同じ形で足します。
+`/waypoint/route`や`/value_function`もlatchなので、それらを見たいときは同じ形で足します。
 
 ```bash
 ros2 bag play run1 --clock --qos-profile-overrides-path qos_override.yaml

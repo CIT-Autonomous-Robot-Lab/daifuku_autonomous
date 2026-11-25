@@ -1,7 +1,9 @@
 # daifuku_waypoint_manager
 
-RViz2 上で waypoint を作り、並べ替え・YAML 保存/読込を行い、vi_planner の
-`/follow_waypoints`（`nav2_msgs/action/FollowWaypoints`）へ送るパネルプラグイン。
+RViz2 上で waypoint を作り、並べ替え・YAML 保存/読込を行うパネルプラグイン。
+順路は機体側の `waypoint_runner`（`daifuku_navigation`）へ渡し、巡回は
+`waypoint_runner` が vi_planner の `/follow_waypoints`
+（`nav2_msgs/action/FollowWaypoints`）へ送る。
 
 `nav2_astar` ブランチの `nav2_waypoint_manager` を移植したもの。名前と namespace を
 `daifuku_*` にそろえてある。
@@ -43,9 +45,9 @@ RViz プラグインなので、実機イメージ (`ros:humble-ros-base`) で�
 別の RViz 設定から使うときは以下が要る。
 
 1. **Panels → Add New Panel** から `daifuku_waypoint_manager/WaypointManagerPanel`
-2. `MarkerArray` 表示を足し、topic を `/waypoint_markers`、Durability を
+2. `MarkerArray` 表示を足し、topic を `/waypoint/markers`、Durability を
    **Transient Local** にする（パネルが latch して出すので、あとから開いても出る）
-3. `2D Goal Pose` (`rviz_default_plugins/SetGoal`) の topic を `/waypoint_pose` にする
+3. `2D Goal Pose` (`rviz_default_plugins/SetGoal`) の topic を `/waypoint/pose` にする
 
 **3 の付け替えで、`2D Goal Pose` は単発ゴールを出さなくなる。** 通常の 1 点ナビゲー
 ションは `Nav2 Goal` (`nav2_rviz_plugins/GoalTool`) 側に残っているのでそちらを使う。
@@ -53,7 +55,8 @@ RViz プラグインなので、実機イメージ (`ros:humble-ros-base`) で�
 なり、**向きが常に単位クォータニオン（yaw 0）になる**（パネルに yaw の手入力欄は無い）。
 
 地図上をクリック＋ドラッグで、クリック位置が座標、ドラッグ方向が向きになる。
-**Start** で巡回開始、**Cancel** で停止。巡回中は「いま何点目か」がステータス行に出る。
+**Start** で巡回開始、**Cancel** で停止。巡回中は「いま何点目か」がステータス行に出る
+（`Robot:` で始まる行は `waypoint_runner` の報告）。
 
 ## 停止点（一時停止）
 
@@ -61,19 +64,40 @@ RViz プラグインなので、実機イメージ (`ros:humble-ros-base`) で�
 ラベルに `STOP`）。巡回は停止点に着くと止まり、**Resume** で次の点から再開する。
 止まっているあいだに **Start** を押すと最初から、**Cancel** を押すと再開できなくなる。
 
-再開は `/waypoint_resume`（`std_msgs/Empty`）でもできる。届くと **Resume** と同じことをする。
-ゲームパッドの B（丸）を押すと `joy_teleop` がこれを出すので、機体のそばで再開できる。
-止まっていないとき（走行中・巡回していない）に届いた要求は、ステータス行にエラーを出して捨てる。
+ゲームパッドの B（丸）でも再開できる。`joy_teleop` が `/waypoint/resume` を出す。
+止まっていないとき（走行中・巡回していない）に届いた要求は捨て、理由をステータス行に出す。
 
-止める仕組みはパネルの側にある。順路を停止点で区切り、区間ごとに別の
-`follow_waypoints` ゴールとして送る。区間のゴールが SUCCEEDED で返ったら、そこが
-停止点ということになる。`vi_planner` は停止点を知らない。そのため次のことが起きる。
+### 区切りと再開は機体の上で持つ
+
+止める仕組みは機体側の `waypoint_runner`（`daifuku_navigation`）にある。
+順路を停止点で区切り、区間ごとに別の `follow_waypoints` ゴールとして送る。
+区間のゴールが SUCCEEDED で返ったら、そこが停止点である。`vi_planner` は停止点を知らない。
+
+パネルに持たせない理由は、**走行中に RViz の PC を外す運用**のためである。
+パネルが区間を送ると、PC を外したあいだに結果を取りこぼす。パネルは「まだ走っている」と
+思い込み、再開を捨て続ける。B の `/waypoint/resume` も受け手が居ないので消える。
+`waypoint_runner` は機体で動くので、どちらも起きない。
+
+パネルと `waypoint_runner` の間は次のトピックでつなぐ。
+
+| トピック | 型 | 向き | 内容 |
+| --- | --- | --- | --- |
+| `/waypoint/route` | `nav_msgs/Path`（latch） | パネル → 機体 | 順路全体 |
+| `/waypoint/stops` | `std_msgs/Int32MultiArray`（latch） | パネル → 機体 | 停止点の番号 |
+| `/waypoint/start` | `std_msgs/Empty` | パネル → 機体 | 最初から走る |
+| `/waypoint/resume` | `std_msgs/Empty` | パネル・`joy_teleop` → 機体 | 停止点から再開 |
+| `/waypoint/status` | `std_msgs/String`（latch） | 機体 → パネル | 状態の文 |
+| `/waypoint/next` | `std_msgs/Int32`（latch） | 機体 → パネル | 次に送る点。走行中は -1 |
+
+状態は latch なので、PC をつなぎ直すと今の状態がそのまま見える。`/waypoint/status` は
+rosbag にも残る。
 
 - **区間をまたいだ先読みはたぶん効かない。** ゴールに入るのは区間の点だけで、
-  `/waypoints` には順路全体が流れる。`vi_planner` がどちらを見て「次」を決めるかは
+  `/waypoint/route` には順路全体が流れる。`vi_planner` がどちらを見て「次」を決めるかは
   **未検証**
 - **止まっているあいだに点を消す・並べ替える・読み込み直すと、再開できなくなる**
-  （再開先の番号が別の点を指してしまうため）。停止点を付け外しするだけなら再開できる
+  （順路が変わると再開先の番号が別の点を指すため、`waypoint_runner` が捨てる）。
+  停止点を付け外しするだけなら再開できる。同じ順路が届き直しても（PC のつなぎ直し）捨てない
 
 YAML では停止点の点にだけ `stop: true` を書く（省略は `false`）。
 
@@ -89,7 +113,7 @@ YAML では停止点の点にだけ `stop: true` を書く（省略は `false`�
 名指しでしか止められない作りだと全部が「Cancel が効かない」になる。
 
 - RViz を立て直した・パネルを閉じて開いた後
-- サーバが落ちていて、パネルが「巡回中」の表示から抜けた後（下記）
+- `waypoint_runner` が送った巡回（パネルはゴールを持たない）
 - `Nav2 Goal` から出した単発ゴール（`navigate_to_pose` 側）
 
 2 秒間投げ直すのは、無線でその 1 発が落ちると**エラーも出ないまま何も止まらない**ため。
@@ -99,29 +123,6 @@ YAML では停止点の点にだけ `stop: true` を書く（省略は `false`�
 巻き込むため）。どちらのサービスも見えなかったときは「サーバが居ないので何も
 取り消していない」とステータス行に出る — その状態で機体が走っていれば、止めるのは
 ジョイスティックかモータ電源になる（`cmd_vel_timeout` は 60 秒）。
-
-## 「巡回中」の表示から抜ける道
-
-表示は `follow_waypoints` の**結果が届くまで**続く。ところが結果は**届かないことが
-ある** — `vi_planner` が巡回の途中や直後に落ちる・立て直される、無線が切れる、
-といった場面で、クライアントは待ち続けたまま二度と起こされない。
-
-**戻す合図は人が Cancel を押したこと**にしてある。取り消しを投げ切ってどちらの
-キャンセルサービスも見えなかったら、そのゴールの結果はもう来ないので、そこで表示を
-戻す（ステータス行には「サーバが居ないので何も取り消していない」が出る）。
-サービスが見えたときは戻さない — 2 秒は「1 発落ちたから投げ直す」の尺であって、
-サーバが取り消して結果を返すまでの尺ではないので（VI の solve 境界で数十秒、無線が
-詰まっていればさらに乗る）、そこで戻すと**効いた取り消しに対して「結果が来ないので
-諦めた」と出したあとで結果が届く**ことになる。
-
-**時間では戻さない。** かつては「サーバが 10 秒見えなければ自分で戻す」タイマを
-持っていて、それが誤って戻したときのために「あとから `feedback` が届いたらゴールを
-持ち直す」世代管理（`goal_epoch_` / `abandoned_goal_` / `readoptGoal`）を抱えていた。
-自作自演なので 2026-08-20 に両方消した。表示が「巡回中」のまま残るのは
-**Cancel を押すまで**で、Cancel は常に押せる。
-
-戻した後もゴール自体は走り続けうる（パネルは知らないまま）。だが Cancel は
-ゴールを名指しせずサービスで全ゴールを止めるので、それでも機体は止められる。
 
 ## 選択中の waypoint
 
@@ -152,13 +153,14 @@ waypoint どうしを結ぶオレンジの線に加えて、**機体の現在地
 ため。同梱の津田沼の順路でも効く）。
 
 **巡回中は引かない。** 1 点目はもう機体の後ろにあり、そこへ線を引いても嘘になる。
-走行中に向かっている先は Nav2 の `Path` 表示のほうに出る。
+走行中に向かっている先は Nav2 の `Path` 表示のほうに出る。走行中かどうかと、
+停止点で止まっているときの線の行き先（再開後の 1 点目）は `/waypoint/next` で決める。
 
-## 順路を `/waypoints` に出す（先読み用）
+## 順路を `/waypoint/route` に出す
 
-マーカ（見せるため）とは別に、順路そのものを `nav_msgs/Path` で `/waypoints` へ
-latch して出す。**これは他ノードが読むためのもの**で、いまの用途は
-`vi_planner` の先読み（`waypoint_prefetch`）1 つ。VI は経路計画も経路追従も
+マーカ（見せるため）とは別に、順路そのものを `nav_msgs/Path` で `/waypoint/route` へ
+latch して出す。**これは他ノードが読むためのもの**で、用途は 2 つある。
+`waypoint_runner` が区間を切ることと、`vi_planner` の先読み（`waypoint_prefetch`）。VI は経路計画も経路追従も
 ゴールごとの価値反復に依っていて、一致するキャッシュや先読み結果がなければ
 solve 中は機体が止まる（過去の実測で 19F が 29 秒、津田沼が 87 秒）。
 次の点が分かっていれば走行中に解いておける。「次の点」を知る手段がこの Path。
@@ -169,23 +171,19 @@ solve 中は機体が止まる（過去の実測で 19F が 29 秒、津田沼�
 変更と機体からの線の引き直しでは出さない — 走行中に毎秒飛ばすと購読側が並びを
 受け取り直し続けるため。
 
-`follow_waypoints` を `vi_planner` 自身が受けるので、順路はゴールにも含まれます。
-このトピックは別の入口として残っています。
-
-`vi_planner` 側はトピック名が `waypoints`。`waypoint_prefetch` は
+`vi_planner` 側は `src/daifuku_config/navigation/vi_planner.yaml` の `waypoint_topic` で
+`waypoint/route` を見る（ノードの既定は `waypoints`）。`waypoint_prefetch` は
 `src/daifuku_config/navigation/vi_planner.yaml`・ノードの宣言ともに `false` だが、
 **既定の場所である `19f` の overrides が `true` へ上書きしている**ので、引数を何も
 足さずに立てれば先読みは入っています。先読みは価値関数を2本保持するため、
 メモリ使用量が増えます。
 
-トピック名はパネルの `kWaypointPathTopic` と `vi_planner` の `waypoint_topic` の
-2 か所にあり、片方だけ変えると**エラーは出ず、ただ先読みが効かない**。
+トピック名はパネルの `kWaypointPathTopic`、`waypoint_runner`、`vi_planner` の
+`waypoint_topic` の 3 か所にあり、片方だけ変えると**エラーは出ず、巡回も先読みも黙って動かない**。
 
-**パネルは絶対名 `"/waypoints"`**、`vi_planner` は相対名 `"waypoints"` である。
-名前空間なし（既定）ではどちらも `/waypoints` に解決されるので噛み合うが、
-`namespace:=` を付けた構成ではパネルの出す `/waypoints` と `vi_planner` の見る
-`/<名前空間>/waypoints` が別になる。**このときも先読みが黙って効かなくなるだけ**で、
-警告は出ない。
+**パネルは絶対名 `"/waypoint/..."`**、機体側（`waypoint_runner`・`vi_planner`・`joy_teleop`）は
+相対名である。名前空間なし（既定）では噛み合うが、`namespace:=` を付けた構成では
+パネルの出す名前と機体の見る `/<名前空間>/waypoint/...` が別になる。**警告は出ない。**
 
 ## frame_id
 

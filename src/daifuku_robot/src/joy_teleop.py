@@ -23,7 +23,7 @@ robot_bringup.launch.py が joy:=true (既定) のとき joy_node と一緒に�
   * STARTを長押し          … teleop の入/切をトグルする (ピロリ↑ / ピロリ↓)
   * BACKを長押し           … モータ電源の入/切をトグルする (ピロリピロリ↑ / ↓)
   * RB を押している間      … ブースト (上限が linear_max_speed から boost へ上がる)
-  * B (丸) を押す          … 停止点で止まっている巡回を再開する (/waypoint_resume)
+  * B (丸) を押す          … 停止点で止まっている巡回を再開する (/waypoint/resume)
 
 左スティックで前後・旋回を操作し、右スティックの左右が不感帯を超えたときは
 旋回だけ右を優先する。後退入力中は旋回の向きを反転する。
@@ -32,7 +32,8 @@ robot_bringup.launch.py が joy:=true (既定) のとき joy_node と一緒に�
 決まる (joy_buttons.HoldLatch)。START と BACK を同時に押したときは
 どちらも起きない。ウェイポイント巡回はこのノードでは始めず、RViz の
 daifuku_waypoint_manager パネルから始める。B は長押しを待たず、押し始めで 1 回だけ
-/waypoint_resume を出す。止まっているかどうかは知らないので、判断はパネルに任せる。
+/waypoint/resume を出す。止まっているかどうかは知らないので、判断は機体側の
+waypoint_runner (daifuku_navigation) に任せる。
 
 出す先は **/cmd_vel_teleop** (twist_mux の優先度 100 側)。自律側の /cmd_vel は
 優先度 10 なので、手動指令が優先される。走行中のゴールは取り消さないので、
@@ -264,9 +265,9 @@ class JoyTeleop(Node):
             QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL),
         )
         self.create_subscription(Joy, 'joy', self._on_joy, 10)
-        # 停止点で止まった巡回の再開。受けるのは RViz のウェイポイントパネルで、
-        # 止まっていなければパネルが聞き流す。
-        self._resume_pub = self.create_publisher(Empty, 'waypoint_resume', 10)
+        # 停止点で止まった巡回の再開。受けるのは機体側の waypoint_runner で、
+        # 止まっていなければ聞き流す。RViz の PC が居なくても届く。
+        self._resume_pub = self.create_publisher(Empty, 'waypoint/resume', 10)
 
         # ブザーは本体ドライバが購読する。買い手が居なくても publish は通るので、
         # 立っていない・ピンを掴めていないときは黙るだけになる。

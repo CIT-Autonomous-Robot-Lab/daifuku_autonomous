@@ -43,7 +43,7 @@ vi_planner:
     global_sweep: true           # 既定 true: 局所の変更を全域へ伝播
     global_cpu_share: 0.2        # 既定 0.2: 単一CPUスレッドに対する全域伝播の配分
     waypoint_prefetch: false     # 既定 false: 次点の先読み。4GB機では無効にする
-    # waypoint_topic: "waypoints"  # 既定 waypoints: 先読み対象の順路
+    waypoint_topic: "waypoint/route"  # 既定 waypoints: 先読み対象の順路。パネルの出す名前に合わせる
     # waypoint_prefetch_threads: 1  # 既定 1: compact先読みのスレッド数
     early_start: false           # 既定 false: 方策が繋がれば走り出し、残りは背景計算
 

@@ -202,8 +202,8 @@ navigation / mapping / `scan_pipeline`のlaunchが`scan.py`の1つの表から
 コストマップ、Nav2のbehavior・waypoint followerは起動しません。
 `velocity_smoother:=false`ならnavigation側のsmootherとマネージャも立ちません。
 
-RVizの「Nav2 Goal」は使用できます。「Navigation 2」パネルは`/waypoints`へ
-MarkerArrayを出し、自前パネルのPathと型が衝突するため追加しないでください。
+RVizの「Nav2 Goal」は使用できます。「Navigation 2」パネルは追加しないでください。
+自前パネルのwaypoint表示と役割が重なり、巡回の操作が2系統になります。
 
 ## 外部パッケージ
 

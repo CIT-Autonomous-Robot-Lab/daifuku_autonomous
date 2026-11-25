@@ -88,7 +88,7 @@ def test_navigation_has_one_vi_with_selected_tf_owner(
     # When: the one VI node resolves its parameters, without starting a process.
     planners = [node for node in nodes if node.node_package == 'vi_planner']
     assert len(planners) == 1
-    adapters = [node for node in nodes if node.node_package == 'daifuku_navigation'
+    adapters = [node for node in nodes if node.node_executable == 'tf_pose.py'
                 and node.condition.evaluate(context)]
     assert len(adapters) == int(not publish_tf)
     planner = planners[0]
