@@ -485,7 +485,7 @@ class JoyTeleop(Node):
     # ── モータ電源 ──────────────────────────────────────────────────────
 
     def _on_navigation_status(self, action, msg):
-        """action サーバの状態一覧から、実行中のゴールがあるかを覚える."""
+        """実行中のゴールがあるかを、action サーバの状態一覧から覚える."""
         self._navigating[action] = any(
             status.status == GoalStatus.STATUS_EXECUTING for status in msg.status_list
         )
