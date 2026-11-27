@@ -19,9 +19,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # PR では Docker イメージの入力が変わったときだけ docker を回す。main と手動実行は
+  # arm64 公開の前提なので常に回す。
+  changes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: read
+    outputs:
+      docker: ${{ steps.filter.outputs.docker }}
+    steps:
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            docker:
+              - shell.nix
+              - daifuku_autonomous.repos
+              - docker/common/**
+              - docker/raspberrypi/**
+              - .github/workflows/ci.yml
+              - .github/workflows/ci-docker.yaml
   ros:
     uses: ./.github/workflows/ci-ros2.yaml
   docker:
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.docker == 'true') }}
     uses: ./.github/workflows/ci-docker.yaml
   map-tools:
     uses: ./.github/workflows/ci-maps.yaml
