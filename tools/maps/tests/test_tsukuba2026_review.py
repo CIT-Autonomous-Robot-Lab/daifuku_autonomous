@@ -65,8 +65,10 @@ def test_navigation_and_localization_keep_the_provided_world_frame() -> None:
 def test_vi_arrival_region_supports_two_cell_transition_outcomes() -> None:
     # Given: the configured planner resolution and machine-consumed goal radius.
     metadata = yaml.safe_load((MAPS / "tsukuba2026_modified.yaml").read_text(encoding="utf-8"))
+    base = yaml.safe_load((ROOT / "src/daifuku_config/navigation/vi_planner.yaml").read_text(encoding="utf-8"))
     profile = yaml.safe_load((ROOT / "src/daifuku_config/sites/tsukuba2026/overrides.yaml").read_text(encoding="utf-8"))
-    parameters = profile["daifuku_navigation"]["vi_planner"]["ros__parameters"]
+    parameters = (base["vi_planner"]["ros__parameters"] |
+                  profile["daifuku_navigation"]["vi_planner"]["ros__parameters"])
     resolution = metadata["resolution"] * parameters.get("map_scale", 1)
     radius = parameters["goal_margin_radius"]
     rows, columns = np.mgrid[-4:5, -4:5]

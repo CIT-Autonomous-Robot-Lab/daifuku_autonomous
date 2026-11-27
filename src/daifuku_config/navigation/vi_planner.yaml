@@ -13,7 +13,7 @@ vi_planner:
     scan_penalty_radius: 0.4    # 既定 0.1 [m]: スキャン障害物のペナルティ帯半幅
     scan_penalty: 10000         # 既定 10000: スキャンのペナルティ。0で無効
     # scan_collision_radius: 0.2  # 既定 0.2 [m]: greedy追従で行動を棄却する円形の機体半径。0で無効
-    goal_margin_radius: 0.25     # 既定 0.3 [m]: 実機調整の到達許容距離0.25 m
+    goal_margin_radius: 0.5      # 既定 0.3 [m]: 0.2m/cellでも値がゴールから広がる到達半径
     goal_margin_theta: 20.0      # 既定 15.0 [deg]: 実機調整の到達許容角度20度
     map_wait_sec: 60             # 既定 30 [s]: 地図の到着待ち
     vi_threads: 0               # 既定 0: 論理コア数を使用
