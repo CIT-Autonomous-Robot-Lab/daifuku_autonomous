@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       publish_arm64:
-        description: Raspberry Pi用arm64イメージをGHCRへ公開する
+        description: Raspberry Pi用arm64のCPU版とVulkan版をGHCRへ公開する
         type: boolean
         default: false
 
