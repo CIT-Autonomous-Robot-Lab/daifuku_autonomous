@@ -17,7 +17,7 @@ daifuku_navigation:
       action_names: ["forward", "back", "right", "rightfwsl", "rightfw", "left", "leftfwsl", "leftfw"]  # 既定 6手: mugimaruと同じ8手
       action_forward_m: [0.8, -0.4, 0.0, 0.4, 0.8, 0.0, 0.4, 0.8]  # 既定 6手: mugimaruの並進量
       action_rotation_deg: [0.0, 0.0, -45.0, -45.0, -20.0, 45.0, 45.0, 20.0]  # 既定 6手: mugimaruの旋回量
-      goal_margin_radius: 1.0  # 既定 0.5: mugimaruの到達半径
+      goal_margin_radius: 0.5  # 断片 0.25: 0.2m/cell・前進0.4/0.8mで値がゴールから広がる下限0.4mを上回らせる
       max_rollout_steps: 100000  # 既定 10000: 大域の回り込みを許す
       cost_drawing_threshold: 600  # 既定 60: mugimaruの表示範囲
       early_start: true  # 既定 false: 方策が接続した時点で開始する

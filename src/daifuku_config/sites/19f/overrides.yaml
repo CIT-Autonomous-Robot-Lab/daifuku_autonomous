@@ -28,5 +28,6 @@ daifuku_navigation:
       solver: "frontier2d_sparse"          # 断片 frontier2d_sparse_compact: 旧 active_reloc 用に密へ戻した設定を維持。scale 2 で 655MB (実測)
       map_scale: 2                         # 既定 1: 内部だけ 0.10m/cell (794 万状態)。solve を軽くするため
       action_rotation_deg: [0.0, 0.0, -45.0, -30.0, 45.0, 30.0]  # 断片 [0, 0, -30, -30, 30, 30]: 据え切りを45度に拡大
+      goal_margin_radius: 0.30             # 断片 0.25: 0.1m/cellで値がゴールから広がる下限0.3mに合わせる
       cost_drawing_threshold: 100          # 断片 60: 表示専用。色スケール上限 [ステップ≒秒] ≒50m
       early_start: true                    # 断片 false: 方策が繋がった時点で solve を打ち切る。密なので効く。ログの cut short / truncated で見る (未検証)
