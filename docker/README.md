@@ -33,20 +33,33 @@ ROS全体の依存を差し替えてキャッシュを無効にしないため�
 ## Raspberry Pi用イメージの公開
 
 通常CIがすべて成功すると、`main`更新時にGitHub Actionsのarm64ランナーで
-実機用イメージをビルドし、GHCRへ公開します。QEMUでの代行ビルドは使いません。
-同じイメージで`build-workspace`が成功してからpushします。
+実機用のCPU版とVulkan版をビルドし、GHCRへ公開します。QEMUでの代行ビルドは使いません。
+各イメージで`build-workspace`が成功してからpushします。Vulkan版ではEMCL3Dを
+Vulkan有効でビルドし、Vulkanローダーにリンクされていることも確認します。
 
-公開先は`ghcr.io/cit-autonomous-robot-lab/daifuku_autonomous:arm64`です。
-コミットを固定する`sha-<40桁のコミットSHA>-arm64`タグも作ります。
+公開先は`ghcr.io/cit-autonomous-robot-lab/daifuku_autonomous`です。
+
+| 構成 | `main`用タグ | コミット固定タグ |
+|---|---|---|
+| CPU版 | `arm64` | `sha-<40桁のコミットSHA>-arm64` |
+| Pi 5 Vulkan版 | `arm64-vulkan` | `sha-<40桁のコミットSHA>-arm64-vulkan` |
+
 PR実行では公開せず、手動公開は次の入口を使います。
 
 ```bash
 gh workflow run ci.yml --ref main -f publish_arm64=true
 ```
 
-`--ref`で別のブランチを選ぶ場合はSHAタグだけを公開し、`arm64`タグを更新しません。
+`--ref`で別のブランチを選ぶ場合はSHAタグだけを公開し、`main`用タグを更新しません。
 イメージは依存環境です。実機では従来どおりソースをマウントしてビルドします。
 GHCRのパッケージが非公開の場合は、取得側で`read:packages`権限の認証が必要です。
+
+Pi 5でVulkan用のCompose構成を使っている場合は、Vulkan版を取得して既存のローカルタグに付けます。
+
+```bash
+docker pull ghcr.io/cit-autonomous-robot-lab/daifuku_autonomous:arm64-vulkan
+docker tag ghcr.io/cit-autonomous-robot-lab/daifuku_autonomous:arm64-vulkan daifuku-autonomous:humble-vulkan
+```
 
 ## common/
 
